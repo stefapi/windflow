@@ -37,7 +37,72 @@ La configuration de production inclut :
 
 ## 🚀 Installation
 
-### 1. Préparation du Serveur
+WindFlow propose deux méthodes d'installation : **automatique** (recommandée) et **manuelle**.
+
+### Méthode 1 : Installation Automatique (Recommandée)
+
+Le script `install.sh` automatise complètement l'installation de WindFlow avec détection du système d'exploitation, gestion des erreurs et configuration automatique.
+
+#### Installation Rapide
+
+```bash
+# Installation avec les paramètres par défaut
+curl -fsSL https://raw.githubusercontent.com/stefapi/windflow/main/scripts/install.sh | bash
+
+# OU téléchargement et exécution locale
+wget https://raw.githubusercontent.com/stefapi/windflow/main/scripts/install.sh
+chmod +x install.sh
+./install.sh
+```
+
+#### Installation Personnalisée
+
+```bash
+# Installation avec paramètres personnalisés
+./install.sh --version v1.2.0 --domain windflow.example.com --install-dir /opt/windflow
+
+# Options disponibles
+./install.sh --help
+```
+
+#### Systèmes Supportés
+
+Le script d'installation automatique supporte :
+- **Ubuntu** 18.04+ / **Debian** 10+
+- **CentOS** 8+ / **RHEL** 8+ / **Rocky Linux** / **AlmaLinux**
+- **Fedora** 35+
+- **Arch Linux** / **Manjaro**
+- **Alpine Linux** 3.15+
+- **openSUSE** / **SLES**
+
+#### Ce que fait le script automatiquement
+
+1. **Détection du système** : Identification automatique de l'OS et de l'architecture
+2. **Vérification des prérequis** : Validation des ressources système (RAM, espace disque, réseau)
+3. **Installation des dépendances** : Docker, Docker Compose, curl, git, openssl
+4. **Téléchargement de WindFlow** : Récupération de la version spécifiée depuis GitHub
+5. **Configuration sécurisée** : Génération automatique des mots de passe et clés
+6. **Démarrage des services** : Lancement et vérification des conteneurs
+7. **Tests d'intégrité** : Validation du fonctionnement des services
+
+#### Logs et Dépannage
+
+```bash
+# Logs d'installation
+tail -f /tmp/windflow-install.log
+
+# Informations d'accès sauvegardées
+cat /opt/windflow/passwords.txt
+
+# État des services
+docker compose ps
+```
+
+### Méthode 2 : Installation Manuelle
+
+Pour un contrôle complet ou sur des systèmes non supportés par le script automatique.
+
+#### 1. Préparation du Serveur
 
 ```bash
 # Mise à jour du système
@@ -61,11 +126,11 @@ sudo chown -R $USER:$USER /opt/windflow
 docker network create traefik-public
 ```
 
-### 2. Clonage et Configuration
+#### 2. Clonage et Configuration
 
 ```bash
 # Clonage du repository
-git clone https://github.com/votre-org/windflow.git
+git clone https://github.com/stefapi/windflow.git
 cd windflow
 
 # Configuration de l'environnement
@@ -78,7 +143,7 @@ ls -la docker-compose*.yml
 # docker-compose.prod.yml  <- Production
 ```
 
-### 3. Configuration des Variables
+#### 3. Configuration des Variables
 
 Éditez `.env.prod` avec vos valeurs spécifiques :
 
@@ -98,7 +163,7 @@ echo "GRAFANA_ADMIN_PASSWORD=$GRAFANA_ADMIN_PASSWORD" >> .env.prod
 echo "GRAFANA_SECRET_KEY=$GRAFANA_SECRET_KEY" >> .env.prod
 ```
 
-### 4. Déploiement
+#### 4. Déploiement
 
 ```bash
 # Construction et démarrage des services
@@ -236,9 +301,31 @@ docker compose -f docker-compose.prod.yml logs -f traefik
 
 ### Mise à Jour
 
+#### Avec le Script d'Installation (Recommandé)
+
+```bash
+# Mise à jour automatique vers la dernière version
+./install.sh --update
+
+# Mise à jour vers une version spécifique
+./install.sh --update --version v1.3.0
+
+# Le script effectue automatiquement :
+# - Sauvegarde des données existantes
+# - Téléchargement de la nouvelle version
+# - Préservation de la configuration (.env)
+# - Redémarrage des services
+# - Validation post-mise à jour
+```
+
+#### Mise à Jour Manuelle
+
 ```bash
 # Sauvegarde avant mise à jour
 docker compose -f docker-compose.prod.yml exec backup /scripts/manual-backup.sh
+
+# Sauvegarde de la configuration
+cp .env .env.backup
 
 # Mise à jour du code
 git pull origin main
@@ -249,6 +336,18 @@ docker compose -f docker-compose.prod.yml up -d
 
 # Migrations base de données
 docker compose -f docker-compose.prod.yml exec windflow-api alembic upgrade head
+```
+
+#### Rollback en cas de problème
+
+```bash
+# Avec le script (si sauvegarde automatique disponible)
+./install.sh --restore-backup
+
+# Méthode manuelle
+git checkout v1.2.0  # version précédente
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 ## 🛡️ Sécurité
@@ -289,7 +388,62 @@ sudo dpkg-reconfigure unattended-upgrades
 
 ## 🔧 Dépannage
 
-### Problèmes Courants
+### Problèmes d'Installation Automatique
+
+**Script install.sh échoue :**
+```bash
+# Vérification des logs d'installation
+tail -f /tmp/windflow-install.log
+
+# Exécution avec debug activé
+bash -x ./install.sh --domain votre-domaine.com
+
+# Vérification des prérequis
+# - Connectivité réseau
+ping -c 1 github.com
+
+# - Permissions utilisateur
+groups $USER | grep docker
+
+# - Espace disque disponible
+df -h /opt
+```
+
+**Système d'exploitation non supporté :**
+```bash
+# Vérification de la détection d'OS
+cat /etc/os-release
+uname -a
+
+# Installation manuelle des dépendances
+# Voir section "Installation Manuelle" ci-dessous
+```
+
+**Problèmes Docker avec le script :**
+```bash
+# Vérification de l'installation Docker
+docker --version
+docker compose version
+
+# Test de fonctionnalité Docker
+docker run --rm hello-world
+
+# Ajout manuel au groupe docker si nécessaire
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+**Échec de téléchargement :**
+```bash
+# Test manuel de téléchargement
+curl -I https://github.com/stefapi/windflow/archive/main.tar.gz
+
+# Utilisation d'un proxy si nécessaire
+export https_proxy=http://proxy:port
+./install.sh
+```
+
+### Problèmes Post-Installation
 
 **Services qui ne démarrent pas :**
 ```bash
@@ -300,6 +454,9 @@ docker system df
 
 # Nettoyage si nécessaire
 docker system prune -a
+
+# Consultation des mots de passe générés
+cat /opt/windflow/passwords.txt
 ```
 
 **Certificats SSL :**
