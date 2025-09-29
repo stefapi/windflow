@@ -1,0 +1,80 @@
+# Dockerfile.api - Backend FastAPI
+FROM python:3.11-slim as base
+
+# Variables d'environnement
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Installation des dépendances système
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Création de l'utilisateur non-root
+RUN groupadd -r windflow && useradd -r -g windflow windflow
+
+# Création du répertoire de travail
+WORKDIR /app
+
+# Installation Poetry
+RUN pip install poetry==1.6.1
+
+# Configuration Poetry
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VENV_IN_PROJECT=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache
+
+# Copie des fichiers de dépendances
+COPY pyproject.toml poetry.lock ./
+
+# Installation des dépendances
+RUN poetry install --only=main && rm -rf $POETRY_CACHE_DIR
+
+# Stage de production
+FROM python:3.11-slim as production
+
+# Variables d'environnement
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/app/.venv/bin:$PATH"
+
+# Installation des dépendances système pour production
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Création de l'utilisateur non-root
+RUN groupadd -r windflow && useradd -r -g windflow windflow
+
+# Création du répertoire de travail
+WORKDIR /app
+
+# Copie de l'environnement virtuel depuis le stage base
+COPY --from=base /app/.venv /app/.venv
+
+# Copie du code source
+COPY backend /app/backend
+COPY alembic.ini /app/
+COPY --chown=windflow:windflow . /app/
+
+# Création des répertoires de logs
+RUN mkdir -p /app/logs && chown -R windflow:windflow /app/logs
+
+# Exposition du port
+EXPOSE 8000
+
+# Configuration de l'utilisateur non-root
+USER windflow
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+
+# Commande par défaut
+CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

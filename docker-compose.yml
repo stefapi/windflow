@@ -1,0 +1,60 @@
+# ============================================================================
+# WINDFLOW DOCKER COMPOSE - CONFIGURATION PRINCIPALE
+# ============================================================================
+#
+# Ce fichier principal redirige vers les configurations spécifiques :
+# - docker-compose-dev.yml  : Développement local
+# - docker-compose.prod.yml : Production
+#
+# Usage:
+#   Développement: docker compose up
+#   Production:    docker compose -f docker-compose.prod.yml up
+#
+
+version: '3.8'
+
+# Include du fichier de développement par défaut
+include:
+  - docker-compose-dev.yml
+
+# ============================================================================
+# INFORMATIONS D'USAGE
+# ============================================================================
+#
+# DÉVELOPPEMENT LOCAL :
+#   docker compose up -d
+#   docker compose logs -f
+#   docker compose down
+#
+# PRODUCTION :
+#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml logs -f
+#   docker compose -f docker-compose.prod.yml down
+#
+# AIDE :
+#   make help                    # Voir toutes les commandes disponibles
+#   make dev                     # Démarrer en développement
+#   make docker-prod             # Démarrer en production
+#
+# ============================================================================
+# DIFFÉRENCES ENTRE ENVIRONNEMENTS
+# ============================================================================
+#
+# DÉVELOPPEMENT (docker-compose-dev.yml) :
+#   - Hot reload activé
+#   - Ports exposés pour debug
+#   - Volumes bind pour le code source
+#   - Services de debug (adminer, mailhog)
+#   - Logs verbeux
+#   - Aucune limite de ressources
+#
+# PRODUCTION (docker-compose.prod.yml) :
+#   - SSL/TLS avec certificats Let's Encrypt
+#   - Réplication des services critiques
+#   - Monitoring complet (Prometheus/Grafana)
+#   - Backup automatique
+#   - Limites de ressources strictes
+#   - Sécurité renforcée
+#   - Logging centralisé
+#
+# ============================================================================

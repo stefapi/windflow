@@ -1,0 +1,61 @@
+# Dockerfile.frontend - Frontend Vue.js
+FROM node:20-alpine as build
+
+# Variables d'environnement
+ENV NODE_ENV=production
+
+# Création du répertoire de travail
+WORKDIR /app
+
+# Installation pnpm
+RUN npm install -g pnpm@9
+
+# Copie des fichiers de dépendances
+COPY package.json pnpm-lock.yaml ./
+
+# Installation des dépendances
+RUN pnpm install --frozen-lockfile --prod=false
+
+# Copie du code source
+COPY . .
+
+# Build de l'application
+RUN pnpm build
+
+# Stage de production avec Nginx
+FROM nginx:alpine as production
+
+# Installation de curl pour le health check
+RUN apk add --no-cache curl
+
+# Copie de la configuration Nginx personnalisée
+COPY ../docker/nginx-frontend.conf /etc/nginx/conf.d/default.conf
+
+# Copie des fichiers build depuis le stage précédent
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Création d'un utilisateur non-root
+RUN addgroup -g 1001 -S windflow && \
+    adduser -S windflow -u 1001 -G windflow
+
+# Changement des permissions
+RUN chown -R windflow:windflow /usr/share/nginx/html && \
+    chown -R windflow:windflow /var/cache/nginx && \
+    chown -R windflow:windflow /var/log/nginx && \
+    chown -R windflow:windflow /etc/nginx/conf.d
+
+RUN touch /var/run/nginx.pid && \
+    chown -R windflow:windflow /var/run/nginx.pid
+
+# Exposition du port
+EXPOSE 80
+
+# Configuration de l'utilisateur non-root
+USER windflow
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost/ || exit 1
+
+# Commande par défaut
+CMD ["nginx", "-g", "daemon off;"]
