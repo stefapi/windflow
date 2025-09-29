@@ -1,0 +1,16 @@
+// This Content is Auto Generated
+{% for schema_name, schema in schemas.items() %}
+/**
+ * {{ schema.title or schema_name }}
+ {% if schema.description %} * {{ schema.description }}{% endif %}
+ */
+{% if schema.properties %}
+export interface {{ schema_name }} {
+{% for prop_name, prop_info in schema.properties.items() %}
+  {% if prop_name not in schema.required %}{{ prop_name }}?: {{ prop_info.ts_type }}{% else %}{{ prop_name }}: {{ prop_info.ts_type }}{% endif %}
+{% endfor %}
+}
+{% else %}
+export type {{ schema_name }} = Record<string, never>
+{% endif %}
+{% endfor %}

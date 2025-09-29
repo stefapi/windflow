@@ -1,0 +1,12 @@
+#!/bin/sh
+# Git hook to validate commit messages
+# This hook calls the Python validation script
+
+# Get the commit message file path (passed as the first argument)
+COMMIT_MSG_FILE=$1
+
+# Call the validation script
+python "$(dirname "$0")/../dev/scripts/validate_commit_msg.py" "$COMMIT_MSG_FILE"
+
+# Exit with the same status as the validation script
+exit $?

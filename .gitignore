@@ -1,0 +1,196 @@
+# Byte-compiled / optimized / DLL files
+**/__pycache__/
+**/*.py[cod]
+**/*.pyclass
+*$py.class
+
+# frontend/.env.development
+docs/site/
+*temp/*
+.secret
+frontend/dist/
+
+dev/data/backups/*
+dev/data/debug/*
+dev/data/img/*
+dev/data/migration/*
+dev/data/users/*
+
+.DS_Store
+
+**/.unlighthouse/
+frontend/.vite-ssg-temp/
+frontend/dev-dist/
+frontend/test/__snapshots__/
+
+# local env files
+.env.local
+.env.*.local
+
+
+# Log files
+**/*.log*
+
+# Editor directories and files
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.vscode
+
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.eggs
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.bento*
+.cache
+.cache-loader
+cover
+.envrc
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+cypress/videos/
+cypress/screenshots/
+
+# Translations
+*.mo
+*.pot
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+_build
+_images
+_modules
+_static
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# dotenv
+# .env
+
+# virtualenv
+.venv
+venv/
+ENV/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+
+# Node Modules
+**/.vite-inspect/
+**/node_modules/
+**/*.db
+**/*.sqlite
+dev/datadev
+
+
+.vagrant
+*.deb
+*.bak
+*.sqllite
+*.swp
+
+dump.rdb
+tmp
+
+# Node.js, webpack artifacts, storybook
+*.entry.js
+*.js.map
+*.map
+*.min.js
+test-changelog.md
+*.tsbuildinfo
+
+# Ignore package-lock in packages
+plugins/*/package-lock.json
+packages/*/package-lock.json
+
+# For country map geojson conversion script
+.ipynb_checkpoints/
+scripts/*.zip
+
+# IntelliJ
+*.iml
+venv
+@eaDir/
+
+# PyCharm
+.run
+
+# Translation binaries
+messages.mo
+/dist/
+
+/frontend/stats.html
+/.continue/
+.env

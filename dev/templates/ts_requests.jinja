@@ -1,0 +1,27 @@
+import type * as Types from './types.ts'
+{% for path in paths.all_paths  %}{% for verb in path.http_verbs  %}{% if path.route_object.router_camel %}
+/**
+ * {{ verb.js_docs }}{% if path.route_object.is_function %}{% for v in path.route_object.var %}
+ * @param {{ v }} {{ v }} parameter{% endfor %}{% elif verb.vars %}
+ * @param data Request data{% endif %}
+ */
+export async function {{ verb.summary_camel }}({% if path.route_object.is_function %}{{path.route_object.var|join(": number, ")}}: number{% elif verb.vars %}{% if verb.content %}data: Types.{{ verb.content }}{% else %}data: { {{verb.vars|join(": any; ")}}: any }{% endif %}{% endif %}{% if verb.vars and path.route_object.is_function %}{% if verb.content %}, data: Types.{{ verb.content }}{% else %}, data: { {{verb.vars|join(": any; ")}}: any }{% endif %}{% endif %}) {
+{% if verb.is_form_data_endpoint %}
+  const formData = new FormData()
+{% if verb.vars %}
+  {% for var in verb.vars %}
+  if (data.{{ var }} !== null && data.{{ var }} !== undefined) {
+    formData.append('{{ var }}', data.{{ var }})
+  }
+  {% endfor %}
+{% endif %}
+  return api.{{ verb.request_type.value }}({% if path.route_object.is_function %}`{{ path.route_object.prefix }}{{ path.route_object.js_route }}`{% else %}'{{ path.route_object.prefix }}{{ path.route_object.route }}'{% endif %}, formData, {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+  })
+{% else %}
+  return api.{{ verb.request_type.value }}({% if path.route_object.is_function %}`{{ path.route_object.prefix }}{{ path.route_object.js_route }}`{% else %}'{{ path.route_object.prefix }}{{ path.route_object.route }}'{% endif %}{% if verb.vars %}{% if path.route_object.is_function %}, data{% else %}, data{% endif %}{% endif %})
+{% endif %}
+}
+{% endif %}{% endfor %}{% endfor %}

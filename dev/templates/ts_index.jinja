@@ -1,0 +1,11 @@
+// This Content is Auto Generated
+
+// Re-export all functions from service files
+{% for api in files.files  %}{% if api %}export * from './{{api}}.ts'
+{% endif %}{% endfor %}
+
+// Re-export routes
+export { API_ROUTES, type ApiRoutes } from './apiRoutes.ts';
+
+// Re-export types
+export * from './types.ts'
