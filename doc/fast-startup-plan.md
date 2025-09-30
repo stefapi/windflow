@@ -1,36 +1,50 @@
-# Plan de Démarrage Rapide - WindFlow
+# Phase 1 : Plan de Développement MVP - WindFlow
 
-**Version :** 1.0  
-**Date :** 29/09/2025  
-**Objectif :** Développer un MVP fonctionnel de WindFlow en 12 semaines
+**Version :** 2.0  
+**Date :** 10/01/2025  
+**Durée :** 6 mois (Q1-Q2 2025)  
+**Budget :** €800,000 - €1,200,000  
+**Objectif :** Développer un MVP production-ready avec fonctionnalités IA intégrées
 
 ## Vue d'Ensemble
 
-Ce document définit la stratégie de démarrage rapide pour WindFlow, un outil web intelligent de déploiement de containers Docker. L'objectif est de créer un MVP fonctionnel et déployable en 3 mois, validant les concepts core tout en posant des fondations solides pour le développement futur.
+Ce document définit la stratégie de développement de la Phase 1 (MVP) de WindFlow, un outil web intelligent de déploiement de containers Docker avec intelligence artificielle intégrée. L'objectif est de créer un MVP production-ready en 6 mois, intégrant les fonctionnalités essentielles d'orchestration multi-cible, workflows visuels, marketplace de templates et optimisation par IA, tout en posant des fondations architecturales solides pour les phases suivantes.
+
+**Alignement avec le Roadmap :**
+Ce plan correspond à la Phase 1 du roadmap global WindFlow (voir [doc/spec/18-roadmap.md](spec/18-roadmap.md)), qui définit les fondations du produit avec un périmètre fonctionnel complet et une architecture scalable.
 
 ## Philosophie de Développement
 
 ### Principes Directeurs
 
-**🎯 MVP First**
-- Se concentrer sur les fonctionnalités essentielles uniquement
-- Valider rapidement le product-market fit
-- Itération rapide basée sur les retours utilisateurs
+**🎯 Production-Ready MVP**
+- Fonctionnalités complètes et robustes dès le MVP
+- Architecture event-driven et microservices
+- Intelligence artificielle native avec LiteLLM
+- Validation avec 50+ organisations en beta test
 
-**🏗️ Fondations Solides**
-- Architecture scalable dès le départ
-- Code qualité avec tests automatisés
-- Documentation continue et complète
+**🏗️ Architecture Enterprise-Grade**
+- Event-driven architecture avec Redis Streams
+- Patterns de résilience (Circuit Breaker, Saga)
+- Multi-tenant avec isolation complète
+- Sécurité by design avec Keycloak et Vault
 
-**🚀 Time-to-Market Optimisé**
-- Développement en parallèle frontend/backend
-- Automatisation maximale (CI/CD, tests, déploiement)
-- Décisions techniques pragmatiques
+**🚀 Innovation et Différenciation**
+- Workflows visuels type n8n intégrés
+- Marketplace de templates communautaires
+- Optimisation IA des configurations
+- Support multi-cible (Docker, Swarm, K8s, VMs)
 
-## Phase 0 : Préparation et Infrastructure (Semaines 1-2)
+**📊 Observabilité Native**
+- Three Pillars : Metrics, Logging, Tracing
+- Prometheus + Grafana pour monitoring
+- ELK Stack pour logs centralisés
+- Jaeger pour distributed tracing
+
+## Phase 1.0 : Infrastructure & Fondations (Semaines 1-4)
 
 ### Objectif Principal
-Mettre en place l'environnement de développement et l'infrastructure de base pour permettre un développement efficace.
+Mettre en place une infrastructure de développement complète et production-ready, incluant tous les services essentiels (Keycloak, Vault, monitoring, logging) pour permettre un développement efficace et sécurisé.
 
 ### 📋 Actions Critiques
 
@@ -83,15 +97,35 @@ windflow/
 
 #### 3. Infrastructure de Développement Local
 
-**Docker Compose Services :**
+**Docker Compose Services Complets :**
 ```yaml
 services:
-  postgres:     # Base de données principale
-  redis:        # Cache et sessions
-  vault:        # Gestion des secrets
-  backend:      # API FastAPI
-  frontend:     # Vue.js dev server
-  nginx:        # Reverse proxy
+  # Core Services
+  postgres:     # Base de données principale (PostgreSQL 15+)
+  redis:        # Redis Cluster (cache, sessions, streams)
+  vault:        # HashiCorp Vault (secrets management)
+  
+  # Application Services
+  backend:      # API FastAPI avec async/await
+  worker:       # Celery workers pour tâches asynchrones
+  frontend:     # Vue.js 3 + Vite dev server
+  nginx:        # Reverse proxy avec TLS
+  
+  # Authentication & Security
+  keycloak:     # Keycloak SSO (authentification enterprise)
+  
+  # Monitoring & Observability
+  prometheus:   # Prometheus (métriques)
+  grafana:      # Grafana (dashboards)
+  alertmanager: # AlertManager (alerting)
+  
+  # Logging Stack (ELK)
+  elasticsearch: # Elasticsearch (stockage logs)
+  logstash:     # Logstash (pipeline logs)
+  kibana:       # Kibana (visualisation logs)
+  
+  # Tracing
+  jaeger:       # Jaeger (distributed tracing)
 ```
 
 **Scripts d'Initialisation :**
@@ -100,43 +134,75 @@ services:
 - `make test` : Exécution de tous les tests
 - `make clean` : Nettoyage environnement
 
-### ✅ Critères de Validation Phase 0
+### ✅ Critères de Validation Phase 1.0
 
-- [ ] Repository configuré avec CI/CD fonctionnel
-- [ ] Environnement local Docker Compose opérationnel
+- [ ] Repository configuré avec CI/CD complet (GitHub Actions)
+- [ ] Environnement local Docker Compose avec tous les services
+- [ ] Keycloak configuré avec realm WindFlow
+- [ ] Vault opérationnel avec secrets management
+- [ ] Stack monitoring complète (Prometheus + Grafana)
+- [ ] Stack logging complète (ELK)
+- [ ] Jaeger configuré pour tracing
 - [ ] Pipeline de tests automatisés en place
-- [ ] Documentation technique initialisée
+- [ ] Documentation technique complète initialisée
 - [ ] Équipe formée aux outils et processus
 
-**Durée :** 2 semaines  
-**Ressources :** 1 DevOps Engineer + 1 Lead Developer
+**Durée :** 4 semaines  
+**Ressources :** 2 DevOps Engineers + 1 Lead Backend + 1 Product Owner
 
 ---
 
-## Phase 1A : Backend Fondamental (Semaines 3-6)
+## Phase 1.1 : Backend Core + Intelligence (Semaines 5-12)
 
 ### Objectif Principal
-Développer une API REST robuste avec authentification, base de données, et fonctionnalités CRUD essentielles.
+Développer une API REST robuste avec authentification enterprise, architecture event-driven, intégration LiteLLM pour l'intelligence artificielle, et patterns de résilience pour la production.
 
 ### 🏗️ Architecture Backend
 
 #### Stack Technique
 
 **Core Framework :**
-- Python 3.11+ avec FastAPI
-- SQLAlchemy 2.0 avec modèles async
-- Alembic pour migrations de base
-- Pydantic v2 pour validation données
+- Python 3.11+ avec FastAPI et async/await natif
+- SQLAlchemy 2.0 avec modèles async et type hints
+- Alembic pour migrations de base de données
+- Pydantic V2 pour validation et sérialisation
 
-**Base de Données :**
-- PostgreSQL 15+ comme base principale
-- Redis pour cache et sessions
-- Connexions poolées pour performance
+**Base de Données & Cache :**
+- PostgreSQL 15+ comme base de données principale
+- Redis 7+ Cluster pour cache, sessions et message queuing
+- Redis Streams pour architecture event-driven
+- Connexions poolées avec asyncpg pour performance
 
-**Sécurité :**
-- JWT avec refresh tokens (PyJWT)
-- HashiCorp Vault pour secrets
-- Middleware de sécurité (CORS, rate limiting)
+**Intelligence Artificielle (NOUVEAU) :**
+- **LiteLLM** pour support multi-providers (OpenAI, Claude, Ollama)
+- Génération automatique de configurations
+- Optimisation intelligente des ressources
+- Diagnostic et résolution d'erreurs assistés par IA
+
+**Architecture Event-Driven (NOUVEAU) :**
+- **Redis Streams** pour message queuing distribué
+- Pattern Pub/Sub pour événements système
+- Event sourcing pour audit trail complet
+- CQRS pour séparation lecture/écriture
+
+**Patterns de Résilience (NOUVEAU) :**
+- **Circuit Breaker** pour protection contre cascades de pannes
+- **Saga Pattern** pour transactions distribuées
+- Retry policies avec exponential backoff + jitter
+- Health checks multi-niveau (liveness, readiness, startup)
+
+**Sécurité Enterprise :**
+- **Keycloak SSO** avec support SAML 2.0 et OAuth2/OIDC
+- JWT avec refresh tokens automatiques
+- HashiCorp Vault pour dynamic secrets
+- 2FA avec TOTP et WebAuthn
+- Middleware de sécurité (CORS, rate limiting, DDoS protection)
+
+**Traitement Asynchrone :**
+- **Celery** avec Redis broker pour task queue
+- Workers spécialisés par type de tâche
+- Retry automatique et dead letter queue
+- Monitoring des tâches avec Flower
 
 #### Modèles de Données Essentiels
 
@@ -261,45 +327,56 @@ SESSION_TTL = 1800  # 30 minutes
 - Pagination automatique (limit/offset)
 - Indexation optimale des requêtes
 
-### ✅ Critères de Validation Phase 1A
+### ✅ Critères de Validation Phase 1.1
 
-- [ ] API REST complète et documentée (OpenAPI)
-- [ ] Authentification JWT sécurisée fonctionnelle
+- [ ] API REST complète et documentée (OpenAPI/Swagger)
+- [ ] Authentification Keycloak SSO fonctionnelle (SAML + OAuth2)
+- [ ] LiteLLM intégré avec 3+ providers (OpenAI, Claude, Ollama)
+- [ ] Event-driven architecture opérationnelle (Redis Streams)
+- [ ] Circuit breaker et saga patterns implémentés
 - [ ] CRUD complet pour toutes les entités MVP
-- [ ] Tests unitaires > 80% coverage
+- [ ] Tests unitaires > 85% coverage
 - [ ] Tests d'intégration sur tous les endpoints
 - [ ] Performance : < 200ms response time (p95)
+- [ ] Celery workers fonctionnels avec monitoring
 
-**Durée :** 4 semaines  
-**Ressources :** 1 Lead Backend Developer + 1 Backend Developer
+**Durée :** 8 semaines  
+**Ressources :** 1 Lead Backend Developer + 2 Backend Developers
 
 ---
 
-## Phase 1B : Frontend Minimal Viable (Semaines 7-10)
+## Phase 1.2 : Frontend Moderne + Workflows (Semaines 13-20)
 
 ### Objectif Principal
-Développer une interface utilisateur moderne, intuitive et responsive qui exploite pleinement l'API backend.
+Développer une interface utilisateur moderne avec design system Element Plus, éditeur de workflows visuels type n8n, et marketplace de templates communautaires.
 
 ### 🎨 Architecture Frontend
 
 #### Stack Technique
 
 **Core Framework :**
-- Vue.js 3 avec Composition API
-- TypeScript pour type safety
-- Vite comme build tool et dev server
-- Vue Router pour navigation SPA
+- Vue.js 3 avec Composition API obligatoire
+- TypeScript strict mode activé
+- Vite comme build tool et dev server optimisé
+- Vue Router avec auto-routes et guards
+
+**UI/UX (CHANGEMENT MAJEUR) :**
+- **Element Plus** comme composants UI enterprise
+- **UnoCSS** pour styling utilitaire performant (remplace Tailwind)
+- **Vue Flow** pour workflows visuels drag-and-drop
+- **VueUse** pour utilities composables réutilisables
+- **Iconify** pour système d'icônes unifié
 
 **State Management :**
-- Pinia pour gestion d'état
-- TanStack Query pour cache API
-- Axios pour requêtes HTTP
+- Pinia pour gestion d'état réactive
+- **Pinia Plugin Persistedstate** pour persistence localStorage
+- **TanStack Query (Vue Query)** pour cache API optimisé
+- Axios avec interceptors pour requêtes HTTP
 
-**UI/UX :**
-- Tailwind CSS pour styling
-- Headless UI pour composants accessibles
-- Vue Use pour utilities composables
-- Iconify pour système d'icônes
+**Communication Temps Réel :**
+- WebSocket natif pour notifications push
+- **Server-Sent Events (SSE)** pour streaming de logs
+- **EventSource API** pour mises à jour live
 
 #### Structure de l'Application
 
@@ -322,30 +399,46 @@ frontend/src/
 └── utils/              # Utilitaires
 ```
 
-#### Design System Minimaliste
+#### Design System avec Element Plus + UnoCSS
 
-**Palette de Couleurs :**
-```css
-:root {
-  --color-primary: #3b82f6;      /* Blue 500 */
-  --color-primary-dark: #1d4ed8;  /* Blue 700 */
-  --color-success: #10b981;       /* Emerald 500 */
-  --color-warning: #f59e0b;       /* Amber 500 */
-  --color-error: #ef4444;         /* Red 500 */
-  --color-gray-50: #f9fafb;
-  --color-gray-900: #111827;
-}
+**Configuration UnoCSS :**
+```typescript
+// uno.config.ts
+import { defineConfig, presetUno, presetAttributify } from 'unocss'
+
+export default defineConfig({
+  presets: [
+    presetUno(),
+    presetAttributify()
+  ],
+  theme: {
+    colors: {
+      primary: {
+        50: '#eff6ff',
+        500: '#3b82f6',
+        600: '#2563eb',
+        700: '#1d4ed8'
+      }
+    }
+  },
+  shortcuts: {
+    'btn-primary': 'bg-primary-600 text-white px-4 py-2 rounded hover:bg-primary-700',
+    'card': 'bg-white rounded-lg shadow border border-gray-200 p-6'
+  }
+})
 ```
 
-**Composants UI Essentiels :**
-- Button (variants: primary, secondary, danger)
-- Input (text, password, email, textarea)
-- Select (single, multiple, searchable)
-- Modal (confirmation, forms)
-- Toast (notifications)
-- Table (avec pagination, tri, filtres)
-- Card (containers de contenu)
-- Tabs (navigation secondaire)
+**Composants Element Plus Utilisés :**
+- **el-button** : Boutons avec variants (primary, success, warning, danger)
+- **el-input** : Inputs avec validation intégrée
+- **el-select** : Select avec recherche et virtualisation
+- **el-dialog** : Modales avec gestion focus
+- **el-message** : Notifications toast
+- **el-table** : Tables avec tri, pagination, filtres
+- **el-card** : Cards avec header/footer
+- **el-tabs** : Navigation par onglets
+- **el-form** : Formulaires avec validation async
+- **el-menu** : Menu de navigation responsive
 
 ### 🔐 Authentification Frontend
 
@@ -489,25 +582,399 @@ const useWebSocket = () => {
 }
 ```
 
-### ✅ Critères de Validation Phase 1B
+### 🔧 Système de Workflows Visuels (NOUVEAU)
 
-- [ ] Interface utilisateur complète et responsive
-- [ ] Authentification et navigation sécurisées
+#### Éditeur Drag-and-Drop avec Vue Flow
+
+**Architecture du Workflow Engine :**
+```vue
+<template>
+  <VueFlow
+    v-model="elements"
+    class="workflow-editor h-screen"
+    @connect="onConnect"
+    @node-click="onNodeClick"
+  >
+    <Background pattern="dots" />
+    <Controls />
+    <MiniMap />
+    
+    <!-- Nodes personnalisés WindFlow -->
+    <template #node-deployment="{ data }">
+      <DeploymentNode :data="data" />
+    </template>
+    
+    <template #node-condition="{ data }">
+      <ConditionNode :data="data" />
+    </template>
+    
+    <template #node-llm="{ data }">
+      <LLMNode :data="data" />
+    </template>
+  </VueFlow>
+</template>
+```
+
+**Nœuds Disponibles MVP :**
+- **Déploiement** : Docker, Swarm, Kubernetes
+- **Condition** : If/Then/Else avec expressions
+- **Notification** : Email, Webhook, Slack
+- **LLM** : Génération et optimisation IA
+- **HTTP Request** : API calls externes
+- **Transformation** : Manipulation de données
+- **Timer/Cron** : Déclencheurs temporels
+- **Event Trigger** : Déclencheurs événements
+
+**Bibliothèque de Templates Workflows :**
+- "Deploy to Production" : Workflow complet CI/CD
+- "Auto-scaling" : Scaling automatique basé métriques
+- "Backup & Restore" : Sauvegarde automatique
+- "Security Scan" : Scan sécurité automatique
+- "Health Monitoring" : Monitoring continu avec alertes
+
+#### Exécution Distribuée
+- Workflow executor basé sur Celery
+- Gestion d'état avec Redis
+- Retry automatique avec exponential backoff
+- Logs détaillés par étape
+- Monitoring temps réel de l'exécution
+
+### 🏪 Marketplace de Templates (NOUVEAU)
+
+#### Interface Marketplace
+
+**Fonctionnalités :**
+- Recherche full-text et filtres avancés
+- Catégories (Web, Database, Monitoring, etc.)
+- Rating et reviews communautaires
+- Templates publics et privés organisation
+- Versioning automatique avec changelog
+- One-click deployment depuis marketplace
+
+**Templates Prédéfinis MVP :**
+- **LAMP Stack** : Linux + Apache + MySQL + PHP
+- **MEAN Stack** : MongoDB + Express + Angular + Node.js
+- **MERN Stack** : MongoDB + Express + React + Node.js
+- **WordPress + MySQL** : Blog/CMS prêt à l'emploi
+- **PostgreSQL + pgAdmin** : Base de données avec admin
+- **Redis Cluster** : Cache distribué haute disponibilité
+- **Elasticsearch + Kibana** : Recherche et visualisation
+- **Prometheus + Grafana** : Monitoring complet
+- **GitLab CE** : Git repository manager
+- **Nextcloud** : Cloud storage privé
+
+#### Contribution Communautaire
+```typescript
+// Structure d'un template marketplace
+interface MarketplaceTemplate {
+  id: string
+  name: string
+  description: string
+  author: string
+  category: TemplateCategory
+  rating: number
+  downloads: number
+  version: string
+  tags: string[]
+  docker_compose: string // YAML configuration
+  variables: TemplateVariable[]
+  requirements: {
+    min_cpu: number
+    min_ram: number
+    required_ports: number[]
+  }
+  screenshots: string[]
+  documentation_url?: string
+}
+```
+
+### ✅ Critères de Validation Phase 1.2
+
+- [ ] Interface utilisateur complète avec Element Plus + UnoCSS
+- [ ] Éditeur de workflows visuels fonctionnel (10+ nœuds)
+- [ ] Marketplace avec 20+ templates certifiés
+- [ ] Authentification Keycloak intégrée au frontend
 - [ ] CRUD fonctionnel pour toutes les entités
-- [ ] Tests end-to-end avec Cypress
-- [ ] Performance : < 3s loading initial, < 1s navigation
+- [ ] Workflows exécutables avec monitoring temps réel
+- [ ] Tests E2E avec Playwright
+- [ ] Performance : < 2s loading initial, < 1s navigation
 - [ ] Accessibility WCAG 2.1 niveau AA
-- [ ] Support navigateurs modernes (Chrome, Firefox, Safari, Edge)
+- [ ] Support navigateurs modernes + PWA
 
-**Durée :** 4 semaines  
-**Ressources :** 1 Lead Frontend Developer + 1 Frontend Developer
+**Durée :** 8 semaines  
+**Ressources :** 1 Lead Frontend + 2 Frontend Developers + 1 UX/UI Designer
 
 ---
 
-## Phase 1C : Déploiement et Validation (Semaines 11-12)
+## Phase 1.3 : Orchestration Multi-Cible (Semaines 21-24)
 
 ### Objectif Principal
-Finaliser l'intégration, déployer en environnement de test, et valider le MVP avec des utilisateurs beta.
+Implémenter le support complet pour Docker Swarm, Kubernetes basique, et gestion des machines virtuelles avec provisioning automatique.
+
+### 🐳 Support Docker Swarm
+
+**Fonctionnalités Swarm :**
+```python
+# windflow/orchestrators/swarm_manager.py
+import docker
+from typing import Dict, List, Any
+
+class SwarmManager:
+    """Gestionnaire Docker Swarm pour orchestration multi-conteneurs."""
+    
+    def __init__(self, swarm_endpoint: str):
+        self.client = docker.DockerClient(base_url=swarm_endpoint)
+        
+    async def deploy_stack(self, stack_config: Dict[str, Any]) -> str:
+        """Déploie un stack sur Docker Swarm."""
+        
+        # Conversion Docker Compose vers Swarm
+        swarm_config = self._convert_compose_to_swarm(stack_config)
+        
+        # Déploiement du stack
+        stack_name = stack_config['name']
+        services = []
+        
+        for service_name, service_config in swarm_config['services'].items():
+            service = self.client.services.create(
+                image=service_config['image'],
+                name=f"{stack_name}_{service_name}",
+                replicas=service_config.get('replicas', 1),
+                networks=service_config.get('networks', []),
+                mounts=service_config.get('volumes', []),
+                env=service_config.get('environment', {})
+            )
+            services.append(service)
+            
+        return stack_name
+    
+    async def scale_service(self, service_id: str, replicas: int):
+        """Scale un service Swarm."""
+        service = self.client.services.get(service_id)
+        service.update(mode={'Replicated': {'Replicas': replicas}})
+```
+
+**Caractéristiques Implémentées :**
+- Conversion automatique Docker Compose → Swarm
+- Service mesh avec overlay networks
+- Load balancing automatique intégré
+- Rolling updates avec rollback automatique
+- Health checks et restart policies
+- Secrets et configs management
+
+### ☸️ Support Kubernetes Basique
+
+**Intégration Kubernetes Client :**
+```python
+# windflow/orchestrators/k8s_manager.py
+from kubernetes import client, config
+from kubernetes.client.rest import ApiException
+import yaml
+
+class KubernetesManager:
+    """Gestionnaire Kubernetes pour déploiements basiques."""
+    
+    def __init__(self, kubeconfig_path: str = None):
+        if kubeconfig_path:
+            config.load_kube_config(kubeconfig_path)
+        else:
+            config.load_incluster_config()
+            
+        self.apps_v1 = client.AppsV1Api()
+        self.core_v1 = client.CoreV1Api()
+        
+    async def deploy_with_helm(
+        self,
+        chart_name: str,
+        release_name: str,
+        values: Dict[str, Any],
+        namespace: str = "default"
+    ) -> Dict[str, Any]:
+        """Déploie via Helm chart."""
+        
+        import subprocess
+        
+        # Génération fichier values
+        values_yaml = yaml.dump(values)
+        values_file = f"/tmp/{release_name}-values.yaml"
+        
+        with open(values_file, 'w') as f:
+            f.write(values_yaml)
+        
+        # Installation Helm
+        helm_cmd = [
+            "helm", "install", release_name, chart_name,
+            "-f", values_file,
+            "--namespace", namespace,
+            "--create-namespace",
+            "--wait"
+        ]
+        
+        result = subprocess.run(helm_cmd, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            raise K8sDeploymentError(f"Helm install failed: {result.stderr}")
+            
+        return {"status": "deployed", "release": release_name}
+```
+
+**Fonctionnalités K8s MVP :**
+- Déploiement via Python Kubernetes client
+- Support Helm pour packages applicatifs
+- ConfigMaps et Secrets management
+- Services et Ingress basiques
+- Monitoring avec Prometheus Operator
+- Logs centralisés avec FluentD
+
+### 🖥️ Gestion des Machines Virtuelles
+
+**Vagrant + Libvirt Integration :**
+```python
+# windflow/orchestrators/vm_manager.py
+import subprocess
+from pathlib import Path
+from jinja2 import Template
+
+class VMManager:
+    """Gestionnaire de machines virtuelles avec Vagrant."""
+    
+    def __init__(self, vagrant_dir: Path):
+        self.vagrant_dir = vagrant_dir
+        self.vagrant_dir.mkdir(parents=True, exist_ok=True)
+        
+    async def create_vm(self, vm_config: Dict[str, Any]) -> str:
+        """Crée et provisionne une VM."""
+        
+        # Génération Vagrantfile depuis template
+        vagrantfile = self._generate_vagrantfile(vm_config)
+        
+        vagrantfile_path = self.vagrant_dir / f"Vagrantfile.{vm_config['name']}"
+        vagrantfile_path.write_text(vagrantfile)
+        
+        # Démarrage VM
+        result = subprocess.run(
+            ["vagrant", "up", "--provider=libvirt"],
+            cwd=self.vagrant_dir,
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode != 0:
+            raise VMCreationError(f"VM creation failed: {result.stderr}")
+            
+        return vm_config['name']
+    
+    def _generate_vagrantfile(self, config: Dict[str, Any]) -> str:
+        """Génère un Vagrantfile depuis configuration."""
+        
+        template = Template('''
+Vagrant.configure("2") do |config|
+  config.vm.box = "{{ box }}"
+  config.vm.hostname = "{{ hostname }}"
+  
+  config.vm.provider :libvirt do |libvirt|
+    libvirt.memory = {{ memory }}
+    libvirt.cpus = {{ cpus }}
+  end
+  
+  {% if networks %}
+  {% for network in networks %}
+  config.vm.network "private_network", ip: "{{ network.ip }}"
+  {% endfor %}
+  {% endif %}
+  
+  config.vm.provision "shell", inline: <<-SHELL
+    {{ provisioning_script }}
+  SHELL
+end
+        ''')
+        
+        return template.render(**config)
+```
+
+**Templates VM Préconfigurés :**
+- Ubuntu Server 22.04 LTS
+- Debian 12 (Bookworm)
+- Rocky Linux 9
+- Windows Server 2022 (pour tests)
+
+### 🔄 Migration Intelligente Entre Cibles
+
+**Système de Migration Automatique :**
+```python
+# windflow/services/migration_service.py
+class MigrationService:
+    """Service de migration intelligente entre différentes cibles."""
+    
+    async def migrate_deployment(
+        self,
+        deployment_id: str,
+        target_source: Target,
+        target_dest: Target
+    ) -> MigrationResult:
+        """Migre un déploiement d'une cible à une autre."""
+        
+        # 1. Analyse de compatibilité
+        compatibility = await self._check_compatibility(target_source, target_dest)
+        
+        if not compatibility.is_compatible:
+            raise MigrationError(f"Incompatible targets: {compatibility.issues}")
+        
+        # 2. Export configuration source
+        source_config = await self._export_configuration(deployment_id, target_source)
+        
+        # 3. Transformation configuration pour cible destination
+        dest_config = await self._transform_configuration(
+            source_config,
+            target_source.type,
+            target_dest.type
+        )
+        
+        # 4. Déploiement sur cible destination
+        new_deployment = await self._deploy_to_target(dest_config, target_dest)
+        
+        # 5. Validation fonctionnelle
+        validation = await self._validate_deployment(new_deployment)
+        
+        if validation.success:
+            # 6. Optionnel: Suppression ancien déploiement
+            if migration_config.delete_source:
+                await self._cleanup_source(deployment_id, target_source)
+                
+        return MigrationResult(
+            success=validation.success,
+            new_deployment_id=new_deployment.id,
+            migration_time=validation.duration
+        )
+```
+
+**Migrations Supportées MVP :**
+- Docker → Docker Swarm
+- Docker → Kubernetes
+- Docker Swarm → Kubernetes
+- Physical/VM → Docker
+- Validation automatique post-migration
+
+### ✅ Critères de Validation Phase 1.3
+
+- [ ] Docker Swarm opérationnel avec service mesh
+- [ ] Kubernetes déploiement via Helm fonctionnel
+- [ ] Provisioning VMs avec Vagrant + Libvirt
+- [ ] Migration intelligente entre cibles testée
+- [ ] Templates VM prêts à l'emploi (4+)
+- [ ] Tests d'intégration orchestration multi-cible
+- [ ] Documentation complète pour chaque orchestrateur
+- [ ] Performance : déploiement Swarm < 2min, K8s < 5min
+
+**Durée :** 4 semaines  
+**Ressources :** 2 Backend Developers + 1 DevOps Engineer
+
+---
+
+## Phase 1.4 : Intégration & Production-Ready (Semaines 25-26)
+
+### Objectif Principal
+Finaliser l'intégration complète, déployer en environnement de test production-like, valider avec beta testeurs étendus, et préparer l'audit sécurité.
 
 ### 🔗 Intégration et Tests
 
@@ -717,59 +1184,110 @@ async def health_check():
 - Compétences : UX, définition besoins, priorisation
 - Responsabilité : Vision produit, validation utilisateurs
 
-### Budget Détaillé (12 semaines)
+### Budget Détaillé Phase 1 (6 mois)
 
-| Poste | Coût Mensuel | Total 3 mois |
+#### Équipe Étendue (8-12 personnes)
+
+**Engineering Core (6-8 personnes) :**
+- 1 Lead Backend Engineer (Python/FastAPI) : €10,000/mois
+- 2 Backend Developers (API, IA, orchestration) : €7,000/mois chacun
+- 1 Lead Frontend Engineer (Vue.js 3) : €9,000/mois
+- 2 Frontend Developers (UI/UX, workflows) : €6,500/mois chacun
+- 1-2 DevOps Engineers (K8s, monitoring) : €8,000/mois chacun
+
+**Product & Support (2-3 personnes) :**
+- 1 Product Owner (vision, priorisation) : €7,000/mois
+- 1 UX/UI Designer (design system) : €6,000/mois
+- 0-1 QA Engineer (selon besoins) : €5,500/mois
+
+#### Budget Détaillé
+
+| Poste | Coût Mensuel | Total 6 mois |
 |-------|-------------|--------------|
-| Lead Backend Developer | €8,000 | €24,000 |
-| Frontend Developer | €6,000 | €18,000 |
-| DevOps Engineer | €7,000 | €21,000 |
-| Product Owner | €5,000 | €15,000 |
-| **Total Salaires** | **€26,000** | **€78,000** |
+| Lead Backend Engineer | €10,000 | €60,000 |
+| Backend Developers (x2) | €14,000 | €84,000 |
+| Lead Frontend Engineer | €9,000 | €54,000 |
+| Frontend Developers (x2) | €13,000 | €78,000 |
+| DevOps Engineers (x1-2) | €8,000-€16,000 | €48,000-€96,000 |
+| Product Owner | €7,000 | €42,000 |
+| UX/UI Designer | €6,000 | €36,000 |
+| QA Engineer (optionnel) | €5,500 | €0-€33,000 |
+| **Total Salaires** | **€72K-€90K** | **€402K-€483K** |
 
-| Infrastructure | Coût Total |
-|----------------|------------|
-| Cloud hosting (dev/staging) | €3,000 |
-| Outils développement (licences) | €2,000 |
-| Services externes (monitoring, etc.) | €1,000 |
-| **Total Infrastructure** | **€6,000** |
+| Infrastructure & Services | Coût Total 6 mois |
+|---------------------------|-------------------|
+| Cloud hosting (AWS/GCP) | €15,000 |
+| Services SaaS (monitoring, etc.) | €8,000 |
+| Licences outils développement | €5,000 |
+| CDN et stockage | €3,000 |
+| **Total Infrastructure** | **€31,000** |
+
+| Services Professionnels | Coût Total |
+|------------------------|------------|
+| Audit sécurité SOC2 Type I | €25,000 |
+| Consultants experts (IA, K8s) | €40,000 |
+| Tests utilisateurs beta (50 orgs) | €10,000 |
+| Marketing et documentation | €15,000 |
+| Formation équipe | €8,000 |
+| **Total Services** | **€98,000** |
 
 | Autres Coûts | Coût Total |
 |-------------|------------|
-| Audit sécurité externe | €5,000 |
-| Tests utilisateurs beta | €2,000 |
-| Documentation/Design | €3,000 |
-| **Total Autres** | **€10,000** |
+| Recrutement et onboarding | €15,000 |
+| Événements et networking | €5,000 |
+| Assurances et légal | €10,000 |
+| Contingence (10%) | €55,000 |
+| **Total Autres** | **€85,000** |
 
-**Budget Total MVP : €94,000**
+**BUDGET TOTAL PHASE 1 MVP : €616K - €697K**  
+*(Bien dans la fourchette €800K-€1.2M avec marge confortable)*
 
-### Timeline Détaillée
+### Timeline Détaillée Phase 1 (6 mois)
 
 ```mermaid
 gantt
-    title Plan de Développement WindFlow MVP
+    title Plan de Développement WindFlow Phase 1 MVP (6 mois)
     dateFormat  YYYY-MM-DD
-    section Phase 0
-    Infrastructure Setup        :active, p0, 2025-01-01, 14d
-    CI/CD Configuration         :p0a, after p0, 7d
     
-    section Phase 1A
-    Backend Architecture        :p1a, 2025-01-15, 7d
-    API Development            :p1aa, after p1a, 14d
-    Authentication            :p1ab, after p1aa, 7d
-    Testing Backend           :p1ac, after p1ab, 7d
+    section Phase 1.0 Infrastructure
+    Infrastructure Setup        :active, p10, 2025-01-01, 28d
+    Keycloak & Vault Config    :p10a, 2025-01-15, 14d
+    ELK Stack & Jaeger         :p10b, 2025-01-20, 14d
     
-    section Phase 1B
-    Frontend Setup            :p1b, 2025-01-22, 7d
-    UI Components             :p1ba, after p1b, 14d
-    Integration API           :p1bb, after p1ba, 7d
-    Testing Frontend          :p1bc, after p1bb, 7d
+    section Phase 1.1 Backend Core
+    Backend Architecture       :p11, 2025-01-29, 14d
+    API REST Development       :p11a, after p11, 21d
+    LiteLLM Integration       :p11b, 2025-02-20, 14d
+    Event-Driven Arch         :p11c, 2025-02-25, 14d
+    Circuit Breaker & Saga    :p11d, after p11c, 7d
+    Backend Testing           :p11e, after p11d, 7d
     
-    section Phase 1C
-    Integration Tests         :p1c, 2025-03-01, 7d
-    Beta Testing             :p1ca, after p1c, 7d
-    Documentation            :p1cb, after p1ca, 7d
+    section Phase 1.2 Frontend & Workflows
+    Frontend Setup            :p12, 2025-02-10, 14d
+    Element Plus UI           :p12a, after p12, 21d
+    Workflow Editor           :p12b, 2025-03-10, 21d
+    Marketplace Frontend      :p12c, 2025-03-20, 14d
+    Frontend Testing          :p12d, after p12c, 7d
+    
+    section Phase 1.3 Orchestration
+    Docker Swarm              :p13, 2025-04-01, 14d
+    Kubernetes Integration    :p13a, after p13, 14d
+    VM Management             :p13b, 2025-04-10, 14d
+    Migration System          :p13c, after p13b, 7d
+    
+    section Phase 1.4 Production
+    Integration E2E           :p14, 2025-04-29, 7d
+    Audit Sécurité           :p14a, after p14, 7d
+    Beta Testing Étendu      :p14b, 2025-05-10, 10d
+    Documentation Finale      :p14c, after p14b, 7d
 ```
+
+**Jalons Importants :**
+- **Fin Mois 1** (29/01) : Infrastructure complète opérationnelle
+- **Mi-Mois 3** (15/03) : Backend Core + LiteLLM prêts
+- **Fin Mois 4** (30/04) : Frontend + Workflows + Marketplace livrés
+- **Mi-Mois 5** (15/05) : Orchestration multi-cible complète
+- **Fin Mois 6** (30/06) : MVP Production-Ready validé avec beta testeurs
 
 ## Risques et Mitigation
 
