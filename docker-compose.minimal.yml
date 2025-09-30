@@ -1,0 +1,162 @@
+version: '3.8'
+
+# ============================================================================
+# WindFlow - Configuration Minimale
+# ============================================================================
+# Installation rapide : bash scripts/install.sh
+# Démarrage : docker compose -f docker-compose.minimal.yml up -d
+# Services : windflow-api (SQLite), windflow-frontend, traefik
+# RAM : < 512 MB
+# Temps : < 2 minutes
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # Traefik - Reverse Proxy Moderne avec Auto-Discovery
+  # ==========================================================================
+  traefik:
+    image: traefik:v2.11
+    container_name: windflow-traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"           # HTTP
+      - "443:443"         # HTTPS
+      - "8080:8080"       # Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./infrastructure/docker/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./infrastructure/docker/traefik/dynamic:/etc/traefik/dynamic:ro
+      - traefik_certificates:/certificates
+      - traefik_logs:/var/log/traefik
+    networks:
+      - windflow-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.localhost`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==========================================================================
+  # API Backend - FastAPI avec SQLite (Base de données embarquée)
+  # ==========================================================================
+  windflow-api:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.api
+    container_name: windflow-api
+    restart: unless-stopped
+    environment:
+      # Configuration minimale - SQLite embedded
+      DATABASE_TYPE: sqlite
+      DATABASE_URL: sqlite:///./data/windflow.db
+      CACHE_TYPE: local
+      SECRETS_TYPE: file
+      AUTH_TYPE: jwt
+
+      # Configuration application
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-please}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ENVIRONMENT: minimal
+
+      # API Configuration
+      API_V1_PREFIX: /api/v1
+      API_TITLE: "WindFlow API"
+      API_VERSION: "1.0.0"
+
+      # CORS
+      BACKEND_CORS_ORIGINS: '["http://localhost", "http://localhost:80", "http://localhost:3000"]'
+    volumes:
+      - ./backend:/app/backend
+      - windflow_data:/app/data
+      - windflow_logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - windflow-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`localhost`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=web"
+      - "traefik.http.services.api.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.api-stripprefix.stripprefix.prefixes=/api"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - traefik
+
+  # ==========================================================================
+  # Frontend - Vue.js 3 avec TypeScript
+  # ==========================================================================
+  windflow-frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../infrastructure/docker/Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: http://localhost/api/v1
+        VITE_WS_URL: ws://localhost/ws
+    container_name: windflow-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: http://localhost/api/v1
+      VITE_WS_URL: ws://localhost/ws
+      VITE_APP_TITLE: WindFlow
+      VITE_APP_VERSION: 1.0.0
+    networks:
+      - windflow-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`localhost`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.priority=1"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+    depends_on:
+      - traefik
+      - windflow-api
+
+# ==============================================================================
+# Volumes Persistants
+# ==============================================================================
+volumes:
+  # Données application (base SQLite, uploads, etc.)
+  windflow_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/windflow
+
+  # Logs application
+  windflow_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs
+
+  # Certificats SSL Traefik
+  traefik_certificates:
+    driver: local
+
+  # Logs Traefik
+  traefik_logs:
+    driver: local
+
+# ==============================================================================
+# Réseaux
+# ==============================================================================
+networks:
+  windflow-network:
+    name: windflow-network
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16

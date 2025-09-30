@@ -1,0 +1,181 @@
+# ============================================================================
+# Traefik v2.11 - Configuration Principale
+# ============================================================================
+# Documentation: https://doc.traefik.io/traefik/
+# ============================================================================
+
+# ==============================================================================
+# API et Dashboard
+# ==============================================================================
+api:
+  dashboard: true
+  insecure: true  # Mode dev - À mettre false en production avec authentification
+  debug: false
+
+# ==============================================================================
+# Points d'Entrée (Entrypoints)
+# ==============================================================================
+entryPoints:
+  # HTTP (port 80)
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+      # Middleware pour redirection HTTPS (désactivé en dev)
+      # middlewares:
+      #   - redirect-to-https@file
+
+  # HTTPS (port 443)
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: localhost
+            sans:
+              - "*.localhost"
+
+  # Dashboard Traefik (port 8080)
+  traefik:
+    address: ":8080"
+
+  # Metrics Prometheus
+  metrics:
+    address: ":8082"
+
+# ==============================================================================
+# Providers (Sources de Configuration)
+# ==============================================================================
+providers:
+  # Docker Provider - Auto-découverte des services
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false  # Sécurité : seuls les services avec label traefik.enable=true
+    network: windflow-network
+    watch: true
+    swarmMode: false
+    constraints: ""
+
+  # File Provider - Configuration dynamique
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+# ==============================================================================
+# Certificats SSL/TLS
+# ==============================================================================
+certificatesResolvers:
+  # Let's Encrypt (production)
+  letsencrypt:
+    acme:
+      email: admin@windflow.local
+      storage: /certificates/acme.json
+      caServer: https://acme-v02.api.letsencrypt.org/directory
+      httpChallenge:
+        entryPoint: web
+
+  # Let's Encrypt (staging - pour tests)
+  letsencrypt-staging:
+    acme:
+      email: admin@windflow.local
+      storage: /certificates/acme-staging.json
+      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      httpChallenge:
+        entryPoint: web
+
+# ==============================================================================
+# Logging
+# ==============================================================================
+log:
+  level: INFO  # DEBUG, INFO, WARN, ERROR, FATAL, PANIC
+  filePath: /var/log/traefik/traefik.log
+  format: json
+  maxSize: 100    # MB
+  maxBackups: 3
+  maxAge: 28      # days
+  compress: true
+
+# Logs d'accès
+accessLog:
+  filePath: /var/log/traefik/access.log
+  format: json
+  bufferingSize: 100
+  filters:
+    statusCodes:
+      - "200"
+      - "300-302"
+      - "400-499"
+      - "500-599"
+    retryAttempts: true
+    minDuration: "10ms"
+  fields:
+    defaultMode: keep
+    names:
+      ClientUsername: drop
+    headers:
+      defaultMode: keep
+      names:
+        User-Agent: keep
+        Authorization: drop
+        Content-Type: keep
+
+# ==============================================================================
+# Métriques Prometheus
+# ==============================================================================
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true
+    entryPoint: metrics
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+    headerLabels:
+      User-Agent: "user_agent"
+
+# ==============================================================================
+# Ping Health Check
+# ==============================================================================
+ping:
+  entryPoint: traefik
+  manualRouting: false
+
+# ==============================================================================
+# Configuration Globale
+# ==============================================================================
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# ==============================================================================
+# ServersTransport (Configuration des connexions backend)
+# ==============================================================================
+serversTransport:
+  insecureSkipVerify: false  # Vérifier les certificats SSL des backends
+  rootCAs:
+    - /etc/ssl/certs/ca-certificates.crt
+  maxIdleConnsPerHost: 200
+  forwardingTimeouts:
+    dialTimeout: 30s
+    responseHeaderTimeout: 0s
+    idleConnTimeout: 90s
+
+# ==============================================================================
+# Tracing (Optionnel - Jaeger/Zipkin)
+# ==============================================================================
+# tracing:
+#   serviceName: traefik
+#   jaeger:
+#     samplingServerURL: http://jaeger:5778/sampling
+#     localAgentHostPort: jaeger:6831
+#     gen128Bit: true
+#     propagation: jaeger
+#     traceContextHeaderName: uber-trace-id

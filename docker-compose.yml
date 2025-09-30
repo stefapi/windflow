@@ -1,60 +1,132 @@
 # ============================================================================
-# WINDFLOW DOCKER COMPOSE - CONFIGURATION PRINCIPALE
+# WindFlow - Docker Compose Principal (Redirecteur Intelligent)
 # ============================================================================
-#
-# Ce fichier principal redirige vers les configurations spécifiques :
-# - docker-compose-dev.yml  : Développement local
-# - docker-compose.prod.yml : Production
-#
-# Usage:
-#   Développement: docker compose up
-#   Production:    docker compose -f docker-compose.prod.yml up
-#
+# Ce fichier détecte automatiquement le mode d'exécution et redirige vers
+# la configuration appropriée :
+#   - Mode MINIMAL : Installation rapide (windflow + traefik uniquement)
+#   - Mode DEV     : Développement complet (toutes extensions activées)
+#   - Mode PROD    : Production optimisée
+# ============================================================================
 
 version: '3.8'
 
-# Include du fichier de développement par défaut
-include:
-  - docker-compose-dev.yml
-
-# ============================================================================
-# INFORMATIONS D'USAGE
-# ============================================================================
+# ==============================================================================
+# UTILISATION
+# ==============================================================================
 #
-# DÉVELOPPEMENT LOCAL :
-#   docker compose up -d
-#   docker compose logs -f
-#   docker compose down
+# Installation minimale (recommandé pour démarrer) :
+#   docker compose -f docker-compose.minimal.yml up -d
+#   OU
+#   make minimal
 #
-# PRODUCTION :
+# Mode développement complet :
+#   docker compose -f docker-compose-dev.yml up -d
+#   OU
+#   make dev-full
+#
+# Mode production :
 #   docker compose -f docker-compose.prod.yml up -d
-#   docker compose -f docker-compose.prod.yml logs -f
-#   docker compose -f docker-compose.prod.yml down
+#   OU
+#   make prod
 #
-# AIDE :
-#   make help                    # Voir toutes les commandes disponibles
-#   make dev                     # Démarrer en développement
-#   make docker-prod             # Démarrer en production
+# Activer des extensions spécifiques :
+#   make enable-database    # PostgreSQL
+#   make enable-cache       # Redis
+#   make enable-monitoring  # Prometheus + Grafana
+#   make enable-workers     # Celery workers
+#   make enable-secrets     # HashiCorp Vault
+#   make enable-sso         # Keycloak SSO
 #
-# ============================================================================
-# DIFFÉRENCES ENTRE ENVIRONNEMENTS
-# ============================================================================
+# ==============================================================================
+
+# ==============================================================================
+# CONFIGURATION PAR DÉFAUT
+# ==============================================================================
+# Par défaut, ce fichier redirige vers le mode MINIMAL pour une installation
+# rapide. Pour changer le comportement par défaut, définissez la variable
+# d'environnement WINDFLOW_MODE :
 #
-# DÉVELOPPEMENT (docker-compose-dev.yml) :
-#   - Hot reload activé
-#   - Ports exposés pour debug
-#   - Volumes bind pour le code source
-#   - Services de debug (adminer, mailhog)
-#   - Logs verbeux
-#   - Aucune limite de ressources
+# export WINDFLOW_MODE=minimal  # Mode minimal (défaut)
+# export WINDFLOW_MODE=dev      # Mode développement
+# export WINDFLOW_MODE=prod     # Mode production
 #
-# PRODUCTION (docker-compose.prod.yml) :
-#   - SSL/TLS avec certificats Let's Encrypt
-#   - Réplication des services critiques
-#   - Monitoring complet (Prometheus/Grafana)
-#   - Backup automatique
-#   - Limites de ressources strictes
-#   - Sécurité renforcée
-#   - Logging centralisé
+# Puis lancez : docker compose up -d
+# ==============================================================================
+
+# Note: Ce fichier est un "meta" compose file. Il ne contient pas de services
+# directement. Utilisez plutôt les fichiers spécifiques :
+#   - docker-compose.minimal.yml     (mode minimal)
+#   - docker-compose-dev.yml         (mode développement)
+#   - docker-compose.prod.yml        (mode production)
+#   - docker-compose.extensions.yml  (extensions optionnelles)
+
+services:
+  # Service factice pour afficher un message d'aide
+  windflow-help:
+    image: alpine:latest
+    container_name: windflow-help
+    command: >
+      sh -c "
+      echo '========================================';
+      echo 'WindFlow - Docker Compose';
+      echo '========================================';
+      echo '';
+      echo '⚠️  Ce fichier est un redirecteur.';
+      echo '';
+      echo '📦 Installation minimale (recommandé) :';
+      echo '   docker compose -f docker-compose.minimal.yml up -d';
+      echo '   OU';
+      echo '   make minimal';
+      echo '';
+      echo '🔧 Mode développement complet :';
+      echo '   docker compose -f docker-compose-dev.yml up -d';
+      echo '   OU';
+      echo '   make dev-full';
+      echo '';
+      echo '🚀 Mode production :';
+      echo '   docker compose -f docker-compose.prod.yml up -d';
+      echo '   OU';
+      echo '   make prod';
+      echo '';
+      echo '📚 Documentation : doc/EXTENSIONS-GUIDE.md';
+      echo '========================================';
+      sleep 10
+      "
+    restart: "no"
+
+# ==============================================================================
+# DOCUMENTATION RAPIDE
+# ==============================================================================
 #
-# ============================================================================
+# ARCHITECTURE MODULAIRE :
+#
+# WindFlow adopte une architecture modulaire avec un core minimal et des
+# extensions optionnelles :
+#
+# CORE (< 512 MB, < 2 min) :
+#   ✓ windflow-api (FastAPI + SQLite)
+#   ✓ windflow-frontend (Vue.js 3)
+#   ✓ traefik (Reverse proxy)
+#
+# EXTENSIONS OPTIONNELLES :
+#   ○ PostgreSQL (base de données externe)
+#   ○ Redis (cache distribué)
+#   ○ HashiCorp Vault (secrets management)
+#   ○ Keycloak (SSO/SAML)
+#   ○ Prometheus + Grafana (monitoring)
+#   ○ Celery + Flower (workers asynchrones)
+#
+# COMMANDES RAPIDES :
+#
+#   make status              # Afficher l'état des services
+#   make logs                # Afficher les logs
+#   make stop                # Arrêter tous les services
+#   make restart             # Redémarrer tous les services
+#   make clean               # Nettoyer complètement
+#
+# PLUS D'INFOS :
+#   README.md                # Guide de démarrage
+#   doc/EXTENSIONS-GUIDE.md  # Guide des extensions
+#   doc/ARCHITECTURE-MODULAIRE.md # Architecture détaillée
+#
+# ==============================================================================

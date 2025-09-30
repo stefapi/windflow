@@ -1,0 +1,215 @@
+# ============================================================================
+# Traefik - Configuration Dynamique - Middlewares
+# ============================================================================
+# Middlewares réutilisables pour sécurité, rate limiting, compression, etc.
+# ============================================================================
+
+http:
+  # ============================================================================
+  # Middlewares de Sécurité
+  # ============================================================================
+  middlewares:
+    # Headers de sécurité
+    security-headers:
+      headers:
+        frameDeny: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        customFrameOptionsValue: "SAMEORIGIN"
+        customResponseHeaders:
+          X-Robots-Tag: "none"
+          Server: "WindFlow"
+        contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
+
+    # Redirection HTTPS
+    redirect-to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    # Rate limiting global
+    rate-limit-global:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: 1m
+
+    # Rate limiting API strict
+    rate-limit-api:
+      rateLimit:
+        average: 50
+        burst: 100
+        period: 1m
+
+    # Rate limiting authentication
+    rate-limit-auth:
+      rateLimit:
+        average: 10
+        burst: 20
+        period: 1m
+
+    # Compression
+    compress:
+      compress:
+        excludedContentTypes:
+          - "text/event-stream"
+          - "application/grpc"
+        minResponseBodyBytes: 1024
+
+    # Strip prefix /api
+    strip-api-prefix:
+      stripPrefix:
+        prefixes:
+          - "/api"
+
+    # CORS pour développement
+    cors-dev:
+      headers:
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "PATCH"
+          - "OPTIONS"
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+          - "X-Requested-With"
+        accessControlAllowOriginList:
+          - "http://localhost"
+          - "http://localhost:80"
+          - "http://localhost:3000"
+          - "http://localhost:8080"
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 100
+
+    # CORS pour production (à configurer selon domaines)
+    cors-prod:
+      headers:
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "PATCH"
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+        accessControlAllowOriginList:
+          - "https://windflow.example.com"
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 3600
+
+    # Timeout backend
+    backend-timeout:
+      forwardedHeaders:
+        trustedIPs:
+          - "127.0.0.1/32"
+          - "172.16.0.0/12"
+
+    # Circuit Breaker
+    circuit-breaker:
+      circuitBreaker:
+        expression: "NetworkErrorRatio() > 0.3 || ResponseCodeRatio(500, 600, 0, 600) > 0.3"
+        checkPeriod: 10s
+        fallbackDuration: 30s
+        recoveryDuration: 10s
+
+    # Retry automatique
+    retry:
+      retry:
+        attempts: 3
+        initialInterval: 100ms
+
+    # Authentication basique (pour services internes)
+    basic-auth:
+      basicAuth:
+        users:
+          - "admin:$apr1$H6uskkkW$IgXLP6ewTrSuBkTrqE8wj/" # admin:admin123
+          - "user:$apr1$H6uskkkW$IgXLP6ewTrSuBkTrqE8wj/"  # user:user123
+
+    # IP Whitelist (pour admin)
+    ip-whitelist-admin:
+      ipWhiteList:
+        sourceRange:
+          - "127.0.0.1/32"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+          - "10.0.0.0/8"
+
+    # Buffer requests
+    buffer-requests:
+      buffering:
+        maxRequestBodyBytes: 10485760  # 10 MB
+        memRequestBodyBytes: 2097152   # 2 MB
+        maxResponseBodyBytes: 10485760 # 10 MB
+        memResponseBodyBytes: 2097152  # 2 MB
+        retryExpression: "IsNetworkError() && Attempts() < 3"
+
+    # Error pages personnalisées
+    error-pages:
+      errors:
+        status:
+          - "400-599"
+        service: windflow-api
+        query: "/api/errors/{status}"
+
+  # ============================================================================
+  # Chaînes de Middlewares (Combinaisons)
+  # ============================================================================
+  middlewares:
+    # Stack complet de sécurité
+    security-stack:
+      chain:
+        middlewares:
+          - security-headers
+          - compress
+          - rate-limit-global
+
+    # Stack API
+    api-stack:
+      chain:
+        middlewares:
+          - security-headers
+          - cors-dev
+          - rate-limit-api
+          - compress
+          - circuit-breaker
+          - retry
+
+    # Stack authentification
+    auth-stack:
+      chain:
+        middlewares:
+          - security-headers
+          - rate-limit-auth
+          - compress
+
+    # Stack admin (avec IP whitelist)
+    admin-stack:
+      chain:
+        middlewares:
+          - security-headers
+          - ip-whitelist-admin
+          - basic-auth
+          - compress
+
+# ============================================================================
+# Services (Routes statiques pour tests)
+# ============================================================================
+# http:
+#   services:
+#     test-service:
+#       loadBalancer:
+#         servers:
+#           - url: "http://httpbin.org"
+#         passHostHeader: true
+#         healthCheck:
+#           path: /health
+#           interval: 10s
+#           timeout: 3s

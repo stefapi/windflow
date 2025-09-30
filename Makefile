@@ -349,6 +349,157 @@ docker-prod: ## 🐳 Start Docker production stack
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml -p windflow up --build
 
 # ============================================================================
+# WINDFLOW MODULAR ARCHITECTURE COMMANDS
+# ============================================================================
+
+.PHONY: minimal dev-full prod
+
+minimal: ## 📦 Start WindFlow in minimal mode (core only: <512MB, <2min)
+	@echo "📦 Starting WindFlow in minimal mode..."
+	@$(DOCKER) network create windflow-network 2>/dev/null || true
+	@$(DOCKER_COMPOSE) -f docker-compose.minimal.yml up -d
+	@echo "✅ WindFlow minimal started successfully!"
+	@echo ""
+	@echo "🌐 Access:"
+	@echo "   - Application:        http://localhost"
+	@echo "   - API:                http://localhost/api"
+	@echo "   - Traefik Dashboard:  http://localhost:8080"
+	@echo ""
+	@echo "📦 Extensions available:"
+	@echo "   make enable-database    # PostgreSQL"
+	@echo "   make enable-cache       # Redis"
+	@echo "   make enable-monitoring  # Prometheus + Grafana"
+	@echo "   make enable-workers     # Celery workers"
+	@echo "   make enable-secrets     # HashiCorp Vault"
+	@echo "   make enable-sso         # Keycloak SSO"
+
+dev-full: ## 🔧 Start WindFlow in development mode (all extensions enabled)
+	@echo "🔧 Starting WindFlow in development mode (all extensions)..."
+	@$(DOCKER) network create windflow-network 2>/dev/null || true
+	@$(DOCKER_COMPOSE) -f docker-compose.minimal.yml \
+		-f docker-compose.extensions.yml \
+		--profile database \
+		--profile cache \
+		--profile monitoring up -d
+	@echo "✅ WindFlow development environment started!"
+	@echo ""
+	@echo "🌐 Services available:"
+	@echo "   - Application:        http://localhost"
+	@echo "   - API:                http://localhost/api"
+	@echo "   - Traefik Dashboard:  http://localhost:8080"
+	@echo "   - Prometheus:         http://prometheus.localhost"
+	@echo "   - Grafana:            http://grafana.localhost (admin/admin123)"
+	@echo "   - PostgreSQL:         localhost:5432 (windflow/windflow123)"
+	@echo "   - Redis:              localhost:6379"
+
+prod: ## 🚀 Start WindFlow in production mode
+	@echo "🚀 Starting WindFlow in production mode..."
+	@$(DOCKER_COMPOSE) -f docker-compose.prod.yml up -d
+	@echo "✅ WindFlow production environment started!"
+
+# Extension management commands
+enable-database: ## 🗄️ Enable PostgreSQL database extension
+	@echo "📦 Enabling PostgreSQL database..."
+	@$(DOCKER_COMPOSE) -f docker-compose.minimal.yml \
+		-f docker-compose.extensions.yml \
+		--profile database up -d
+	@echo "✅ PostgreSQL enabled: localhost:5432 (windflow/windflow123)"
+
+enable-cache: ## 🔄 Enable Redis cache extension
+	@echo "📦 Enabling Redis cache..."
+	@$(DOCKER_COMPOSE) -f docker-compose.minimal.yml \
+		-f docker-compose.extensions.yml \
+		--profile cache up -d
+	@echo "✅ Redis enabled: localhost:6379"
+
+enable-secrets: ## 🔐 Enable HashiCorp Vault secrets extension
+	@echo "📦 Enabling HashiCorp Vault..."
+	@$(DOCKER_COMPOSE) -f docker-compose.minimal.yml \
+		-f docker-compose.extensions.yml \
+		--profile secrets up -d
+	@echo "✅ Vault enabled: http://vault.localhost"
+
+enable-sso: ## 🔑 Enable Keycloak SSO extension
+	@echo "📦 Enabling Keycloak SSO..."
+	@$(DOCKER_COMPOSE) -f docker-compose.minimal.yml \
+		-f docker-compose.extensions.yml \
+		--profile sso up -d
+	@echo "✅ Keycloak enabled: http://keycloak.localhost (admin/admin123)"
+
+enable-monitoring: ## 📊 Enable Prometheus + Grafana monitoring extension
+	@echo "📦 Enabling monitoring stack..."
+	@$(DOCKER_COMPOSE) -f docker-compose.minimal.yml \
+		-f docker-compose.extensions.yml \
+		--profile monitoring up -d
+	@echo "✅ Monitoring enabled:"
+	@echo "   - Prometheus: http://prometheus.localhost"
+	@echo "   - Grafana:    http://grafana.localhost (admin/admin123)"
+
+enable-workers: ## ⚙️ Enable Celery workers extension (requires Redis)
+	@echo "📦 Enabling Celery workers..."
+	@$(DOCKER_COMPOSE) -f docker-compose.minimal.yml \
+		-f docker-compose.extensions.yml \
+		--profile cache \
+		--profile workers up -d
+	@echo "✅ Workers enabled:"
+	@echo "   - Flower: http://flower.localhost (admin/flower123)"
+
+# Extension disable commands
+disable-database: ## 🗑️ Disable PostgreSQL database extension
+	@echo "🗑️  Disabling PostgreSQL..."
+	@$(DOCKER_COMPOSE) -f docker-compose.extensions.yml --profile database down
+	@echo "✅ PostgreSQL disabled"
+
+disable-cache: ## 🗑️ Disable Redis cache extension
+	@echo "🗑️  Disabling Redis..."
+	@$(DOCKER_COMPOSE) -f docker-compose.extensions.yml --profile cache down
+	@echo "✅ Redis disabled"
+
+disable-secrets: ## 🗑️ Disable HashiCorp Vault extension
+	@echo "🗑️  Disabling Vault..."
+	@$(DOCKER_COMPOSE) -f docker-compose.extensions.yml --profile secrets down
+	@echo "✅ Vault disabled"
+
+disable-sso: ## 🗑️ Disable Keycloak SSO extension
+	@echo "🗑️  Disabling Keycloak..."
+	@$(DOCKER_COMPOSE) -f docker-compose.extensions.yml --profile sso down
+	@echo "✅ Keycloak disabled"
+
+disable-monitoring: ## 🗑️ Disable monitoring extension
+	@echo "🗑️  Disabling monitoring..."
+	@$(DOCKER_COMPOSE) -f docker-compose.extensions.yml --profile monitoring down
+	@echo "✅ Monitoring disabled"
+
+disable-workers: ## 🗑️ Disable workers extension
+	@echo "🗑️  Disabling workers..."
+	@$(DOCKER_COMPOSE) -f docker-compose.extensions.yml --profile workers down
+	@echo "✅ Workers disabled"
+
+# Utility commands
+status: ## 📊 Show status of all WindFlow services
+	@echo "📊 WindFlow Services Status:"
+	@echo "=================================================="
+	@$(DOCKER_COMPOSE) -f docker-compose.minimal.yml \
+		-f docker-compose.extensions.yml ps
+
+logs: ## 📋 View logs from all services
+	@$(DOCKER_COMPOSE) -f docker-compose.minimal.yml \
+		-f docker-compose.extensions.yml logs -f
+
+stop: ## ⏹️ Stop all WindFlow services
+	@echo "⏹️  Stopping WindFlow services..."
+	@$(DOCKER_COMPOSE) -f docker-compose.minimal.yml down
+	@$(DOCKER_COMPOSE) -f docker-compose.extensions.yml down
+	@echo "✅ WindFlow stopped"
+
+restart: stop minimal ## 🔄 Restart WindFlow (minimal mode)
+
+# Shortcuts
+enable-db: enable-database ## 🗄️ Shortcut for enable-database
+enable-mon: enable-monitoring ## 📊 Shortcut for enable-monitoring
+enable-work: enable-workers ## ⚙️ Shortcut for enable-workers
+
+# ============================================================================
 # DEPLOYMENT COMMANDS
 # ============================================================================
 
@@ -392,6 +543,63 @@ generate-openapi-docs: ## 📋 Generate comprehensive OpenAPI specification in .
 	$(POETRY) run python dev/scripts/generate_openapi_junie.py
 
 # ============================================================================
+# CI/CD COMMANDS (Local execution)
+# ============================================================================
+
+ci-lint-backend: ## 🔍 CI: Lint backend (local execution)
+	@echo "🔍 Running backend linting..."
+	$(POETRY) run black --check $(BACKEND_DIR)/
+	$(POETRY) run isort --check-only $(BACKEND_DIR)/
+	$(POETRY) run flake8 $(BACKEND_DIR)/
+	$(POETRY) run pylint $(BACKEND_DIR)/ --fail-under=8.0 || true
+	@echo "✅ Backend linting complete"
+
+ci-lint-frontend: ## 🔍 CI: Lint frontend (local execution)
+	@echo "🔍 Running frontend linting..."
+	cd $(FRONTEND_DIR) && $(PNPM) lint-check
+	cd $(FRONTEND_DIR) && $(PNPM) css-check
+	cd $(FRONTEND_DIR) && $(PNPM) typecheck
+	@echo "✅ Frontend linting complete"
+
+ci-test-backend: ## 🧪 CI: Test backend with coverage (local execution)
+	@echo "🧪 Running backend tests..."
+	$(POETRY) run pytest $(BACKEND_DIR)/tests/ \
+		--cov=$(BACKEND_DIR) \
+		--cov-report=xml \
+		--cov-report=html \
+		--cov-report=term \
+		--cov-fail-under=80 \
+		-v
+	@echo "✅ Backend tests complete"
+
+ci-test-frontend: ## 🧪 CI: Test frontend (local execution)
+	@echo "🧪 Running frontend tests..."
+	cd $(FRONTEND_DIR) && $(PNPM) test:ci
+	@echo "✅ Frontend tests complete"
+
+ci-security-backend: ## 🔒 CI: Security audit backend (local execution)
+	@echo "🔒 Running backend security audit..."
+	$(POETRY) run bandit -r $(BACKEND_DIR)/ -f json -o bandit-report.json || true
+	$(POETRY) run safety check --json || true
+	@echo "✅ Backend security audit complete"
+
+ci-security-frontend: ## 🔒 CI: Security audit frontend (local execution)
+	@echo "🔒 Running frontend security audit..."
+	cd $(FRONTEND_DIR) && $(PNPM) audit --audit-level=moderate || true
+	@echo "✅ Frontend security audit complete"
+
+ci-build-docker: ## 🐳 CI: Build Docker images (local execution)
+	@echo "🐳 Building Docker images..."
+	$(DOCKER) build -t windflow/api:local -f $(INFRASTRUCTURE_DIR)/docker/Dockerfile.api .
+	$(DOCKER) build -t windflow/worker:local -f $(INFRASTRUCTURE_DIR)/docker/Dockerfile.worker .
+	$(DOCKER) build -t windflow/frontend:local -f $(INFRASTRUCTURE_DIR)/docker/Dockerfile.frontend ./$(FRONTEND_DIR)
+	@echo "✅ Docker images built"
+
+ci-full: ci-lint-backend ci-lint-frontend ci-test-backend ci-test-frontend ci-security-backend ci-security-frontend ## ✅ CI: Run full CI pipeline locally
+
+ci-quick: ci-lint-backend ci-lint-frontend ## ⚡ CI: Quick checks (lint only)
+
+# ============================================================================
 # ALL-IN-ONE COMMANDS
 # ============================================================================
 
@@ -401,7 +609,7 @@ docs: ## 📄 Generate and serve documentation
 
 all: clean setup format lint test dev ## 🚀 Complete setup, format, lint, test, and run
 
-ci: install lint test ## ✅ Continuous integration pipeline
+ci: install lint test ## ✅ Continuous integration pipeline (legacy)
 
 dev-prepare: setup ## 🎉 Prepare environment for new developer
 	@echo "🎉 Environment ready for WindFlow development!"

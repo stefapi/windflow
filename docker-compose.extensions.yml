@@ -1,0 +1,371 @@
+version: '3.8'
+
+# ============================================================================
+# WindFlow - Extensions Optionnelles
+# ============================================================================
+# Utilisation : docker compose -f docker-compose.minimal.yml \
+#                -f docker-compose.extensions.yml \
+#                --profile <nom-profile> up -d
+#
+# Profiles disponibles :
+#   - database   : PostgreSQL (base de données externe)
+#   - cache      : Redis (cache distribué)
+#   - secrets    : HashiCorp Vault (gestion des secrets)
+#   - sso        : Keycloak (authentification SSO/SAML)
+#   - monitoring : Prometheus + Grafana
+#   - workers    : Celery workers + Flower
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # EXTENSION: PostgreSQL Database
+  # Profile: database
+  # Activation: make enable-database
+  # ==========================================================================
+  windflow-postgres:
+    image: postgres:15-alpine
+    container_name: windflow-postgres
+    restart: unless-stopped
+    profiles: ["database"]
+    environment:
+      POSTGRES_DB: windflow
+      POSTGRES_USER: windflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-windflow123}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/init-scripts:/docker-entrypoint-initdb.d:ro
+    networks:
+      - windflow-network
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U windflow -d windflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "traefik.enable=false"
+
+  # ==========================================================================
+  # EXTENSION: Redis Cache
+  # Profile: cache
+  # Activation: make enable-cache
+  # ==========================================================================
+  windflow-redis:
+    image: redis:7-alpine
+    container_name: windflow-redis
+    restart: unless-stopped
+    profiles: ["cache"]
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD:-redis123}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - windflow-network
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "traefik.enable=false"
+
+  # ==========================================================================
+  # EXTENSION: HashiCorp Vault
+  # Profile: secrets
+  # Activation: make enable-secrets
+  # ==========================================================================
+  windflow-vault:
+    image: hashicorp/vault:1.15
+    container_name: windflow-vault
+    restart: unless-stopped
+    profiles: ["secrets"]
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_TOKEN:-vault-dev-token}
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      VAULT_ADDR: http://0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - vault_data:/vault/data
+      - vault_logs:/vault/logs
+      - ./infrastructure/docker/vault-config:/vault/config:ro
+    networks:
+      - windflow-network
+    ports:
+      - "${VAULT_PORT:-8200}:8200"
+    command: vault server -dev -dev-listen-address=0.0.0.0:8200
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vault.rule=Host(`vault.localhost`)"
+      - "traefik.http.routers.vault.entrypoints=web"
+      - "traefik.http.services.vault.loadbalancer.server.port=8200"
+
+  # ==========================================================================
+  # EXTENSION: Keycloak SSO
+  # Profile: sso
+  # Activation: make enable-sso
+  # Note: Nécessite PostgreSQL (profile database)
+  # ==========================================================================
+  windflow-keycloak-db:
+    image: postgres:15-alpine
+    container_name: windflow-keycloak-db
+    restart: unless-stopped
+    profiles: ["sso"]
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak123}
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    networks:
+      - windflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "traefik.enable=false"
+
+  windflow-keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    container_name: windflow-keycloak
+    restart: unless-stopped
+    profiles: ["sso"]
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_PASSWORD:-admin123}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://windflow-keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak123}
+      KC_HOSTNAME: keycloak.localhost
+      KC_HOSTNAME_STRICT: false
+      KC_HTTP_ENABLED: true
+      KC_HEALTH_ENABLED: true
+      KC_METRICS_ENABLED: true
+    command: start-dev
+    networks:
+      - windflow-network
+    depends_on:
+      windflow-keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.keycloak.rule=Host(`keycloak.localhost`)"
+      - "traefik.http.routers.keycloak.entrypoints=web"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+
+  # ==========================================================================
+  # EXTENSION: Prometheus (Monitoring)
+  # Profile: monitoring
+  # Activation: make enable-monitoring
+  # ==========================================================================
+  windflow-prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: windflow-prometheus
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    user: root
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./infrastructure/docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/docker/prometheus-rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    networks:
+      - windflow-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.localhost`)"
+      - "traefik.http.routers.prometheus.entrypoints=web"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  # ==========================================================================
+  # EXTENSION: Grafana (Visualisation)
+  # Profile: monitoring
+  # Activation: make enable-monitoring
+  # ==========================================================================
+  windflow-grafana:
+    image: grafana/grafana:10.2.2
+    container_name: windflow-grafana
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    user: root
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin123}
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource,grafana-piechart-panel
+      GF_USERS_ALLOW_SIGN_UP: false
+      GF_SERVER_ROOT_URL: http://grafana.localhost
+      GF_ANALYTICS_REPORTING_ENABLED: false
+      GF_ANALYTICS_CHECK_FOR_UPDATES: false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/docker/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./infrastructure/docker/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - windflow-network
+    depends_on:
+      - windflow-prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.localhost`)"
+      - "traefik.http.routers.grafana.entrypoints=web"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  # ==========================================================================
+  # EXTENSION: Celery Worker (Tâches asynchrones)
+  # Profile: workers
+  # Activation: make enable-workers
+  # Note: Nécessite Redis (profile cache)
+  # ==========================================================================
+  windflow-worker:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    container_name: windflow-worker
+    restart: unless-stopped
+    profiles: ["workers"]
+    environment:
+      DATABASE_TYPE: ${DATABASE_TYPE:-sqlite}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./data/windflow.db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis123}@windflow-redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis123}@windflow-redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis123}@windflow-redis:6379/1
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-please}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+    volumes:
+      - ./backend:/app/backend
+      - windflow_data:/app/data
+      - windflow_logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - windflow-network
+    depends_on:
+      - windflow-redis
+    labels:
+      - "traefik.enable=false"
+
+  # ==========================================================================
+  # EXTENSION: Flower (Monitoring Celery)
+  # Profile: workers
+  # Activation: make enable-workers
+  # ==========================================================================
+  windflow-flower:
+    image: mher/flower:2.0
+    container_name: windflow-flower
+    restart: unless-stopped
+    profiles: ["workers"]
+    environment:
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis123}@windflow-redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis123}@windflow-redis:6379/1
+      FLOWER_PORT: 5555
+      FLOWER_BASIC_AUTH: ${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-flower123}
+      FLOWER_PERSISTENT: "True"
+      FLOWER_DB: /data/flower.db
+    volumes:
+      - flower_data:/data
+    networks:
+      - windflow-network
+    depends_on:
+      - windflow-redis
+      - windflow-worker
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5555/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.flower.rule=Host(`flower.localhost`)"
+      - "traefik.http.routers.flower.entrypoints=web"
+      - "traefik.http.services.flower.loadbalancer.server.port=5555"
+
+# ==============================================================================
+# Volumes Persistants pour les Extensions
+# ==============================================================================
+volumes:
+  # PostgreSQL
+  postgres_data:
+    driver: local
+
+  # Redis
+  redis_data:
+    driver: local
+
+  # Vault
+  vault_data:
+    driver: local
+  vault_logs:
+    driver: local
+
+  # Keycloak
+  keycloak_db_data:
+    driver: local
+
+  # Monitoring
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+  # Workers
+  flower_data:
+    driver: local
+
+  # Données partagées (définies dans minimal, réutilisées ici)
+  windflow_data:
+    external: true
+    name: windflow_windflow_data
+
+  windflow_logs:
+    external: true
+    name: windflow_windflow_logs
+
+# ==============================================================================
+# Réseau (utilise le réseau du minimal)
+# ==============================================================================
+networks:
+  windflow-network:
+    external: true
+    name: windflow-network

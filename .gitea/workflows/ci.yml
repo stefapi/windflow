@@ -1,0 +1,326 @@
+# ============================================================================
+# WINDFLOW CI/CD - GITEA ACTIONS
+# ============================================================================
+#
+# Pipeline d'intégration continue pour Gitea
+# Documentation: https://docs.gitea.com/usage/actions/overview
+#
+
+name: WindFlow CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+# Permissions
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ============================================================================
+  # LINT BACKEND
+  # ============================================================================
+  lint-backend:
+    name: 🔍 Lint Backend (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: 📚 Install dependencies
+        run: poetry install --with dev
+
+      - name: 🧹 Run Black (format check)
+        run: poetry run black --check backend/
+
+      - name: 🧹 Run isort (import check)
+        run: poetry run isort --check-only backend/
+
+      - name: 🔍 Run Flake8 (linting)
+        run: poetry run flake8 backend/
+
+      - name: 🔍 Run Pylint (code quality)
+        run: poetry run pylint backend/ --fail-under=8.0 || true
+
+      - name: 🔒 Run Bandit (security)
+        run: poetry run bandit -r backend/ -f json -o bandit-report.json || true
+
+      - name: 📊 Upload Bandit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-security-report
+          path: bandit-report.json
+
+  # ============================================================================
+  # LINT FRONTEND
+  # ============================================================================
+  lint-frontend:
+    name: 🔍 Lint Frontend (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 📦 Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: 📚 Install dependencies
+        working-directory: ./frontend
+        run: pnpm install
+
+      - name: 🔍 Run ESLint
+        working-directory: ./frontend
+        run: pnpm lint-check
+
+      - name: 🎨 Run CSS linting
+        working-directory: ./frontend
+        run: pnpm css-check
+
+      - name: 🔍 Run TypeScript check
+        working-directory: ./frontend
+        run: pnpm typecheck
+
+  # ============================================================================
+  # TEST BACKEND
+  # ============================================================================
+  test-backend:
+    name: 🧪 Test Backend
+    runs-on: ubuntu-latest
+    needs: [lint-backend]
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: windflow_test
+          POSTGRES_USER: windflow
+          POSTGRES_PASSWORD: windflow123
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: 📚 Install dependencies
+        run: poetry install --with dev
+
+      - name: 🧪 Run tests with coverage
+        env:
+          DATABASE_URL: postgresql://windflow:windflow123@localhost:5432/windflow_test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key-for-ci
+        run: |
+          poetry run pytest backend/tests/ \
+            --cov=backend \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term \
+            --cov-fail-under=80 \
+            -v
+
+      - name: 📊 Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-report
+          path: |
+            coverage.xml
+            htmlcov/
+
+  # ============================================================================
+  # TEST FRONTEND
+  # ============================================================================
+  test-frontend:
+    name: 🧪 Test Frontend
+    runs-on: ubuntu-latest
+    needs: [lint-frontend]
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 📦 Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: 📚 Install dependencies
+        working-directory: ./frontend
+        run: pnpm install
+
+      - name: 🧪 Run unit tests
+        working-directory: ./frontend
+        run: pnpm test:ci
+
+      - name: 📊 Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-report
+          path: frontend/coverage/
+
+  # ============================================================================
+  # BUILD DOCKER IMAGES
+  # ============================================================================
+  build-docker:
+    name: 🐳 Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🏗️ Build API image
+        run: |
+          docker build \
+            -t windflow/api:${{ github.sha }} \
+            -t windflow/api:latest \
+            -f infrastructure/docker/Dockerfile.api \
+            .
+
+      - name: 🏗️ Build Worker image
+        run: |
+          docker build \
+            -t windflow/worker:${{ github.sha }} \
+            -t windflow/worker:latest \
+            -f infrastructure/docker/Dockerfile.worker \
+            .
+
+      - name: 🏗️ Build Frontend image
+        run: |
+          docker build \
+            -t windflow/frontend:${{ github.sha }} \
+            -t windflow/frontend:latest \
+            -f infrastructure/docker/Dockerfile.frontend \
+            ./frontend
+
+  # ============================================================================
+  # SECURITY AUDIT
+  # ============================================================================
+  security-audit:
+    name: 🔒 Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: 🔒 Python security audit
+        run: |
+          poetry install --with dev
+          poetry run safety check --json || true
+
+      - name: 📦 Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 📦 Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: 🔒 NPM security audit
+        working-directory: ./frontend
+        run: |
+          pnpm install
+          pnpm audit --audit-level=moderate || true
+
+  # ============================================================================
+  # DEPLOYMENT (optionnel, à adapter selon environnement)
+  # ============================================================================
+  deploy-dev:
+    name: 🚀 Deploy to Development
+    runs-on: ubuntu-latest
+    needs: [build-docker, security-audit]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🚀 Deploy notification
+        run: |
+          echo "🚀 Déploiement automatique vers environnement de développement"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref }}"
+          # Ajouter ici les commandes de déploiement spécifiques
+
+  deploy-staging:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build-docker, security-audit]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🚀 Deploy notification
+        run: |
+          echo "🚀 Déploiement automatique vers environnement de staging"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref }}"
+          # Ajouter ici les commandes de déploiement spécifiques
