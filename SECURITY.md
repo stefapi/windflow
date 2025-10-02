@@ -121,7 +121,7 @@ Lors du déploiement de WindFlow, veuillez suivre ces bonnes pratiques de sécur
 
 Nous annonçons les mises à jour de sécurité via :
 
-- **GitHub Security Advisories** : [github.com/windflow/security/advisories](https://github.com/windflow/security/advisories)
+- **Gitea Security Advisories** : Consultez les issues de sécurité sur votre instance Gitea
 - **Notes de release** : Détails techniques dans chaque release
 
 ### Processus de Mise à jour
@@ -140,7 +140,7 @@ En tant qu'équipe restreinte travaillant sur une base volontaire, nous n'avons 
 Nous reconnaissons les contributions sécurité de plusieurs façons :
 - **Hall of Fame** : Liste publique des contributeurs sécurité
 - **Mentions de remerciements** : Dans les notes de release
-- **Badges** : Reconnaissance spéciale sur GitHub
+- **Badges** : Reconnaissance spéciale sur Gitea
 - **Collaboration** : Invitation à rejoindre l'équipe sécurité
 
 ### Évolution Future

@@ -55,7 +55,8 @@ Dans votre instance Gitea, assurez-vous que les Actions sont activées :
 # app.ini
 [actions]
 ENABLED = true
-DEFAULT_ACTIONS_URL = https://github.com
+# DEFAULT_ACTIONS_URL = https://github.com  # Optionnel: pour utiliser des actions de GitHub
+# Gitea supporte nativement les actions hébergées localement
 ```
 
 ### 2. Configurer un Runner

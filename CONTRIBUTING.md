@@ -55,7 +55,7 @@ En participant à ce projet, vous acceptez de respecter notre [Code de Conduite]
 ### Installation Rapide
 ```bash
 # 1. Fork et clone du projet
-git clone git@github.com:VOTRE_USERNAME/windflow.git
+git clone git@gitea.yourdomain.com:VOTRE_USERNAME/windflow.git
 cd windflow
 
 # 2. Installation automatique
@@ -104,11 +104,11 @@ make dev
 ```bash
 # 1. Fork du repository sur GitHub
 # 2. Clone du fork
-git clone git@github.com:VOTRE_USERNAME/windflow.git
+git clone git@gitea.yourdomain.com:VOTRE_USERNAME/windflow.git
 cd windflow
 
 # 3. Configuration des remotes
-git remote add upstream git@github.com:windflow/windflow.git
+git remote add upstream git@gitea.yourdomain.com:windflow/windflow.git
 
 # 4. Synchronisation
 git fetch upstream
@@ -119,14 +119,14 @@ git merge upstream/main
 #### Pour les Contributeurs Internes
 ```bash
 # Clone direct
-git clone git@github.com:windflow/windflow.git
+git clone git@gitea.yourdomain.com:windflow/windflow.git
 cd windflow
 ```
 
 ### 2. Identification du Travail
 
 #### Issues Existantes
-1. **Parcourir les Issues** : [GitHub Issues](https://github.com/windflow/windflow/issues)
+1. **Parcourir les Issues** : [GitHub Issues](https://gitea.yourdomain.com/windflow/windflow/issues)
 2. **Labels "Good First Issue"** : Parfait pour débuter
 3. **Assignation** : Commenter pour demander l'assignation
 4. **Clarification** : Poser des questions si nécessaire
@@ -483,8 +483,8 @@ Toute autre information, capture d'écran, ou exemple.
 - [Stack Technologique](doc/spec/03-technology-stack.md) - Technologies utilisées
 
 ### Outils Utiles
-- [GitHub CLI](https://cli.github.com/) - Gestion GitHub en ligne de commande
-- [GitHub Desktop](https://desktop.github.com/) - Interface graphique Git
+- [GitHub CLI](https://cli.gitea.yourdomain.com/) - Gestion GitHub en ligne de commande
+- [GitHub Desktop](https://desktop.gitea.yourdomain.com/) - Interface graphique Git
 - [VS Code GitHub Extension](https://marketplace.visualstudio.com/items?itemName=GitHub.vscode-pull-request-github)
 
 ### Commandes Make Utiles
@@ -583,7 +583,7 @@ make docker-up
 
 ### Apprentissage
 - [Git Tutorial](https://learngitbranching.js.org/)
-- [GitHub Flow](https://guides.github.com/introduction/flow/)
+- [GitHub Flow](https://guides.gitea.yourdomain.com/introduction/flow/)
 - [Open Source Guide](https://opensource.guide/)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Vue.js 3 Guide](https://vuejs.org/guide/)

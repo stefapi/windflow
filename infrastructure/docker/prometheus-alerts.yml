@@ -1,0 +1,246 @@
+# WindFlow - Prometheus Alerting Rules
+# Critical alerts for system health and deployments
+
+groups:
+  - name: windflow_system_alerts
+    interval: 30s
+    rules:
+      # API Service Alerts
+      - alert: WindFlowAPIDown
+        expr: up{job="windflow-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "WindFlow API is down"
+          description: "The WindFlow API service has been down for more than 2 minutes."
+
+      - alert: WindFlowAPIHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="windflow-api"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "WindFlow API high response time"
+          description: "API P95 response time is above 1 second (current: {{ $value }}s)."
+
+      # Frontend Service Alerts
+      - alert: WindFlowFrontendDown
+        expr: up{job="windflow-frontend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: frontend
+        annotations:
+          summary: "WindFlow Frontend is down"
+          description: "The WindFlow Frontend service has been down for more than 2 minutes."
+
+      # Traefik Proxy Alerts
+      - alert: TraefikProxyDown
+        expr: up{job="traefik"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: proxy
+        annotations:
+          summary: "Traefik Proxy is down"
+          description: "The Traefik reverse proxy has been down for more than 1 minute."
+
+      - alert: TraefikHighErrorRate
+        expr: rate(traefik_service_requests_total{code=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: proxy
+        annotations:
+          summary: "Traefik high error rate"
+          description: "Traefik is experiencing more than 5% error rate (current: {{ $value }})."
+
+      # System Resource Alerts
+      - alert: HighCPUUsage
+        expr: 100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% for more than 10 minutes (current: {{ $value }}%)."
+
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 5m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical CPU usage detected"
+          description: "CPU usage is above 95% for more than 5 minutes (current: {{ $value }}%)."
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 85% for more than 10 minutes (current: {{ $value }}%)."
+
+      - alert: CriticalMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical memory usage detected"
+          description: "Memory usage is above 95% for more than 5 minutes (current: {{ $value }}%)."
+
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "Low disk space"
+          description: "Available disk space is below 15% (current: {{ $value }}%)."
+
+      - alert: CriticalDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 5
+        for: 5m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical disk space"
+          description: "Available disk space is below 5% (current: {{ $value }}%)."
+
+  - name: windflow_deployment_alerts
+    interval: 30s
+    rules:
+      # Deployment Failure Alerts
+      - alert: HighDeploymentFailureRate
+        expr: rate(windflow_deployments_failed_total[10m]) / rate(windflow_deployments_total[10m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          component: deployments
+        annotations:
+          summary: "High deployment failure rate"
+          description: "More than 20% of deployments are failing (current rate: {{ $value }})."
+
+      - alert: CriticalDeploymentFailureRate
+        expr: rate(windflow_deployments_failed_total[10m]) / rate(windflow_deployments_total[10m]) > 0.5
+        for: 3m
+        labels:
+          severity: critical
+          component: deployments
+        annotations:
+          summary: "Critical deployment failure rate"
+          description: "More than 50% of deployments are failing (current rate: {{ $value }})."
+
+      - alert: DeploymentStuck
+        expr: windflow_deployment_duration_seconds > 3600
+        for: 5m
+        labels:
+          severity: warning
+          component: deployments
+        annotations:
+          summary: "Deployment taking too long"
+          description: "A deployment has been running for more than 1 hour (duration: {{ $value }}s)."
+
+      - alert: NoDeploymentsInLast24Hours
+        expr: increase(windflow_deployments_total[24h]) == 0
+        for: 30m
+        labels:
+          severity: info
+          component: deployments
+        annotations:
+          summary: "No deployments in last 24 hours"
+          description: "No deployment activity detected in the last 24 hours. This might be normal for some environments."
+
+  - name: windflow_database_alerts
+    interval: 30s
+    rules:
+      # Database Alerts (PostgreSQL when enabled)
+      - alert: PostgreSQLDown
+        expr: up{job="postgresql"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "The PostgreSQL database service has been down for more than 2 minutes."
+
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL high connection usage"
+          description: "PostgreSQL is using more than 80% of available connections (current: {{ $value }})."
+
+  - name: windflow_cache_alerts
+    interval: 30s
+    rules:
+      # Redis Cache Alerts (when enabled)
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis cache is down"
+          description: "The Redis cache service has been down for more than 2 minutes."
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis is using more than 90% of available memory (current: {{ $value }})."
+
+  - name: windflow_worker_alerts
+    interval: 30s
+    rules:
+      # Celery Worker Alerts (when enabled)
+      - alert: CeleryWorkerDown
+        expr: up{job="celery-worker"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: workers
+        annotations:
+          summary: "Celery worker is down"
+          description: "A Celery worker has been down for more than 5 minutes."
+
+      - alert: CeleryQueueBacklog
+        expr: celery_queue_length > 100
+        for: 10m
+        labels:
+          severity: warning
+          component: workers
+        annotations:
+          summary: "Celery queue backlog"
+          description: "Celery queue has more than 100 pending tasks (current: {{ $value }})."
+
+      - alert: CeleryHighTaskFailureRate
+        expr: rate(celery_tasks_failed_total[10m]) / rate(celery_tasks_total[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: workers
+        annotations:
+          summary: "High Celery task failure rate"
+          description: "More than 10% of Celery tasks are failing (current rate: {{ $value }})."

@@ -1,0 +1,17 @@
+# WindFlow - Grafana Dashboards Provisioning
+# Automatically loads WindFlow-specific dashboards
+
+apiVersion: 1
+
+providers:
+  - name: 'WindFlow Dashboards'
+    orgId: 1
+    folder: 'WindFlow'
+    folderUid: 'windflow'
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

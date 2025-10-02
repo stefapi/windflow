@@ -71,6 +71,52 @@
 - **Alerting Intelligent** : Notifications multi-canal
 - **Health Checks** : Surveillance continue des services
 
+## 🧩 Architecture Modulaire
+
+WindFlow adopte une **architecture modulaire extensible** permettant de démarrer avec un système minimal et d'activer progressivement les fonctionnalités avancées selon vos besoins.
+
+### Démarrage Minimal (< 5 minutes)
+
+Le **Core Minimal** inclut uniquement les services essentiels :
+- ✅ API Backend (FastAPI)
+- ✅ Base de données (PostgreSQL)
+- ✅ Cache & Message Broker (Redis)
+- ✅ Interface Web (Vue.js 3)
+- ✅ Reverse Proxy (Nginx)
+- ✅ Worker asynchrone (Celery)
+
+**Ressources** : 1.5 GB RAM, 2 CPU cores
+
+```bash
+# Installation minimale ultra-rapide
+./scripts/install.sh
+# ou
+docker compose -f docker-compose.minimal.yml up -d
+```
+
+### Extensions Optionnelles
+
+Activez les fonctionnalités avancées uniquement quand vous en avez besoin :
+
+| Extension | Description | Commande |
+|-----------|-------------|----------|
+| **Monitoring** | Prometheus + Grafana | `./scripts/enable-extension.sh monitoring` |
+| **Logging** | ELK Stack (Elasticsearch, Logstash, Kibana) | `./scripts/enable-extension.sh logging` |
+| **Secrets** | HashiCorp Vault | `./scripts/enable-extension.sh vault` |
+| **SSO** | Keycloak (LDAP/AD) | `./scripts/enable-extension.sh sso` |
+| **IA** | LiteLLM + Ollama | `./scripts/enable-extension.sh ai` |
+| **Kubernetes** | Orchestration K8s | `./scripts/enable-extension.sh kubernetes` |
+
+### Avantages de l'Approche Modulaire
+
+- 🚀 **Démarrage ultra-rapide** : Installation fonctionnelle en quelques minutes
+- 💰 **Économie de ressources** : Seuls les services activés consomment de la RAM/CPU
+- 🎯 **Simplicité** : Commencez simple, évoluez selon vos besoins
+- 🔧 **Flexibilité** : Activez/désactivez les extensions à la demande
+- 📈 **Scalabilité** : Architecture production-ready dès le départ
+
+📚 **Documentation complète** : [Architecture Modulaire](doc/ARCHITECTURE-MODULAIRE.md)
+
 ## 🚀 Installation Rapide
 
 ### Prérequis
@@ -83,7 +129,7 @@
 
 ```bash
 # Cloner le repository
-git clone https://github.com/yourusername/windflow.git
+git clone https://gitea.yourdomain.com/yourusername/windflow.git
 cd windflow
 
 # Copier les fichiers d'environnement

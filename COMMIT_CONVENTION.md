@@ -55,7 +55,7 @@ The body should include the motivation for the change and contrast this with pre
 
 ### Footer
 
-The footer should contain any information about **Breaking Changes** and is also the place to reference GitHub issues that this commit closes.
+The footer should contain any information about **Breaking Changes** and is also the place to reference Gitea issues that this commit closes.
 
 ## Examples
 
