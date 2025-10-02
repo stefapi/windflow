@@ -40,13 +40,16 @@ class Database:
         """Crée le moteur de base de données et configure les sessions."""
         # Configuration spécifique selon le type de base de données
         connect_args = {}
-        poolclass = None
+        engine_kwargs = {
+            "echo": settings.debug,
+        }
 
         if self._is_sqlite:
             # SQLite nécessite check_same_thread=False pour async
             connect_args = {"check_same_thread": False}
             # StaticPool pour SQLite en développement
-            poolclass = StaticPool
+            engine_kwargs["poolclass"] = StaticPool
+            engine_kwargs["connect_args"] = connect_args
 
             # Créer le répertoire data si nécessaire
             import os
@@ -54,17 +57,15 @@ class Database:
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
         else:
             # PostgreSQL avec pool de connexions
-            poolclass = None  # Utilise le pool par défaut
+            engine_kwargs["connect_args"] = connect_args
+            engine_kwargs["pool_size"] = settings.database_pool_size
+            engine_kwargs["max_overflow"] = settings.database_max_overflow
+            engine_kwargs["pool_recycle"] = settings.database_pool_recycle
 
         # Création du moteur async
         self.engine = create_async_engine(
             settings.database_url,
-            echo=settings.debug,
-            connect_args=connect_args,
-            poolclass=poolclass,
-            pool_size=settings.database_pool_size if not self._is_sqlite else 5,
-            max_overflow=settings.database_max_overflow if not self._is_sqlite else 10,
-            pool_recycle=settings.database_pool_recycle,
+            **engine_kwargs
         )
 
         # Factory de sessions

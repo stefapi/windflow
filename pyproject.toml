@@ -6,10 +6,69 @@ authors = [
     {name = "stephane apiou",email = "stephane@apiou.org"}
 ]
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "aiosqlite>=0.19.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "email-validator>=2.0.0",
+    "python-multipart>=0.0.6",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "celery>=5.3.0",
+    "redis>=5.0.0",
+    "litellm>=1.0.0",
+    "uvicorn>=0.24.0",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.24.0",
+    "aiosqlite>=0.19.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--cov=backend/app",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "asyncio: mark test as asyncio test",
+    "unit: mark test as unit test",
+    "integration: mark test as integration test",
+]
+
+[tool.coverage.run]
+source = ["backend/app"]
+omit = [
+    "*/tests/*",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

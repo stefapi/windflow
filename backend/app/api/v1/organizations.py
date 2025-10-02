@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...database import db
+from ...database import get_db
 from ...schemas.organization import OrganizationResponse, OrganizationCreate, OrganizationUpdate
 from ...services.organization_service import OrganizationService
 from ...auth.dependencies import get_current_active_user, require_superuser
@@ -21,7 +21,7 @@ async def list_organizations(
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(require_superuser),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Liste toutes les organisations (superuser uniquement).
@@ -43,7 +43,7 @@ async def list_organizations(
 async def get_organization(
     organization_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Récupère une organisation par son ID.
@@ -79,7 +79,7 @@ async def get_organization(
 async def create_organization(
     organization_data: OrganizationCreate,
     current_user: User = Depends(require_superuser),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Crée une nouvelle organisation (superuser uniquement).
@@ -112,7 +112,7 @@ async def update_organization(
     organization_id: UUID,
     organization_data: OrganizationUpdate,
     current_user: User = Depends(require_superuser),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Met à jour une organisation (superuser uniquement).
@@ -154,7 +154,7 @@ async def update_organization(
 async def delete_organization(
     organization_id: UUID,
     current_user: User = Depends(require_superuser),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Supprime une organisation (superuser uniquement).

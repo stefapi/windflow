@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...database import db
+from ...database import get_db
 from ...schemas.target import TargetResponse, TargetCreate, TargetUpdate
 from ...services.target_service import TargetService
 from ...auth.dependencies import get_current_active_user
@@ -21,7 +21,7 @@ async def list_targets(
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Liste les cibles de déploiement de l'organisation.
@@ -48,7 +48,7 @@ async def list_targets(
 async def get_target(
     target_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Récupère une cible par son ID.
@@ -85,7 +85,7 @@ async def get_target(
 async def create_target(
     target_data: TargetCreate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Crée une nouvelle cible de déploiement.
@@ -122,7 +122,7 @@ async def update_target(
     target_id: UUID,
     target_data: TargetUpdate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Met à jour une cible de déploiement.
@@ -175,7 +175,7 @@ async def update_target(
 async def delete_target(
     target_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Supprime une cible de déploiement.

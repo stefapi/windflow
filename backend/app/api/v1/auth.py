@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...database import db
+from ...database import get_db
 from ...schemas.user import Token, UserLogin
 from ...services.user_service import UserService
 from ...auth.jwt import create_access_token
@@ -17,7 +17,7 @@ router = APIRouter()
 @router.post("/login", response_model=Token)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Authentification utilisateur et génération de token JWT.

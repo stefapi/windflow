@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     # Base de données (SQLite par défaut, PostgreSQL optionnel)
-    database_url: str = "sqlite:///./data/windflow/windflow.db"
+    database_url: str = "sqlite+aiosqlite:///./data/windflow/windflow.db"
     database_pool_size: int = 5
     database_max_overflow: int = 10
     database_pool_recycle: int = 3600

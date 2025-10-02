@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...database import db
+from ...database import get_db
 from ...schemas.deployment import DeploymentResponse, DeploymentCreate, DeploymentUpdate
 from ...services.deployment_service import DeploymentService
 from ...auth.dependencies import get_current_active_user
@@ -21,7 +21,7 @@ async def list_deployments(
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Liste les déploiements de l'organisation.
@@ -48,7 +48,7 @@ async def list_deployments(
 async def get_deployment(
     deployment_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Récupère un déploiement par son ID.
@@ -85,7 +85,7 @@ async def get_deployment(
 async def create_deployment(
     deployment_data: DeploymentCreate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Crée un nouveau déploiement.
@@ -127,7 +127,7 @@ async def update_deployment(
     deployment_id: UUID,
     deployment_data: DeploymentUpdate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Met à jour un déploiement.
@@ -180,7 +180,7 @@ async def update_deployment(
 async def delete_deployment(
     deployment_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Supprime un déploiement.

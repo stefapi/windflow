@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .database import db
+from .api.v1 import api_router
 
 
 @asynccontextmanager
@@ -47,6 +48,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Enregistrement des routers API
+app.include_router(api_router)
 
 
 @app.get("/")

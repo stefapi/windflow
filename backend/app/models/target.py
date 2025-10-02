@@ -74,7 +74,7 @@ class Target(Base):
     last_check: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
     # Configuration additionnelle
-    metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    extra_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     # Organisation (multi-tenant)
     organization_id: Mapped[str] = mapped_column(

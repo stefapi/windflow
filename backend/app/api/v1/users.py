@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...database import db
+from ...database import get_db
 from ...schemas.user import UserResponse, UserCreate, UserUpdate
 from ...services.user_service import UserService
 from ...auth.dependencies import get_current_active_user, require_superuser
@@ -37,7 +37,7 @@ async def list_users(
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Liste les utilisateurs de l'organisation.
@@ -64,7 +64,7 @@ async def list_users(
 async def get_user(
     user_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Récupère un utilisateur par son ID.
@@ -101,7 +101,7 @@ async def get_user(
 async def create_user(
     user_data: UserCreate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Crée un nouvel utilisateur dans l'organisation.
@@ -135,7 +135,7 @@ async def update_user(
     user_id: UUID,
     user_data: UserUpdate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Met à jour un utilisateur.
@@ -184,7 +184,7 @@ async def update_user(
 async def delete_user(
     user_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Supprime un utilisateur.

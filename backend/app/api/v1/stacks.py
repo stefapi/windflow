@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...database import db
+from ...database import get_db
 from ...schemas.stack import StackResponse, StackCreate, StackUpdate
 from ...services.stack_service import StackService
 from ...auth.dependencies import get_current_active_user
@@ -21,7 +21,7 @@ async def list_stacks(
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Liste les stacks Docker Compose de l'organisation.
@@ -48,7 +48,7 @@ async def list_stacks(
 async def get_stack(
     stack_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Récupère une stack par son ID.
@@ -85,7 +85,7 @@ async def get_stack(
 async def create_stack(
     stack_data: StackCreate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Crée une nouvelle stack Docker Compose.
@@ -122,7 +122,7 @@ async def update_stack(
     stack_id: UUID,
     stack_data: StackUpdate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Met à jour une stack Docker Compose.
@@ -175,7 +175,7 @@ async def update_stack(
 async def delete_stack(
     stack_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(db.get_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """
     Supprime une stack Docker Compose.
