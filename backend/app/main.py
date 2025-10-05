@@ -24,6 +24,7 @@ async def lifespan(app: FastAPI):
     # Startup
     await db.connect()
     await db.create_tables()
+    await db.seed_tables()
 
     yield
 

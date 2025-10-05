@@ -92,6 +92,20 @@ class Database:
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
+    async def seed_tables(self) -> None:
+        """
+        Initialise la base de données avec les données minimales.
+
+        Crée l'organisation par défaut et l'utilisateur admin
+        lors de la première initialisation.
+        """
+        if not self.session_factory:
+            raise RuntimeError("Database not initialized. Call connect() first.")
+
+        async with self.session() as session:
+            from .database_seed import seed_database
+            await seed_database(session)
+
     @asynccontextmanager
     async def session(self) -> AsyncGenerator[AsyncSession, None]:
         """

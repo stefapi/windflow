@@ -78,6 +78,14 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "json"
 
+    # Initial Admin User (pour seeding de la base de données)
+    admin_email: str = "admin@windflow.dev"
+    admin_username: str = "admin"
+    admin_password: str = "changeme123"
+    admin_full_name: str = "Administrator"
+    default_org_name: str = "Default Organization"
+    default_org_slug: str = "default"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
