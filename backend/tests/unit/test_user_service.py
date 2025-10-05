@@ -29,6 +29,19 @@ class TestUserService:
 
         assert not UserService.verify_password("wrongpassword", hashed)
 
+    async def test_hash_password_long(self):
+        """Test du hashing avec mot de passe long (>72 bytes)."""
+        # Créer un mot de passe > 72 bytes
+        long_password = "a" * 100  # 100 caractères = 100 bytes en ASCII
+        hashed = UserService.hash_password(long_password)
+
+        assert hashed != long_password
+        assert len(hashed) > 0
+        # Vérifier que le mot de passe tronqué fonctionne
+        assert UserService.verify_password(long_password, hashed)
+        # Vérifier que les 72 premiers bytes sont suffisants
+        assert UserService.verify_password(long_password[:72], hashed)
+
     async def test_create_user(self, db_session: AsyncSession, test_organization: Organization):
         """Test de création d'utilisateur."""
         user_data = UserCreate(

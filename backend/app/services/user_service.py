@@ -25,13 +25,43 @@ class UserService:
 
     @staticmethod
     def hash_password(password: str) -> str:
-        """Hash un mot de passe."""
-        return pwd_context.hash(password)
+        """
+        Hash un mot de passe.
+
+        Tronque automatiquement le mot de passe à 72 bytes pour respecter
+        la limite de bcrypt. Cette approche est recommandée par la documentation
+        bcrypt pour éviter les erreurs avec des mots de passe très longs.
+
+        Args:
+            password: Mot de passe en clair
+
+        Returns:
+            Hash bcrypt du mot de passe
+        """
+        # Bcrypt a une limite de 72 bytes, tronquer si nécessaire
+        password_bytes = password.encode('utf-8')[:72]
+        password_truncated = password_bytes.decode('utf-8', errors='ignore')
+        return pwd_context.hash(password_truncated)
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
-        """Vérifie un mot de passe."""
-        return pwd_context.verify(plain_password, hashed_password)
+        """
+        Vérifie un mot de passe.
+
+        Applique la même troncature à 72 bytes que lors du hashing
+        pour assurer la cohérence de la vérification.
+
+        Args:
+            plain_password: Mot de passe en clair à vérifier
+            hashed_password: Hash bcrypt stocké
+
+        Returns:
+            True si le mot de passe correspond, False sinon
+        """
+        # Appliquer la même troncature que lors du hashing
+        password_bytes = plain_password.encode('utf-8')[:72]
+        password_truncated = password_bytes.decode('utf-8', errors='ignore')
+        return pwd_context.verify(password_truncated, hashed_password)
 
     @staticmethod
     async def get_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
