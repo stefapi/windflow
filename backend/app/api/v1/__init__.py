@@ -17,6 +17,7 @@ from .reviews import router as reviews_router
 from .favorites import router as favorites_router
 from .stats import router as stats_router
 from .import_export import router as import_export_router
+from .admin import admin_router
 
 # Router principal v1
 api_router = APIRouter(prefix="/api/v1")
@@ -34,5 +35,6 @@ api_router.include_router(reviews_router, tags=["reviews"])
 api_router.include_router(favorites_router, tags=["favorites"])
 api_router.include_router(stats_router, tags=["statistics"])
 api_router.include_router(import_export_router, tags=["import-export"])
+api_router.include_router(admin_router)  # Le préfixe /admin est déjà dans le router
 
 __all__ = ["api_router"]

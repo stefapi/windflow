@@ -100,6 +100,10 @@ async def require_superuser(
     return current_user
 
 
+# Alias pour compatibilité avec les routes admin
+get_current_superadmin = require_superuser
+
+
 async def get_current_user_ws(
     websocket: WebSocket,
     token: Optional[str] = Query(None),
