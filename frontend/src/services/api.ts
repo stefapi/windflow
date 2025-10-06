@@ -29,8 +29,18 @@ import type {
 
 // Auth API
 export const authApi = {
-  login: (data: LoginRequest) =>
-    http.post<LoginResponse>('/auth/login', data),
+  login: (data: LoginRequest) => {
+    // OAuth2PasswordRequestForm expects form-data, not JSON
+    const formData = new URLSearchParams()
+    formData.append('username', data.username)
+    formData.append('password', data.password)
+
+    return http.post<LoginResponse>('/auth/login', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    })
+  },
 
   register: (data: UserCreate) =>
     http.post<User>('/auth/register', data),

@@ -51,64 +51,93 @@ def deploy_stack(
     Raises:
         Exception: En cas d'erreur de déploiement
     """
+    from backend.app.services.docker_compose_service import DockerComposeService
+    from backend.app.database import AsyncSessionLocal
+    from backend.app.models.stack import Stack
+    from sqlalchemy import select
+    from pathlib import Path
+    import asyncio
+
     logger.info(
         f"Starting deployment {deployment_id} of stack {stack_id} "
         f"on target {target_id} by user {user_id}"
     )
 
     try:
-        # TODO: Intégrer avec les services de déploiement réels
-        # from backend.app.services.deployment_service import DeploymentService
-        # from backend.app.database import get_db
-        #
-        # async with get_db() as db:
-        #     service = DeploymentService(db)
-        #     result = await service.execute_deployment(
-        #         deployment_id, stack_id, target_id, configuration
-        #     )
+        # Fonction async pour gérer le déploiement
+        async def execute_deployment():
+            async with AsyncSessionLocal() as db:
+                # 1. Charger le stack
+                result = await db.execute(
+                    select(Stack).where(Stack.id == stack_id)
+                )
+                stack = result.scalar_one_or_none()
 
-        # Simulation pour l'instant
-        logger.info(f"Deploying stack {stack_id} to target {target_id}...")
+                if not stack:
+                    raise ValueError(f"Stack {stack_id} non trouvé")
 
-        # Publier un événement de démarrage
-        # from backend.app.core.events import publish_event, Event, EventType
-        # await publish_event(Event(
-        #     event_type=EventType.DEPLOYMENT_STARTED,
-        #     aggregate_id=UUID(deployment_id),
-        #     aggregate_type="deployment",
-        #     user_id=UUID(user_id),
-        #     payload={"stack_id": stack_id, "target_id": target_id}
-        # ))
+                logger.info(f"Stack chargé: {stack.name} v{stack.version}")
 
-        result = {
-            "deployment_id": deployment_id,
-            "status": "completed",
-            "message": "Stack deployed successfully (simulated)",
-            "stack_id": stack_id,
-            "target_id": target_id,
-            "started_at": datetime.utcnow().isoformat(),
-            "completed_at": datetime.utcnow().isoformat(),
-            "task_id": self.request.id,
-            "retry_count": self.request.retries
-        }
+                # 2. Substituer les variables dans le template
+                compose_service = DockerComposeService()
+                final_compose = compose_service.substitute_variables(
+                    stack.template,
+                    configuration
+                )
+
+                logger.info("Variables substituées dans le template")
+
+                # 3. Valider le compose généré
+                is_valid, error_msg = compose_service.validate_compose(final_compose)
+                if not is_valid:
+                    raise ValueError(f"Compose invalide: {error_msg}")
+
+                # 4. Générer le fichier docker-compose.yml
+                deploy_dir = Path(f"/tmp/windflow-deployments/{deployment_id}")
+                compose_file = deploy_dir / "docker-compose.yml"
+
+                compose_service.generate_compose_file(final_compose, compose_file)
+                logger.info(f"Fichier compose généré: {compose_file}")
+
+                # 5. Déployer avec docker-compose
+                project_name = f"windflow-{deployment_id[:8]}"
+                success, output = await compose_service.deploy_compose(
+                    compose_file,
+                    project_name
+                )
+
+                if not success:
+                    raise Exception(f"Échec du déploiement: {output}")
+
+                logger.info(f"Déploiement réussi: {output}")
+
+                return {
+                    "deployment_id": deployment_id,
+                    "status": "completed",
+                    "message": "Stack deployed successfully",
+                    "stack_id": stack_id,
+                    "stack_name": stack.name,
+                    "target_id": target_id,
+                    "project_name": project_name,
+                    "compose_file": str(compose_file),
+                    "started_at": datetime.utcnow().isoformat(),
+                    "completed_at": datetime.utcnow().isoformat(),
+                    "task_id": self.request.id,
+                    "retry_count": self.request.retries,
+                    "output": output
+                }
+
+        # Exécuter la fonction async
+        result = asyncio.run(execute_deployment())
 
         logger.info(f"Deployment {deployment_id} completed successfully")
-
-        # Publier un événement de succès
-        # await publish_event(Event(
-        #     event_type=EventType.DEPLOYMENT_COMPLETED,
-        #     aggregate_id=UUID(deployment_id),
-        #     aggregate_type="deployment",
-        #     user_id=UUID(user_id),
-        #     payload=result
-        # ))
-
         return result
 
     except Exception as e:
         logger.error(f"Deployment {deployment_id} failed: {e}")
 
-        # Publier un événement d'échec
+        # Publier un événement d'échec si nécessaire
+        # from backend.app.core.events import publish_event, Event, EventType
         # await publish_event(Event(
         #     event_type=EventType.DEPLOYMENT_FAILED,
         #     aggregate_id=UUID(deployment_id),

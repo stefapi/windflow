@@ -13,6 +13,7 @@ from ..database import Base
 if TYPE_CHECKING:
     from .organization import Organization
     from .deployment import Deployment
+    from .stack_review import StackReview
 
 
 class Stack(Base):
@@ -38,8 +39,13 @@ class Stack(Base):
     # Template Docker Compose (YAML stocké en JSON)
     template: Mapped[dict] = mapped_column(JSON, nullable=False)
 
-    # Variables configurables
-    variables: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Variables configurables (format simple pour JSONForms)
+    variables: Mapped[dict] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+        comment="Variables configurables au format simple"
+    )
 
     # Métadonnées
     version: Mapped[str] = mapped_column(String(50), nullable=False, default="1.0.0")
@@ -47,9 +53,16 @@ class Stack(Base):
     tags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
 
     # Marketplace (si le stack est public)
-    is_public: Mapped[bool] = mapped_column(default=False, nullable=False)
+    is_public: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)
     downloads: Mapped[int] = mapped_column(default=0, nullable=False)
     rating: Mapped[float] = mapped_column(default=0.0, nullable=False)
+
+    # Métadonnées marketplace
+    icon_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    screenshots: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    documentation_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    author: Mapped[str] = mapped_column(String(255), nullable=True)
+    license: Mapped[str] = mapped_column(String(100), nullable=True, default="MIT")
 
     # Organisation (multi-tenant)
     organization_id: Mapped[str] = mapped_column(
@@ -80,6 +93,12 @@ class Stack(Base):
 
     deployments: Mapped[List["Deployment"]] = relationship(
         "Deployment",
+        back_populates="stack",
+        cascade="all, delete-orphan"
+    )
+
+    reviews: Mapped[List["StackReview"]] = relationship(
+        "StackReview",
         back_populates="stack",
         cascade="all, delete-orphan"
     )

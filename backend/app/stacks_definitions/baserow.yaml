@@ -1,0 +1,464 @@
+# Configuration Baserow pour WindFlow Marketplace
+# Baserow - Alternative open-source à Airtable
+# https://baserow.io
+
+# ============================================================================
+# MÉTADONNÉES DU STACK
+# ============================================================================
+metadata:
+  name: "Baserow - No-Code Database Platform"
+  version: "1.0.0"
+  category: "Database & No-Code"
+  author: "Baserow Team"
+  license: "MIT"
+
+  description: |
+    Baserow est une alternative open-source à Airtable. Créez des bases de données
+    collaboratives sans code avec une interface intuitive de type tableur.
+
+    Fonctionnalités principales :
+    - Interface de tableur intuitive
+    - API REST automatique pour chaque table
+    - Formulaires personnalisables
+    - Vues multiples (Grid, Gallery, Kanban)
+    - Collaboration en temps réel
+    - Import/Export de données
+    - Webhooks et automatisations
+
+    Ce stack déploie une instance complète avec PostgreSQL, Redis et Caddy.
+
+  icon_url: "https://baserow.io/img/logo.svg"
+  documentation_url: "https://baserow.io/docs"
+
+  screenshots:
+    - "https://baserow.io/img/screenshots/database-view.png"
+    - "https://baserow.io/img/screenshots/grid-view.png"
+    - "https://baserow.io/img/screenshots/form-builder.png"
+
+  tags:
+    - no-code
+    - database
+    - airtable
+    - spreadsheet
+    - collaboration
+    - postgresql
+    - redis
+
+  is_public: true
+
+# ============================================================================
+# TEMPLATE DOCKER COMPOSE
+# ============================================================================
+template:
+  version: "3.9"
+
+  services:
+    # Base de données PostgreSQL
+    db:
+      image: "postgres:14-alpine"
+      container_name: baserow_db
+      environment:
+        POSTGRES_USER: baserow
+        POSTGRES_PASSWORD: "{{ db_password }}"
+        POSTGRES_DB: baserow
+      volumes:
+        - baserow_db_data:/var/lib/postgresql/data
+      restart: unless-stopped
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U baserow"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+      networks:
+        - baserow_internal
+
+    # Cache Redis
+    redis:
+      image: "redis:7-alpine"
+      container_name: baserow_redis
+      command: redis-server --requirepass "{{ redis_password }}"
+      volumes:
+        - baserow_redis_data:/data
+      restart: unless-stopped
+      healthcheck:
+        test: ["CMD", "redis-cli", "ping"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+      networks:
+        - baserow_internal
+
+    # Backend Baserow
+    backend:
+      image: "baserow/backend:{{ baserow_version }}"
+      container_name: baserow_backend
+      environment:
+        # URL publique
+        BASEROW_PUBLIC_URL: "https://{{ domain }}"
+
+        # Configuration base de données
+        DATABASE_HOST: db
+        DATABASE_PORT: 5432
+        DATABASE_NAME: baserow
+        DATABASE_USER: baserow
+        DATABASE_PASSWORD: "{{ db_password }}"
+
+        # Configuration Redis
+        REDIS_HOST: redis
+        REDIS_PORT: 6379
+        REDIS_PASSWORD: "{{ redis_password }}"
+        REDIS_PROTOCOL: "rediss"
+
+        # Sécurité
+        SECRET_KEY: "{{ secret_key }}"
+
+        # Workers et performance
+        BASEROW_AMOUNT_OF_WORKERS: "{{ max_workers }}"
+        BASEROW_AMOUNT_OF_GUNICORN_WORKERS: "{{ max_workers }}"
+
+        # Email (optionnel)
+        EMAIL_SMTP: "{{ enable_email }}"
+        EMAIL_SMTP_HOST: "{{ email_host }}"
+        EMAIL_SMTP_PORT: "{{ email_port }}"
+        EMAIL_SMTP_USER: "{{ email_user }}"
+        EMAIL_SMTP_PASSWORD: "{{ email_password }}"
+        FROM_EMAIL: "{{ from_email }}"
+
+        # Stockage média
+        MEDIA_URL: "https://{{ domain }}/media/"
+        MEDIA_ROOT: /baserow/media
+
+        # Autres options
+        BASEROW_ENABLE_SECURE_PROXY_SSL_HEADER: "true"
+        BASEROW_EXTRA_ALLOWED_HOSTS: "{{ domain }}"
+
+      depends_on:
+        db:
+          condition: service_healthy
+        redis:
+          condition: service_healthy
+
+      volumes:
+        - baserow_media:/baserow/media
+        - baserow_data:/baserow/data
+
+      restart: unless-stopped
+
+      healthcheck:
+        test: ["CMD-SHELL", "curl -f http://localhost:8000/api/_health/ || exit 1"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+        start_period: 60s
+
+      networks:
+        - baserow_internal
+
+    # Frontend Baserow
+    frontend:
+      image: "baserow/web-frontend:{{ baserow_version }}"
+      container_name: baserow_frontend
+      environment:
+        BASEROW_PUBLIC_URL: "https://{{ domain }}"
+        PRIVATE_BACKEND_URL: "http://backend:8000"
+        PUBLIC_BACKEND_URL: "https://{{ domain }}"
+
+      depends_on:
+        - backend
+
+      restart: unless-stopped
+
+      healthcheck:
+        test: ["CMD-SHELL", "curl -f http://localhost:3000/_health || exit 1"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+
+      networks:
+        - baserow_internal
+
+    # Reverse Proxy Caddy (avec SSL automatique)
+    caddy:
+      image: "caddy:2-alpine"
+      container_name: baserow_caddy
+      ports:
+        - "{{ public_port }}:80"
+        - "{{ ssl_port }}:443"
+
+      volumes:
+        - ./Caddyfile:/etc/caddy/Caddyfile:ro
+        - baserow_caddy_data:/data
+        - baserow_caddy_config:/config
+
+      environment:
+        DOMAIN: "{{ domain }}"
+
+      restart: unless-stopped
+
+      depends_on:
+        - frontend
+        - backend
+
+      networks:
+        - baserow_internal
+
+      # Caddyfile inline
+      configs:
+        - source: caddyfile
+          target: /etc/caddy/Caddyfile
+
+  # Volumes persistants
+  volumes:
+    baserow_db_data:
+      driver: local
+    baserow_redis_data:
+      driver: local
+    baserow_media:
+      driver: local
+    baserow_data:
+      driver: local
+    baserow_caddy_data:
+      driver: local
+    baserow_caddy_config:
+      driver: local
+
+  # Réseaux
+  networks:
+    baserow_internal:
+      driver: bridge
+
+  # Configuration Caddy
+  configs:
+    caddyfile:
+      content: |
+        {$DOMAIN} {
+          # Reverse proxy vers le frontend
+          reverse_proxy frontend:3000
+
+          # Reverse proxy API vers le backend
+          handle /api/* {
+            reverse_proxy backend:8000
+          }
+
+          handle /ws/* {
+            reverse_proxy backend:8000
+          }
+
+          # Média statiques
+          handle /media/* {
+            reverse_proxy backend:8000
+          }
+
+          # Headers de sécurité
+          header {
+            Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+            X-Content-Type-Options "nosniff"
+            X-Frame-Options "SAMEORIGIN"
+            X-XSS-Protection "1; mode=block"
+            Referrer-Policy "strict-origin-when-cross-origin"
+          }
+
+          # Compression
+          encode gzip zstd
+
+          # Logs
+          log {
+            output file /data/access.log
+            format json
+          }
+        }
+
+# ============================================================================
+# VARIABLES CONFIGURABLES
+# ============================================================================
+variables:
+  # Version de Baserow
+  baserow_version:
+    type: string
+    label: "Version de Baserow"
+    description: "Version de Baserow à déployer"
+    default: "1.26.1"
+    enum:
+      - "1.26.1"
+      - "1.25.2"
+      - "1.24.2"
+      - "latest"
+    required: true
+    group: "Configuration générale"
+
+  # Domaine
+  domain:
+    type: string
+    label: "Nom de domaine"
+    description: "Domaine d'accès à Baserow (ex: baserow.example.com)"
+    default: "baserow.localhost"
+    required: true
+    pattern: "^[a-zA-Z0-9][a-zA-Z0-9-\\.]*[a-zA-Z0-9]$"
+    help: "Le domaine doit pointer vers votre serveur. SSL sera configuré automatiquement."
+    group: "Configuration générale"
+
+  # Ports
+  public_port:
+    type: number
+    label: "Port HTTP public"
+    description: "Port d'accès HTTP (sera redirigé vers HTTPS)"
+    default: 80
+    minimum: 1
+    maximum: 65535
+    group: "Configuration réseau"
+
+  ssl_port:
+    type: number
+    label: "Port HTTPS public"
+    description: "Port d'accès HTTPS sécurisé"
+    default: 443
+    minimum: 1
+    maximum: 65535
+    group: "Configuration réseau"
+
+  # Base de données
+  db_password:
+    type: password
+    label: "Mot de passe PostgreSQL"
+    description: "Mot de passe de la base de données (généré automatiquement si vide)"
+    default: "{{ generate_password(20) }}"
+    required: true
+    min_length: 12
+    help: "Un mot de passe fort sera généré automatiquement. Conservez-le en lieu sûr."
+    group: "Sécurité"
+
+  redis_password:
+    type: password
+    label: "Mot de passe Redis"
+    description: "Mot de passe pour Redis (généré automatiquement si vide)"
+    default: "{{ generate_password(20) }}"
+    required: true
+    min_length: 12
+    group: "Sécurité"
+
+  secret_key:
+    type: password
+    label: "Clé secrète Django"
+    description: "Clé secrète pour Django (généré automatiquement si vide)"
+    default: "{{ generate_secret(50) }}"
+    required: true
+    min_length: 32
+    help: "Cette clé est utilisée pour le chiffrement des sessions. Ne la modifiez jamais après le premier déploiement."
+    group: "Sécurité"
+
+  # Performance
+  max_workers:
+    type: number
+    label: "Nombre de workers"
+    description: "Nombre de workers backend Baserow (recommandé: 2 × CPU cores)"
+    default: 2
+    minimum: 1
+    maximum: 16
+    help: "Plus de workers = meilleure performance mais plus de RAM utilisée"
+    group: "Performance"
+
+  # Email (optionnel)
+  enable_email:
+    type: boolean
+    label: "Activer l'envoi d'emails"
+    description: "Activer la configuration SMTP pour l'envoi d'emails"
+    default: false
+    group: "Email (optionnel)"
+
+  email_host:
+    type: string
+    label: "Serveur SMTP"
+    description: "Adresse du serveur SMTP (ex: smtp.gmail.com)"
+    default: ""
+    required: false
+    group: "Email (optionnel)"
+    depends_on:
+      enable_email: true
+
+  email_port:
+    type: number
+    label: "Port SMTP"
+    description: "Port du serveur SMTP (587 pour TLS, 465 pour SSL)"
+    default: 587
+    minimum: 1
+    maximum: 65535
+    group: "Email (optionnel)"
+    depends_on:
+      enable_email: true
+
+  email_user:
+    type: string
+    label: "Utilisateur SMTP"
+    description: "Nom d'utilisateur pour l'authentification SMTP"
+    default: ""
+    required: false
+    group: "Email (optionnel)"
+    depends_on:
+      enable_email: true
+
+  email_password:
+    type: password
+    label: "Mot de passe SMTP"
+    description: "Mot de passe pour l'authentification SMTP"
+    default: ""
+    required: false
+    group: "Email (optionnel)"
+    depends_on:
+      enable_email: true
+
+  from_email:
+    type: string
+    label: "Email expéditeur"
+    description: "Adresse email utilisée comme expéditeur"
+    default: "noreply@{{ domain }}"
+    required: false
+    pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    group: "Email (optionnel)"
+    depends_on:
+      enable_email: true
+
+# ============================================================================
+# NOTES DE DÉPLOIEMENT
+# ============================================================================
+deployment_notes: |
+  ## Notes de déploiement Baserow
+
+  ### Première connexion
+  Après le déploiement, accédez à https://{{ domain }} et créez votre premier compte administrateur.
+
+  ### Volumes persistants
+  Les données suivantes sont persistées :
+  - Base de données PostgreSQL : baserow_db_data
+  - Cache Redis : baserow_redis_data
+  - Fichiers média uploadés : baserow_media
+  - Données application : baserow_data
+  - Configuration Caddy : baserow_caddy_data
+
+  ### Sauvegardes
+  Pour sauvegarder vos données :
+  ```bash
+  docker exec baserow_db pg_dump -U baserow baserow > backup.sql
+  docker cp baserow_backend:/baserow/media ./media_backup
+  ```
+
+  ### Performance
+  Pour une utilisation en production, ajustez :
+  - `max_workers` selon vos ressources (recommandé : 2 × nombre de CPU)
+  - Configurez un CDN pour les fichiers média
+  - Utilisez un certificat SSL valide (Let's Encrypt via Caddy)
+
+  ### Ressources recommandées
+  - CPU : 2 cores minimum (4+ recommandé)
+  - RAM : 4 GB minimum (8+ recommandé)
+  - Disque : 20 GB minimum pour démarrer
+
+  ### Sécurité
+  - Tous les mots de passe sont générés automatiquement
+  - SSL/TLS activé automatiquement via Caddy
+  - Connexions base de données et Redis sécurisées
+  - Headers de sécurité configurés
+
+  ### Support
+  - Documentation : https://baserow.io/docs
+  - Forum : https://community.baserow.io
+  - GitHub : https://github.com/bram2w/baserow

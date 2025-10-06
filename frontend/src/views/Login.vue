@@ -23,11 +23,12 @@
 
 <script setup lang="ts">
 import { reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
 const loginForm = reactive({
@@ -39,8 +40,12 @@ const handleLogin = async () => {
   try {
     await authStore.login(loginForm)
     ElMessage.success('Login successful')
-    router.push('/')
-  } catch (error) {
+
+    // Use replace instead of push to avoid keeping login in history
+    // Navigate to the redirect path or dashboard
+    const redirect = (route.query.redirect as string) || '/'
+    await router.replace(redirect)
+  } catch {
     ElMessage.error('Login failed')
   }
 }

@@ -12,6 +12,7 @@ from ..database import Base
 
 if TYPE_CHECKING:
     from .organization import Organization
+    from .stack_review import StackReview
 
 
 class User(Base):
@@ -69,6 +70,12 @@ class User(Base):
     organization: Mapped["Organization"] = relationship(
         "Organization",
         back_populates="users"
+    )
+
+    stack_reviews: Mapped[list["StackReview"]] = relationship(
+        "StackReview",
+        back_populates="user",
+        cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

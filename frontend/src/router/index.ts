@@ -82,9 +82,11 @@ router.beforeEach((to, from, next) => {
   if (requiresAuth && !authStore.isAuthenticated) {
     // Redirect to login if not authenticated
     next({ name: 'Login', query: { redirect: to.fullPath } })
-  } else if (to.name === 'Login' && authStore.isAuthenticated) {
-    // Redirect to dashboard if already authenticated
-    next({ name: 'Dashboard' })
+  } else if (to.name === 'Login' && authStore.isAuthenticated && from.name !== 'Login') {
+    // Only redirect away from login if coming from another page (not from login itself)
+    // This allows Login component to handle its own navigation after login
+    const redirectPath = (to.query.redirect as string) || '/'
+    next(redirectPath)
   } else {
     next()
   }

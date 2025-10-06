@@ -161,6 +161,50 @@ pip install -e ./cli
 windflow --help
 ```
 
+## 🎯 Exemples de Déploiement
+
+WindFlow inclut des exemples prêts à l'emploi pour déployer des applications populaires :
+
+### 📦 Applications Disponibles
+
+#### Baserow - Alternative Open Source à Airtable
+Base de données no-code avec interface moderne (PostgreSQL + Redis)
+
+```bash
+# Créer les répertoires de données
+mkdir -p data/baserow/{postgres,redis,app,media}
+
+# Lancer Baserow
+docker compose -f examples/docker-compose.baserow.yml up -d
+
+# Accéder à l'interface
+# http://baserow.localhost
+```
+
+#### WordPress - CMS Populaire
+Système de gestion de contenu complet (MySQL + Redis + WP-CLI)
+
+```bash
+# Créer les répertoires de données
+mkdir -p data/wordpress/{mysql,redis,html,uploads,themes,plugins}
+
+# Lancer WordPress
+docker compose -f examples/docker-compose.wordpress.yml up -d
+
+# Accéder à l'interface
+# http://wordpress.localhost
+```
+
+### 🔧 Intégration WindFlow
+
+Les exemples sont configurés pour une intégration transparente :
+- ✅ **Réseau partagé** avec WindFlow (windflow-network)
+- ✅ **Découverte automatique** via labels Traefik
+- ✅ **Health checks** pour surveillance
+- ✅ **Labels WindFlow** pour gestion dans l'interface
+
+📚 **Documentation complète** : [examples/README.md](examples/README.md)
+
 ## 📖 Documentation
 
 La documentation complète se trouve dans le répertoire `doc/` :

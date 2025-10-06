@@ -1,115 +1,229 @@
+/**
+ * Store Pinia pour la marketplace WindFlow.
+ *
+ * Gère l'état global de la marketplace (stacks, catégories, filtres).
+ */
+
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import { templatesApi } from '@/services/api'
-import type { Template } from '@/types/api'
+import { ref, computed } from 'vue'
+import { marketplaceService } from '@/services/marketplaceService'
+import type { MarketplaceStack, StackDetails } from '@/types/marketplace'
+import { ElMessage } from 'element-plus'
 
 export const useMarketplaceStore = defineStore('marketplace', () => {
-  const templates = ref<Template[]>([])
-  const currentTemplate = ref<Template | null>(null)
+  // État
+  const stacks = ref<MarketplaceStack[]>([])
+  const currentStack = ref<StackDetails | null>(null)
   const categories = ref<string[]>([])
-  const popularTemplates = ref<Template[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function fetchTemplates(params?: {
+  // Filtres
+  const selectedCategory = ref<string>('')
+  const searchQuery = ref('')
+  const currentPage = ref(0)
+  const pageSize = ref(20)
+  const totalStacks = ref(0)
+
+  // Getters
+  const filteredStacks = computed(() => {
+    let filtered = [...stacks.value]
+
+    if (selectedCategory.value) {
+      filtered = filtered.filter(s => s.category === selectedCategory.value)
+    }
+
+    if (searchQuery.value) {
+      const query = searchQuery.value.toLowerCase()
+      filtered = filtered.filter(s =>
+        s.name.toLowerCase().includes(query) ||
+        s.description?.toLowerCase().includes(query) ||
+        s.tags.some(tag => tag.toLowerCase().includes(query))
+      )
+    }
+
+    return filtered
+  })
+
+  const totalPages = computed(() =>
+    Math.ceil(totalStacks.value / pageSize.value)
+  )
+
+  const hasMoreStacks = computed(() =>
+    currentPage.value < totalPages.value - 1
+  )
+
+  // Actions
+  async function fetchStacks(params?: {
     category?: string
-    tags?: string[]
     search?: string
-  }): Promise<void> {
+    reset?: boolean
+  }) {
+    if (params?.reset) {
+      currentPage.value = 0
+      stacks.value = []
+    }
+
     loading.value = true
     error.value = null
+
     try {
-      const response = await templatesApi.list(params)
-      templates.value = response.data.items
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch templates'
+      const response = await marketplaceService.listStacks({
+        category: params?.category || selectedCategory.value || undefined,
+        search: params?.search || searchQuery.value || undefined,
+        skip: currentPage.value * pageSize.value,
+        limit: pageSize.value
+      })
+
+      if (params?.reset) {
+        stacks.value = response.data
+      } else {
+        stacks.value.push(...response.data)
+      }
+
+      totalStacks.value = response.total
+
+    } catch (err: any) {
+      error.value = err.message || 'Erreur lors du chargement des stacks'
+      ElMessage.error(error.value)
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  async function fetchTemplate(id: string): Promise<void> {
+  async function loadMore() {
+    if (!loading.value && hasMoreStacks.value) {
+      currentPage.value++
+      await fetchStacks()
+    }
+  }
+
+  async function fetchStackDetails(stackId: string) {
     loading.value = true
     error.value = null
+
     try {
-      const response = await templatesApi.get(id)
-      currentTemplate.value = response.data
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch template'
+      currentStack.value = await marketplaceService.getStackDetails(stackId)
+      return currentStack.value
+    } catch (err: any) {
+      error.value = err.message || 'Erreur lors du chargement des détails'
+      ElMessage.error(error.value)
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  async function fetchCategories(): Promise<void> {
+  async function fetchCategories() {
+    try {
+      categories.value = await marketplaceService.getCategories()
+    } catch (err: any) {
+      console.error('Erreur lors du chargement des catégories:', err)
+    }
+  }
+
+  async function deployStack(
+    stackId: string,
+    targetId: string,
+    configuration: Record<string, any>,
+    name?: string
+  ) {
     loading.value = true
     error.value = null
+
     try {
-      const response = await templatesApi.categories()
-      categories.value = response.data
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch categories'
+      const response = await marketplaceService.deployStack(stackId, {
+        target_id: targetId,
+        configuration,
+        name
+      })
+
+      ElMessage.success('Déploiement lancé avec succès !')
+      return response
+    } catch (err: any) {
+      error.value = err.message || 'Erreur lors du déploiement'
+      ElMessage.error(error.value)
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  async function fetchPopularTemplates(limit = 10): Promise<void> {
+  async function installStack(stackId: string) {
     loading.value = true
     error.value = null
+
     try {
-      const response = await templatesApi.popular(limit)
-      popularTemplates.value = response.data
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch popular templates'
+      const installedStack = await marketplaceService.installStack(stackId)
+      ElMessage.success(`Stack "${installedStack.name}" installé dans votre organisation !`)
+      return installedStack
+    } catch (err: any) {
+      error.value = err.message || "Erreur lors de l'installation"
+      ElMessage.error(error.value)
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  async function downloadTemplate(id: string): Promise<string> {
-    loading.value = true
-    error.value = null
-    try {
-      const response = await templatesApi.download(id)
-      return response.data.stack_id
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to download template'
-      throw err
-    } finally {
-      loading.value = false
-    }
+  function setCategory(category: string) {
+    selectedCategory.value = category
+    fetchStacks({ reset: true })
   }
 
-  async function rateTemplate(id: string, rating: number): Promise<void> {
-    loading.value = true
+  function setSearch(query: string) {
+    searchQuery.value = query
+    fetchStacks({ reset: true })
+  }
+
+  function clearFilters() {
+    selectedCategory.value = ''
+    searchQuery.value = ''
+    fetchStacks({ reset: true })
+  }
+
+  function reset() {
+    stacks.value = []
+    currentStack.value = null
+    categories.value = []
+    selectedCategory.value = ''
+    searchQuery.value = ''
+    currentPage.value = 0
+    totalStacks.value = 0
     error.value = null
-    try {
-      await templatesApi.rate(id, rating)
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to rate template'
-      throw err
-    } finally {
-      loading.value = false
-    }
   }
 
   return {
-    templates,
-    currentTemplate,
+    // État
+    stacks,
+    currentStack,
     categories,
-    popularTemplates,
     loading,
     error,
-    fetchTemplates,
-    fetchTemplate,
+
+    // Filtres
+    selectedCategory,
+    searchQuery,
+    currentPage,
+    pageSize,
+    totalStacks,
+
+    // Getters
+    filteredStacks,
+    totalPages,
+    hasMoreStacks,
+
+    // Actions
+    fetchStacks,
+    loadMore,
+    fetchStackDetails,
     fetchCategories,
-    fetchPopularTemplates,
-    downloadTemplate,
-    rateTemplate,
+    deployStack,
+    installStack,
+    setCategory,
+    setSearch,
+    clearFilters,
+    reset
   }
 })

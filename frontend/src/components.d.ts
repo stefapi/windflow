@@ -7,12 +7,24 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
+    BooleanControlRenderer: typeof import('./components/marketplace/renderers/BooleanControlRenderer.vue')['default']
+    DeploymentProgress: typeof import('./components/marketplace/DeploymentProgress.vue')['default']
+    DeploymentWizard: typeof import('./components/marketplace/DeploymentWizard.vue')['default']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCard: typeof import('element-plus/es')['ElCard']
     ElForm: typeof import('element-plus/es')['ElForm']
     ElFormItem: typeof import('element-plus/es')['ElFormItem']
     ElInput: typeof import('element-plus/es')['ElInput']
+    EnumControlRenderer: typeof import('./components/marketplace/renderers/EnumControlRenderer.vue')['default']
+    NumberControlRenderer: typeof import('./components/marketplace/renderers/NumberControlRenderer.vue')['default']
+    PasswordControlRenderer: typeof import('./components/marketplace/renderers/PasswordControlRenderer.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    StackCard: typeof import('./components/marketplace/StackCard.vue')['default']
+    StackDetailsModal: typeof import('./components/marketplace/StackDetailsModal.vue')['default']
+    StackReviews: typeof import('./components/marketplace/StackReviews.vue')['default']
+    StringControlRenderer: typeof import('./components/marketplace/renderers/StringControlRenderer.vue')['default']
+    TargetSelector: typeof import('./components/marketplace/TargetSelector.vue')['default']
+    TextAreaControlRenderer: typeof import('./components/marketplace/renderers/TextAreaControlRenderer.vue')['default']
   }
 }

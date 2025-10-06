@@ -21,7 +21,10 @@ class WebSocketService {
   constructor() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    this.url = `${protocol}//${host}/ws`
+    const apiUrl = import.meta.env['VITE_API_BASE_URL'] || `${protocol}//${host}`
+
+    // Normaliser l'URL pour WebSocket
+    this.url = apiUrl.replace(/^http/, 'ws').replace(/\/$/, '') + '/api/v1/ws'
   }
 
   /**
