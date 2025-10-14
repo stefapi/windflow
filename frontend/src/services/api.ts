@@ -42,6 +42,9 @@ export const authApi = {
     })
   },
 
+  refreshToken: (refreshToken: string) =>
+    http.post<LoginResponse>('/auth/refresh', { refresh_token: refreshToken }),
+
   register: (data: UserCreate) =>
     http.post<User>('/auth/register', data),
 
@@ -133,13 +136,13 @@ export const stacksApi = {
 // Deployments API
 export const deploymentsApi = {
   list: (params?: { skip?: number; limit?: number; organization_id?: string }) =>
-    http.get<PaginatedResponse<Deployment>>('/deployments', { params }),
+    http.get<PaginatedResponse<Deployment>>('/deployments/', { params }),
 
   get: (id: string) =>
     http.get<Deployment>(`/deployments/${id}`),
 
   create: (data: DeploymentCreate) =>
-    http.post<Deployment>('/deployments', data),
+    http.post<Deployment>('/deployments/', data),
 
   cancel: (id: string) =>
     http.post<Deployment>(`/deployments/${id}/cancel`),

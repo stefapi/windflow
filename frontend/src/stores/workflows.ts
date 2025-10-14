@@ -16,8 +16,15 @@ export const useWorkflowsStore = defineStore('workflows', () => {
       const response = await workflowsApi.list({ organization_id: organizationId })
       workflows.value = response.data.items
     } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch workflows'
-      throw err
+      // Handle 404 gracefully - workflows endpoint may not be implemented yet
+      if ((err as any)?.response?.status === 404) {
+        workflows.value = []
+        error.value = null
+      } else {
+        error.value = err instanceof Error ? err.message : 'Failed to fetch workflows'
+        workflows.value = []
+      }
+      // Don't throw - allow dashboard to continue loading other data
     } finally {
       loading.value = false
     }

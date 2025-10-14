@@ -9,6 +9,11 @@ export default [
   {
     files: ['**/*.vue'],
     languageOptions: {
+      globals: {
+        console: 'readonly',
+        window: 'readonly',
+        document: 'readonly',
+      },
       parserOptions: {
         parser: tseslint.parser,
         ecmaVersion: 'latest',

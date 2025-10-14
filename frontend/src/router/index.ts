@@ -79,12 +79,14 @@ router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
   const requiresAuth = to.meta.requiresAuth !== false
 
-  if (requiresAuth && !authStore.isAuthenticated) {
+  // Skip auth check if coming from login page (allows post-login navigation)
+  const comingFromLogin = from.name === 'Login'
+
+  if (requiresAuth && !authStore.isAuthenticated && !comingFromLogin) {
     // Redirect to login if not authenticated
     next({ name: 'Login', query: { redirect: to.fullPath } })
-  } else if (to.name === 'Login' && authStore.isAuthenticated && from.name !== 'Login') {
-    // Only redirect away from login if coming from another page (not from login itself)
-    // This allows Login component to handle its own navigation after login
+  } else if (to.name === 'Login' && authStore.isAuthenticated) {
+    // Redirect away from login if already authenticated
     const redirectPath = (to.query.redirect as string) || '/'
     next(redirectPath)
   } else {

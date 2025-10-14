@@ -7,6 +7,7 @@ from .organization import Organization
 from .target import Target
 from .stack import Stack
 from .deployment import Deployment
+from .stack_review import StackReview
 
 __all__ = [
     "User",
@@ -14,4 +15,5 @@ __all__ = [
     "Target",
     "Stack",
     "Deployment",
+    "StackReview",
 ]

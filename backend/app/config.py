@@ -31,10 +31,10 @@ class Settings(BaseSettings):
     session_ttl: int = 1800  # 30 minutes
 
     # JWT Authentication
-    jwt_secret_key: str = "changeme-in-production-use-vault"
+    jwt_secret_key: str = "dev-secret-key-change-in-production-please-use-a-long-random-string-minimum-32-characters"
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 15
-    jwt_refresh_token_expire_days: int = 30
+    jwt_access_token_expire_minutes: int = 15  # Short-lived access tokens for better security
+    jwt_refresh_token_expire_days: int = 7     # Longer refresh tokens for better UX
 
     # Keycloak SSO (optionnel - désactivé par défaut)
     keycloak_enabled: bool = False
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = [
         "http://localhost:3000",
         "http://localhost:5173",
-        "http://localhost:8080"
+        "http://localhost:8010"
     ]
 
     # API

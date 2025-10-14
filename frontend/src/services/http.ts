@@ -6,9 +6,16 @@
 import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import type { ApiError } from '@/types/api'
 
-// Create axios instance
+// Create axios instance with custom backend URL from environment
+const baseURL = import.meta.env.VITE_API_BASE_URL
+  ? `${import.meta.env.VITE_API_BASE_URL}/api/v1`
+  : '/api/v1'
+
+// Display API address for debugging
+console.log('🔌 API Base URL:', baseURL)
+
 const http: AxiosInstance = axios.create({
-  baseURL: '/api/v1',
+  baseURL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -34,15 +41,68 @@ http.interceptors.response.use(
   (response) => {
     return response
   },
-  (error: AxiosError<ApiError>) => {
+  async (error: AxiosError<ApiError>) => {
     if (error.response) {
       const { status, data } = error.response
 
-      // Handle 401 - Unauthorized
+      // Handle 401 - Unauthorized with retry logic
       if (status === 401) {
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('user')
-        window.location.href = '/login'
+        const token = localStorage.getItem('access_token')
+
+        // If no token, redirect immediately
+        if (!token) {
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('user')
+          window.location.href = '/login'
+          return Promise.reject(error)
+        }
+
+        // Check if token is really expired or if it's a temporary issue
+        try {
+          // Try to decode the token to check expiration
+          const tokenParts = token.split('.')
+          if (tokenParts.length === 3) {
+            const payload = JSON.parse(atob(tokenParts[1]))
+            const currentTime = Date.now() / 1000
+
+            // If token is expired by more than 5 minutes, redirect
+            if (payload.exp && (currentTime - payload.exp) > 300) {
+              localStorage.removeItem('access_token')
+              localStorage.removeItem('user')
+              window.location.href = '/login'
+              return Promise.reject(error)
+            }
+
+            // If token is still valid or recently expired, try refreshing user data
+            // This handles edge cases where the token is valid but server rejects it
+            console.warn('Token validation issue, attempting to refresh user data')
+
+            // Try one more request to /auth/me to verify the token
+            try {
+              await http.get('/auth/me')
+              // If successful, the token is actually valid, return original error
+              return Promise.reject(error)
+            } catch (refreshError) {
+              // If refresh also fails, clear storage and redirect
+              localStorage.removeItem('access_token')
+              localStorage.removeItem('user')
+              window.location.href = '/login'
+              return Promise.reject(error)
+            }
+          } else {
+            // Malformed token, redirect immediately
+            localStorage.removeItem('access_token')
+            localStorage.removeItem('user')
+            window.location.href = '/login'
+            return Promise.reject(error)
+          }
+        } catch (decodeError) {
+          // Error decoding token, redirect immediately
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('user')
+          window.location.href = '/login'
+          return Promise.reject(error)
+        }
       }
 
       // Handle 403 - Forbidden
@@ -69,4 +129,5 @@ http.interceptors.response.use(
   }
 )
 
+export { baseURL }
 export default http

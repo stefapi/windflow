@@ -14,6 +14,7 @@ from ..database import Base
 if TYPE_CHECKING:
     from .stack import Stack
     from .target import Target
+    from .organization import Organization
 
 
 class DeploymentStatus(str, Enum):
@@ -53,6 +54,14 @@ class Deployment(Base):
     target_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("targets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    # Organisation (multi-tenant)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True
     )
@@ -97,6 +106,11 @@ class Deployment(Base):
     )
 
     # Relations
+    organization: Mapped["Organization"] = relationship(
+        "Organization",
+        back_populates="deployments"
+    )
+
     stack: Mapped["Stack"] = relationship(
         "Stack",
         back_populates="deployments"

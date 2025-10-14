@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import StaticPool, NullPool
+from sqlalchemy import text
 
 from .config import settings
 
@@ -144,7 +145,7 @@ class Database:
 
         try:
             async with self.engine.connect() as conn:
-                await conn.execute("SELECT 1")
+                await conn.execute(text("SELECT 1"))
             return True
         except Exception:
             return False

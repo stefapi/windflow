@@ -126,7 +126,8 @@ async def create_user(
         )
 
     # Utiliser l'organisation de l'utilisateur courant
-    user = await UserService.create(session, user_data, current_user.organization_id)
+    user_data.organization_id = current_user.organization_id
+    user = await UserService.create(session, user_data)
     return user
 
 

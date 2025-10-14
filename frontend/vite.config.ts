@@ -8,8 +8,7 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import Icons from 'unplugin-icons/vite'
 import IconsResolver from 'unplugin-icons/resolver'
 import path from 'node:path'
-import vueJsx from '@vitejs/plugin-vue-jsx'
-import LinkAttributes from 'markdown-it-link-attributes'
+import Starter from 'unplugin-vue-jsx/vite'
 import Shiki from 'markdown-it-shiki'
 import { visualizer } from 'rollup-plugin-visualizer'
 import ElementPlus from 'unplugin-element-plus/vite'
@@ -19,7 +18,6 @@ import VueMacros from 'unplugin-vue-macros/vite'
 import Markdown from 'unplugin-vue-markdown/vite'
 import { VueRouterAutoImports } from 'unplugin-vue-router'
 import VueRouter from 'unplugin-vue-router/vite'
-import { defineConfig } from 'vite'
 import compression from 'vite-plugin-compression'
 import dts from 'vite-plugin-dts'
 import Inspect from 'vite-plugin-inspect'
@@ -37,7 +35,7 @@ export default defineConfig({
         vue: vue({
           include: [/\.vue$/, /\.md$/],
         }),
-        vueJsx: vueJsx(),
+        vueJsx: Starter(),
       },
     }),
     // https://github.com/posva/unplugin-vue-router
@@ -150,13 +148,6 @@ export default defineConfig({
       markdownItSetup(md) {
         // @ts-expect-error - Shiki plugin type compatibility issue
         md.use(Shiki)
-        md.use(LinkAttributes, {
-          matcher: (link: string) => /^https?:\/\//.test(link),
-          attrs: {
-            target: '_blank',
-            rel: 'noopener',
-          },
-        })
       },
     }),
 

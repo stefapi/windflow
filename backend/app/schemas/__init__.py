@@ -12,6 +12,7 @@ from .user import (
     UserResponse,
     UserLogin,
     Token,
+    LoginResponse,
     TokenData
 )
 from .organization import (
@@ -47,6 +48,7 @@ __all__ = [
     "UserResponse",
     "UserLogin",
     "Token",
+    "LoginResponse",
     "TokenData",
     # Organization schemas
     "OrganizationBase",

@@ -109,6 +109,7 @@
     "unplugin-icons": "^22.4.2",
     "unplugin-vue-components": "^29.1.0",
     "unplugin-vue-inspector": "^2.3.2",
+    "unplugin-vue-jsx":  "^0.8.1",
     "unplugin-vue-macros": "^2.14.5",
     "unplugin-vue-markdown": "^29.2.0",
     "unplugin-vue-router": "^0.15.0",

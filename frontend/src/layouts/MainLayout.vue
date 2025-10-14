@@ -10,27 +10,27 @@
         class="el-menu-vertical"
       >
         <el-menu-item index="/">
-          <el-icon><icon-ep-odometer /></el-icon>
+          <el-icon><Odometer /></el-icon>
           <span>Dashboard</span>
         </el-menu-item>
         <el-menu-item index="/targets">
-          <el-icon><icon-ep-monitor /></el-icon>
+          <el-icon><Monitor /></el-icon>
           <span>Targets</span>
         </el-menu-item>
         <el-menu-item index="/stacks">
-          <el-icon><icon-ep-box /></el-icon>
+          <el-icon><Box /></el-icon>
           <span>Stacks</span>
         </el-menu-item>
         <el-menu-item index="/deployments">
-          <el-icon><icon-ep-upload /></el-icon>
+          <el-icon><Upload /></el-icon>
           <span>Deployments</span>
         </el-menu-item>
         <el-menu-item index="/workflows">
-          <el-icon><icon-ep-connection /></el-icon>
+          <el-icon><Connection /></el-icon>
           <span>Workflows</span>
         </el-menu-item>
         <el-menu-item index="/marketplace">
-          <el-icon><icon-ep-shop /></el-icon>
+          <el-icon><Shop /></el-icon>
           <span>Marketplace</span>
         </el-menu-item>
       </el-menu>
@@ -43,7 +43,7 @@
         <div class="header-right">
           <el-dropdown @command="handleCommand">
             <span class="user-dropdown">
-              <el-icon><icon-ep-user /></el-icon>
+              <el-icon><User /></el-icon>
               {{ authStore.user?.username }}
             </span>
             <template #dropdown>
@@ -65,6 +65,15 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import {
+  Odometer,
+  Monitor,
+  Box,
+  Upload,
+  Connection,
+  Shop,
+  User
+} from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()

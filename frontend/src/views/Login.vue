@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { reactive, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
@@ -41,7 +41,9 @@ const handleLogin = async () => {
     await authStore.login(loginForm)
     ElMessage.success('Login successful')
 
-    // Use replace instead of push to avoid keeping login in history
+    // Wait for Vue's reactivity system to update before navigation
+    await nextTick()
+
     // Navigate to the redirect path or dashboard
     const redirect = (route.query.redirect as string) || '/'
     await router.replace(redirect)

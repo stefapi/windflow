@@ -4,12 +4,12 @@
     <el-row :gutter="20">
       <el-col :span="6">
         <el-card>
-          <el-statistic title="Total Targets" :value="targetsStore.targets.length" />
+          <el-statistic title="Total Targets" :value="targetsStore.targets?.length || 0" />
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card>
-          <el-statistic title="Total Stacks" :value="stacksStore.stacks.length" />
+          <el-statistic title="Total Stacks" :value="stacksStore.stacks?.length || 0" />
         </el-card>
       </el-col>
       <el-col :span="6">
@@ -19,7 +19,7 @@
       </el-col>
       <el-col :span="6">
         <el-card>
-          <el-statistic title="Workflows" :value="workflowsStore.workflows.length" />
+          <el-statistic title="Workflows" :value="workflowsStore.workflows?.length || 0" />
         </el-card>
       </el-col>
     </el-row>
@@ -55,12 +55,12 @@ const stacksStore = useStacksStore()
 const deploymentsStore = useDeploymentsStore()
 const workflowsStore = useWorkflowsStore()
 
-const activeDeployments = computed(() => 
-  deploymentsStore.deployments.filter(d => d.status === 'running' || d.status === 'pending').length
+const activeDeployments = computed(() =>
+  deploymentsStore.deployments?.filter(d => d.status === 'running' || d.status === 'pending').length || 0
 )
 
-const recentDeployments = computed(() => 
-  deploymentsStore.deployments.slice(0, 5)
+const recentDeployments = computed(() =>
+  deploymentsStore.deployments?.slice(0, 5) || []
 )
 
 onMounted(async () => {

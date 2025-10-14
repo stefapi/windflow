@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from .user import User
     from .target import Target
     from .stack import Stack
+    from .deployment import Deployment
 
 
 class Organization(Base):
@@ -69,6 +70,12 @@ class Organization(Base):
 
     stacks: Mapped[List["Stack"]] = relationship(
         "Stack",
+        back_populates="organization",
+        cascade="all, delete-orphan"
+    )
+
+    deployments: Mapped[List["Deployment"]] = relationship(
+        "Deployment",
         back_populates="organization",
         cascade="all, delete-orphan"
     )

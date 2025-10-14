@@ -17,36 +17,45 @@ class WebSocketService {
   private reconnectDelay = 3000
   private listeners: Map<string, Set<EventCallback>> = new Map()
   private url: string
+  private authenticated = false
+  private authToken: string | null = null
 
   constructor() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
     const apiUrl = import.meta.env['VITE_API_BASE_URL'] || `${protocol}//${host}`
 
-    // Normaliser l'URL pour WebSocket
-    this.url = apiUrl.replace(/^http/, 'ws').replace(/\/$/, '') + '/api/v1/ws'
+    // Utiliser l'endpoint WebSocket sécurisé (authentification obligatoire)
+    this.url = apiUrl.replace(/^http/, 'ws').replace(/\/$/, '') + '/api/v1/ws/'
   }
 
   /**
-   * Connect to WebSocket server
+   * Connect to WebSocket server with optional authentication
    */
-  connect(): void {
+  connect(authToken?: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       return
     }
 
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      console.warn('Cannot connect to WebSocket: No access token')
-      return
+    // Stocker le token d'authentification si fourni
+    if (authToken) {
+      this.authToken = authToken
     }
 
     try {
-      this.ws = new WebSocket(`${this.url}?token=${token}`)
+      this.ws = new WebSocket(this.url)
 
       this.ws.onopen = () => {
-        console.log('WebSocket connected')
+        console.log('🔗 WebSocket connected successfully!')
         this.reconnectAttempts = 0
+
+        // Authentifier immédiatement si un token est disponible
+        if (this.authToken) {
+          console.log('🔐 Sending authentication...')
+          this.authenticate(this.authToken)
+        } else {
+          console.warn('⚠️ No auth token available for WebSocket authentication')
+        }
       }
 
       this.ws.onmessage = (event: MessageEvent) => {
@@ -62,13 +71,44 @@ class WebSocketService {
         console.error('WebSocket error:', error)
       }
 
-      this.ws.onclose = () => {
-        console.log('WebSocket disconnected')
+      this.ws.onclose = (event) => {
+        console.log('WebSocket disconnected:', event.code, event.reason)
+        this.authenticated = false
         this.attemptReconnect()
       }
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error)
     }
+  }
+
+  /**
+   * Authenticate with the WebSocket server
+   */
+  private authenticate(token: string): void {
+    console.log('🔐 Attempting WebSocket authentication...')
+    console.log('🔐 WebSocket readyState:', this.ws?.readyState)
+    console.log('🔐 Token length:', token.length)
+
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      const authMessage = {
+        type: 'auth',
+        token: token
+      }
+      console.log('🔐 Sending auth message:', { type: 'auth', token: `${token.substring(0, 10)}...` })
+      this.ws.send(JSON.stringify(authMessage))
+      console.log('✅ Authentication message sent successfully')
+      this.authToken = token
+    } else {
+      console.error('❌ Cannot authenticate: WebSocket not connected, readyState:', this.ws?.readyState)
+    }
+  }
+
+  /**
+   * Authenticate with a new token
+   */
+  authenticateWithToken(token: string): void {
+    this.authToken = token
+    this.authenticate(token)
   }
 
   /**
@@ -106,6 +146,15 @@ class WebSocketService {
    */
   private handleMessage(message: WebSocketMessage): void {
     const { type, data } = message
+
+    // Gestion spéciale des messages d'authentification
+    if (type === 'auth_success') {
+      this.authenticated = true
+      console.log('WebSocket authentication successful')
+    } else if (type === 'error') {
+      console.error('WebSocket server error:', data)
+    }
+
     const callbacks = this.listeners.get(type)
 
     if (callbacks) {
@@ -166,6 +215,56 @@ class WebSocketService {
   isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN
   }
+
+  /**
+   * Check if WebSocket is authenticated
+   */
+  isAuthenticated(): boolean {
+    return this.authenticated
+  }
+
+  /**
+   * Connect with automatic authentication using auth store
+   */
+  connectWithAuth(): void {
+    console.log('🔐 Attempting to connect with authentication...')
+
+    // Essayer d'abord le localStorage directement avec plus de détails
+    const storedToken = localStorage.getItem('access_token')
+    console.log('🔐 localStorage keys:', Object.keys(localStorage))
+    console.log('🔐 access_token key exists:', localStorage.getItem('access_token') !== null)
+    console.log('🔐 Token from localStorage:', storedToken ? `${storedToken.substring(0, 20)}...` : 'null')
+
+    if (storedToken && storedToken.length > 0) {
+      console.log('🔐 Connecting with localStorage token...')
+      this.connect(storedToken)
+      return
+    }
+
+    // Fallback vers le store d'authentification si pas de token en localStorage
+    console.log('🔐 No token in localStorage, trying auth store...')
+    import('@/stores/auth').then(({ useAuthStore }) => {
+      const authStore = useAuthStore()
+      console.log('🔐 Auth store state:', {
+        hasToken: !!authStore.token,
+        hasUser: !!authStore.user,
+        isAuthenticated: authStore.isAuthenticated
+      })
+
+      if (authStore.token) {
+        console.log('🔐 Connecting with store token...')
+        this.connect(authStore.token)
+      } else {
+        console.warn('⚠️ No authentication token available in store either - connecting without auth')
+        console.warn('🔐 This means the user is not logged in or the session expired')
+        this.connect()
+      }
+    }).catch(error => {
+      console.error('❌ Failed to load auth store:', error)
+      console.warn('⚠️ Falling back to connection without auth')
+      this.connect()
+    })
+  }
 }
 
 // Singleton instance
@@ -175,17 +274,65 @@ export default wsService
 
 // Event-specific helpers
 export const deploymentEvents = {
-  subscribeToLogs: (deploymentId: string, callback: (log: string) => void) => {
+  subscribeToLogs: (deploymentId: string, callback: (data: unknown) => void) => {
     return wsService.on(`deployment:${deploymentId}:logs`, callback)
   },
 
-  subscribeToStatus: (deploymentId: string, callback: (status: string) => void) => {
+  subscribeToStatus: (deploymentId: string, callback: (data: unknown) => void) => {
     return wsService.on(`deployment:${deploymentId}:status`, callback)
   },
+
+  subscribeToDeployment: (deploymentId: string, callback: (data: unknown) => void) => {
+    // S'abonner aux logs et au statut d'un déploiement spécifique
+    const unsubscribeLogs = wsService.on(`deployment:${deploymentId}:logs`, callback)
+    const unsubscribeStatus = wsService.on(`deployment:${deploymentId}:status`, callback)
+
+    // Envoyer un message pour s'abonner côté serveur
+    wsService.send('deployment_logs', { deployment_id: deploymentId })
+
+    // Retourner une fonction pour se désabonner des deux événements
+    return () => {
+      unsubscribeLogs()
+      unsubscribeStatus()
+    }
+  }
 }
 
 export const notificationEvents = {
-  subscribe: (callback: (notification: unknown) => void) => {
+  subscribe: (callback: (data: unknown) => void) => {
     return wsService.on('notification', callback)
   },
+
+  subscribeToSystemEvents: (callback: (data: unknown) => void) => {
+    // S'abonner aux événements système généraux
+    const unsubscribe = wsService.on('system_event', callback)
+
+    // Envoyer un message pour s'abonner côté serveur
+    wsService.send('subscribe', { event_type: 'system_event' })
+
+    return unsubscribe
+  }
+}
+
+// Helper pour les événements personnalisés
+export const eventHelpers = {
+  /**
+   * S'abonner à un événement personnalisé
+   */
+  subscribe: (eventType: string, callback: (data: unknown) => void) => {
+    const unsubscribe = wsService.on(eventType, callback)
+
+    // Envoyer un message pour s'abonner côté serveur
+    wsService.send('subscribe', { event_type: eventType })
+
+    return unsubscribe
+  },
+
+  /**
+   * Se désabonner d'un événement personnalisé
+   */
+  unsubscribe: (eventType: string, callback: (data: unknown) => void) => {
+    wsService.off(eventType, callback)
+    wsService.send('unsubscribe', { event_type: eventType })
+  }
 }

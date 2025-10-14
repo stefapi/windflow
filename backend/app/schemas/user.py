@@ -66,6 +66,31 @@ class Token(BaseModel):
     expires_in: int = Field(..., description="Durée de validité en secondes")
 
 
+class RefreshTokenRequest(BaseModel):
+    """Schema pour demande de refresh token."""
+
+    refresh_token: str = Field(..., description="Token de rafraîchissement")
+
+
+class LoginResponse(BaseModel):
+    """Schema pour réponse de login avec user data."""
+
+    access_token: str = Field(..., description="Token d'accès JWT")
+    refresh_token: str = Field(..., description="Token de rafraîchissement")
+    token_type: str = Field(default="bearer", description="Type de token")
+    expires_in: int = Field(..., description="Durée de validité en secondes")
+    user: UserResponse = Field(..., description="Données de l'utilisateur")
+
+
+class RefreshResponse(BaseModel):
+    """Schema pour réponse de refresh token."""
+
+    access_token: str = Field(..., description="Nouveau token d'accès JWT")
+    refresh_token: str = Field(..., description="Nouveau token de rafraîchissement")
+    token_type: str = Field(default="bearer", description="Type de token")
+    expires_in: int = Field(..., description="Durée de validité en secondes")
+
+
 class TokenData(BaseModel):
     """Schema pour données extraites du token JWT."""
 

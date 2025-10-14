@@ -4,10 +4,12 @@ Application FastAPI principale pour WindFlow Backend.
 Architecture modulaire avec support SQLite par défaut et extensions optionnelles.
 """
 
+print("=== LOADING backend.app.main MODULE ===", flush=True)
+
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .database import db
@@ -22,18 +24,27 @@ async def lifespan(app: FastAPI):
     Connexion et déconnexion de la base de données au démarrage/arrêt.
     """
     # Startup
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("=== Application startup ===")
+
     await db.connect()
     await db.create_tables()
     await db.seed_tables()
 
+    logger.info("=== Database initialized ===")
+
     yield
 
     # Shutdown
+    logger.info("=== Application shutdown ===")
     await db.disconnect()
 
 
+# Configuration CORS standard avec FastAPI
+
 # Application FastAPI
-app = FastAPI(
+_app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="Plateforme intelligente de déploiement Docker avec IA intégrée",
@@ -41,20 +52,32 @@ app = FastAPI(
     debug=settings.debug,
 )
 
-# Configuration CORS
-app.add_middleware(
+# Configuration CORS - doit être ajoutée AVANT les routers
+_app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=settings.cors_origins,  # Utilise la configuration depuis settings
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    allow_origin_regex=None  # Important pour les WebSockets
 )
 
-# Enregistrement des routers API
-app.include_router(api_router)
+# Configuration WebSocket explicite pour Uvicorn
+from uvicorn.config import Config
+import os
+os.environ["WEBSOCKETS_ENABLED"] = "true"
+
+# Ajouter les middlewares personnalisés
+from .middleware import logging_middleware, error_handler_middleware
+_app.middleware("http")(logging_middleware)
+_app.middleware("http")(error_handler_middleware)
+
+# Enregistrement des routers API sur l'app interne
+_app.include_router(api_router)
 
 
-@app.get("/")
+@_app.get("/")
 async def root():
     """
     Endpoint racine.
@@ -72,7 +95,7 @@ async def root():
     }
 
 
-@app.get("/health")
+@_app.get("/health")
 async def health_check():
     """
     Health check endpoint pour monitoring.
@@ -131,7 +154,7 @@ async def health_check():
     return health_status
 
 
-@app.get("/api/v1/info")
+@_app.get("/api/v1/info")
 async def api_info():
     """
     Informations sur l'API et configuration.
@@ -158,6 +181,10 @@ async def api_info():
             "openapi": "/openapi.json"
         }
     }
+
+
+# Export de l'application avec CORS configuré
+app = _app
 
 
 if __name__ == "__main__":

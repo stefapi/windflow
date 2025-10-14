@@ -142,7 +142,7 @@ const emit = defineEmits<Emits>()
 
 const router = useRouter()
 
-// Utilisation du composable WebSocket
+// Utilisation du composable WebSocket avec authentification
 const {
   logs: wsLogs,
   connected,
@@ -153,6 +153,7 @@ const {
   isSuccess
 } = useDeploymentLogs(computed(() => props.deploymentId), {
   onConnect: () => {
+    console.log('✅ WebSocket connected for deployment logs')
     ElMessage.success('Connexion WebSocket établie')
   },
   onDisconnect: () => {
@@ -162,6 +163,12 @@ const {
     console.error('Erreur WebSocket:', err)
     ElMessage.error('Erreur de connexion aux logs')
   }
+})
+
+// Connexion WebSocket avec authentification automatique
+onMounted(() => {
+  console.log('🔌 Initializing WebSocket connection for deployment:', props.deploymentId)
+  // Le composable useDeploymentLogs va automatiquement utiliser connectWithAuth()
 })
 
 // État local
