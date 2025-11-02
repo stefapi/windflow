@@ -30,28 +30,29 @@ WindFlow adopte une **architecture modulaire** qui permet de démarrer avec un s
 
 ### Architecture
 
+[ditaa]
 ```
 ┌────────────────────────────────────────────────────────────┐
-│                   WINDFLOW ARCHITECTURE                     │
+│                   WINDFLOW ARCHITECTURE                    │
 ├────────────────────────────────────────────────────────────┤
-│                                                              │
+│                                                            │
 │  CORE MINIMAL (< 512MB RAM, < 2 min)                       │
-│  ┌──────────┐  ┌───────────────┐  ┌──────────────┐        │
-│  │ Traefik  │──│ windflow-api  │──│  frontend    │        │
-│  │ (Proxy)  │  │   (SQLite)    │  │  (Vue.js 3)  │        │
-│  └──────────┘  └───────────────┘  └──────────────┘        │
-│                                                              │
+│  ┌──────────┐  ┌───────────────┐  ┌──────────────┐         │
+│  │ Traefik  │──│ windflow-api  │──│  frontend    │         │
+│  │ (Proxy)  │  │   (SQLite)    │  │  (Vue.js 3)  │         │
+│  └──────────┘  └───────────────┘  └──────────────┘         │
+│                                                            │
 ├────────────────────────────────────────────────────────────┤
-│                                                              │
-│  EXTENSIONS OPTIONNELLES                                    │
-│                                                              │
+│                                                            │
+│  EXTENSIONS OPTIONNELLES                                   │
+│                                                            │
 │  🗄️  Database:     PostgreSQL 15                           │
 │  🔄  Cache:        Redis 7                                 │
 │  🔐  Secrets:      HashiCorp Vault                         │
 │  🔑  Auth:         Keycloak SSO/SAML                       │
 │  📊  Monitoring:   Prometheus + Grafana                    │
-│  ⚙️  Workers:      Celery + Flower                         │
-│                                                              │
+│  ⚙️  Workers:       Celery + Flower                         │
+│                                                            │
 └────────────────────────────────────────────────────────────┘
 ```
 

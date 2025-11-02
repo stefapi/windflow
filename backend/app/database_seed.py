@@ -4,9 +4,10 @@ Module de seeding pour initialisation de la base de données.
 Crée les données minimales requises au premier démarrage :
 - Organisation par défaut
 - Utilisateur admin avec droits superuser
+- Cible localhost auto-scannée
 """
 
-from typing import Optional
+from typing import List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,9 +73,20 @@ async def seed_database(session: AsyncSession) -> None:
 
         await UserService.create(session, admin_data)
 
+        target_created, target_messages = await _create_localhost_target(
+            session,
+            default_org.id
+        )
+
         print(f"✓ Base de données initialisée avec succès")
         print(f"  - Organisation: {default_org.name} ({default_org.slug})")
         print(f"  - Admin: {settings.admin_username} ({settings.admin_email})")
+        if target_created:
+            print("  - Target: localhost (créée automatiquement)")
+        else:
+            print("  - Target: localhost non créée (voir détails)")
+        for message in target_messages:
+            print(f"    • {message}")
         print(f"  - Mot de passe par défaut: {settings.admin_password}")
         print(f"  ⚠️  IMPORTANT: Changez le mot de passe admin en production!")
 
@@ -82,6 +94,85 @@ async def seed_database(session: AsyncSession) -> None:
         await session.rollback()
         print(f"✗ Erreur lors du seeding de la base de données: {e}")
         raise
+
+
+async def _create_localhost_target(
+    session: AsyncSession,
+    organization_id: str
+) -> Tuple[bool, List[str]]:
+    """
+    Scanne localhost et crée la cible associée lors du premier démarrage.
+
+    Returns:
+        Tuple[bool, List[str]]: Statut de création et détails d'exécution.
+    """
+    from .schemas.target import TargetCreate
+    from .services.target_scanner_service import TargetScannerService
+    from .services.target_service import TargetService
+
+    details: List[str] = []
+    try:
+        scanner = TargetScannerService()
+        scan_result = await scanner.scan_localhost()
+
+        target_type = _infer_target_type_from_scan(scan_result)
+        details.append(f"type détecté: {target_type.value}")
+
+        if scan_result.docker and scan_result.docker.installed:
+            docker_version = scan_result.docker.version or "présent"
+            details.append(f"Docker: {docker_version}")
+            if scan_result.docker.swarm and scan_result.docker.swarm.available:
+                swarm_state = "actif" if scan_result.docker.swarm.active else "disponible"
+                details.append(f"Swarm: {swarm_state}")
+        libvirt_tool = scan_result.virtualization.get("libvirt")
+        if libvirt_tool and libvirt_tool.available:
+            details.append(f"Libvirt: {libvirt_tool.version or 'présent'}")
+
+        target_payload = TargetCreate(
+            name="localhost",
+            description="Local machine automatically discovered during initial database bootstrap",
+            host="localhost",
+            port=22,
+            type=target_type,
+            credentials={},
+            organization_id=organization_id,
+            extra_metadata={
+                "auto_created": True,
+                "creation_source": "database_seed"
+            }
+        )
+
+        target = await TargetService.create(session, target_payload)
+        await TargetService.update_discovered_capabilities(
+            db=session,
+            target=target,
+            capabilities=scan_result.model_dump(mode="json"),
+            scan_date=scan_result.scan_date,
+            status="completed" if scan_result.success else "failed"
+        )
+        details.append("capabilities persistées avec succès")
+        return True, details
+
+    except Exception as exc:  # noqa: B902 - log et continuer
+        details.append(f"erreur: {exc}")
+        return False, details
+
+
+def _infer_target_type_from_scan(scan_result: "ScanResult") -> "TargetType":
+    """Déduit le type de cible optimal depuis un ScanResult."""
+    from .schemas.target import TargetType
+    from .schemas.target_scan import ScanResult
+
+    docker_caps = scan_result.docker
+    if docker_caps and docker_caps.swarm and docker_caps.swarm.available:
+        return TargetType.DOCKER_SWARM
+    if docker_caps and docker_caps.installed:
+        return TargetType.DOCKER
+    if any(tool.available for tool in scan_result.kubernetes.values()):
+        return TargetType.KUBERNETES
+    if any(tool.available for tool in scan_result.virtualization.values()):
+        return TargetType.VM
+    return TargetType.PHYSICAL
 
 
 async def check_admin_exists(session: AsyncSession) -> bool:

@@ -64,6 +64,20 @@ class TargetResponse(TargetBase):
     id: str = Field(..., description="ID unique de la cible")
     status: TargetStatus = Field(..., description="Statut de la cible")
     last_check: Optional[datetime] = Field(None, description="Dernière vérification")
+    last_scan_date: Optional[datetime] = Field(
+        None,
+        description="Date du dernier scan des capacités"
+    )
+    scan_status: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=20,
+        description="Statut du dernier scan (pending, scanning, completed, failed)"
+    )
+    discovered_capabilities: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Capacités découvertes lors du dernier scan"
+    )
     extra_metadata: Dict[str, Any] = Field(default_factory=dict, description="Métadonnées")
     organization_id: str = Field(..., description="ID de l'organisation")
     created_at: datetime = Field(..., description="Date de création")

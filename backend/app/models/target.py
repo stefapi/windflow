@@ -75,6 +75,22 @@ class Target(Base):
 
     # Configuration additionnelle
     extra_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    discovered_capabilities: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
+        comment="Capabilities discovered during the last scan"
+    )
+    last_scan_date: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+        comment="Timestamp of the last capabilities scan"
+    )
+    scan_status: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="Status of the last capabilities scan"
+    )
 
     # Organisation (multi-tenant)
     organization_id: Mapped[str] = mapped_column(
