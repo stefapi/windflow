@@ -4,6 +4,8 @@ Unit tests for target scanner related utilities.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
 
 from backend.app.api.v1.targets import _infer_target_type
@@ -98,7 +100,7 @@ class TestInferTargetType:
         """Virtualization tools fallback to VM type."""
         scan_result = ScanResult(
             host="host",
-            scan_date=None,
+            scan_date=datetime.utcnow(),
             success=True,
             docker=None,
             virtualization={

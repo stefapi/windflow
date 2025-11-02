@@ -4,16 +4,16 @@ Routes de gestion des cibles de déploiement.
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_active_user
 from ...database import get_db
 from ...models.user import User
 from ...schemas.target import TargetResponse, TargetCreate, TargetUpdate, TargetType
+from ...schemas.target_capability import CapabilityType, TargetCapabilityResponse
 from ...schemas.target_scan import (
     ScanResult,
     TargetCapabilitiesResponse,
@@ -24,6 +24,14 @@ from ...services.target_scanner_service import TargetScannerService
 from ...services.target_service import TargetService
 
 router = APIRouter()
+
+VIRTUALIZATION_CAPABILITY_TYPES: set[CapabilityType] = {
+    CapabilityType.LIBVIRT,
+    CapabilityType.VIRTUALBOX,
+    CapabilityType.VAGRANT,
+    CapabilityType.PROXMOX,
+    CapabilityType.QEMU_KVM,
+}
 
 
 @router.get("/", response_model=List[TargetResponse])
@@ -236,12 +244,26 @@ async def discover_target(
         organization_id=organization_id
     )
 
-    await TargetService.update_discovered_capabilities(
+    capabilities_payload = scanner.build_capabilities_payload(scan_result)
+    platform_payload = (
+        scan_result.platform.model_dump(mode="json")
+        if scan_result.platform
+        else None
+    )
+    os_payload = (
+        scan_result.os.model_dump(mode="json")
+        if scan_result.os
+        else None
+    )
+
+    await TargetService.apply_scan_result(
         db=session,
         target=target,
-        capabilities=scan_result.model_dump(mode="json"),
+        capabilities=capabilities_payload,
         scan_date=scan_result.scan_date,
-        status="completed" if scan_result.success else "failed"
+        success=scan_result.success,
+        platform_info=platform_payload,
+        os_info=os_payload,
     )
 
     return TargetDiscoveryResponse(
@@ -280,11 +302,12 @@ async def scan_target(
 @router.get("/{target_id}/capabilities", response_model=TargetCapabilitiesResponse)
 async def get_target_capabilities(
     target_id: str,
+    capability_type: Optional[CapabilityType] = None,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ) -> TargetCapabilitiesResponse:
     """
-    Récupère les capacités découvertes pour une cible.
+    Récupère les capacités persistées pour une cible.
     """
     target = await TargetService.get_by_id(session, target_id)
     if not target:
@@ -299,18 +322,98 @@ async def get_target_capabilities(
             detail="Accès refusé à cette cible"
         )
 
-    scan_result: ScanResult | None = None
-    if target.discovered_capabilities:
-        try:
-            scan_result = ScanResult.model_validate(target.discovered_capabilities)
-        except ValidationError:
-            scan_result = None
+    capabilities = await TargetService.list_capabilities(
+        db=session,
+        target_id=target.id,
+        capability_type=capability_type
+    )
 
     return TargetCapabilitiesResponse(
-        scan_status=target.scan_status,
-        last_scan_date=target.last_scan_date,
-        scan_result=scan_result
+        scan_date=target.scan_date,
+        scan_success=target.scan_success,
+        platform_info=target.platform_info,
+        os_info=target.os_info,
+        capabilities=[
+            TargetCapabilityResponse.model_validate(capability)
+            for capability in capabilities
+        ],
     )
+
+
+@router.get(
+    "/{target_id}/capabilities/{capability_type}",
+    response_model=TargetCapabilityResponse
+)
+async def get_target_capability_by_type(
+    target_id: str,
+    capability_type: CapabilityType,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db)
+) -> TargetCapabilityResponse:
+    """
+    Récupère une capacité spécifique par son type pour une cible.
+    """
+    target = await TargetService.get_by_id(session, target_id)
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cible {target_id} non trouvée"
+        )
+
+    if target.organization_id != current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé à cette cible"
+        )
+
+    capabilities = await TargetService.list_capabilities(
+        db=session,
+        target_id=target.id,
+        capability_type=capability_type
+    )
+
+    if not capabilities:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Capacité {capability_type.value} non trouvée pour cette cible"
+        )
+
+    return TargetCapabilityResponse.model_validate(capabilities[0])
+
+
+@router.get(
+    "/{target_id}/capabilities/virtualization",
+    response_model=List[TargetCapabilityResponse]
+)
+async def get_target_virtualization_capabilities(
+    target_id: str,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db)
+) -> List[TargetCapabilityResponse]:
+    """
+    Récupère uniquement les capacités de virtualisation détectées pour une cible.
+    """
+    target = await TargetService.get_by_id(session, target_id)
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cible {target_id} non trouvée"
+        )
+
+    if target.organization_id != current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé à cette cible"
+        )
+
+    capabilities = await TargetService.list_capabilities(db=session, target_id=target.id)
+
+    virtualization_capabilities = [
+        TargetCapabilityResponse.model_validate(capability)
+        for capability in capabilities
+        if capability.capability_type in VIRTUALIZATION_CAPABILITY_TYPES
+    ]
+    return virtualization_capabilities
 
 
 def _infer_target_type(scan_result: ScanResult) -> TargetType:

@@ -5,7 +5,7 @@ Modèle Target pour gestion des serveurs cibles de déploiement.
 from datetime import datetime
 from uuid import uuid4
 from enum import Enum
-from sqlalchemy import String, DateTime, JSON, ForeignKey, Enum as SQLEnum
+from sqlalchemy import String, DateTime, JSON, ForeignKey, Enum as SQLEnum, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING, List
 
@@ -14,6 +14,7 @@ from ..database import Base
 if TYPE_CHECKING:
     from .organization import Organization
     from .deployment import Deployment
+    from .target_capability import TargetCapability
 
 
 class TargetType(str, Enum):
@@ -75,21 +76,27 @@ class Target(Base):
 
     # Configuration additionnelle
     extra_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    discovered_capabilities: Mapped[dict | None] = mapped_column(
-        JSON,
-        nullable=True,
-        default=None,
-        comment="Capabilities discovered during the last scan"
-    )
-    last_scan_date: Mapped[datetime | None] = mapped_column(
+    scan_date: Mapped[datetime | None] = mapped_column(
         DateTime,
         nullable=True,
         comment="Timestamp of the last capabilities scan"
     )
-    scan_status: Mapped[str | None] = mapped_column(
-        String(20),
+    scan_success: Mapped[bool | None] = mapped_column(
+        Boolean,
         nullable=True,
-        comment="Status of the last capabilities scan"
+        comment="Indicates if the last capabilities scan succeeded"
+    )
+    platform_info: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
+        comment="Platform capabilities detected during the last scan"
+    )
+    os_info: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
+        comment="Operating system information detected during the last scan"
     )
 
     # Organisation (multi-tenant)
@@ -121,6 +128,12 @@ class Target(Base):
 
     deployments: Mapped[List["Deployment"]] = relationship(
         "Deployment",
+        back_populates="target",
+        cascade="all, delete-orphan"
+    )
+
+    capabilities: Mapped[List["TargetCapability"]] = relationship(
+        "TargetCapability",
         back_populates="target",
         cascade="all, delete-orphan"
     )

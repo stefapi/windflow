@@ -13,13 +13,14 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, Optional, Protocol, Tuple, TypeVar
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Protocol, Tuple, TypeVar
 
 import asyncssh
 from asyncssh import ConnectionLost
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.target import Target
+from ..models.target_capability import CapabilityType
 from ..schemas.target_scan import (
     DockerCapabilities,
     DockerComposeInfo,
@@ -479,7 +480,7 @@ class TargetScannerService:
         Raises:
             ValueError: When credentials are missing for remote scan.
         """
-        await TargetService.set_scan_status(db, target, "scanning")
+        await TargetService.mark_scan_in_progress(db, target)
 
         is_localhost = target.host in {"localhost", "127.0.0.1"}
         try:
@@ -505,17 +506,31 @@ class TargetScannerService:
                 )
                 scan_result = await self.scan_remote(scan_request)
 
-            payload = scan_result.model_dump(mode="json")
-            await TargetService.update_discovered_capabilities(
+            capabilities = self.build_capabilities_payload(scan_result)
+
+            platform_payload = (
+                scan_result.platform.model_dump(mode="json")
+                if scan_result.platform
+                else None
+            )
+            os_payload = (
+                scan_result.os.model_dump(mode="json")
+                if scan_result.os
+                else None
+            )
+
+            await TargetService.apply_scan_result(
                 db=db,
                 target=target,
-                capabilities=payload,
+                capabilities=capabilities,
                 scan_date=scan_result.scan_date,
-                status="completed" if scan_result.success else "failed"
+                success=scan_result.success,
+                platform_info=platform_payload,
+                os_info=os_payload,
             )
             return target
         except Exception:  # noqa: B902
-            await TargetService.set_scan_status(db, target, "failed")
+            await TargetService.mark_scan_failed(db, target)
             raise
 
     async def _run_scan(
@@ -694,6 +709,27 @@ class TargetScannerService:
             else:
                 virtualization.setdefault(tool, ToolInfo(available=False))
 
+        podman_version_result = await executor.run("podman --version", timeout=self._DEFAULT_TIMEOUT)
+        if podman_version_result.success:
+            version_info = self._parse_version_only(podman_version_result.stdout)
+            podman_details: Dict[str, Any] | None = None
+            podman_info_result = await executor.run(
+                "podman info --format json",
+                timeout=self._DEFAULT_TIMEOUT
+            )
+            if podman_info_result.success and podman_info_result.stripped_stdout():
+                try:
+                    podman_details = json.loads(podman_info_result.stripped_stdout())
+                except json.JSONDecodeError:
+                    podman_details = {"raw_output": podman_info_result.stripped_stdout()}
+            virtualization["podman"] = ToolInfo(
+                available=True,
+                version=version_info.get("version") if version_info else None,
+                details=podman_details
+            )
+        else:
+            virtualization.setdefault("podman", ToolInfo(available=False))
+
         kvm_result = await executor.run("test -e /dev/kvm && echo 'present'", timeout=self._DEFAULT_TIMEOUT)
         if "present" in kvm_result.stdout:
             virtualization.setdefault("qemu_kvm", ToolInfo(available=True)).details = {
@@ -813,6 +849,131 @@ class TargetScannerService:
             else:
                 kubernetes[tool] = ToolInfo(available=False)
         return kubernetes
+
+    def build_capabilities_payload(self, scan_result: ScanResult) -> List[Dict[str, Any]]:
+        """Construit la liste normalisée des capacités détectées."""
+        capabilities: List[Dict[str, Any]] = []
+        detected_at = scan_result.scan_date
+
+        def add_capability(
+            capability_type: CapabilityType,
+            available: bool,
+            version: Optional[str],
+            details: Optional[Dict[str, Any]]
+        ) -> None:
+            capabilities.append(
+                {
+                    "capability_type": capability_type,
+                    "is_available": available,
+                    "version": version,
+                    "details": details,
+                    "detected_at": detected_at,
+                }
+            )
+
+        virtualization = scan_result.virtualization or {}
+        for key, info in virtualization.items():
+            capability_type = self._map_virtualization_key_to_capability(key)
+            if capability_type is None:
+                continue
+            available, version, details = self._extract_tool_info(info)
+            add_capability(capability_type, available, version, details)
+
+        docker_caps = scan_result.docker
+        if docker_caps is not None:
+            docker_details = {
+                "running": docker_caps.running,
+                "socket_accessible": docker_caps.socket_accessible,
+            }
+            add_capability(
+                CapabilityType.DOCKER,
+                docker_caps.installed,
+                docker_caps.version,
+                docker_details,
+            )
+
+            compose_info = docker_caps.compose
+            if compose_info:
+                compose_details: Dict[str, Any] = {}
+                if compose_info.plugin_based is not None:
+                    compose_details["plugin_based"] = compose_info.plugin_based
+                add_capability(
+                    CapabilityType.DOCKER_COMPOSE,
+                    compose_info.available,
+                    compose_info.version,
+                    compose_details or None,
+                )
+            else:
+                add_capability(CapabilityType.DOCKER_COMPOSE, False, None, None)
+
+            swarm_info = docker_caps.swarm
+            if swarm_info:
+                swarm_details = swarm_info.details or {
+                    "active": swarm_info.active,
+                    "node_role": swarm_info.node_role,
+                }
+                add_capability(
+                    CapabilityType.DOCKER_SWARM,
+                    swarm_info.available,
+                    None,
+                    swarm_details,
+                )
+            else:
+                add_capability(CapabilityType.DOCKER_SWARM, False, None, None)
+        else:
+            add_capability(CapabilityType.DOCKER, False, None, None)
+            add_capability(CapabilityType.DOCKER_COMPOSE, False, None, None)
+            add_capability(CapabilityType.DOCKER_SWARM, False, None, None)
+
+        kubernetes_tools = scan_result.kubernetes or {}
+        for key, info in kubernetes_tools.items():
+            capability_type = self._map_kubernetes_key_to_capability(key)
+            if capability_type is None:
+                continue
+            available, version, details = self._extract_tool_info(info)
+            add_capability(capability_type, available, version, details)
+
+        return capabilities
+
+    def _map_virtualization_key_to_capability(
+        self,
+        key: str
+    ) -> Optional[CapabilityType]:
+        mapping = {
+            "libvirt": CapabilityType.LIBVIRT,
+            "virtualbox": CapabilityType.VIRTUALBOX,
+            "vagrant": CapabilityType.VAGRANT,
+            "proxmox": CapabilityType.PROXMOX,
+            "qemu_kvm": CapabilityType.QEMU_KVM,
+            "podman": CapabilityType.PODMAN,
+        }
+        return mapping.get(key.lower())
+
+    def _map_kubernetes_key_to_capability(
+        self,
+        key: str
+    ) -> Optional[CapabilityType]:
+        mapping = {
+            "kubectl": CapabilityType.KUBECTL,
+            "kubeadm": CapabilityType.KUBEADM,
+            "k3s": CapabilityType.K3S,
+            "microk8s": CapabilityType.MICROK8S,
+        }
+        return mapping.get(key.lower())
+
+    def _extract_tool_info(
+        self,
+        info: Any
+    ) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
+        if isinstance(info, ToolInfo):
+            return info.available, info.version, info.details
+        if isinstance(info, dict):
+            available = bool(info.get("available"))
+            version = info.get("version")
+            raw_details = info.get("details")
+            details = raw_details if isinstance(raw_details, dict) else None
+            return available, version, details
+        return False, None, None
 
     def _map_architecture(self, raw_arch: str) -> PlatformArchitecture:
         normalized = raw_arch.strip().lower()

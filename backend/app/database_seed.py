@@ -143,18 +143,35 @@ async def _create_localhost_target(
         )
 
         target = await TargetService.create(session, target_payload)
-        await TargetService.update_discovered_capabilities(
+
+        capabilities_payload = scanner.build_capabilities_payload(scan_result)
+        platform_payload = (
+            scan_result.platform.model_dump(mode="json")
+            if scan_result.platform
+            else None
+        )
+        os_payload = (
+            scan_result.os.model_dump(mode="json")
+            if scan_result.os
+            else None
+        )
+
+        await TargetService.apply_scan_result(
             db=session,
             target=target,
-            capabilities=scan_result.model_dump(mode="json"),
+            capabilities=capabilities_payload,
             scan_date=scan_result.scan_date,
-            status="completed" if scan_result.success else "failed"
+            success=scan_result.success,
+            platform_info=platform_payload,
+            os_info=os_payload
         )
         details.append("capabilities persistées avec succès")
         return True, details
 
     except Exception as exc:  # noqa: B902 - log et continuer
         details.append(f"erreur: {exc}")
+        if "target" in locals():
+            await TargetService.mark_scan_failed(session, target)
         return False, details
 
 

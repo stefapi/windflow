@@ -271,15 +271,23 @@ class TargetCapabilitiesResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    scan_status: Optional[str] = Field(
-        default=None,
-        description="Status of the last scan (pending, scanning, completed, failed)"
-    )
-    last_scan_date: Optional[datetime] = Field(
+    scan_date: Optional[datetime] = Field(
         default=None,
         description="Timestamp of the last capabilities scan"
     )
-    scan_result: Optional[ScanResult] = Field(
+    scan_success: Optional[bool] = Field(
         default=None,
-        description="Stored scan result when available"
+        description="Indicates whether the last capabilities scan succeeded"
+    )
+    platform_info: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Platform information detected during the last scan"
+    )
+    os_info: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Operating system information detected during the last scan"
+    )
+    capabilities: List[TargetCapabilityResponse] = Field(
+        default_factory=list,
+        description="List of detected capabilities for the target"
     )
