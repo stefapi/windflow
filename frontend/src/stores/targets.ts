@@ -83,20 +83,6 @@ export const useTargetsStore = defineStore('targets', () => {
     }
   }
 
-  async function testConnection(id: string): Promise<{ success: boolean; message: string }> {
-    loading.value = true
-    error.value = null
-    try {
-      const response = await targetsApi.testConnection(id)
-      return response.data
-    } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : 'Connection test failed'
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
   return {
     targets,
     currentTarget,
@@ -107,6 +93,5 @@ export const useTargetsStore = defineStore('targets', () => {
     createTarget,
     updateTarget,
     deleteTarget,
-    testConnection,
   }
 })

@@ -107,9 +107,6 @@ export const targetsApi = {
 
   delete: (id: string) =>
     http.delete(`/targets/${id}`),
-
-  testConnection: (id: string) =>
-    http.post<{ success: boolean; message: string }>(`/targets/${id}/test`),
 }
 
 // Stacks API

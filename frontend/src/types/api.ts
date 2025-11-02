@@ -54,8 +54,8 @@ export interface OrganizationUpdate {
 }
 
 // Target types
-export type TargetType = 'docker_compose' | 'docker_swarm' | 'kubernetes' | 'vm'
-export type TargetStatus = 'active' | 'inactive' | 'error' | 'maintenance'
+export type TargetType = 'docker' | 'docker_swarm' | 'kubernetes' | 'vm' | 'physical'
+export type TargetStatus = 'online' | 'offline' | 'error' | 'maintenance'
 
 export interface Target extends BaseModel {
   name: string

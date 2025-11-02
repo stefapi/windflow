@@ -9,17 +9,18 @@
       </template>
       <el-table :data="targetsStore.targets" v-loading="targetsStore.loading">
         <el-table-column prop="name" label="Name" />
-        <el-table-column prop="type" label="Type" />
         <el-table-column prop="host" label="Host" />
         <el-table-column prop="port" label="Port" width="100" />
-        <el-table-column prop="status" label="Status">
+        <el-table-column label="Status" width="150">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">{{ row.status }}</el-tag>
+            <div class="status-indicator">
+              <span class="status-dot" :class="`status-${row.status}`" />
+              {{ row.status }}
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="Actions" width="200">
+        <el-table-column label="Actions" width="120">
           <template #default="{ row }">
-            <el-button size="small" @click="testConnection(row.id)">Test</el-button>
             <el-button size="small" type="danger" @click="deleteTarget(row.id)">Delete</el-button>
           </template>
         </el-table-column>
@@ -33,10 +34,11 @@
         </el-form-item>
         <el-form-item label="Type">
           <el-select v-model="form.type" style="width: 100%">
-            <el-option label="Docker Compose" value="docker_compose" />
+            <el-option label="Docker" value="docker" />
             <el-option label="Docker Swarm" value="docker_swarm" />
             <el-option label="Kubernetes" value="kubernetes" />
             <el-option label="VM" value="vm" />
+            <el-option label="Physical" value="physical" />
           </el-select>
         </el-form-item>
         <el-form-item label="Host">
@@ -70,40 +72,21 @@ const showDialog = ref(false)
 
 const form = reactive<TargetCreate>({
   name: '',
-  type: 'docker_compose',
+  type: 'docker',
   host: '',
   port: 22,
   description: '',
   organization_id: authStore.organizationId || '',
 })
 
-const getStatusType = (status: string) => {
-  const map: Record<string, any> = {
-    active: 'success',
-    inactive: 'info',
-    error: 'danger',
-    maintenance: 'warning',
-  }
-  return map[status] || 'info'
-}
-
 const handleCreate = async () => {
   try {
     await targetsStore.createTarget({ ...form })
     ElMessage.success('Target created successfully')
     showDialog.value = false
-    Object.assign(form, { name: '', type: 'docker_compose', host: '', port: 22, description: '' })
-  } catch (error) {
+    Object.assign(form, { name: '', type: 'docker', host: '', port: 22, description: '' })
+  } catch (_error) {
     ElMessage.error('Failed to create target')
-  }
-}
-
-const testConnection = async (id: string) => {
-  try {
-    const result = await targetsStore.testConnection(id)
-    ElMessage[result.success ? 'success' : 'error'](result.message)
-  } catch (error) {
-    ElMessage.error('Connection test failed')
   }
 }
 
@@ -111,7 +94,7 @@ const deleteTarget = async (id: string) => {
   try {
     await targetsStore.deleteTarget(id)
     ElMessage.success('Target deleted successfully')
-  } catch (error) {
+  } catch (_error) {
     ElMessage.error('Failed to delete target')
   }
 }
@@ -126,5 +109,33 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.status-online {
+  background-color: #67c23a; /* Green */
+}
+
+.status-offline {
+  background-color: #f56c6c; /* Red */
+}
+
+.status-error {
+  background-color: #e6a23c; /* Orange */
+}
+
+.status-maintenance {
+  background-color: #f0ad4e; /* Yellow */
 }
 </style>
