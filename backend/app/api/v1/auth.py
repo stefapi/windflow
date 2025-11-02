@@ -28,7 +28,8 @@ async def login(
     if not user:
         user = await UserService.get_by_email(session, form_data.username)
 
-    if not user or not UserService.verify_password(form_data.password, user.hashed_password):
+    # Vérifier le mot de passe et mettre à jour le hash si nécessaire
+    if not user or not await UserService.verify_and_update_user(session, user, form_data.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",

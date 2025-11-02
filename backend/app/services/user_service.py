@@ -4,7 +4,7 @@ Service métier pour gestion des utilisateurs.
 Implémente le pattern Repository avec SQLAlchemy 2.0 async.
 """
 
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
@@ -12,8 +12,8 @@ from passlib.context import CryptContext
 from ..models.user import User
 from ..schemas.user import UserCreate, UserUpdate
 
-# Configuration password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Configuration password hashing avec Argon2
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 class UserService:
@@ -26,42 +26,106 @@ class UserService:
     @staticmethod
     def hash_password(password: str) -> str:
         """
-        Hash un mot de passe.
+        Hash un mot de passe avec Argon2.
 
-        Tronque automatiquement le mot de passe à 72 bytes pour respecter
-        la limite de bcrypt. Cette approche est recommandée par la documentation
-        bcrypt pour éviter les erreurs avec des mots de passe très longs.
+        Argon2 est un algorithme moderne de hashing de mots de passe,
+        gagnant du Password Hashing Competition (PHC). Il offre une meilleure
+        sécurité que bcrypt et n'a pas de limite de longueur pour les mots de passe.
 
         Args:
             password: Mot de passe en clair
 
         Returns:
-            Hash bcrypt du mot de passe
+            Hash Argon2 du mot de passe
         """
-        # Bcrypt a une limite de 72 bytes, tronquer si nécessaire
-        password_bytes = password.encode('utf-8')[:72]
-        password_truncated = password_bytes.decode('utf-8', errors='ignore')
-        return pwd_context.hash(password_truncated)
+        return pwd_context.hash(password)
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """
-        Vérifie un mot de passe.
+        Vérifie un mot de passe avec Argon2.
 
-        Applique la même troncature à 72 bytes que lors du hashing
-        pour assurer la cohérence de la vérification.
+        Contrairement à bcrypt, Argon2 n'a pas de limite de longueur pour les mots de passe,
+        donc aucune troncature n'est nécessaire.
 
         Args:
             plain_password: Mot de passe en clair à vérifier
-            hashed_password: Hash bcrypt stocké
+            hashed_password: Hash Argon2 stocké
 
         Returns:
             True si le mot de passe correspond, False sinon
         """
-        # Appliquer la même troncature que lors du hashing
-        password_bytes = plain_password.encode('utf-8')[:72]
-        password_truncated = password_bytes.decode('utf-8', errors='ignore')
-        return pwd_context.verify(password_truncated, hashed_password)
+        return pwd_context.verify(plain_password, hashed_password)
+
+    @staticmethod
+    def verify_and_update(plain_password: str, hashed_password: str) -> Tuple[bool, Optional[str]]:
+        """
+        Vérifie un mot de passe et détecte si le hash doit être renouvelé.
+
+        Cette méthode utilise la fonctionnalité de passlib pour détecter
+        automatiquement si un hash doit être mis à jour (par exemple si
+        les paramètres de sécurité Argon2 ont été modifiés dans la configuration).
+
+        Args:
+            plain_password: Mot de passe en clair à vérifier
+            hashed_password: Hash Argon2 stocké
+
+        Returns:
+            Tuple[bool, Optional[str]]:
+                - bool: True si le mot de passe correspond, False sinon
+                - Optional[str]: Nouveau hash si une mise à jour est nécessaire, None sinon
+
+        Example:
+            >>> is_valid, new_hash = UserService.verify_and_update("password123", old_hash)
+            >>> if is_valid and new_hash:
+            ...     # Mettre à jour le hash en base de données
+            ...     user.hashed_password = new_hash
+            ...     await db.commit()
+        """
+        # Vérifier le mot de passe et obtenir le résultat
+        verified, new_hash = pwd_context.verify_and_update(plain_password, hashed_password)
+
+        return verified, new_hash
+
+    @staticmethod
+    async def verify_and_update_user(
+        db: AsyncSession,
+        user: User,
+        plain_password: str
+    ) -> bool:
+        """
+        Vérifie le mot de passe d'un utilisateur et met à jour automatiquement
+        le hash si nécessaire.
+
+        Cette méthode combine la vérification et la mise à jour du hash en une seule
+        opération. Si le hash doit être renouvelé, il est automatiquement mis à jour
+        en base de données.
+
+        Args:
+            db: Session de base de données async
+            user: Utilisateur dont on vérifie le mot de passe
+            plain_password: Mot de passe en clair à vérifier
+
+        Returns:
+            True si le mot de passe est valide, False sinon
+
+        Example:
+            >>> user = await UserService.get_by_email(db, "user@example.com")
+            >>> is_valid = await UserService.verify_and_update_user(db, user, "password123")
+            >>> if is_valid:
+            ...     # L'utilisateur est authentifié
+            ...     pass
+        """
+        is_valid, new_hash = UserService.verify_and_update(plain_password, user.hashed_password)
+
+        # Si le mot de passe est valide et qu'un nouveau hash est disponible
+        if is_valid and new_hash:
+            # Mettre à jour le hash en base de données
+            user.hashed_password = new_hash
+            await db.commit()
+            await db.refresh(user)
+
+        return is_valid
 
     @staticmethod
     async def get_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
