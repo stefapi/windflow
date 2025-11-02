@@ -12,12 +12,31 @@ WindFlow est un outil web intelligent de déploiement de containers Docker sur d
 - **Event-Driven** : Communication asynchrone via messages Redis Streams
 - **Security by Design** : Sécurité intégrée à tous les niveaux
 - **Observabilité** : Monitoring et logging natifs obligatoires
+- **Style**: Modular Monolith d'abord puis Hexagonale si complexité augmente
 
 ### Standards de Code
 - **Type Safety** : Usage obligatoire des type hints en Python et TypeScript strict
 - **Documentation** : Code auto-documenté avec docstrings et commentaires explicatifs
 - **Tests** : Couverture de tests minimale de 80% pour les nouveaux composants
 - **Clean Code** : Noms explicites, fonctions courtes, responsabilités uniques
+- **Principes de conception**: SOLID, DRY, KISS, YAGNI, SoC
+
+### Performances et résilience
+- Caching (client, edge, app, DB), circuit breaker, retry/backoff, bulkhead, rate limiting.
+- Scalabilité horizontale d’abord ; services stateless autant que possible.
+
+### Qualité, tests & observabilité
+
+- Test Pyramid : beaucoup d’unitaires, moins d’intégration, peu d’end-to-end.
+- Tests exhaustifs pour les API
+
+### Front-end & mobile (selon contexte)
+
+- Component-driven (Design Systems)
+- gestion d’état
+- accessibilité (WCAG)
+- offline-first
+- sync conflictuelle
 
 ## Conventions de Nommage
 
@@ -75,6 +94,13 @@ frontend/
 - Retry automatique pour les erreurs temporaires
 
 ## Sécurité
+
+#### Principes de base
+
+- Principe OWASP Top 10
+- Least privilege
+- zero trust
+- chiffrement en transit et au repos
 
 ### Authentification/Autorisation
 - JWT tokens avec refresh automatique

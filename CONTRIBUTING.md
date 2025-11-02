@@ -1,385 +1,421 @@
-# Guide de Contribution - WindFlow
+# Contribution Guide — WindFlow
 
-Merci de votre intérêt pour contribuer au projet WindFlow ! Ce guide détaille les processus et conventions pour contribuer efficacement à notre outil intelligent de déploiement de containers Docker.
+Thank you for your interest in contributing to the WindFlow project! This guide details the processes and conventions for contributing effectively to our intelligent Docker container deployment tool.
 
-## À Propos de WindFlow
+## About WindFlow
 
-WindFlow est un outil web intelligent qui combine une interface utilisateur moderne, un système d'échange de données flexible, et une intelligence artificielle pour automatiser et optimiser les déploiements de containers Docker sur des machines cibles.
+WindFlow is an intelligent web tool that combines a modern user interface, a flexible data exchange system, and artificial intelligence to automate and optimize Docker container deployments on target machines.
 
-### Principes du Projet
-- **API-First** : Toute fonctionnalité doit d'abord être disponible via l'API REST
-- **Security by Design** : Sécurité intégrée à tous les niveaux
-- **Type Safety** : Usage obligatoire des type hints Python et TypeScript strict
-- **Observabilité** : Monitoring et logging natifs obligatoires
-- **Clean Code** : Code auto-documenté avec tests et documentation
+### Project Principles
 
-## Code de Conduite
+* **API-First:** Every feature must first be available via the REST API
+* **Security by Design:** Security integrated at every level
+* **Type Safety:** Mandatory Python type hints and strict TypeScript
+* **Observability:** Built-in monitoring and logging required
+* **Clean Code:** Self-documenting code with tests and documentation
 
-En participant à ce projet, vous acceptez de respecter notre [Code de Conduite](CODE_OF_CONDUCT.md) :
-- Soyez respectueux et inclusif
-- Soyez patient et accueillant
-- Soyez collaboratif et constructif
-- Acceptez les critiques constructives
+## Code of Conduct
 
-## Types de Contributions
+By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md):
 
-### 🆕 Nouvelles Fonctionnalités
-- **Processus** : Issue → Discussion → Design → Implementation → Review
-- **Validation** : Tests complets, documentation, compatibilité
-- **Exemples** : Nouveaux types de déploiement, intégrations IA, optimisations
+* Be respectful and inclusive
+* Be patient and welcoming
+* Be collaborative and constructive
+* Embrace constructive feedback
 
-### 🐛 Corrections de Bugs
-- **Processus** : Reproduction → Investigation → Fix → Validation
-- **Validation** : Tests de régression, pas d'effet de bord
-- **Priorité** : Bugs critiques traités en priorité
+## Types of Contributions
+
+### 🆕 New Features
+
+* **Process:** Issue → Discussion → Design → Implementation → Review
+* **Validation:** Comprehensive tests, documentation, compatibility
+* **Examples:** New deployment types, AI integrations, optimizations
+
+### 🐛 Bug Fixes
+
+* **Process:** Reproduction → Investigation → Fix → Validation
+* **Validation:** Regression tests, no side effects
+* **Priority:** Critical bugs handled first
 
 ### 📚 Documentation
-- **Processus** : Identification → Rédaction → Review → Publication
-- **Types** : Documentation utilisateur, développeur, API, architecture
-- **Validation** : Clarté, exactitude, complétude
 
-### 🔧 Améliorations Techniques
-- **Processus** : Analyse → Proposition → Implementation → Validation
-- **Types** : Refactoring, optimisations, maintenance, mise à jour dépendances
-- **Validation** : Pas de régression, amélioration mesurable
+* **Process:** Identify → Draft → Review → Publish
+* **Types:** User, developer, API, architecture documentation
+* **Validation:** Clarity, accuracy, completeness
 
-## Configuration de l'Environnement
+### 🔧 Technical Improvements
 
-### Prérequis
-- **Python** 3.11+
-- **Node.js** 20+ avec pnpm 9+
-- **Docker** & Docker Compose
-- **Git** avec configuration SSH
-- **Poetry** pour la gestion des dépendances Python
+* **Process:** Analysis → Proposal → Implementation → Validation
+* **Types:** Refactoring, optimizations, maintenance, dependency updates
+* **Validation:** No regressions, measurable improvement
 
-### Installation Rapide
+## Environment Setup
+
+### Prerequisites
+
+* **Python** 3.11+
+* **Node.js** 20+ with pnpm 9+
+* **Docker** & Docker Compose
+* **Git** with SSH configuration
+* **Poetry** for Python dependency management
+
+### Quick Setup
+
 ```bash
-# 1. Fork et clone du projet
-git clone git@gitea.yourdomain.com:VOTRE_USERNAME/windflow.git
+# 1. Fork and clone the project
+git clone git@gitea.yourdomain.com:YOUR_USERNAME/windflow.git
 cd windflow
 
-# 2. Installation automatique
+# 2. Automatic installation
 ./install.sh
 
-# 3. Configuration environnement
+# 3. Environment configuration
 cp .env.example .env
-# Éditer .env avec vos paramètres locaux
+# Edit .env with your local settings
 
-# 4. Setup complet
+# 4. Full setup
 make setup
 
-# 5. Démarrage des services de développement
+# 5. Start development services
 make dev
 ```
 
-### Configuration IDE
+### IDE Configuration
 
 #### PyCharm (Backend)
-- **Interpéteur** : Poetry Environment
-- **Plugins requis** : Python Type Checker (mypy), Pre-commit Hook Plugin
-- **Configuration** : Black formatter, pytest runner
+
+* **Interpreter:** Poetry environment
+* **Required plugins:** Python Type Checker (mypy), Pre-commit Hook Plugin
+* **Configuration:** Black formatter, pytest runner
 
 #### VS Code (Frontend)
-- **Extensions** : Vue Language Features (Volar), TypeScript strict mode, UnoCSS IntelliSense
-- **Configuration** : Format on save, Prettier formatter
 
-### Vérification de l'Installation
+* **Extensions:** Vue Language Features (Volar), strict TypeScript mode, UnoCSS IntelliSense
+* **Configuration:** Format on save, Prettier formatter
+
+### Verify Installation
+
 ```bash
-# Vérification des outils
+# Tool checks
 make check-deps
 
-# Tests rapides
+# Quick tests
 make test-quick
 
-# Lancement de l'interface
+# Launch the UI
 make dev
-# L'application devrait être accessible sur http://localhost:3000
+# The app should be available at http://localhost:3000
 ```
 
-## Processus de Contribution
+## Contribution Process
 
-### 1. Préparation
+### 1. Preparation
 
-#### Pour les Contributeurs Externes
+#### For External Contributors
+
 ```bash
-# 1. Fork du repository sur GitHub
-# 2. Clone du fork
-git clone git@gitea.yourdomain.com:VOTRE_USERNAME/windflow.git
+# 1. Fork the repository on GitHub
+# 2. Clone your fork
+git clone git@gitea.yourdomain.com:YOUR_USERNAME/windflow.git
 cd windflow
 
-# 3. Configuration des remotes
+# 3. Configure remotes
 git remote add upstream git@gitea.yourdomain.com:windflow/windflow.git
 
-# 4. Synchronisation
+# 4. Sync
 git fetch upstream
 git checkout main
 git merge upstream/main
 ```
 
-#### Pour les Contributeurs Internes
+#### For Internal Contributors
+
 ```bash
-# Clone direct
+# Direct clone
 git clone git@gitea.yourdomain.com:windflow/windflow.git
 cd windflow
 ```
 
-### 2. Identification du Travail
+### 2. Identify Work
 
-#### Issues Existantes
-1. **Parcourir les Issues** : [GitHub Issues](https://gitea.yourdomain.com/windflow/windflow/issues)
-2. **Labels "Good First Issue"** : Parfait pour débuter
-3. **Assignation** : Commenter pour demander l'assignation
-4. **Clarification** : Poser des questions si nécessaire
+#### Existing Issues
 
-#### Nouvelles Issues
-Utilisez les templates appropriés :
-- **Bug Report** : Description détaillée, étapes de reproduction, environnement
-- **Feature Request** : Description du besoin, solutions envisagées, cas d'usage
-- **Documentation** : Section concernée, amélioration proposée
+1. **Browse Issues:** [GitHub Issues](https://gitea.yourdomain.com/windflow/windflow/issues)
+2. **“Good First Issue” labels:** Perfect for newcomers
+3. **Assignment:** Comment to request assignment
+4. **Clarification:** Ask questions if needed
 
-### 3. Développement
+#### New Issues
 
-#### Création de la Branche
+Use the appropriate templates:
+
+* **Bug Report:** Detailed description, reproduction steps, environment
+* **Feature Request:** Problem description, proposed solutions, use cases
+* **Documentation:** Target section, proposed improvement
+
+### 3. Development
+
+#### Branch Creation
+
 ```bash
-# Synchronisation avec la branche principale
+# Sync with main
 git checkout main
-git pull upstream main  # ou origin main pour contributeurs internes
+git pull upstream main  # or origin main for internal contributors
 
-# Création de la branche selon le type
-git checkout -b feature/description-courte     # Nouvelle fonctionnalité
-git checkout -b fix/issue-number-description   # Correction de bug
+# Create a branch by type
+git checkout -b feature/short-description     # New feature
+git checkout -b fix/issue-number-description  # Bug fix
 git checkout -b docs/section-updated          # Documentation
-git checkout -b refactor/component-name       # Refactoring
+git checkout -b refactor/component-name       # Refactor
 ```
 
-#### Standards de Développement
+#### Development Standards
 
-**Règles Obligatoires :**
-1. **Suivre les Conventions** : Respecter [les règles de développement](.clinerules/README.md)
-2. **Type Safety** : Types Python/TypeScript stricts obligatoires
-3. **Tests** : Ajouter des tests pour tout nouveau code (85% de couverture minimum)
-4. **Documentation** : Mettre à jour la documentation si nécessaire
-5. **Commits** : Suivre la [convention de commits](COMMIT_CONVENTION.md)
+**Mandatory Rules:**
 
-**Cycle de Développement :**
+1. **Follow Conventions:** Respect the [development rules](.clinerules/README.md)
+2. **Type Safety:** Strict Python/TypeScript types are required
+3. **Tests:** Add tests for all new code (≥ 85% coverage)
+4. **Documentation:** Update docs as needed
+5. **Commits:** Follow the [commit convention](COMMIT_CONVENTION.md)
+
+**Development Cycle:**
+
 ```bash
-# Développement itératif
+# Iterative development
 git add .
-git commit -m "feat(scope): description claire"
+git commit -m "feat(scope): clear description"
 
-# Push régulier pour sauvegarde
-git push origin feature/description-courte
+# Push regularly as a backup
+git push origin feature/short-description
 
-# Synchronisation avec upstream si nécessaire
+# Sync with upstream if needed
 git fetch upstream
 git rebase upstream/main
 ```
 
 #### Backend (FastAPI)
+
 ```bash
-# Démarrage en mode développement
+# Start in dev mode
 make backend
 
-# Tests en continu
+# Continuous tests
 make backend-test-watch
 
-# Validation qualité
+# Quality checks
 make backend-lint
 make backend-format
 make backend-typecheck
 ```
 
-**Structure recommandée :**
-1. **Modèle** : `windflow/models/` (SQLAlchemy)
-2. **Schema** : `windflow/schemas/` (Pydantic)
-3. **Service** : `windflow/services/` (Logique métier)
-4. **Router** : `windflow/api/` (Endpoints)
-5. **Tests** : `tests/` (Unit, integration, E2E)
+**Recommended structure:**
+
+1. **Model:** `windflow/models/` (SQLAlchemy)
+2. **Schema:** `windflow/schemas/` (Pydantic)
+3. **Service:** `windflow/services/` (Business logic)
+4. **Router:** `windflow/api/` (Endpoints)
+5. **Tests:** `tests/` (Unit, integration, E2E)
 
 #### Frontend (Vue.js 3)
+
 ```bash
-# Démarrage en mode développement
+# Start in dev mode
 make frontend
 
-# Tests en continu
+# Continuous tests
 cd frontend && pnpm test --watch
 
-# Validation qualité
+# Quality checks
 make frontend-lint
 make frontend-format
 make frontend-typecheck
 ```
 
-**Structure recommandée :**
-1. **Types** : `src/types/` (TypeScript)
-2. **Services** : `src/services/` (API)
-3. **Stores** : `src/stores/` (Pinia)
-4. **Composants** : `src/components/` (Vue)
-5. **Pages** : `src/views/` (Routes)
-6. **Tests** : `tests/` (Vitest, Playwright)
+**Recommended structure:**
 
-### 4. Tests et Validation
+1. **Types:** `src/types/` (TypeScript)
+2. **Services:** `src/services/` (API)
+3. **Stores:** `src/stores/` (Pinia)
+4. **Components:** `src/components/` (Vue)
+5. **Pages:** `src/views/` (Routes)
+6. **Tests:** `tests/` (Vitest, Playwright)
 
-#### Tests Obligatoires
+### 4. Testing & Validation
+
+#### Required Tests
+
 ```bash
-# Tests unitaires
+# Unit tests
 make backend-test        # Backend
 make frontend-test       # Frontend
 
-# Tests d'intégration
-make test-integration    # API complète
+# Integration tests
+make test-integration    # Full API
 
-# Tests end-to-end
-make frontend-test-e2e   # Workflows utilisateur
+# End-to-end tests
+make frontend-test-e2e   # User workflows
 
-# Couverture de code
-make backend-coverage    # Doit être ≥ 85%
-make frontend-coverage   # Doit être ≥ 80%
+# Code coverage
+make backend-coverage    # Must be ≥ 85%
+make frontend-coverage   # Must be ≥ 80%
 ```
 
-#### Validation Qualité
+#### Quality Validation
+
 ```bash
-# Formatage automatique
+# Auto-format
 make format
 
-# Vérifications de qualité
+# Quality checks
 make lint
 
 # Type checking
 make typecheck
 
-# Tests de sécurité
+# Security checks
 make security-check
 
-# Validation complète
+# Full validation
 make all
 ```
 
 ### 5. Pull Request
 
-#### Préparation de la PR
+#### PR Preparation
+
 ```bash
-# Tests complets avant soumission
+# Full test suite before submission
 make test-all
 
-# Formatage final
+# Final formatting
 make format
 
-# Rebase pour historique propre
+# Rebase for a clean history
 git rebase upstream/main
 
-# Push final
-git push origin feature/description-courte
+# Final push
+git push origin feature/short-description
 ```
 
-#### Création de la PR
-1. **Aller sur GitHub** : Votre fork → "Compare & pull request"
-2. **Base Branch** : `main` (sauf indication contraire)
-3. **Titre** : Descriptif et clair (suivre convention commits)
-4. **Description** : Utiliser le template, être exhaustif
-5. **Labels** : feature, bugfix, documentation, etc.
-6. **Reviewers** : Demander 2+ reviews pour les changements importants
+#### Creating the PR
 
-#### Template de Pull Request
+1. **Go to GitHub:** Your fork → “Compare & pull request”
+2. **Base branch:** `main` (unless otherwise specified)
+3. **Title:** Descriptive and clear (follow commit convention)
+4. **Description:** Use the template, be thorough
+5. **Labels:** feature, bugfix, documentation, etc.
+6. **Reviewers:** Request 2+ reviews for substantial changes
+
+#### Pull Request Template
+
 ```markdown
 ## Description
-Description claire des changements apportés
+Clear description of the changes made
 
-## Type de Changement
-- [ ] Correction de bug (changement non-breaking)
-- [ ] Nouvelle fonctionnalité (changement non-breaking)
-- [ ] Changement breaking (correction ou fonctionnalité qui casserait l'existant)
-- [ ] Mise à jour de documentation
+## Type of Change
+- [ ] Bug fix (non-breaking change)
+- [ ] New feature (non-breaking change)
+- [ ] Breaking change (fix or feature that would cause existing functionality to change)
+- [ ] Documentation update
 
 ## Tests
-- [ ] Tests unitaires ajoutés/mis à jour
-- [ ] Tests d'intégration ajoutés/mis à jour
-- [ ] Tests E2E ajoutés/mis à jour
-- [ ] Tests manuels effectués
+- [ ] Unit tests added/updated
+- [ ] Integration tests added/updated
+- [ ] E2E tests added/updated
+- [ ] Manual tests performed
 
 ## Checklist
-- [ ] Le code suit les guidelines du projet
-- [ ] Auto-review effectué
-- [ ] Documentation mise à jour
-- [ ] Tests passent localement
-- [ ] Aucun changement breaking introduit
-- [ ] Couverture de tests maintenue
+- [ ] Code follows project guidelines
+- [ ] Self-review performed
+- [ ] Documentation updated
+- [ ] Tests pass locally
+- [ ] No breaking changes introduced
+- [ ] Test coverage maintained
 
-## Issues Liées
-Fixes #(numéro d'issue)
+## Related Issues
+Fixes #(issue number)
 
-## Captures d'Écran (si applicable)
-[Ajouter des captures d'écran ici]
+## Screenshots (if applicable)
+[Add screenshots here]
 ```
 
 ### 6. Code Review
 
-#### Processus de Review
-1. **Automated Checks** : Tests CI/CD, coverage, linting, security
-2. **Human Review** : 
-   - Fonctionnalité conforme aux specs
-   - Respect des [règles de développement](.clinerules/)
-   - Qualité et lisibilité du code
-   - Tests appropriés et complets
-   - Documentation mise à jour
-   - Performance (pas de régression)
+#### Review Process
 
-#### Répondre aux Commentaires
+1. **Automated Checks:** CI/CD tests, coverage, linting, security
+2. **Human Review:**
+
+   * Feature matches specs
+   * Compliance with [development rules](.clinerules/)
+   * Code quality and readability
+   * Appropriate and complete tests
+   * Documentation updated
+   * Performance (no regression)
+
+#### Responding to Comments
+
 ```bash
-# Après feedback des reviewers
-git checkout feature/description-courte
+# After reviewer feedback
+git checkout feature/short-description
 
-# Apporter les corrections
-# ... modifications selon feedback ...
+# Apply changes
+# ... modifications per feedback ...
 
 git add .
 git commit -m "fix(review): address reviewer feedback"
-git push origin feature/description-courte
+git push origin feature/short-description
 
-# Re-demander une review si nécessaire
+# Re-request review if needed
 ```
 
-#### Types de Feedback
-- **Changes Requested** : Modifications obligatoires avant merge
-- **Suggestions** : Améliorations recommandées
-- **Questions** : Clarifications nécessaires
-- **Approved** : Review positive, prêt pour merge
+#### Types of Feedback
 
-### 7. Merge et Finalisation
+* **Changes Requested:** Mandatory changes before merge
+* **Suggestions:** Recommended improvements
+* **Questions:** Clarifications needed
+* **Approved:** Positive review, ready to merge
 
-#### Après Approbation
-- **Squash et Merge** : Généralement utilisé pour garder un historique propre
-- **Nettoyage** : Suppression automatique de la branche après merge
-- **Sync Fork** : Mettre à jour le fork après merge
+### 7. Merge & Finalization
+
+#### After Approval
+
+* **Squash & Merge:** Typically used to keep a clean history
+* **Cleanup:** Automatically delete the branch after merge
+* **Sync Fork:** Update your fork after merge
 
 ```bash
-# Après merge, nettoyage local
+# After merge, local cleanup
 git checkout main
 git pull upstream main
-git branch -d feature/description-courte
-git push origin --delete feature/description-courte
+git branch -d feature/short-description
+git push origin --delete feature/short-description
 ```
 
-## Standards de Qualité
+## Quality Standards
 
-### Critères d'Acceptance
-1. **Fonctionnel** : La feature fonctionne comme spécifiée
-2. **Technique** : Code respecte les standards WindFlow
-3. **Testé** : Tests appropriés ajoutés et passants (85%+ couverture)
-4. **Documenté** : Documentation mise à jour
-5. **Sécurisé** : Audit sécurité pour code sensible
-6. **Performant** : Pas de régression de performance
+### Acceptance Criteria
+
+1. **Functional:** The feature works as specified
+2. **Technical:** Code follows WindFlow standards
+3. **Tested:** Appropriate tests added and passing (≥ 85% coverage)
+4. **Documented:** Documentation updated
+5. **Secure:** Security review for sensitive code
+6. **Performant:** No performance regression
 
 ### Quality Gates
-- **Coverage** : 85% minimum backend, 80% minimum frontend
-- **Performance** : Pas de régression > 10%
-- **Security** : Aucune vulnérabilité critique
-- **Documentation** : README et API docs à jour
-- **Linting** : Aucune erreur de linting
 
-## Git et Conventions
+* **Coverage:** Minimum 85% backend, 80% frontend
+* **Performance:** No regression > 10%
+* **Security:** No critical vulnerabilities
+* **Documentation:** README and API docs up to date
+* **Linting:** No linting errors
 
-### Convention de Commits
+## Git & Conventions
+
+### Commit Convention
+
 ```
 type(scope): description
 
@@ -388,16 +424,18 @@ type(scope): description
 [optional footer]
 ```
 
-**Types :**
-- `feat` : Nouvelle fonctionnalité
-- `fix` : Correction de bug
-- `docs` : Documentation
-- `style` : Formatage code (sans changement logique)
-- `refactor` : Refactoring sans changement fonctionnel
-- `test` : Ajout/modification de tests
-- `chore` : Tâches de maintenance
+**Types:**
 
-**Exemples :**
+* `feat`: New feature
+* `fix`: Bug fix
+* `docs`: Documentation
+* `style`: Code formatting (no logic changes)
+* `refactor`: Refactoring without functional change
+* `test`: Add/modify tests
+* `chore`: Maintenance tasks
+
+**Examples:**
+
 ```bash
 feat(api): add deployment optimization endpoint
 fix(ui): correct responsive layout on mobile devices
@@ -406,136 +444,148 @@ refactor(service): simplify deployment logic for better maintainability
 test(backend): add integration tests for authentication
 ```
 
-### Stratégie de Branches
+### Branching Strategy
+
 ```
-main                 ← Production stable
-├── develop          ← Intégration continue (si utilisée)
-├── feature/xxx      ← Nouvelles fonctionnalités
-├── fix/xxx          ← Corrections de bugs
+main                 ← Stable production
+├── develop          ← Continuous integration (if used)
+├── feature/xxx      ← New features
+├── fix/xxx          ← Bug fixes
 ├── docs/xxx         ← Documentation
 └── refactor/xxx     ← Refactoring
 ```
 
-## Rapporter des Bugs
+## Report Bugs
 
-### Informations Requises
-1. **Titre** : Clair et descriptif
-2. **Étapes de reproduction** : Détaillées et reproductibles
-3. **Comportement attendu** : Ce qui devrait se passer
-4. **Comportement actuel** : Ce qui se passe vraiment
-5. **Captures d'écran** : Si applicable
-6. **Environnement** :
-   - OS et version
-   - Navigateur et version
-   - Version WindFlow
-   - Configuration spécifique
+### Required Information
 
-### Template Bug Report
+1. **Title:** Clear and descriptive
+2. **Reproduction steps:** Detailed and repeatable
+3. **Expected behavior:** What should happen
+4. **Actual behavior:** What actually happens
+5. **Screenshots:** If applicable
+6. **Environment:**
+
+   * OS and version
+   * Browser and version
+   * WindFlow version
+   * Specific configuration
+
+### Bug Report Template
+
 ```markdown
-**Description du Bug**
-Description claire et concise du problème.
+**Bug Description**
+Clear and concise description of the issue.
 
-**Étapes de Reproduction**
-1. Aller à '...'
-2. Cliquer sur '...'
-3. Faire défiler vers '...'
-4. Voir l'erreur
+**Reproduction Steps**
+1. Go to '...'
+2. Click on '...'
+3. Scroll to '...'
+4. See the error
 
-**Comportement Attendu**
-Description de ce qui devrait se passer.
+**Expected Behavior**
+Describe what should happen.
 
-**Captures d'Écran**
-Si applicable, ajouter des captures d'écran.
+**Screenshots**
+If applicable, add screenshots.
 
-**Environnement :**
-- OS: [ex. Ubuntu 20.04]
-- Navigateur: [ex. Chrome 91]
-- Version WindFlow: [ex. 1.2.3]
+**Environment:**
+- OS: [e.g., Ubuntu 20.04]
+- Browser: [e.g., Chrome 91]
+- WindFlow Version: [e.g., 1.2.3]
 
-**Contexte Additionnel**
-Toute autre information pertinente.
+**Additional Context**
+Any other relevant information.
 ```
 
-## Suggérer des Fonctionnalités
+## Suggest Features
 
-### Template Feature Request
+### Feature Request Template
+
 ```markdown
-**Le problème est-il lié à un problème existant ?**
-Description claire du problème ou de la limitation.
+**Is your request related to a problem?**
+Clear description of the problem or limitation.
 
-**Décrivez la solution souhaitée**
-Description claire de ce que vous voulez voir implémenté.
+**Describe the desired solution**
+Clear description of what you want implemented.
 
-**Décrivez les alternatives considérées**
-Autres solutions ou fonctionnalités envisagées.
+**Describe alternatives you’ve considered**
+Other solutions or features considered.
 
-**Contexte Additionnel**
-Toute autre information, capture d'écran, ou exemple.
+**Additional context**
+Any other information, screenshots, or examples.
 ```
 
-## Ressources de Développement
+## Developer Resources
 
-### Documentation Technique
-- [Règles de Développement](.clinerules/README.md) - Standards obligatoires
-- [Workflow de Développement](doc/workflows/development-workflow.md) - Processus quotidien
-- [Workflow de Test](doc/workflows/testing-workflow.md) - Stratégie de test
-- [Architecture](doc/spec/02-architecture.md) - Vue d'ensemble technique
-- [Stack Technologique](doc/spec/03-technology-stack.md) - Technologies utilisées
+### Technical Documentation
 
-### Outils Utiles
-- [GitHub CLI](https://cli.gitea.yourdomain.com/) - Gestion GitHub en ligne de commande
-- [GitHub Desktop](https://desktop.gitea.yourdomain.com/) - Interface graphique Git
-- [VS Code GitHub Extension](https://marketplace.visualstudio.com/items?itemName=GitHub.vscode-pull-request-github)
+* [Development Rules](.clinerules/README.md) — Mandatory standards
+* [Development Workflow](doc/workflows/development-workflow.md) — Day-to-day process
+* [Testing Workflow](doc/workflows/testing-workflow.md) — Testing strategy
+* [Architecture](doc/spec/02-architecture.md) — Technical overview
+* [Technology Stack](doc/spec/03-technology-stack.md) — Technologies used
 
-### Commandes Make Utiles
+### Useful Tools
+
+* [GitHub CLI](https://cli.gitea.yourdomain.com/) — Command-line GitHub management
+* [GitHub Desktop](https://desktop.gitea.yourdomain.com/) — Git GUI
+* [VS Code GitHub Extension](https://marketplace.visualstudio.com/items?itemName=GitHub.vscode-pull-request-github)
+
+### Useful Make Commands
+
 ```bash
-# Développement
-make dev                 # Démarrage complet (backend + frontend)
-make backend            # Backend seul
-make frontend           # Frontend seul
+# Development
+make dev                 # Full startup (backend + frontend)
+make backend             # Backend only
+make frontend            # Frontend only
 
 # Tests
-make test-all           # Tous les tests
-make test-quick         # Tests rapides seulement
-make backend-test       # Tests backend
-make frontend-test      # Tests frontend
+make test-all            # All tests
+make test-quick          # Quick tests only
+make backend-test        # Backend tests
+make frontend-test       # Frontend tests
 
-# Qualité
-make format             # Formatage automatique
-make lint               # Vérifications de qualité
-make typecheck          # Vérification des types
+# Quality
+make format              # Auto-formatting
+make lint                # Quality checks
+make typecheck           # Type checks
 
 # Maintenance
-make clean              # Nettoyage
-make setup              # Configuration initiale
-make outdated           # Vérification des mises à jour
+make clean               # Cleanup
+make setup               # Initial setup
+make outdated            # Check for updates
 ```
 
-## Communication et Support
+## Communication & Support
 
-### Channels de Communication
-1. **GitHub Issues** : Discussion technique sur problèmes spécifiques
-2. **GitHub Discussions** : Questions générales, idées, aide
-3. **PR Comments** : Feedback technique sur le code
-4. **Documentation** : Guides et références techniques
+### Communication Channels
 
-### Obtenir de l'Aide
-- **Issues** : Créer une issue avec le label "help wanted"
-- **Discussions** : Poser des questions dans GitHub Discussions
-- **Code Review** : Demander des conseils lors du review
-- **Mentoring** : Contacter un contributeur expérimenté
+1. **GitHub Issues:** Technical discussion on specific problems
+2. **GitHub Discussions:** General questions, ideas, help
+3. **PR Comments:** Technical code feedback
+4. **Documentation:** Guides and technical references
 
-### Bonnes Pratiques Communication
-1. **Respectueux** : Ton professionnel et constructif
-2. **Clair** : Messages précis et détaillés avec contexte
-3. **Patient** : Les réponses peuvent prendre du temps
-4. **Recherche** : Vérifier les discussions existantes avant de créer
+### Getting Help
+
+* **Issues:** Create an issue with the “help wanted” label
+* **Discussions:** Ask questions in GitHub Discussions
+* **Code Review:** Request guidance during review
+* **Mentoring:** Contact an experienced contributor
+
+### Communication Best Practices
+
+1. **Respectful:** Professional, constructive tone
+2. **Clear:** Precise, detailed messages with context
+3. **Patient:** Responses may take time
+4. **Do your homework:** Check existing discussions before creating new ones
 
 ## Troubleshooting
 
-### Problèmes Courants
+### Common Issues
 
 #### 1. Fork Out of Sync
+
 ```bash
 git fetch upstream
 git checkout main
@@ -543,28 +593,31 @@ git merge upstream/main
 git push origin main
 ```
 
-#### 2. Conflits lors du Rebase
+#### 2. Conflicts During Rebase
+
 ```bash
 git rebase upstream/main
-# Résoudre les conflits dans l'éditeur
+# Resolve conflicts in your editor
 git add .
 git rebase --continue
 ```
 
 #### 3. Tests Failing
+
 ```bash
-# Reset environnement
+# Reset environment
 make clean
 make setup
 
-# Tests isolés
+# Isolated tests
 make backend-test-unit
 make frontend-test-unit
 ```
 
-#### 4. Problèmes Docker
+#### 4. Docker Issues
+
 ```bash
-# Nettoyage complet
+# Full cleanup
 make docker-down
 docker system prune -af
 make docker-build
@@ -573,31 +626,34 @@ make docker-up
 
 ## Recognition
 
-### Attribution des Contributions
-- **Contributors** : Listés dans README et releases
-- **Commit History** : Préservé dans l'historique Git
-- **Release Notes** : Contributions importantes mentionnées
-- **Badges** : Recognition pour contributeurs réguliers
+### Contribution Attribution
 
-## Liens Utiles
+* **Contributors:** Listed in README and releases
+* **Commit History:** Preserved in Git history
+* **Release Notes:** Major contributions highlighted
+* **Badges:** Recognition for regular contributors
 
-### Apprentissage
-- [Git Tutorial](https://learngitbranching.js.org/)
-- [GitHub Flow](https://guides.gitea.yourdomain.com/introduction/flow/)
-- [Open Source Guide](https://opensource.guide/)
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [Vue.js 3 Guide](https://vuejs.org/guide/)
+## Useful Links
 
-### WindFlow Spécifique
-- [Architecture Overview](doc/spec/02-architecture.md)
-- [API Design](doc/spec/07-api-design.md)
-- [Security Guidelines](doc/spec/13-security.md)
-- [Deployment Guide](doc/spec/15-deployment-guide.md)
+### Learning
+
+* [Git Tutorial](https://learngitbranching.js.org/)
+* [GitHub Flow](https://guides.gitea.yourdomain.com/introduction/flow/)
+* [Open Source Guide](https://opensource.guide/)
+* [FastAPI Documentation](https://fastapi.tiangolo.com/)
+* [Vue.js 3 Guide](https://vuejs.org/guide/)
+
+### WindFlow Specific
+
+* [Architecture Overview](doc/spec/02-architecture.md)
+* [API Design](doc/spec/07-api-design.md)
+* [Security Guidelines](doc/spec/13-security.md)
+* [Deployment Guide](doc/spec/15-deployment-guide.md)
 
 ---
 
-**Rappel Important** : Chaque contribution, même petite, est précieuse ! L'équipe WindFlow est là pour vous accompagner dans votre parcours de contribution. N'hésitez pas à poser des questions et à demander de l'aide.
+**Important Reminder:** Every contribution, even small ones, is valuable! The WindFlow team is here to support you throughout your contribution journey. Don’t hesitate to ask questions and request help.
 
-**Version du guide :** 1.0  
-**Dernière mise à jour :** 29/09/2025  
-**Équipe :** WindFlow
+**Guide version:** 1.0
+**Last updated:** 09/29/2025
+**Team:** WindFlow

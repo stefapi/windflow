@@ -1,181 +1,196 @@
-# Politique de Sécurité - WindFlow
+# Security Policy — WindFlow
 
-## Versions Supportées
+## Supported Versions
 
-Nous fournissons des mises à jour de sécurité pour les versions suivantes de WindFlow :
+We provide security updates for the following WindFlow versions:
 
-| Version | Supportée          | Fin de Support |
-| ------- | ------------------ |----------------|
+| Version | Supported          | End of Support |
+| ------- | ------------------ | -------------- |
 | 1.x.x   | :white_check_mark: | TBD            |
 | 0.x.x   | :x:                | 202x-12-31     |
 
-## Signalement de Vulnérabilités
+## Reporting Vulnerabilities
 
-Nous prenons la sécurité de WindFlow très au sérieux. Si vous découvrez une vulnérabilité de sécurité, veuillez suivre le processus de signalement responsable ci-dessous.
+We take WindFlow’s security very seriously. If you discover a security vulnerability, please follow the responsible disclosure process below.
 
-### 🚨 Ne divulguez PAS la vulnérabilité publiquement
+### 🚨 Do **not** publicly disclose the vulnerability
 
-### Contact Sécurisé
+### Secure Contact
 
-**Email principal :** `security_at_windflow_dot_org`  
-**Email alternatif :** `stephane_plus_security_at_apiou_dot_org`
+**Primary email:** `security_at_windflow_dot_org`
+**Alternate email:** `stephane_plus_security_at_apiou_dot_org`
 
-Convertissez _plus_ _at_ _dot_ dans le caractère qui correspond.
+Replace *plus*, *at*, and *dot* with the corresponding characters.
 
-### Chiffrement PGP (Recommandé pour les vulnérabilités critiques)
+### PGP Encryption (Recommended for critical vulnerabilities)
 
-**Clé PGP :** [6003730D87EE5599672576C3DFDF4B84BE07B250](https://keys.openpgp.org/vks/v1/by-fingerprint/6003730D87EE5599672576C3DFDF4B84BE07B250)
+**PGP Key:** [6003730D87EE5599672576C3DFDF4B84BE07B250](https://keys.openpgp.org/vks/v1/by-fingerprint/6003730D87EE5599672576C3DFDF4B84BE07B250)
 
-### Informations à Inclure
+### Information to Include
 
-Lors du signalement d'une vulnérabilité, veuillez fournir :
+When reporting a vulnerability, please provide:
 
-1. **Description détaillée** de la vulnérabilité
-2. **Étapes de reproduction** précises
-3. **Impact potentiel** et scénarios d'exploitation
-4. **Composants affectés** (backend, frontend, CLI, infrastructure)
-5. **Version de WindFlow** concernée
-6. **Preuves de concept** (si applicable et sécurisé)
-7. **Suggestions de correction** (optionnel)
+1. **Detailed description** of the vulnerability
+2. **Exact reproduction steps**
+3. **Potential impact** and exploitation scenarios
+4. **Affected components** (backend, frontend, CLI, infrastructure)
+5. **WindFlow version** affected
+6. **Proof of concept** (if applicable and safe)
+7. **Remediation suggestions** (optional)
 
-### Reconnaissance
+### Acknowledgment
 
-Si vous le souhaitez, nous vous créditerons publiquement pour votre découverte responsable (à moins que vous ne préfériez rester anonyme).
+If you wish, we will publicly credit you for your responsible disclosure (unless you prefer to remain anonymous).
 
-## Ce à quoi Vous Attendre
+## What to Expect
 
-| Étape | Délai | Description |
-|-------|-------|-------------|
-| **Accusé de réception** | 48 heures | Confirmation de réception de votre rapport |
-| **Évaluation initiale** | 7 jours | Classification et évaluation de l'impact |
-| **Mise à jour de progression** | Hebdomadaire | Informations sur l'avancement de la correction |
-| **Correction développée** | 30 jours | Développement et test de la solution |
-| **Déploiement** | 72 heures | Déploiement de la correction en production |
-| **Divulgation publique** | 90 jours max | Publication après résolution complète |
+| Step                   | Timeline    | Description                               |
+| ---------------------- | ----------- | ----------------------------------------- |
+| **Acknowledgment**     | 48 hours    | Confirmation that we received your report |
+| **Initial assessment** | 7 days      | Classification and impact evaluation      |
+| **Progress update**    | Weekly      | Information on remediation progress       |
+| **Fix developed**      | 30 days     | Development and testing of the fix        |
+| **Deployment**         | 72 hours    | Production rollout of the fix             |
+| **Public disclosure**  | Max 90 days | Publication after full resolution         |
 
-Nous nous engageons à vous tenir informé de nos progrès tout au long du processus.
+We are committed to keeping you informed throughout the process.
 
-## Types de Vulnérabilités
+## Types of Vulnerabilities
 
-### Vulnérabilités Critiques (Correction Immédiate)
-- **Injection de code** : SQL, NoSQL, OS Command
-- **Authentification bypass** : Contournement des mécanismes d'auth
-- **Remote Code Execution (RCE)** : Exécution de code à distance
-- **Escalade de privilèges** : Accès non autorisé aux ressources admin
-- **Container Escape** : Évasion de conteneurs Docker/Kubernetes
-- **Exposition de secrets** : Fuite de clés API, tokens, mots de passe
+### Critical Vulnerabilities (Immediate Fix)
 
-### Vulnérabilités Importantes (Correction < 7 jours)
-- **Cross-Site Scripting (XSS)** : Stored, Reflected, DOM-based
-- **Cross-Site Request Forgery (CSRF)**
-- **Server-Side Request Forgery (SSRF)**
-- **Path Traversal** : Accès non autorisé aux fichiers
-- **Déploiement malveillant** : Injection de containers malicieux
+* **Code injection:** SQL, NoSQL, OS command
+* **Authentication bypass**
+* **Remote Code Execution (RCE)**
+* **Privilege escalation:** Unauthorized access to admin resources
+* **Container escape:** Docker/Kubernetes
+* **Secret exposure:** Leakage of API keys, tokens, passwords
 
-### Vulnérabilités Spécifiques à WindFlow
-- **LLM/AI poisoning** : Manipulation des modèles d'intelligence artificielle
-- **Infrastructure tampering** : Manipulation des configurations d'infrastructure
-- **Secrets exposure** : Exposition des secrets de déploiement via logs ou API
-- **Privilege escalation** : Dans les environnements de déploiement cibles
+### Important Vulnerabilities (Fix within 7 days)
 
-## Bonnes Pratiques pour le Déploiement
+* **Cross-Site Scripting (XSS):** Stored, Reflected, DOM-based
+* **Cross-Site Request Forgery (CSRF)**
+* **Server-Side Request Forgery (SSRF)**
+* **Path Traversal:** Unauthorized file access
+* **Malicious deployment:** Injection of malicious containers
 
-Lors du déploiement de WindFlow, veuillez suivre ces bonnes pratiques de sécurité :
+### WindFlow-Specific Vulnerabilities
 
-### 1. Variables d'Environnement
-- Ne jamais commiter les fichiers `.env` dans le contrôle de version
-- Utiliser des valeurs fortes et uniques pour `SECRET_KEY` et autres variables sensibles
-- Effectuer une rotation régulière des secrets
+* **LLM/AI poisoning:** Manipulation of AI models
+* **Infrastructure tampering:** Manipulation of infrastructure configurations
+* **Secrets exposure:** Deployment secrets leaked via logs or API
+* **Privilege escalation:** In target deployment environments
 
-### 2. Sécurité Base de Données
-- Utiliser des mots de passe forts pour l'accès base de données
-- Restreindre l'accès base de données au serveur d'application uniquement
-- Activer TLS/SSL pour les connexions base de données
+## Deployment Best Practices
 
-### 3. Sécurité API
-- Utiliser HTTPS en production
-- Implémenter du rate limiting pour prévenir les abus
-- Maintenir les dépendances à jour pour éviter les vulnérabilités connues
-- Configurer HashiCorp Vault pour la gestion des secrets
+When deploying WindFlow, please follow these security best practices:
 
-### 4. Authentification et Autorisation
-- Utiliser des politiques de mots de passe forts
-- Implémenter l'authentification multi-facteur (MFA/2FA)
-- Configurer des durées d'expiration appropriées pour les tokens
-- Respecter le principe du moindre privilège (RBAC)
+### 1. Environment Variables
 
-### 5. Containers et Infrastructure
-- Scanner les images Docker avec des outils comme Trivy ou Grype
-- Utiliser des images de base minimales et à jour
-- Configurer des NetworkPolicies Kubernetes restrictives
-- Appliquer des PodSecurityPolicies appropriées
-- Limiter les ressources (CPU, mémoire) des containers
+* Never commit `.env` files to version control
+* Use strong, unique values for `SECRET_KEY` and other sensitive variables
+* Rotate secrets regularly
 
-### 6. Monitoring et Audit
-- Activer les logs d'audit pour toutes les actions sensibles
-- Monitorer les tentatives d'accès non autorisées
-- Configurer des alertes pour les événements de sécurité critiques
-- Sauvegarder et protéger les logs d'audit
+### 2. Database Security
 
-## Mises à jour de Sécurité
+* Use strong passwords for database access
+* Restrict database access to the application server only
+* Enable TLS/SSL for database connections
 
-Nous annonçons les mises à jour de sécurité via :
+### 3. API Security
 
-- **Gitea Security Advisories** : Consultez les issues de sécurité sur votre instance Gitea
-- **Notes de release** : Détails techniques dans chaque release
+* Use HTTPS in production
+* Implement rate limiting to prevent abuse
+* Keep dependencies up to date to avoid known vulnerabilities
+* Configure HashiCorp Vault for secrets management
 
-### Processus de Mise à jour
+### 4. Authentication & Authorization
 
-1. **Patches critiques** : Déploiement immédiat (24-48h)
-2. **Patches importants** : Déploiement hebdomadaire (mardis)
-3. **Patches mineurs** : Déploiement mensuel (premier mardi du mois)
-4. **Mises à jour majeures** : Planifiées trimestriellement
+* Enforce strong password policies
+* Implement multi-factor authentication (MFA/2FA)
+* Set appropriate token expiration times
+* Follow the principle of least privilege (RBAC)
 
-## Programme Bug Bounty
+### 5. Containers & Infrastructure
 
-### Statut Actuel
-En tant qu'équipe restreinte travaillant sur une base volontaire, nous n'avons pas actuellement de programme de bug bounty avec récompenses financières.
+* Scan Docker images with tools like Trivy or Grype
+* Use minimal, up-to-date base images
+* Configure restrictive Kubernetes NetworkPolicies
+* Apply appropriate Pod Security Policies
+* Limit container resources (CPU, memory)
 
-### Reconnaissance des Contributions
-Nous reconnaissons les contributions sécurité de plusieurs façons :
-- **Hall of Fame** : Liste publique des contributeurs sécurité
-- **Mentions de remerciements** : Dans les notes de release
-- **Badges** : Reconnaissance spéciale sur Gitea
-- **Collaboration** : Invitation à rejoindre l'équipe sécurité
+### 6. Monitoring & Audit
 
-### Évolution Future
-Nous évaluons la possibilité d'établir un programme de bug bounty formel avec le développement du projet.
+* Enable audit logs for all sensitive actions
+* Monitor unauthorized access attempts
+* Configure alerts for critical security events
+* Store and protect audit logs
 
-## Ressources de Sécurité
+## Security Updates
 
-### Documentation Technique
-- [Architecture Sécurisée](doc/spec/02-architecture.md) - Principes architecturaux sécurisés
-- [Spécifications Sécurité](doc/spec/13-security.md) - Documentation technique détaillée
-- [Authentification](doc/spec/05-authentication.md) - Système d'authentification complet
-- [Contrôle d'Accès RBAC](doc/spec/06-rbac-permissions.md) - Gestion des permissions
-- [Règles de Développement](.clinerules/README.md) - Standards de code sécurisé
+We announce security updates via:
 
-### Standards et Frameworks
-- **OWASP Top 10** : Guide des vulnérabilités web les plus critiques
-- **CIS Benchmarks** : Standards de configuration sécurisée
-- **NIST Cybersecurity Framework** : Framework de cybersécurité
-- **Docker Security Best Practices** : Bonnes pratiques pour containers
+* **Gitea Security Advisories:** Check security issues on your Gitea instance
+* **Release notes:** Technical details in each release
 
-## Contact d'Urgence
+### Update Process
 
-### En Cas d'Incident de Sécurité Actif
+1. **Critical patches:** Immediate deployment (24–48h)
+2. **Important patches:** Weekly deployment (Tuesdays)
+3. **Minor patches:** Monthly deployment (first Tuesday of the month)
+4. **Major upgrades:** Planned quarterly
 
-**Email d'urgence :** `security_minus_emergency_at_windflow_dot_dev`  
-**Objet requis :** `[URGENT SECURITY] Description courte`
+## Bug Bounty Program
 
-Nous accuserons réception sous **1 heure** pour les urgences de sécurité.
+### Current Status
+
+As a small volunteer team, we do not currently run a paid bug bounty program.
+
+### Contribution Recognition
+
+We recognize security contributions in several ways:
+
+* **Hall of Fame:** Public list of security contributors
+* **Thank-you mentions:** In release notes
+* **Badges:** Special recognition on Gitea
+* **Collaboration:** Invitation to join the security team
+
+### Future Direction
+
+We are evaluating the possibility of a formal bug bounty program as the project grows.
+
+## Security Resources
+
+### Technical Documentation
+
+* [Secure Architecture](doc/spec/02-architecture.md) — Secure architectural principles
+* [Security Specifications](doc/spec/13-security.md) — Detailed technical documentation
+* [Authentication](doc/spec/05-authentication.md) — Complete authentication system
+* [RBAC Access Control](doc/spec/06-rbac-permissions.md) — Permission management
+* [Development Rules](.clinerules/README.md) — Secure coding standards
+
+### Standards & Frameworks
+
+* **OWASP Top 10:** Guide to the most critical web vulnerabilities
+* **CIS Benchmarks:** Secure configuration standards
+* **NIST Cybersecurity Framework:** Cybersecurity framework
+* **Docker Security Best Practices:** Container best practices
+
+## Emergency Contact
+
+### In Case of an Active Security Incident
+
+**Emergency email:** `security_minus_emergency_at_windflow_dot_dev`
+**Required subject:** `[URGENT SECURITY] Short description`
+
+We will acknowledge receipt within **1 hour** for security emergencies.
 
 ---
 
-**Dernière mise à jour :** 29/09/2025  
-**Version de la politique :** 1.1  
-**Prochaine révision :** 29/12/2025
+**Last updated:** 09/29/2025
+**Policy version:** 1.1
+**Next review:** 12/29/2025
 
-Cette politique est un document vivant qui évolue avec le projet. Les suggestions d'amélioration sont les bienvenues via nos canaux de communication sécurisés.
+This policy is a living document that evolves with the project. Suggestions for improvement are welcome via our secure communication channels.
 
-**Merci de contribuer à maintenir WindFlow et ses utilisateurs en sécurité !**
+**Thank you for helping keep WindFlow and its users secure!**

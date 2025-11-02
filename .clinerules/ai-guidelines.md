@@ -23,7 +23,13 @@ Ce document définit les règles pour l'utilisation de l'intelligence artificiel
 - **Type Safety** : Maintenir le type safety strict (Python type hints, TypeScript)
 - **Test-Driven** : Générer automatiquement les tests appropriés
 - **Performance-Conscious** : Optimiser pour les workloads de déploiement
-
+- 
+### 3. Langues et traduction
+- **Code** : Tous les noms de méthodes, classes en variables dans le code sont en anglais
+- **Commentaires** : Tous les commentaires dans le code sont en anglais
+- **Documents officiels** : les documents officiels (README.md, SECURITY.md, CHANGELOG.md, CONTRIBUTIONG.md) que l'on trouve sur la racine du projet sont en anglais
+- **Documentation** : Les documents présents dans le répertoire doc et ses sous répertoires sont en français
+- 
 ## Intégration LLM dans WindFlow
 
 ### Configuration LiteLLM Multi-Provider

@@ -1,6 +1,6 @@
 # WindFlow - Règles de Développement
 
-Ce répertoire contient les règles de développement pour le projet WindFlow, un outil web intelligent de déploiement de containers Docker.
+Le répertoire .clinerules contient les règles de développement pour le projet WindFlow, un outil web intelligent de déploiement de containers Docker.
 
 ## Organisation des Fichiers
 

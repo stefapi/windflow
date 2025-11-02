@@ -1,203 +1,204 @@
-# Code de Conduite - WindFlow
+# Code of Conduct — WindFlow
 
-## Notre Engagement
+## Our Commitment
 
-En tant que membres, contributeurs et dirigeants du projet WindFlow, nous nous engageons à faire de la participation à notre communauté une expérience sans harcèlement pour tous, quels que soient l'âge, la taille corporelle, le handicap visible ou invisible, l'appartenance ethnique, les caractéristiques sexuelles, l'identité et l'expression de genre, le niveau d'expérience, l'éducation, le statut socio-économique, la nationalité, l'apparence personnelle, la race, la religion ou l'identité et l'orientation sexuelles.
+As members, contributors, and leaders of the WindFlow project, we are committed to making participation in our community a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation.
 
-Nous nous engageons à agir et interagir de manière à contribuer à une communauté ouverte, accueillante, diversifiée, inclusive et saine, centrée sur l'innovation dans le domaine du déploiement intelligent de containers.
+We pledge to act and interact in ways that contribute to an open, welcoming, diverse, inclusive, and healthy community, focused on innovation in intelligent container deployment.
 
-## Nos Standards
+## Our Standards
 
-### Comportements Encouragés
+### Encouraged Behaviors
 
-Exemples de comportements qui contribuent à un environnement positif pour notre communauté :
+Examples of behavior that contributes to a positive environment for our community:
 
-* **Collaboration technique constructive** : Partager des connaissances techniques, proposer des améliorations et solutions
-* **Respect des standards de qualité** : Suivre les règles de développement définies dans `.clinerules/` et maintenir la qualité du code
-* **Mentorat et apprentissage** : Aider les nouveaux contributeurs à comprendre l'architecture WindFlow et les bonnes pratiques
-* **Communication claire et professionnelle** : Utiliser un langage précis dans les issues, PRs et discussions techniques
-* **Feedback constructif** : Donner et recevoir gracieusement des critiques techniques constructives
-* **Focus sur l'innovation** : Contribuer aux aspects IA/ML et optimisation des déploiements
-* **Responsabilité collective** : Accepter la responsabilité et s'excuser auprès des personnes affectées par nos erreurs
-* **Vision communautaire** : Se concentrer sur ce qui est le mieux pour l'ensemble de la communauté WindFlow
+* **Constructive technical collaboration:** Share technical knowledge, propose improvements and solutions
+* **Respect for quality standards:** Follow the development rules defined in `.clinerules/` and maintain code quality
+* **Mentorship and learning:** Help new contributors understand WindFlow’s architecture and best practices
+* **Clear, professional communication:** Use precise language in issues, PRs, and technical discussions
+* **Constructive feedback:** Give and receive constructive technical criticism graciously
+* **Focus on innovation:** Contribute to AI/ML aspects and deployment optimization
+* **Collective responsibility:** Take responsibility and apologize to those affected by our mistakes
+* **Community vision:** Focus on what is best for the broader WindFlow community
 
-### Comportements Inacceptables
+### Unacceptable Behaviors
 
-Exemples de comportements inacceptables :
+Examples of unacceptable behavior:
 
-* **Harcèlement et discrimination** : Language ou imagerie sexualisés, attention ou avances sexuelles de toute nature
-* **Trolling et attaques** : Commentaires insultants ou désobligeants, attaques personnelles ou politiques
-* **Harcèlement public ou privé** : Toute forme d'intimidation ou de harcèlement
-* **Violation de la vie privée** : Publication d'informations privées d'autrui sans permission explicite
-* **Sabotage technique** : Introduction délibérée de code malveillant, vulnérabilités ou régressions
-* **Plagiat et appropriation** : Utilisation non autorisée de code ou d'idées sans attribution appropriée
-* **Contournement des standards** : Ignorance délibérée des règles de qualité et de sécurité du projet
-* **Comportement non professionnel** : Toute autre conduite qui pourrait raisonnablement être considérée comme inappropriée dans un cadre professionnel
+* **Harassment and discrimination:** Sexualized language or imagery; any kind of sexual attention or advances
+* **Trolling and attacks:** Insulting or derogatory comments; personal or political attacks
+* **Public or private harassment:** Any form of intimidation or harassment
+* **Privacy violations:** Publishing others’ private information without explicit permission
+* **Technical sabotage:** Deliberately introducing malicious code, vulnerabilities, or regressions
+* **Plagiarism and appropriation:** Using code or ideas without proper attribution
+* **Bypassing standards:** Willfully ignoring the project’s quality and security rules
+* **Unprofessional conduct:** Any other behavior reasonably considered inappropriate in a professional setting
 
-## Responsabilités d'Application
+## Enforcement Responsibilities
 
-Les mainteneurs du projet sont responsables de clarifier et d'appliquer nos standards de comportement acceptable et prendront des mesures correctives appropriées et équitables en réponse à tout comportement qu'ils jugent inapproprié, menaçant, offensant ou nuisible.
+Project maintainers are responsible for clarifying and enforcing our standards of acceptable behavior and will take appropriate and fair corrective action in response to any behavior they deem inappropriate, threatening, offensive, or harmful.
 
-Les mainteneurs ont le droit et la responsabilité de supprimer, modifier ou rejeter les commentaires, commits, code, modifications wiki, issues et autres contributions qui ne sont pas alignées avec ce Code de Conduite, et communiqueront les raisons des décisions de modération lorsque cela est approprié.
+Maintainers have the right and responsibility to remove, edit, or reject comments, commits, code, wiki edits, issues, and other contributions that are not aligned with this Code of Conduct, and will communicate reasons for moderation decisions when appropriate.
 
-### Standards Techniques Spécifiques
+### Specific Technical Standards
 
-En plus des standards comportementaux généraux, les contributeurs WindFlow doivent respecter :
+In addition to general behavioral standards, WindFlow contributors must adhere to:
 
-* **Qualité du code** : Maintenir une couverture de tests ≥ 85% et respecter les patterns architecturaux
-* **Sécurité** : Suivre les principes "Security by Design" et ne jamais exposer de secrets ou données sensibles
-* **Documentation** : Maintenir la documentation technique à jour avec les changements de code
-* **Tests** : Inclure des tests appropriés (unitaires, intégration, E2E) pour toute nouvelle fonctionnalité
-* **Performance** : Considérer l'impact performance et scalabilité de toute modification
-* **IA responsable** : Respecter les guidelines d'utilisation de l'IA définis dans `.clinerules/ai-guidelines.md`
+* **Code quality:** Maintain ≥ 85% test coverage and follow architectural patterns
+* **Security:** Follow “Security by Design” principles and never expose secrets or sensitive data
+* **Documentation:** Keep technical documentation up to date with code changes
+* **Testing:** Include appropriate tests (unit, integration, E2E) for any new feature
+* **Performance:** Consider performance and scalability impacts of any change
+* **Responsible AI:** Follow the AI usage guidelines defined in `.clinerules/ai-guidelines.md`
 
-## Portée
+## Scope
 
-Ce Code de Conduite s'applique dans tous les espaces communautaires, et s'applique également lorsqu'une personne représente officiellement la communauté dans des espaces publics.
+This Code of Conduct applies in all community spaces and also when an individual is officially representing the community in public spaces.
 
-### Espaces Communautaires WindFlow
+### WindFlow Community Spaces
 
-* **Repositories GitHub** : Issues, Pull Requests, Discussions, Wiki
-* **Canaux de communication** : Discord, forums, listes de diffusion
-* **Événements** : Conférences, meetups, workshops techniques
-* **Documentation** : Contributions à la documentation technique et utilisateur
-* **Code Review** : Processus de révision de code et feedback technique
+* **GitHub repositories:** Issues, Pull Requests, Discussions, Wiki
+* **Communication channels:** Discord, forums, mailing lists
+* **Events:** Conferences, meetups, technical workshops
+* **Documentation:** Contributions to technical and user documentation
+* **Code review:** Code review process and technical feedback
 
-## Application et Signalement
+## Enforcement & Reporting
 
-Les instances de comportement abusif, harcelant ou autrement inacceptable peuvent être signalées aux mainteneurs du projet responsables de l'application à :
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainers responsible for enforcement at:
 
-**Contact principal** : [conduct@windflow.dev](mailto:conduct@windflow.dev)
+**Primary contact:** [conduct@windflow.dev](mailto:conduct@windflow.dev)
 
-**Équipe de modération** :
-- Via GitHub Issues avec le label `conduct`
-- Via les maintainers principaux du projet
-- Via les canaux de communication officiels
+**Moderation team:**
 
-Toutes les plaintes seront examinées et feront l'objet d'une enquête rapide et équitable.
+* Via GitHub Issues with the `conduct` label
+* Via the project’s lead maintainers
+* Via official communication channels
 
-Tous les mainteneurs du projet sont tenus de respecter la confidentialité et la sécurité du rapporteur de tout incident.
+All complaints will be reviewed and investigated promptly and fairly.
 
-## Lignes Directrices d'Application
+All project maintainers are obligated to respect the confidentiality and safety of the reporter of any incident.
 
-Les mainteneurs du projet suivront ces Lignes Directrices d'Impact Communautaire pour déterminer les conséquences de toute action qu'ils jugent en violation de ce Code de Conduite :
+## Enforcement Guidelines
+
+Project maintainers will follow these Community Impact Guidelines to determine the consequences of any action they deem in violation of this Code of Conduct:
 
 ### 1. Correction
 
-**Impact Communautaire** : Utilisation d'un langage inapproprié ou autre comportement jugé non professionnel ou indésirable dans la communauté.
+**Community Impact:** Use of inappropriate language or other behavior deemed unprofessional or unwelcome in the community.
 
-**Conséquence** : Un avertissement privé et écrit de la part des mainteneurs du projet, fournissant des clarifications sur la nature de la violation et une explication de pourquoi le comportement était inapproprié. Des excuses publiques peuvent être demandées.
+**Consequence:** A private, written warning from project maintainers, providing clarity around the nature of the violation and an explanation of why the behavior was inappropriate. A public apology may be requested.
 
-### 2. Avertissement
+### 2. Warning
 
-**Impact Communautaire** : Une violation par un incident unique ou une série d'actions.
+**Community Impact:** A violation through a single incident or series of actions.
 
-**Conséquence** : Un avertissement avec des conséquences pour un comportement continu. Aucune interaction avec les personnes impliquées, y compris les interactions non sollicitées avec ceux qui appliquent le Code de Conduite, pendant une période spécifiée. Cela inclut éviter les interactions dans les espaces communautaires ainsi que les canaux externes comme les réseaux sociaux. Violer ces termes peut conduire à un bannissement temporaire ou permanent.
+**Consequence:** A warning with consequences for continued behavior. No interaction with the affected parties, including unsolicited interaction with those enforcing the Code of Conduct, for a specified period. This includes avoiding interactions in community spaces as well as external channels such as social media. Violating these terms may lead to a temporary or permanent ban.
 
-### 3. Bannissement Temporaire
+### 3. Temporary Ban
 
-**Impact Communautaire** : Une violation grave des standards communautaires, y compris un comportement inapproprié soutenu.
+**Community Impact:** A serious violation of community standards, including sustained inappropriate behavior.
 
-**Conséquence** : Un bannissement temporaire de toute sorte d'interaction ou communication publique avec la communauté pendant une période spécifiée. Aucune interaction publique ou privée avec les personnes impliquées, y compris les interactions non sollicitées avec ceux qui appliquent le Code de Conduite, n'est autorisée pendant cette période. Violer ces termes peut conduire à un bannissement permanent.
+**Consequence:** A temporary ban from any form of interaction or public communication with the community for a specified period. No public or private interaction with the affected parties, including unsolicited interaction with those enforcing the Code of Conduct, is allowed during this period. Violating these terms may lead to a permanent ban.
 
-### 4. Bannissement Permanent
+### 4. Permanent Ban
 
-**Impact Communautaire** : Démonstration d'un pattern de violation des standards communautaires, y compris un comportement inapproprié soutenu, le harcèlement d'un individu, ou l'agression envers ou le dénigrement de classes d'individus.
+**Community Impact:** Demonstrating a pattern of violating community standards, including sustained inappropriate behavior, harassment of an individual, or aggression toward or disparagement of classes of individuals.
 
-**Conséquence** : Un bannissement permanent de toute sorte d'interaction publique au sein de la communauté.
+**Consequence:** A permanent ban from any sort of public interaction within the community.
 
-## Considérations Spéciales pour WindFlow
+## Special Considerations for WindFlow
 
-### Contributions IA et ML
+### AI and ML Contributions
 
-Étant donné la nature innovante de WindFlow dans l'intégration d'IA pour l'optimisation des déploiements :
+Given WindFlow’s innovative use of AI for deployment optimization:
 
-* **Transparence** : Documenter clairement l'utilisation d'outils d'IA dans les contributions
-* **Responsabilité** : Valider et tester humainement tout code généré par IA
-* **Éthique** : Respecter les principes d'IA responsable et éviter les biais
-* **Attribution** : Créditer appropriéement l'utilisation d'outils d'IA dans les contributions
+* **Transparency:** Clearly document the use of AI tools in contributions
+* **Accountability:** Have all AI-generated code validated and tested by humans
+* **Ethics:** Follow responsible AI principles and avoid bias
+* **Attribution:** Provide appropriate credit for the use of AI tools in contributions
 
-### Multilinguisme
+### Multilingualism
 
-WindFlow étant un projet international avec une forte composante française :
+As WindFlow is an international project with a strong French component:
 
-* **Langue principale** : La documentation principale est en français
-* **Accessibilité** : Les contributions en anglais sont acceptées et encouragées
-* **Traduction** : L'aide pour la traduction et la localisation est valorisée
-* **Respect culturel** : Respecter les différences culturelles et linguistiques
+* **Primary language:** Core documentation is in French
+* **Accessibility:** Contributions in English are accepted and encouraged
+* **Translation:** Help with translation and localization is valued
+* **Cultural respect:** Respect cultural and linguistic differences
 
-### Standards Techniques Élevés
+### High Technical Standards
 
-WindFlow maintient des standards techniques stricts :
+WindFlow maintains strict technical standards:
 
-* **Code Review** : Accepter constructivement les reviews techniques détaillées
-* **Qualité** : Ne pas prendre personnellement les demandes d'amélioration de code
-* **Apprentissage** : Voir les corrections comme des opportunités d'apprentissage
-* **Patience** : Comprendre que les reviews peuvent prendre du temps pour maintenir la qualité
+* **Code review:** Accept thorough technical reviews constructively
+* **Quality:** Do not take code improvement requests personally
+* **Learning:** View corrections as learning opportunities
+* **Patience:** Understand that reviews may take time to maintain quality
 
-## Reconnaissance et Remerciements
+## Recognition and Acknowledgments
 
-### Valorisation des Contributions
+### Valuing Contributions
 
-WindFlow reconnaît et valorise toutes les formes de contribution :
+WindFlow recognizes and values all forms of contribution:
 
-* **Code** : Développement backend, frontend, CLI, infrastructure
-* **Documentation** : Amélioration de la documentation technique et utilisateur
-* **Tests** : Ajout et amélioration des tests automatisés
-* **Design** : Contributions UX/UI et design d'expérience utilisateur
-* **Community** : Animation de la communauté, aide aux nouveaux contributeurs
-* **Security** : Signalement responsable de vulnérabilités de sécurité
+* **Code:** Backend, frontend, CLI, infrastructure development
+* **Documentation:** Improvements to technical and user documentation
+* **Testing:** Adding and improving automated tests
+* **Design:** UX/UI contributions and user-experience design
+* **Community:** Community engagement, helping new contributors
+* **Security:** Responsible reporting of security vulnerabilities
 
-### Mentorat et Développement
+### Mentorship and Growth
 
-* **Mentorat** : Les contributeurs expérimentés sont encouragés à mentorer les nouveaux
-* **Apprentissage** : Chaque interaction est une opportunité d'apprentissage mutuel
-* **Progression** : Les contributeurs réguliers peuvent être invités à rejoindre l'équipe core
-* **Recognition** : Les contributions significatives sont reconnues publiquement
+* **Mentorship:** Experienced contributors are encouraged to mentor newcomers
+* **Learning:** Every interaction is an opportunity for mutual learning
+* **Progression:** Regular contributors may be invited to join the core team
+* **Recognition:** Significant contributions are publicly acknowledged
 
-## Ressources et Support
+## Resources & Support
 
-### Documentation Technique
+### Technical Documentation
 
-* [Règles de Développement](/.clinerules/README.md)
-* [Workflow de Contribution](/doc/workflows/contribution-workflow.md)
-* [Guidelines de Test](/doc/workflows/testing-workflow.md)
-* [Architecture du Projet](/doc/spec/02-architecture.md)
+* [Development Rules](/.clinerules/README.md)
+* [Contribution Workflow](/doc/workflows/contribution-workflow.md)
+* [Testing Guidelines](/doc/workflows/testing-workflow.md)
+* [Project Architecture](/doc/spec/02-architecture.md)
 
-### Canaux de Support
+### Support Channels
 
-* **GitHub Discussions** : Questions générales et aide technique
-* **GitHub Issues** : Signalement de bugs et demandes de fonctionnalités
-* **Documentation** : Guides détaillés pour contributeurs
-* **Community** : Channels Discord pour discussion en temps réel
+* **GitHub Discussions:** General questions and technical help
+* **GitHub Issues:** Bug reports and feature requests
+* **Documentation:** Detailed contributor guides
+* **Community:** Discord channels for real-time discussion
 
-### Formation et Ressources
+### Training & Resources
 
-* **Onboarding** : Guide d'intégration pour nouveaux contributeurs
-* **Best Practices** : Documentation des meilleures pratiques WindFlow
-* **Technical Deep Dives** : Sessions techniques pour comprendre l'architecture
-* **Office Hours** : Sessions régulières de Q&A avec l'équipe core
+* **Onboarding:** Guide for new contributors
+* **Best Practices:** Documentation of WindFlow best practices
+* **Technical Deep Dives:** Sessions to understand the architecture
+* **Office Hours:** Regular Q&A sessions with the core team
 
 ## Attribution
 
-Ce Code de Conduite est adapté du [Contributor Covenant](https://www.contributor-covenant.org), version 2.1, disponible à https://www.contributor-covenant.org/version/2/1/code_of_conduct.html.
+This Code of Conduct is adapted from the [Contributor Covenant](https://www.contributor-covenant.org), version 2.1, available at [https://www.contributor-covenant.org/version/2/1/code_of_conduct.html](https://www.contributor-covenant.org/version/2/1/code_of_conduct.html).
 
-Les Lignes Directrices d'Impact Communautaire sont inspirées de [l'échelle d'application du code de conduite de Mozilla](https://github.com/mozilla/diversity).
+The Community Impact Guidelines are inspired by [Mozilla’s code of conduct enforcement ladder](https://github.com/mozilla/diversity).
 
-Ce code a été spécifiquement adapté pour refléter les valeurs, les processus techniques et la mission de WindFlow en tant que plateforme de déploiement intelligent.
+This code has been specifically adapted to reflect the values, technical processes, and mission of WindFlow as an intelligent deployment platform.
 
-## Contact et Feedback
+## Contact & Feedback
 
-Pour toute question sur ce Code de Conduite ou pour suggérer des améliorations :
+For any questions about this Code of Conduct or to suggest improvements:
 
-* **Email** : conduct@windflow.dev
-* **GitHub Issue** : Créer une issue avec le label `conduct`
-* **Documentation** : Contribuer directement aux améliorations via PR
+* **Email:** [conduct@windflow.dev](mailto:conduct@windflow.dev)
+* **GitHub Issue:** Create an issue with the `conduct` label
+* **Documentation:** Contribute improvements directly via PR
 
 ---
 
-**Version** : 2.1 WindFlow Edition  
-**Dernière mise à jour** : 29 septembre 2025  
-**Révision suivante** : Trimestrielle ou selon besoins communautaires
+**Version:** 2.1 WindFlow Edition
+**Last updated:** September 29, 2025
+**Next review:** Quarterly or as community needs dictate
 
-Ce Code de Conduite évolue avec la communauté WindFlow et sera mis à jour régulièrement pour refléter nos valeurs et nos pratiques en constante amélioration.
+This Code of Conduct evolves with the WindFlow community and will be updated regularly to reflect our values and continuously improving practices.

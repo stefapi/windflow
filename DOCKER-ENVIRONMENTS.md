@@ -1,126 +1,143 @@
-# Environnements Docker WindFlow
+# WindFlow Docker Environments
 
-Ce document explique la structure des fichiers Docker Compose de WindFlow après la refactorisation.
+This document explains the structure of WindFlow’s Docker Compose files after the refactor.
 
-## 📁 Structure des Fichiers
+## 📁 File Structure
 
-### `docker-compose.yml` (Principal)
-- **Rôle** : Point d'entrée principal qui inclut la configuration de développement
-- **Usage** : `docker compose up` (développement par défaut)
-- **Contenu** : Documentation et redirection vers `docker-compose-dev.yml`
+### `docker-compose.yml` (Main)
 
-### `docker-compose-dev.yml` (Développement)
-- **Rôle** : Configuration complète pour le développement local
-- **Usage** : `docker compose -f docker-compose-dev.yml up`
-- **Caractéristiques** :
-  - Hot reload activé
-  - Ports exposés pour debug
-  - Volumes bind pour le code source
-  - Services de debug (adminer, mailhog)
-  - Logs verbeux
-  - Aucune limite de ressources
-  - Configuration Vault en mode développement
+* **Role:** Main entry point that includes the development configuration
+* **Usage:** `docker compose up` (development by default)
+* **Contents:** Documentation and redirection to `docker-compose-dev.yml`
+
+### `docker-compose-dev.yml` (Development)
+
+* **Role:** Full configuration for local development
+* **Usage:** `docker compose -f docker-compose-dev.yml up`
+* **Features:**
+
+  * Hot reload enabled
+  * Ports exposed for debugging
+  * Bind mounts for source code
+  * Debug services (Adminer, MailHog)
+  * Verbose logs
+  * No resource limits
+  * Vault configured in development mode
 
 ### `docker-compose.prod.yml` (Production)
-- **Rôle** : Configuration optimisée pour la production
-- **Usage** : `docker compose -f docker-compose.prod.yml up -d`
-- **Caractéristiques** :
-  - SSL/TLS avec certificats Let's Encrypt automatiques
-  - Réplication des services critiques (2 répliques API/Workers/Frontend)
-  - Monitoring complet (Prometheus, Grafana, Loki, Promtail)
-  - Backup automatique vers S3
-  - Limites de ressources strictes
-  - Sécurité renforcée (headers, réseaux isolés)
-  - Logging centralisé
-  - Health checks complets
 
-## 🚀 Commandes Makefile Mises à Jour
+* **Role:** Configuration optimized for production
+* **Usage:** `docker compose -f docker-compose.prod.yml up -d`
+* **Features:**
 
-### Développement
+  * SSL/TLS with automatic Let’s Encrypt certificates
+  * Replication of critical services (2 replicas for API/Workers/Frontend)
+  * Full monitoring (Prometheus, Grafana, Loki, Promtail)
+  * Automatic backups to S3
+  * Strict resource limits
+  * Hardened security (headers, isolated networks)
+  * Centralized logging
+  * Comprehensive health checks
+
+## 🚀 Updated Makefile Commands
+
+### Development
+
 ```bash
-make dev                 # Démarrer l'environnement de développement complet
-make docker-dev          # Démarrer uniquement les services Docker dev
-make docker-build        # Builder les images de développement
-make docker-logs         # Afficher les logs de développement
-make docker-stop         # Arrêter les services de développement
+make dev                 # Start the full development environment
+make docker-dev          # Start Docker dev services only
+make docker-build        # Build development images
+make docker-logs         # Show development logs
+make docker-stop         # Stop development services
 ```
 
 ### Production
+
 ```bash
-make docker-prod         # Démarrer l'environnement de production
-make docker-build-prod   # Builder les images de production
-make docker-logs-prod    # Afficher les logs de production
-make docker-stop-prod    # Arrêter les services de production
+make docker-prod         # Start the production environment
+make docker-build-prod   # Build production images
+make docker-logs-prod    # Show production logs
+make docker-stop-prod    # Stop production services
 ```
 
-## 🔄 Migration depuis l'Ancien Système
+## 🔄 Migration from the Old System
 
-Si vous utilisiez l'ancien `docker-compose.yml` :
+If you used the old `docker-compose.yml`:
 
-### Avant (Ancien)
+### Before (Old)
+
 ```bash
-docker compose up        # Démarrait le développement
+docker compose up        # Started development
 ```
 
-### Après (Nouveau)
+### After (New)
+
 ```bash
-docker compose up        # Démarre toujours le développement (redirection)
-# OU explicitement :
+docker compose up        # Still starts development (redirected)
+# OR explicitly:
 docker compose -f docker-compose-dev.yml up
 ```
 
 ### Production
+
 ```bash
-# Nouvelle commande pour la production
+# New command for production
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-## 🎯 Avantages de cette Structure
+## 🎯 Benefits of This Structure
 
-### 1. **Séparation Claire**
-- Développement et production sont complètement séparés
-- Aucun risque de confusion d'environnement
-- Configuration spécialisée pour chaque usage
+### 1. **Clear Separation**
 
-### 2. **Facilité d'Utilisation**
-- `docker compose up` fonctionne toujours pour le développement
-- Pas de changement pour les développeurs existants
-- Documentation claire dans chaque fichier
+* Development and production are completely separated
+* No risk of environment confusion
+* Configuration tailored to each use case
 
-### 3. **Production Robuste**
-- Configuration production optimisée et sécurisée
-- Monitoring et backup intégrés
-- Haute disponibilité avec réplication
+### 2. **Ease of Use**
 
-### 4. **Maintenance Simplifiée**
-- Chaque environnement a ses propres paramètres
-- Mise à jour indépendante des configurations
-- Tests plus faciles pour chaque environnement
+* `docker compose up` always works for development
+* No changes for existing developers
+* Clear documentation in each file
 
-## 📖 Liens vers la Documentation
+### 3. **Robust Production**
 
-- **Développement** : Voir `docker-compose-dev.yml` pour les détails
-- **Production** : Voir [PRODUCTION-DEPLOYMENT.md](PRODUCTION-DEPLOYMENT.md)
-- **Variables d'environnement** : Voir `.env.prod.example`
-- **Commandes** : `make help` pour la liste complète
+* Optimized and secured production configuration
+* Built-in monitoring and backups
+* High availability with replication
 
-## 🔧 Dépannage
+### 4. **Simplified Maintenance**
 
-### Le fichier `docker-compose.yml` ne fonctionne plus
-- Le nouveau fichier redirige vers `docker-compose-dev.yml`
-- Utilisez : `docker compose -f docker-compose-dev.yml up`
+* Each environment has its own settings
+* Independent configuration updates
+* Easier testing per environment
 
-### Erreur "file not found"
-- Assurez-vous que `docker-compose-dev.yml` existe
-- Vérifiez que vous êtes dans le bon répertoire
+## 📖 Documentation Links
 
-### Services production ne démarrent pas
-- Consultez [PRODUCTION-DEPLOYMENT.md](PRODUCTION-DEPLOYMENT.md)
-- Vérifiez votre fichier `.env.prod`
-- Créez le réseau : `docker network create traefik-public`
+* **Development:** See `docker-compose-dev.yml` for details
+* **Production:** See [PRODUCTION-DEPLOYMENT.md](PRODUCTION-DEPLOYMENT.md)
+* **Environment variables:** See `.env.prod.example`
+* **Commands:** Run `make help` for the full list
+
+## 🔧 Troubleshooting
+
+### The `docker-compose.yml` file no longer works
+
+* The new file redirects to `docker-compose-dev.yml`
+* Use: `docker compose -f docker-compose-dev.yml up`
+
+### “file not found” error
+
+* Make sure `docker-compose-dev.yml` exists
+* Verify you’re in the correct directory
+
+### Production services won’t start
+
+* See [PRODUCTION-DEPLOYMENT.md](PRODUCTION-DEPLOYMENT.md)
+* Check your `.env.prod` file
+* Create the network: `docker network create traefik-public`
 
 ---
 
-**Version** : 1.0  
-**Date** : 30/09/2025  
-**Auteur** : Équipe WindFlow
+**Version:** 1.0
+**Date:** 09/30/2025
+**Author:** WindFlow Team

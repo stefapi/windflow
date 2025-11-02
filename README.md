@@ -11,140 +11,150 @@
 </div>
 
 <p align="center">
-  <em>Outil web intelligent de déploiement de containers Docker — orchestration multi-cible, IA intégrée, expérience utilisateur exceptionnelle</em>
+  <em>Intelligent web tool for deploying Docker containers — multi-target orchestration, built-in AI, outstanding user experience</em>
 </p>
 
 ---
 
-**WindFlow** est un outil web intelligent de déploiement de containers Docker sur des machines cibles. Il combine une interface utilisateur moderne, un système d'échange de données flexible, et une intelligence artificielle pour automatiser et optimiser les déploiements.
+**WindFlow** is an intelligent web tool for deploying Docker containers to target machines. It combines a modern user interface, a flexible data exchange system, and artificial intelligence to automate and optimize deployments.
 
-## 🎯 Vision et Objectifs
+## 🎯 Vision & Goals
 
-### Simplicité d'Utilisation
-- **Interface web intuitive** avec workflows visuels
-- **Configuration automatique** générée par IA (LiteLLM)
-- **One-click deployment** de stacks préconfigurées
-- **CLI/TUI puissants** pour l'automatisation (Rich + Typer + Textual)
+### Ease of Use
 
-### Flexibilité Maximale
-- **Support multi-cible** : containers, VMs, serveurs physiques
-- **Orchestration adaptative** : Docker, Swarm, Kubernetes
-- **Templates personnalisables** et marketplace communautaire
-- **Workflows de déploiement** configurables
+* **Intuitive web interface** with visual workflows
+* **AI-generated configuration** (LiteLLM)
+* **One-click deployment** of preconfigured stacks
+* **Powerful CLI/TUI** for automation (Rich + Typer + Textual)
 
-### Intelligence Intégrée
-- **Optimisation automatique** des ressources par IA
-- **Résolution intelligente** des conflits et dépendances
-- **Suggestions de sécurité** et bonnes pratiques
-- **Diagnostic automatique** des erreurs
+### Maximum Flexibility
 
-## ✨ Fonctionnalités Principales
+* **Multi-target support:** containers, VMs, physical servers
+* **Adaptive orchestration:** Docker, Swarm, Kubernetes
+* **Customizable templates** and a community marketplace
+* **Configurable deployment workflows**
 
-### 🧠 Intelligence Artificielle
-- **LiteLLM Integration** : Support multi-provider (OpenAI, Claude, Ollama, etc.)
-- **Configuration intelligente** : Génération automatique selon contraintes
-- **Optimisation des ressources** : IA pour l'allocation optimale
-- **Résolution de conflits** : Détection et correction automatique
+### Built-in Intelligence
 
-### 🔧 Orchestration Multi-Cible
-- **Docker Engine** : Containers natifs et Docker Compose
-- **Docker Swarm** : Orchestration en cluster
-- **Kubernetes + Helm** : Déploiements enterprise
-- **VM Management** : Vagrant + Libvirt pour machines virtuelles
-- **Physical Servers** : SSH + Ansible pour serveurs physiques
+* **Automatic resource optimization** via AI
+* **Smart resolution** of conflicts and dependencies
+* **Security suggestions** and best practices
+* **Automatic error diagnostics**
 
-### 🌐 Interface Utilisateur Moderne
-- **Interface Web** : Vue.js 3 + TypeScript + Element Plus + UnoCSS
-- **Workflows Visuels** : Éditeur drag-and-drop inspiré de n8n
-- **CLI Complet** : Rich + Typer pour automatisation
-- **TUI Interactif** : Textual pour interface terminal moderne
+## ✨ Key Features
 
-### 🔐 Sécurité Enterprise
-- **SSO Integration** : Keycloak avec LDAP/AD
-- **HashiCorp Vault** : Gestion centralisée des secrets
-- **RBAC Granulaire** : Contrôle d'accès basé sur les rôles
-- **Audit Trail** : Traçabilité complète des actions
+### 🧠 Artificial Intelligence
 
-### 📊 Monitoring et Observabilité
-- **Prometheus + Grafana** : Métriques et dashboards
-- **ELK Stack** : Centralisation des logs
-- **Alerting Intelligent** : Notifications multi-canal
-- **Health Checks** : Surveillance continue des services
+* **LiteLLM Integration:** Multi-provider support (OpenAI, Claude, Ollama, etc.)
+* **Smart configuration:** Auto-generated based on constraints
+* **Resource optimization:** AI-driven optimal allocation
+* **Conflict resolution:** Automatic detection and correction
 
-## 🧩 Architecture Modulaire
+### 🔧 Multi-Target Orchestration
 
-WindFlow adopte une **architecture modulaire extensible** permettant de démarrer avec un système minimal et d'activer progressivement les fonctionnalités avancées selon vos besoins.
+* **Docker Engine:** Native containers and Docker Compose
+* **Docker Swarm:** Cluster orchestration
+* **Kubernetes + Helm:** Enterprise deployments
+* **VM Management:** Vagrant + Libvirt for virtual machines
+* **Physical Servers:** SSH + Ansible for bare metal
 
-### Démarrage Minimal (< 5 minutes)
+### 🌐 Modern User Interface
 
-Le **Core Minimal** inclut uniquement les services essentiels :
-- ✅ API Backend (FastAPI)
-- ✅ Base de données (PostgreSQL)
-- ✅ Cache & Message Broker (Redis)
-- ✅ Interface Web (Vue.js 3)
-- ✅ Reverse Proxy (Nginx)
-- ✅ Worker asynchrone (Celery)
+* **Web UI:** Vue.js 3 + TypeScript + Element Plus + UnoCSS
+* **Visual Workflows:** Drag-and-drop editor inspired by n8n
+* **Full CLI:** Rich + Typer for automation
+* **Interactive TUI:** Textual for a modern terminal UI
 
-**Ressources** : 1.5 GB RAM, 2 CPU cores
+### 🔐 Enterprise Security
+
+* **SSO Integration:** Keycloak with LDAP/AD
+* **HashiCorp Vault:** Centralized secrets management
+* **Granular RBAC:** Role-based access control
+* **Audit Trail:** Full action traceability
+
+### 📊 Monitoring & Observability
+
+* **Prometheus + Grafana:** Metrics and dashboards
+* **ELK Stack:** Centralized logging
+* **Intelligent Alerting:** Multi-channel notifications
+* **Health Checks:** Continuous service monitoring
+
+## 🧩 Modular Architecture
+
+WindFlow adopts an **extensible modular architecture** that lets you start with a minimal system and progressively enable advanced features as needed.
+
+### Minimal Start (< 5 minutes)
+
+The **Minimal Core** includes only the essential services:
+
+* ✅ Backend API (FastAPI)
+* ✅ Database (PostgreSQL)
+* ✅ Cache & Message Broker (Redis)
+* ✅ Web Interface (Vue.js 3)
+* ✅ Reverse Proxy (Nginx)
+* ✅ Asynchronous worker (Celery)
+
+**Resources:** 1.5 GB RAM, 2 CPU cores
 
 ```bash
-# Installation minimale ultra-rapide
+# Ultra-fast minimal installation
 ./scripts/install.sh
-# ou
+# or
 docker compose -f docker-compose.minimal.yml up -d
 ```
 
-### Extensions Optionnelles
+### Optional Extensions
 
-Activez les fonctionnalités avancées uniquement quand vous en avez besoin :
+Enable advanced features only when you need them:
 
-| Extension | Description | Commande |
-|-----------|-------------|----------|
-| **Monitoring** | Prometheus + Grafana | `./scripts/enable-extension.sh monitoring` |
-| **Logging** | ELK Stack (Elasticsearch, Logstash, Kibana) | `./scripts/enable-extension.sh logging` |
-| **Secrets** | HashiCorp Vault | `./scripts/enable-extension.sh vault` |
-| **SSO** | Keycloak (LDAP/AD) | `./scripts/enable-extension.sh sso` |
-| **IA** | LiteLLM + Ollama | `./scripts/enable-extension.sh ai` |
-| **Kubernetes** | Orchestration K8s | `./scripts/enable-extension.sh kubernetes` |
+| Extension      | Description                                 | Command                                    |
+| -------------- | ------------------------------------------- | ------------------------------------------ |
+| **Monitoring** | Prometheus + Grafana                        | `./scripts/enable-extension.sh monitoring` |
+| **Logging**    | ELK Stack (Elasticsearch, Logstash, Kibana) | `./scripts/enable-extension.sh logging`    |
+| **Secrets**    | HashiCorp Vault                             | `./scripts/enable-extension.sh vault`      |
+| **SSO**        | Keycloak (LDAP/AD)                          | `./scripts/enable-extension.sh sso`        |
+| **AI**         | LiteLLM + Ollama                            | `./scripts/enable-extension.sh ai`         |
+| **Kubernetes** | K8s orchestration                           | `./scripts/enable-extension.sh kubernetes` |
 
-### Avantages de l'Approche Modulaire
+### Benefits of the Modular Approach
 
-- 🚀 **Démarrage ultra-rapide** : Installation fonctionnelle en quelques minutes
-- 💰 **Économie de ressources** : Seuls les services activés consomment de la RAM/CPU
-- 🎯 **Simplicité** : Commencez simple, évoluez selon vos besoins
-- 🔧 **Flexibilité** : Activez/désactivez les extensions à la demande
-- 📈 **Scalabilité** : Architecture production-ready dès le départ
+* 🚀 **Ultra-fast start:** Working setup in minutes
+* 💰 **Resource savings:** Only enabled services consume RAM/CPU
+* 🎯 **Simplicity:** Start simple, evolve as you go
+* 🔧 **Flexibility:** Enable/disable extensions on demand
+* 📈 **Scalability:** Production-ready architecture from day one
 
-📚 **Documentation complète** : [Architecture Modulaire](doc/ARCHITECTURE-MODULAIRE.md)
+📚 **Full documentation:** [Modular Architecture](doc/ARCHITECTURE-MODULAIRE.md)
 
-## 🚀 Installation Rapide
+## 🚀 Quick Start
 
-### Prérequis
+### Prerequisites
 
-- **Docker** ≥ 20.10 et docker-compose v2
-- **Python** ≥ 3.11 et Poetry ≥ 1.8 (pour développement backend)
-- **Node.js** ≥ 20 et pnpm ≥ 9 (pour développement frontend)
+* **Docker** ≥ 20.10 and docker-compose v2
+* **Python** ≥ 3.11 and Poetry ≥ 1.8 (for backend development)
+* **Node.js** ≥ 20 and pnpm ≥ 9 (for frontend development)
 
-### Installation avec Docker (Recommandée)
+### Install with Docker (Recommended)
 
 ```bash
-# Cloner le repository
+# Clone the repository
 git clone https://gitea.yourdomain.com/yourusername/windflow.git
 cd windflow
 
-# Copier les fichiers d'environnement
+# Copy environment files
 cp .env.example .env
 
-# Lancer l'application
+# Start the application
 docker compose up --build -d
 ```
 
-**Accès :**
-- **Interface Web** : http://localhost:8080
-- **API Documentation** : http://localhost:8080/api/docs
-- **CLI** : `docker exec -it windflow-cli windflow --help`
+**Access:**
 
-### Installation pour Développement
+* **Web Interface:** [http://localhost:8080](http://localhost:8080)
+* **API Documentation:** [http://localhost:8080/api/docs](http://localhost:8080/api/docs)
+* **CLI:** `docker exec -it windflow-cli windflow --help`
+
+### Development Setup
 
 ```bash
 # Backend (FastAPI)
@@ -161,75 +171,80 @@ pip install -e ./cli
 windflow --help
 ```
 
-## 🎯 Exemples de Déploiement
+## 🎯 Deployment Examples
 
-WindFlow inclut des exemples prêts à l'emploi pour déployer des applications populaires :
+WindFlow includes ready-to-use examples to deploy popular applications:
 
-### 📦 Applications Disponibles
+### 📦 Available Applications
 
-#### Baserow - Alternative Open Source à Airtable
-Base de données no-code avec interface moderne (PostgreSQL + Redis)
+#### Baserow — Open Source Airtable Alternative
+
+No-code database with a modern interface (PostgreSQL + Redis)
 
 ```bash
-# Créer les répertoires de données
+# Create data directories
 mkdir -p data/baserow/{postgres,redis,app,media}
 
-# Lancer Baserow
+# Start Baserow
 docker compose -f examples/docker-compose.baserow.yml up -d
 
-# Accéder à l'interface
+# Access the UI
 # http://baserow.localhost
 ```
 
-#### WordPress - CMS Populaire
-Système de gestion de contenu complet (MySQL + Redis + WP-CLI)
+#### WordPress — Popular CMS
+
+Full-featured content management system (MySQL + Redis + WP-CLI)
 
 ```bash
-# Créer les répertoires de données
+# Create data directories
 mkdir -p data/wordpress/{mysql,redis,html,uploads,themes,plugins}
 
-# Lancer WordPress
+# Start WordPress
 docker compose -f examples/docker-compose.wordpress.yml up -d
 
-# Accéder à l'interface
+# Access the UI
 # http://wordpress.localhost
 ```
 
-### 🔧 Intégration WindFlow
+### 🔧 WindFlow Integration
 
-Les exemples sont configurés pour une intégration transparente :
-- ✅ **Réseau partagé** avec WindFlow (windflow-network)
-- ✅ **Découverte automatique** via labels Traefik
-- ✅ **Health checks** pour surveillance
-- ✅ **Labels WindFlow** pour gestion dans l'interface
+The examples are configured for seamless integration:
 
-📚 **Documentation complète** : [examples/README.md](examples/README.md)
+* ✅ **Shared network** with WindFlow (windflow-network)
+* ✅ **Auto-discovery** via Traefik labels
+* ✅ **Health checks** for monitoring
+* ✅ **WindFlow labels** for management in the UI
+
+📚 **Full documentation:** [examples/README.md](examples/README.md)
 
 ## 📖 Documentation
 
-La documentation complète se trouve dans le répertoire `doc/` :
+The complete documentation is in the `doc/` directory:
 
-### Documentation Principale
-- **[Vue d'Ensemble](doc/spec/01-overview.md)** - Vision et objectifs du projet
-- **[Architecture](doc/spec/02-architecture.md)** - Principes de conception
-- **[Stack Technologique](doc/spec/03-technology-stack.md)** - Technologies utilisées
-- **[Guide de Déploiement](doc/spec/15-deployment-guide.md)** - Installation et configuration
+### Main Documentation
 
-### Guides Utilisateur
-- **[Fonctionnalités Principales](doc/spec/10-core-features.md)** - Fonctionnalités détaillées
-- **[Interface CLI](doc/spec/08-cli-interface.md)** - Utilisation de la CLI/TUI
-- **[Intégration LLM](doc/spec/17-llm-integration.md)** - Intelligence artificielle
+* **[Overview](doc/spec/01-overview.md)** — Project vision and goals
+* **[Architecture](doc/spec/02-architecture.md)** — Design principles
+* **[Technology Stack](doc/spec/03-technology-stack.md)** — Technologies used
+* **[Deployment Guide](doc/spec/15-deployment-guide.md)** — Installation and configuration
 
-### Ressources Développeur
-- **[Modèle de Données](doc/spec/04-data-model.md)** - Structure des données
-- **[API Design](doc/spec/07-api-design.md)** - Documentation des APIs
-- **[Workflows](doc/workflows/README.md)** - Processus de développement
-- **[Règles de Développement](.clinerules/README.md)** - Standards et conventions
+### User Guides
 
+* **[Core Features](doc/spec/10-core-features.md)** — Detailed features
+* **[CLI Interface](doc/spec/08-cli-interface.md)** — Using the CLI/TUI
+* **[LLM Integration](doc/spec/17-llm-integration.md)** — Artificial intelligence
+
+### Developer Resources
+
+* **[Data Model](doc/spec/04-data-model.md)** — Data structure
+* **[API Design](doc/spec/07-api-design.md)** — API documentation
+* **[Workflows](doc/workflows/README.md)** — Development processes
+* **[Development Rules](.clinerules/README.md)** — Standards and conventions
 
 ## 🔧 Configuration
 
-### Variables d'Environnement Principales
+### Main Environment Variables
 
 ```bash
 # Application
@@ -243,17 +258,17 @@ API_HOST=0.0.0.0
 API_PORT=8000
 API_WORKERS=4
 
-# Base de données
+# Database
 DATABASE_URL=postgresql+asyncpg://windflow:password@localhost:5432/windflow
 REDIS_URL=redis://localhost:6379/0
 
-# Sécurité
+# Security
 SECRET_KEY=your-secret-key-here
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 VAULT_URL=http://localhost:8200
 VAULT_TOKEN=your-vault-token
 
-# Intelligence Artificielle
+# Artificial Intelligence
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4-turbo-preview
 OPENAI_API_KEY=your-openai-key
@@ -264,10 +279,10 @@ PROMETHEUS_ENABLED=true
 LOG_LEVEL=INFO
 ```
 
-### Configuration Multi-Environnements
+### Multi-Environment Configuration
 
 ```bash
-# Développement
+# Development
 cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.override.yml up
 
@@ -280,32 +295,32 @@ cp .env.production .env
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up
 ```
 
-## 🚢 Déploiement
+## 🚢 Deployment
 
-### Déploiement Docker
+### Docker Deployment
 
 ```bash
-# Build et push des images
+# Build and push images
 make docker-build
 docker tag windflow:latest registry.example.com/windflow:v1.0.0
 docker push registry.example.com/windflow:v1.0.0
 
-# Déploiement sur serveur
+# Deploy to server
 docker compose pull
 docker compose up -d --remove-orphans
 ```
 
-### Déploiement Kubernetes
+### Kubernetes Deployment
 
 ```bash
-# Via Helm (recommandé)
+# Via Helm (recommended)
 helm repo add windflow https://charts.windflow.io
 helm install windflow windflow/windflow \
   --namespace windflow \
   --create-namespace \
   --values values.yaml
 
-# Via manifestes
+# Via manifests
 kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/configmap.yaml
 kubectl apply -f k8s/secrets.yaml
@@ -316,97 +331,103 @@ kubectl apply -f k8s/ingress.yaml
 
 ### Production Ready
 
-Pour un déploiement en production, assurez-vous de :
+For a production deployment, make sure you have:
 
-- **Reverse Proxy** : Nginx, Traefik ou Caddy pour TLS/HTTP2
-- **Monitoring** : Prometheus + Grafana + Alertmanager
-- **Backups** : Base de données et volumes persistants
-- **Secrets** : HashiCorp Vault en haute disponibilité
-- **Logs** : ELK Stack ou solution équivalente
-- **Scaling** : Kubernetes HPA ou Docker Swarm
+* **Reverse Proxy:** Nginx, Traefik, or Caddy for TLS/HTTP2
+* **Monitoring:** Prometheus + Grafana + Alertmanager
+* **Backups:** Database and persistent volumes
+* **Secrets:** HashiCorp Vault in high availability
+* **Logs:** ELK Stack or equivalent solution
+* **Scaling:** Kubernetes HPA or Docker Swarm
 
-## 🤝 Contribution
+## 🤝 Contributing
 
-WindFlow est un projet open source qui accueille les contributions ! 
+WindFlow is an open-source project and welcomes contributions!
 
-### Guides de Contribution
-- **[Guide de Contribution](CONTRIBUTING.md)** - Processus de contribution
-- **[Workflows de Développement](doc/workflows/development-workflow.md)** - Processus techniques
-- **[Règles de Code](.clinerules/README.md)** - Standards et conventions
-- **[Code de Conduite](CODE_OF_CONDUCT.md)** - Règles communautaires
+### Contribution Guides
 
-### Comment Contribuer
-1. **Fork** le repository
-2. **Créer** une branche feature (`git checkout -b feature/amazing-feature`)
-3. **Commiter** les changements (`git commit -m 'feat: add amazing feature'`)
-4. **Push** vers la branche (`git push origin feature/amazing-feature`)
-5. **Ouvrir** une Pull Request
+* **[Contributing Guide](CONTRIBUTING.md)** — Contribution process
+* **[Development Workflows](doc/workflows/development-workflow.md)** — Technical processes
+* **[Code Rules](.clinerules/README.md)** — Standards and conventions
+* **[Code of Conduct](CODE_OF_CONDUCT.md)** — Community rules
 
-### Développement Local
+### How to Contribute
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Commit** your changes (`git commit -m 'feat: add amazing feature'`)
+4. **Push** to the branch (`git push origin feature/amazing-feature`)
+5. **Open** a Pull Request
+
+### Local Development
+
 ```bash
-# Setup complet
+# Full setup
 make setup
 
-# Tests avant commit
+# Pre-commit tests
 make test
 make lint
 
-# Commit avec convention
+# Conventional commit
 git commit -m "feat(api): add deployment optimization endpoint"
 ```
 
 ## 📊 Roadmap
 
 ### Version 1.0 (Q1 2025)
-- [x] Interface web moderne (Vue.js 3 + TypeScript)
-- [x] API REST complète (FastAPI + SQLAlchemy)
-- [x] CLI/TUI puissants (Rich + Typer + Textual)
-- [x] Orchestration Docker + Kubernetes
-- [ ] Intelligence artificielle (LiteLLM)
-- [ ] Monitoring intégré (Prometheus + Grafana)
+
+* [x] Modern web interface (Vue.js 3 + TypeScript)
+* [x] Full REST API (FastAPI + SQLAlchemy)
+* [x] Powerful CLI/TUI (Rich + Typer + Textual)
+* [x] Docker + Kubernetes orchestration
+* [ ] Artificial intelligence (LiteLLM)
+* [ ] Integrated monitoring (Prometheus + Grafana)
 
 ### Version 1.1 (Q2 2025)
-- [ ] Marketplace de templates communautaires
-- [ ] Support VM (Vagrant + Libvirt)
-- [ ] Workflows visuels avancés
-- [ ] SSO enterprise (Keycloak)
-- [ ] Audit trail complet
+
+* [ ] Community template marketplace
+* [ ] VM support (Vagrant + Libvirt)
+* [ ] Advanced visual workflows
+* [ ] Enterprise SSO (Keycloak)
+* [ ] Full audit trail
 
 ### Version 1.2 (Q3 2025)
-- [ ] Multi-cloud provider (AWS, Azure, GCP)
-- [ ] GitOps integration (ArgoCD, Flux)
-- [ ] Plugin system extensible
-- [ ] Mobile app (React Native)
 
-Voir la **[Roadmap Complète](doc/spec/18-roadmap.md)** pour plus de détails.
+* [ ] Multi-cloud provider (AWS, Azure, GCP)
+* [ ] GitOps integration (ArgoCD, Flux)
+* [ ] Extensible plugin system
+* [ ] Mobile app (React Native)
 
-## 📄 Licence
+See the **[Full Roadmap](doc/spec/18-roadmap.md)** for more details.
 
-WindFlow est publié sous licence **MIT**. Voir [LICENSE](LICENSE) pour les détails.
+## 📄 License
 
-## 🙏 Remerciements
+WindFlow is released under the **MIT** license. See [LICENSE](LICENSE) for details.
 
-WindFlow s'appuie sur des technologies exceptionnelles :
+## 🙏 Acknowledgements
 
-- **[FastAPI](https://fastapi.tiangolo.com/)** - Framework web moderne pour Python
-- **[Vue.js](https://vuejs.org/)** - Framework progressif pour interfaces utilisateur
-- **[Element Plus](https://element-plus.org/)** - Bibliothèque de composants Vue 3
-- **[Rich](https://rich.readthedocs.io/)** - Bibliothèque pour interfaces CLI riches
-- **[Docker](https://www.docker.com/)** - Plateforme de conteneurisation
-- **[Kubernetes](https://kubernetes.io/)** - Orchestrateur de containers
-- **[PostgreSQL](https://www.postgresql.org/)** - Base de données relationnelle
-- **[Redis](https://redis.io/)** - Store de données en mémoire
+WindFlow is built on exceptional technologies:
 
-Un grand merci à toutes les communautés open source qui rendent WindFlow possible ! 🚀
+* **[FastAPI](https://fastapi.tiangolo.com/)** — Modern web framework for Python
+* **[Vue.js](https://vuejs.org/)** — Progressive framework for user interfaces
+* **[Element Plus](https://element-plus.org/)** — Component library for Vue 3
+* **[Rich](https://rich.readthedocs.io/)** — Library for rich CLI interfaces
+* **[Docker](https://www.docker.com/)** — Containerization platform
+* **[Kubernetes](https://kubernetes.io/)** — Container orchestrator
+* **[PostgreSQL](https://www.postgresql.org/)** — Relational database
+* **[Redis](https://redis.io/)** — In-memory data store
+
+A big thank you to all the open-source communities that make WindFlow possible! 🚀
 
 ---
 
 <div align="center">
-  <p><em>Créé avec ❤️ par l'équipe WindFlow</em></p>
+  <p><em>Made with ❤️ by the WindFlow team</em></p>
   <p>
     <a href="https://github.com/yourusername/windflow">GitHub</a> •
-    <a href="https://windflow.io">Site Web</a> •
+    <a href="https://windflow.io">Website</a> •
     <a href="https://docs.windflow.io">Documentation</a> •
-    <a href="https://community.windflow.io">Communauté</a>
+    <a href="https://community.windflow.io">Community</a>
   </p>
 </div>
