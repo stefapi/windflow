@@ -65,6 +65,10 @@ __all__ = [
     "StackCreate",
     "StackUpdate",
     "StackResponse",
+    # Target Capability schemas
+    "CapabilityType",
+    "TargetCapabilityBase",
+    "TargetCapabilityResponse",
     # Deployment schemas
     "DeploymentBase",
     "DeploymentCreate",
