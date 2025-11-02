@@ -87,7 +87,6 @@ outdated: ## 🚧 Check for outdated dependencies in both backend and frontend
 setup: ## 🏗 Setup complete development environment
 	$(POETRY) install --with dev
 	cd $(FRONTEND_DIR) && $(PNPM) install
-	$(POETRY) run pre-commit install
 	cp -n .env.example .env || true
 	@echo "🏗  Development Setup Complete "
 	@echo "❗️ Tips"

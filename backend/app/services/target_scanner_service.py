@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Optional, Protocol, Tuple, TypeVar
 
 import asyncssh
-from asyncssh import SSHConnectionLost
+from asyncssh import ConnectionLost
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.target import Target
@@ -184,7 +184,7 @@ class SSHCommandExecutor:
                 exit_status=124,
                 stderr=f"Remote command timed out after {timeout}s"
             ) from exc
-        except (asyncssh.Error, SSHConnectionLost) as exc:
+        except (asyncssh.Error, ConnectionLost) as exc:
             raise CommandExecutionError(
                 command,
                 exit_status=255,
@@ -261,19 +261,24 @@ class DockerSocketClient:
         return docker.DockerClient(base_url=f"unix://{self.socket_path}")  # type: ignore[no-any-return]
 
     def _can_connect(self) -> bool:
+        client = None
         try:
-            with self._create_client() as client:
-                client.ping()
+            client = self._create_client()
+            client.ping()
             return True
         except DockerException:
             return False
+        finally:
+            if client is not None:
+                client.close()
 
     def _collect_capabilities_sync(self) -> Optional[DockerCapabilities]:
+        client = None
         try:
-            with self._create_client() as client:
-                info = client.info()
-                version_info = client.version()
-                swarm_info = info.get("Swarm") if isinstance(info, dict) else None
+            client = self._create_client()
+            info = client.info()
+            version_info = client.version()
+            swarm_info = info.get("Swarm") if isinstance(info, dict) else None
 
             return DockerCapabilities(
                 installed=True,
@@ -285,6 +290,9 @@ class DockerSocketClient:
             )
         except DockerException:
             return None
+        finally:
+            if client is not None:
+                client.close()
 
     @staticmethod
     def _build_swarm_info(swarm_info: Optional[Dict[str, Any]]) -> Optional[DockerSwarmInfo]:
