@@ -23,7 +23,8 @@ export const useDeploymentsStore = defineStore('deployments', () => {
 
     try {
       const response = await deploymentsApi.list({ organization_id: organizationId })
-      deployments.value = response.data.items
+      // Backend returns List[DeploymentResponse] directly, not wrapped in {items:[]}
+      deployments.value = response.data
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch deployments'
       throw err

@@ -57,6 +57,39 @@ export interface OrganizationUpdate {
 export type TargetType = 'docker' | 'docker_swarm' | 'kubernetes' | 'vm' | 'physical'
 export type TargetStatus = 'online' | 'offline' | 'error' | 'maintenance'
 
+// Target Capability types
+export type CapabilityType =
+  | 'libvirt'
+  | 'virtualbox'
+  | 'vagrant'
+  | 'proxmox'
+  | 'qemu_kvm'
+  | 'docker'
+  | 'docker_compose'
+  | 'docker_swarm'
+  | 'podman'
+  | 'kubectl'
+  | 'kubeadm'
+  | 'k3s'
+  | 'microk8s'
+
+export interface TargetCapability extends BaseModel {
+  target_id: string
+  capability_type: CapabilityType
+  is_available: boolean
+  version: string | null
+  details: Record<string, unknown> | null
+  detected_at: string
+}
+
+export interface TargetCapabilitiesResponse {
+  scan_date: string | null
+  scan_success: boolean | null
+  platform_info: Record<string, unknown> | null
+  os_info: Record<string, unknown> | null
+  capabilities: TargetCapability[]
+}
+
 export interface Target extends BaseModel {
   name: string
   type: TargetType
@@ -66,6 +99,7 @@ export interface Target extends BaseModel {
   status: TargetStatus
   metadata: Record<string, unknown>
   organization_id: string
+  capabilities?: TargetCapability[]
 }
 
 export interface TargetCreate {

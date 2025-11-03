@@ -16,6 +16,7 @@ import type {
   Target,
   TargetCreate,
   TargetUpdate,
+  TargetCapabilitiesResponse,
   Stack,
   StackCreate,
   StackUpdate,
@@ -107,6 +108,12 @@ export const targetsApi = {
 
   delete: (id: string) =>
     http.delete(`/targets/${id}`),
+
+  scan: (id: string) =>
+    http.post<Target>(`/targets/${id}/scan`),
+
+  getCapabilities: (id: string) =>
+    http.get<TargetCapabilitiesResponse>(`/targets/${id}/capabilities`),
 }
 
 // Stacks API

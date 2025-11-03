@@ -14,7 +14,8 @@ export const useWorkflowsStore = defineStore('workflows', () => {
     error.value = null
     try {
       const response = await workflowsApi.list({ organization_id: organizationId })
-      workflows.value = response.data.items
+      // Backend returns List[WorkflowResponse] directly, not wrapped in {items:[]}
+      workflows.value = response.data
     } catch (err: unknown) {
       // Handle 404 gracefully - workflows endpoint may not be implemented yet
       if ((err as any)?.response?.status === 404) {

@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.target import Target
+from ..models.target import Target, TargetStatus
 from ..models.target_capability import CapabilityType, TargetCapability
 from ..schemas.target import TargetCreate, TargetUpdate
 
@@ -130,8 +130,12 @@ class TargetService:
         scan_date: Optional[datetime] = None
     ) -> Target:
         """Indique qu'un scan a échoué pour la cible."""
+        scan_time = scan_date or datetime.utcnow()
+
         target.scan_success = False
-        target.scan_date = scan_date or datetime.utcnow()
+        target.scan_date = scan_time
+        target.status = TargetStatus.ERROR
+        target.last_check = scan_time
         target.updated_at = datetime.utcnow()
 
         db.add(target)
@@ -170,6 +174,14 @@ class TargetService:
         target.platform_info = platform_info
         target.os_info = os_info
         target.updated_at = datetime.utcnow()
+
+        # Update status based on scan result
+        if success:
+            target.status = TargetStatus.ONLINE
+        else:
+            target.status = TargetStatus.ERROR
+
+        target.last_check = scan_date
 
         await db.execute(
             delete(TargetCapability).where(TargetCapability.target_id == target.id)

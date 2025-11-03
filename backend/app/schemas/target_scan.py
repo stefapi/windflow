@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from .target import TargetResponse, TargetType
+from .target_capability import TargetCapabilityResponse
 
 
 class PlatformArchitecture(str, Enum):

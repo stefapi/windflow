@@ -749,6 +749,9 @@ class TargetScannerService:
         if is_local_execution and await docker_socket_client.is_available():
             capabilities = await docker_socket_client.collect_capabilities()
             if capabilities:
+                # Complete capabilities with Docker Compose detection
+                compose_info = await self._detect_docker_compose(executor)
+                capabilities.compose = compose_info
                 return capabilities
 
         docker_version_result = await executor.run("docker --version", timeout=self._DEFAULT_TIMEOUT)
@@ -851,7 +854,10 @@ class TargetScannerService:
         return kubernetes
 
     def build_capabilities_payload(self, scan_result: ScanResult) -> List[Dict[str, Any]]:
-        """Construit la liste normalisée des capacités détectées."""
+        """Construit la liste normalisée des capacités détectées.
+
+        Ne crée des entrées que pour les capacités réellement disponibles.
+        """
         capabilities: List[Dict[str, Any]] = []
         detected_at = scan_result.scan_date
 
@@ -861,16 +867,19 @@ class TargetScannerService:
             version: Optional[str],
             details: Optional[Dict[str, Any]]
         ) -> None:
-            capabilities.append(
-                {
-                    "capability_type": capability_type,
-                    "is_available": available,
-                    "version": version,
-                    "details": details,
-                    "detected_at": detected_at,
-                }
-            )
+            # Ne créer une entrée que si la capacité est disponible
+            if available:
+                capabilities.append(
+                    {
+                        "capability_type": capability_type,
+                        "is_available": available,
+                        "version": version,
+                        "details": details,
+                        "detected_at": detected_at,
+                    }
+                )
 
+        # Virtualisation : ne garder que les outils disponibles
         virtualization = scan_result.virtualization or {}
         for key, info in virtualization.items():
             capability_type = self._map_virtualization_key_to_capability(key)
@@ -879,8 +888,9 @@ class TargetScannerService:
             available, version, details = self._extract_tool_info(info)
             add_capability(capability_type, available, version, details)
 
+        # Docker : ne créer des entrées que si installé et disponible
         docker_caps = scan_result.docker
-        if docker_caps is not None:
+        if docker_caps is not None and docker_caps.installed:
             docker_details = {
                 "running": docker_caps.running,
                 "socket_accessible": docker_caps.socket_accessible,
@@ -892,8 +902,9 @@ class TargetScannerService:
                 docker_details,
             )
 
+            # Docker Compose : seulement si disponible
             compose_info = docker_caps.compose
-            if compose_info:
+            if compose_info and compose_info.available:
                 compose_details: Dict[str, Any] = {}
                 if compose_info.plugin_based is not None:
                     compose_details["plugin_based"] = compose_info.plugin_based
@@ -903,11 +914,10 @@ class TargetScannerService:
                     compose_info.version,
                     compose_details or None,
                 )
-            else:
-                add_capability(CapabilityType.DOCKER_COMPOSE, False, None, None)
 
+            # Docker Swarm : seulement si disponible
             swarm_info = docker_caps.swarm
-            if swarm_info:
+            if swarm_info and swarm_info.available:
                 swarm_details = swarm_info.details or {
                     "active": swarm_info.active,
                     "node_role": swarm_info.node_role,
@@ -918,13 +928,8 @@ class TargetScannerService:
                     None,
                     swarm_details,
                 )
-            else:
-                add_capability(CapabilityType.DOCKER_SWARM, False, None, None)
-        else:
-            add_capability(CapabilityType.DOCKER, False, None, None)
-            add_capability(CapabilityType.DOCKER_COMPOSE, False, None, None)
-            add_capability(CapabilityType.DOCKER_SWARM, False, None, None)
 
+        # Kubernetes : ne garder que les outils disponibles
         kubernetes_tools = scan_result.kubernetes or {}
         for key, info in kubernetes_tools.items():
             capability_type = self._map_kubernetes_key_to_capability(key)

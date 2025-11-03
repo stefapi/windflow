@@ -14,7 +14,8 @@ export const useTargetsStore = defineStore('targets', () => {
     error.value = null
     try {
       const response = await targetsApi.list({ organization_id: organizationId })
-      targets.value = response.data.items
+      // Backend returns List[TargetResponse] directly, not wrapped in {items:[]}
+      targets.value = response.data
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch targets'
       throw err
@@ -83,6 +84,30 @@ export const useTargetsStore = defineStore('targets', () => {
     }
   }
 
+  async function scanTarget(id: string): Promise<void> {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await targetsApi.scan(id)
+
+      // Update target in the list
+      const index = targets.value.findIndex(t => t.id === id)
+      if (index !== -1) {
+        targets.value[index] = response.data
+      }
+
+      // Update currentTarget if it's the same target
+      if (currentTarget.value?.id === id) {
+        currentTarget.value = response.data
+      }
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to scan target'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     targets,
     currentTarget,
@@ -93,5 +118,6 @@ export const useTargetsStore = defineStore('targets', () => {
     createTarget,
     updateTarget,
     deleteTarget,
+    scanTarget,
   }
 })

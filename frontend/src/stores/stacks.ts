@@ -14,7 +14,8 @@ export const useStacksStore = defineStore('stacks', () => {
     error.value = null
     try {
       const response = await stacksApi.list({ organization_id: organizationId })
-      stacks.value = response.data.items
+      // Backend returns List[StackResponse] directly, not wrapped in {items:[]}
+      stacks.value = response.data
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch stacks'
       throw err
