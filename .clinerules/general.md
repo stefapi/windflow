@@ -37,34 +37,6 @@ Pour le contexte architectural, les principes de développement et l'état du pr
 - **UUID** pour tous les identifiants primaires
 - **timestamps** obligatoires : `created_at`, `updated_at`
 
-## Structure des Projets
-
-### Backend (FastAPI)
-```
-windflow/
-├── api/                 # Endpoints API REST
-├── core/               # Configuration et utilitaires
-├── models/             # Modèles SQLAlchemy
-├── services/           # Logique métier
-├── tasks/              # Tâches Celery
-├── tests/              # Tests automatisés
-└── main.py            # Point d'entrée FastAPI
-```
-
-### Frontend (Vue.js 3)
-```
-frontend/
-├── src/
-│   ├── components/     # Composants réutilisables
-│   ├── views/          # Pages/vues
-│   ├── stores/         # State management Pinia
-│   ├── services/       # API services
-│   ├── types/          # Types TypeScript
-│   └── utils/          # Utilitaires
-├── public/             # Assets statiques
-└── package.json
-```
-
 ## Gestion des Erreurs
 
 ### Backend
