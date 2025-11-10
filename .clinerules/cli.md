@@ -2,12 +2,7 @@
 
 ## Stack Technologique CLI/TUI
 
-### Framework Principal
-- **Rich** pour l'interface CLI moderne avec couleurs et formatage
-- **Typer** pour les commandes type-safe avec auto-complétion
-- **Textual** pour l'interface TUI (Text User Interface)
-- **argparse** pour les parsers de commandes hiérarchiques
-- **python-dotenv** pour la gestion de configuration
+**Note** : Pour les technologies CLI/TUI (Rich, Typer, Textual, etc.), voir `memory-bank/techContext.md`.
 
 ## Conventions CLI
 

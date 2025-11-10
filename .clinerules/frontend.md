@@ -1,14 +1,6 @@
 # Règles de Développement Frontend - WindFlow
 
-## Stack Technologique Frontend
-
-### Framework Principal
-- **Vue.js 3** avec Composition API obligatoire
-- **TypeScript** strict mode activé
-- **Element Plus** pour les composants UI
-- **UnoCSS** pour le styling utilitaire
-- **Pinia** pour la gestion d'état
-- **Vue Router** pour le routage
+**Note** : Pour le stack technologique et l'architecture générale, voir `memory-bank/techContext.md`.
 
 ## Conventions TypeScript
 
@@ -611,127 +603,7 @@ export default defineConfig({
 
 ## Tests Frontend
 
-### Tests Unitaires avec Vitest
-```typescript
-// tests/components/DeploymentCard.test.ts
-import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { ElButton, ElTag } from 'element-plus'
-import DeploymentCard from '@/components/features/DeploymentCard.vue'
-import type { Deployment } from '@/types'
-
-const mockDeployment: Deployment = {
-  id: 'test-123',
-  name: 'Test Deployment',
-  status: 'running',
-  targetType: 'docker',
-  createdAt: '2024-01-15T10:00:00Z',
-  updatedAt: '2024-01-15T10:30:00Z'
-}
-
-describe('DeploymentCard', () => {
-  it('affiche les informations du déploiement', () => {
-    const wrapper = mount(DeploymentCard, {
-      props: { deployment: mockDeployment },
-      global: {
-        components: { ElButton, ElTag }
-      }
-    })
-
-    expect(wrapper.text()).toContain('Test Deployment')
-    expect(wrapper.text()).toContain('docker')
-    expect(wrapper.text()).toContain('running')
-  })
-
-  it('émet l\'événement view-logs au clic', async () => {
-    const wrapper = mount(DeploymentCard, {
-      props: { deployment: mockDeployment },
-      global: {
-        components: { ElButton, ElTag }
-      }
-    })
-
-    await wrapper.find('[data-test="view-logs-btn"]').trigger('click')
-    
-    expect(wrapper.emitted('view-logs')).toEqual([['test-123']])
-  })
-
-  it('affiche le bouton d\'arrêt pour les déploiements en cours', () => {
-    const wrapper = mount(DeploymentCard, {
-      props: { deployment: mockDeployment },
-      global: {
-        components: { ElButton, ElTag }
-      }
-    })
-
-    expect(wrapper.find('[data-test="stop-btn"]').exists()).toBe(true)
-  })
-
-  it('n\'affiche pas le bouton d\'arrêt pour les déploiements terminés', () => {
-    const finishedDeployment = { ...mockDeployment, status: 'success' as const }
-    
-    const wrapper = mount(DeploymentCard, {
-      props: { deployment: finishedDeployment },
-      global: {
-        components: { ElButton, ElTag }
-      }
-    })
-
-    expect(wrapper.find('[data-test="stop-btn"]').exists()).toBe(false)
-  })
-})
-```
-
-### Tests E2E avec Playwright
-```typescript
-// tests/e2e/deployment-workflow.test.ts
-import { test, expect } from '@playwright/test'
-
-test.describe('Workflow de déploiement', () => {
-  test.beforeEach(async ({ page }) => {
-    // Mock de l'authentification
-    await page.goto('/login')
-    await page.fill('[data-test="username"]', 'test@windflow.local')
-    await page.fill('[data-test="password"]', 'password')
-    await page.click('[data-test="login-btn"]')
-    await expect(page).toHaveURL('/dashboard')
-  })
-
-  test('création d\'un nouveau déploiement', async ({ page }) => {
-    // Navigation vers la page de déploiements
-    await page.click('[data-test="nav-deployments"]')
-    await expect(page).toHaveURL('/dashboard/deployments')
-
-    // Clic sur le bouton de création
-    await page.click('[data-test="create-deployment-btn"]')
-
-    // Remplissage du formulaire
-    await page.fill('[data-test="deployment-name"]', 'Test E2E Deployment')
-    await page.selectOption('[data-test="target-type"]', 'docker')
-    
-    // Soumission
-    await page.click('[data-test="submit-btn"]')
-
-    // Vérification de la création
-    await expect(page.locator('[data-test="deployment-card"]')).toContainText('Test E2E Deployment')
-    await expect(page.locator('[data-test="status-badge"]')).toContainText('pending')
-  })
-
-  test('visualisation des logs de déploiement', async ({ page }) => {
-    // Clic sur un déploiement existant
-    await page.click('[data-test="deployment-card"]:first-child')
-    
-    // Vérification de la page de détails
-    await expect(page).toHaveURL(/\/dashboard\/deployments\/.*/)
-    
-    // Clic sur l'onglet logs
-    await page.click('[data-test="logs-tab"]')
-    
-    // Vérification de l'affichage des logs
-    await expect(page.locator('[data-test="logs-container"]')).toBeVisible()
-  })
-})
-```
+**Note** : Pour les stratégies et règles de test générales, voir `memory-bank/testing.md`.
 
 ## Performance et Optimisations
 

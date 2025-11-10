@@ -1,12 +1,6 @@
 # Règles de Développement Backend - WindFlow
 
-## Stack Technologique Backend
-
-### Framework Principal
-- **FastAPI** avec Python 3.11+ obligatoire
-- **Pydantic V2** pour la validation des données
-- **SQLAlchemy 2.0** avec async/await natif
-- **Alembic** pour les migrations de base de données
+**Note** : Pour le stack technologique et l'architecture générale, voir `memory-bank/techContext.md` et `memory-bank/systemPatterns.md`.
 
 ## Conventions de Code Python
 
@@ -224,79 +218,13 @@ class DeploymentResponse(DeploymentBase):
 
 ## Services et Logique Métier
 
-### Pattern Repository
-```python
-# services/deployment_repository.py
-from abc import ABC, abstractmethod
-from uuid import UUID
-from typing import List, Optional
-from sqlalchemy.ext.asyncio import AsyncSession
+**Note** : Pour les patterns Repository et Dependency Injection, voir `memory-bank/systemPatterns.md`.
 
-class DeploymentRepository(ABC):
-    """Interface repository pour les déploiements."""
-    
-    @abstractmethod
-    async def create(self, deployment: DeploymentCreate) -> Deployment:
-        pass
-    
-    @abstractmethod
-    async def get_by_id(self, deployment_id: UUID) -> Optional[Deployment]:
-        pass
-    
-    @abstractmethod
-    async def get_by_user(self, user_id: UUID, limit: int = 20) -> List[Deployment]:
-        pass
-
-class SQLDeploymentRepository(DeploymentRepository):
-    """Implémentation SQLAlchemy du repository."""
-    
-    def __init__(self, db: AsyncSession):
-        self.db = db
-    
-    async def create(self, deployment: DeploymentCreate) -> Deployment:
-        db_deployment = Deployment(**deployment.model_dump())
-        self.db.add(db_deployment)
-        await self.db.commit()
-        await self.db.refresh(db_deployment)
-        return db_deployment
-```
-
-### Services avec Dependency Injection
-```python
-# services/deployment_service.py
-from dependency_injector.wiring import Provide, inject
-from container import Container
-
-class DeploymentService:
-    """Service de gestion des déploiements."""
-    
-    @inject
-    async def create_deployment(
-        self,
-        deployment_data: DeploymentCreate,
-        user_id: UUID,
-        repository: DeploymentRepository = Provide[Container.deployment_repository]
-    ) -> DeploymentResponse:
-        """Crée un nouveau déploiement."""
-        
-        # Validation métier
-        await self._validate_deployment_config(deployment_data)
-        
-        # Optimisation LLM si activée
-        if deployment_data.enable_llm_optimization:
-            deployment_data.configuration = await self._optimize_with_llm(
-                deployment_data.configuration,
-                deployment_data.target_type
-            )
-        
-        # Création en base
-        deployment = await repository.create(deployment_data)
-        
-        # Lancement asynchrone du déploiement
-        await self._trigger_deployment_task(deployment.id)
-        
-        return DeploymentResponse.model_validate(deployment)
-```
+### Bonnes Pratiques de Services
+- **Responsabilité unique** : Chaque service gère une fonctionnalité métier spécifique
+- **Validation métier** : Valider les données avant traitement en base
+- **Gestion d'erreurs** : Lever des exceptions métier explicites
+- **Logging contextuel** : Inclure l'ID de l'entité et l'utilisateur dans les logs
 
 ## Tâches Asynchrones
 
@@ -382,48 +310,7 @@ def deploy_stack_task(self, deployment_id: str):
 
 ## Configuration et Variables d'Environnement
 
-### Configuration Centralisée
-```python
-# core/config.py
-from pydantic_settings import BaseSettings
-from typing import Optional
-
-class Settings(BaseSettings):
-    """Configuration centralisée de l'application."""
-    
-    # Database
-    DATABASE_URL: str
-    DATABASE_POOL_SIZE: int = 10
-    DATABASE_MAX_OVERFLOW: int = 20
-    
-    # Redis
-    REDIS_URL: str
-    REDIS_MAX_CONNECTIONS: int = 100
-    
-    # Security
-    SECRET_KEY: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    
-    # Vault
-    VAULT_URL: str
-    VAULT_TOKEN: Optional[str] = None
-    
-    # LLM
-    LLM_PROVIDER: str = "openai"
-    LLM_MODEL: str = "gpt-4-turbo-preview"
-    LLM_MAX_TOKENS: int = 2000
-    
-    # Monitoring
-    PROMETHEUS_ENABLED: bool = True
-    LOG_LEVEL: str = "INFO"
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
-settings = Settings()
-```
+**Note** : Pour la configuration générale et les variables d'environnement, voir `memory-bank/techContext.md`.
 
 ## Logging Structuré
 
@@ -472,118 +359,10 @@ def log_deployment_event(deployment_id: UUID, event: str, **kwargs):
 
 ## Tests Backend
 
-### Structure des Tests
-```python
-# tests/conftest.py
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
-
-@pytest.fixture
-async def async_db():
-    """Base de données de test."""
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///./test.db",
-        echo=True
-    )
-    
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async_session = sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
-    
-    async with async_session() as session:
-        yield session
-    
-    await engine.dispose()
-
-# tests/test_deployment_service.py
-@pytest.mark.asyncio
-async def test_create_deployment(async_db):
-    """Test de création d'un déploiement."""
-    
-    # Arrange
-    deployment_data = DeploymentCreate(
-        name="test-deployment",
-        target_type="docker",
-        configuration={"replicas": 2}
-    )
-    
-    repository = SQLDeploymentRepository(async_db)
-    service = DeploymentService()
-    
-    # Act
-    result = await service.create_deployment(
-        deployment_data,
-        user_id=UUID('12345678-1234-5678-9012-123456789012'),
-        repository=repository
-    )
-    
-    # Assert
-    assert result.name == "test-deployment"
-    assert result.status == DeploymentStatus.PENDING
-    assert result.id is not None
-```
+**Note** : Pour les stratégies et règles de test générales, voir `memory-bank/testing.md`.
 
 ## Performance et Monitoring
 
-### Métriques Prometheus
-```python
-# core/metrics.py
-from prometheus_client import Counter, Histogram, Gauge
-import time
-from functools import wraps
-
-# Métriques métier
-DEPLOYMENT_COUNTER = Counter(
-    'windflow_deployments_total',
-    'Nombre total de déploiements',
-    ['target_type', 'status']
-)
-
-DEPLOYMENT_DURATION = Histogram(
-    'windflow_deployment_duration_seconds',
-    'Durée des déploiements',
-    ['target_type'],
-    buckets=(1, 5, 10, 30, 60, 120, 300, 600, 1200, float('inf'))
-)
-
-ACTIVE_DEPLOYMENTS = Gauge(
-    'windflow_active_deployments',
-    'Nombre de déploiements actifs'
-)
-
-def monitor_deployment(target_type: str):
-    """Décorateur pour monitorer les déploiements."""
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            start_time = time.time()
-            ACTIVE_DEPLOYMENTS.inc()
-            
-            try:
-                result = await func(*args, **kwargs)
-                DEPLOYMENT_COUNTER.labels(
-                    target_type=target_type,
-                    status='success'
-                ).inc()
-                return result
-            except Exception as e:
-                DEPLOYMENT_COUNTER.labels(
-                    target_type=target_type,
-                    status='error'
-                ).inc()
-                raise
-            finally:
-                duration = time.time() - start_time
-                DEPLOYMENT_DURATION.labels(target_type=target_type).observe(duration)
-                ACTIVE_DEPLOYMENTS.dec()
-        
-        return wrapper
-    return decorator
-```
+**Note** : Pour les métriques et monitoring, voir `memory-bank/techContext.md`.
 
 Ces règles assurent un développement backend cohérent, maintenable et performant pour WindFlow.

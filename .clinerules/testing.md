@@ -1,6 +1,6 @@
 # Règles de Test - WindFlow
 
-## Tests Backend avec pytest
+**Note** : Pour les stratégies et règles de test générales, voir `memory-bank/testing.md`.
 
 ### Configuration pytest
 ```python

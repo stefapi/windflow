@@ -15,6 +15,10 @@
 - **Loading States**: Added skeleton loaders and progress indicators throughout the app
 - **Stacks Foundation**: Basic stack CRUD operations implemented in backend
 - **API Integration**: Enhanced error handling and retry logic in frontend services
+- **Documentation Cleanup**: Removed redundancies between .clinerules/ and memory-bank/ files
+  - Cleaned backend.md, frontend.md, infrastructure.md, testing.md
+  - Added references to memory-bank for technology stack and patterns
+  - Maintained separation of responsibilities between documentation types
 
 ### Active Decisions and Considerations
 

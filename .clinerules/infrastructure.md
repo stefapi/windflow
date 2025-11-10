@@ -1,22 +1,8 @@
 # Règles d'Infrastructure et Fichiers Annexes - WindFlow
 
-## Vue d'Ensemble
+# Règles d'Infrastructure et Fichiers Annexes - WindFlow
 
-Ce document définit les règles de structuration et d'organisation des fichiers annexes de type infrastructure, outils de développement, et fichiers de support pour le projet WindFlow.
-
-## Principes Généraux
-
-### Organisation Hiérarchique
-- **Fichiers de configuration racine** : Variables d'environnement, configuration Docker, outils de développement
-- **Répertoire dev/** : Outils, données et templates de développement
-- **Scripts spécialisés** : Génération de code, automatisation, validation
-- **Templates modulaires** : Génération automatique de code et configuration
-
-### Conventions de Nommage
-- **kebab-case** pour les fichiers Docker et compose : `docker-compose.yml`, `docker-compose.override.yml`
-- **lowercase** pour les fichiers de configuration : `makefile`, `dockerfile`, `.env`
-- **UPPERCASE** pour les fichiers de documentation projet : `README.md`, `CHANGELOG.md`
-- **snake_case** pour les scripts Python : `generate_api.py`, `validate_config.py`
+**Note** : Pour les technologies d'infrastructure et l'environnement de développement, voir `memory-bank/techContext.md`.
 
 ## Makefile - Orchestrateur Principal
 
@@ -334,15 +320,7 @@ dev/templates/documentation/
 
 ## Monitoring et Observabilité
 
-### Prometheus Configuration
-**Objectifs** : Métriques application/infrastructure, service discovery, alerting rules
-- Configuration scrape_configs pour windflow-backend, windflow-frontend
-- Retention adaptée à l'usage, règles d'alerting définies
-
-### Grafana Dashboard Config
-**Objectifs** : Tableaux de bord pour métriques clés WindFlow
-- API Response Time, Deployment Success Rate
-- Panels configurés avec requêtes PromQL appropriées
+**Note** : Pour les métriques et monitoring, voir `memory-bank/techContext.md`.
 
 ## Validation et Contrôle Qualité
 
