@@ -10,28 +10,6 @@
 - **Pinia** pour la gestion d'état
 - **Vue Router** pour le routage
 
-### Architecture des Composants
-
-#### Structure Obligatoire
-```
-frontend/
-├── src/
-│   ├── components/         # Composants réutilisables
-│   │   ├── ui/            # Composants de base
-│   │   ├── layout/        # Composants de layout
-│   │   └── features/      # Composants métier
-│   ├── views/             # Pages/vues principales
-│   ├── stores/            # Stores Pinia
-│   ├── composables/       # Logique réutilisable
-│   ├── services/          # Services API
-│   ├── types/             # Types TypeScript
-│   ├── utils/             # Fonctions utilitaires
-│   ├── router/            # Configuration routing
-│   └── assets/            # Assets statiques
-├── public/                # Fichiers publics
-└── tests/                 # Tests unitaires/E2E
-```
-
 ## Conventions TypeScript
 
 ### Types Stricts Obligatoires

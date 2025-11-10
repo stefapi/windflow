@@ -9,26 +9,6 @@
 - **argparse** pour les parsers de commandes hiérarchiques
 - **python-dotenv** pour la gestion de configuration
 
-### Architecture des Services CLI
-
-#### Structure Obligatoire
-```
-windflow-cli/
-├── cli/
-│   ├── commands/           # Commandes CLI par catégorie
-│   │   ├── auth.py        # Authentification
-│   │   ├── deploy.py      # Déploiements
-│   │   ├── org.py         # Organisations
-│   │   └── stack.py       # Stacks
-│   ├── services/          # Services CLI
-│   ├── tui/               # Interfaces TUI
-│   ├── utils/             # Utilitaires CLI
-│   ├── config.py          # Configuration
-│   └── main.py           # Point d'entrée CLI
-├── tests/                 # Tests CLI/TUI
-└── completion/            # Scripts auto-complétion
-```
-
 ## Conventions CLI
 
 ### Architecture des Services Modulaires

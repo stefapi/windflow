@@ -1,18 +1,26 @@
 # WindFlow - Règles de Développement
 
-Le répertoire .clinerules contient les règles de développement pour le projet WindFlow, un outil web intelligent de déploiement de containers Docker.
+Le répertoire `.clinerules` contient **uniquement les règles de développement concrètes** pour le projet WindFlow.
+
+## Séparation des Responsabilités
+
+### 📚 Memory Bank (`memory-bank/`)
+Contient le **contexte du projet et l'état actuel** :
+- `projectbrief.md` : Vue d'ensemble et objectifs du projet
+- `productContext.md` : Problèmes résolus et utilisateurs cibles
+- `activeContext.md` : État actuel et prochaines étapes
+- `systemPatterns.md` : Patterns architecturaux et décisions techniques
+- `techContext.md` : Technologies utilisées et environnement de développement
+- `progress.md` : État d'avancement et métriques
+
+### 📋 Règles de Développement (`.clinerules/`)
+Contient **les conventions de code et bonnes pratiques** :
+- Règles de développement spécifiques par technologie
+- Conventions de nommage et formatage
+- Patterns de code et structures
+- Outils et workflows de développement
 
 ## Organisation des Fichiers
-
-### 📋 [general.md](general.md) - Règles Générales
-Principes de développement transversaux applicables à tous les aspects du projet :
-- **Architecture** : API-First, Microservices, Event-Driven, Security by Design
-- **Standards de Code** : Type Safety, Documentation, Tests, Clean Code
-- **Conventions de Nommage** : Fichiers, base de données, structures de projet
-- **Sécurité** : Authentification, secrets, RBAC
-- **Performance** : Backend et frontend
-- **CI/CD** : Tests, validation, environnements
-- **Monitoring** : Métriques, logging, observabilité
 
 ### 🐍 [backend.md](backend.md) - Règles Backend
 Règles spécifiques au développement backend FastAPI :

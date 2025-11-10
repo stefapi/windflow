@@ -8,27 +8,6 @@
 - **SQLAlchemy 2.0** avec async/await natif
 - **Alembic** pour les migrations de base de données
 
-### Architecture des Services
-
-#### Structure Obligatoire
-```
-windflow/
-├── api/
-│   ├── v1/              # Endpoints API versionnés
-│   ├── dependencies/    # Dependencies FastAPI
-│   └── middleware/      # Middlewares personnalisés
-├── core/
-│   ├── config.py       # Configuration centralisée
-│   ├── security.py     # Utilitaires sécurité
-│   └── database.py     # Configuration DB
-├── models/             # Modèles SQLAlchemy
-├── schemas/            # Schémas Pydantic
-├── services/           # Logique métier
-├── tasks/              # Tâches Celery
-├── tests/              # Tests automatisés
-└── main.py            # Point d'entrée FastAPI
-```
-
 ## Conventions de Code Python
 
 ### Type Hints Obligatoires
