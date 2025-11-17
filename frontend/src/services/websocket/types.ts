@@ -3,39 +3,67 @@
  */
 
 /**
- * Types d'événements WebSocket supportés
+ * Types d'événements WebSocket supportés.
+ *
+ * IMPORTANT: Ces types doivent correspondre exactement aux types définis
+ * dans backend/app/schemas/websocket_events.py
+ *
  * Organisés par catégorie pour faciliter la maintenance
  */
 export enum WebSocketEventType {
+  // ============================================================================
   // Authentification
-  AUTH_SUCCESS = 'auth_success',
-  AUTH_ERROR = 'auth_error',
+  // ============================================================================
+  AUTH_LOGIN_SUCCESS = 'AUTH_LOGIN_SUCCESS',
+  AUTH_LOGOUT = 'AUTH_LOGOUT',
+  AUTH_TOKEN_REFRESH = 'AUTH_TOKEN_REFRESH',
 
+  // ============================================================================
   // Notifications
-  NOTIFICATION_SYSTEM = 'notification:system',
-  NOTIFICATION_USER = 'notification:user',
+  // ============================================================================
+  NOTIFICATION_SYSTEM = 'NOTIFICATION_SYSTEM',
+  NOTIFICATION_USER = 'NOTIFICATION_USER',
+  NOTIFICATION_DEPLOYMENT = 'NOTIFICATION_DEPLOYMENT',
 
-  // Session utilisateur
-  SESSION_AUTH_REQUIRED = 'session:auth_required',
-  SESSION_PERMISSION_CHANGED = 'session:permission_changed',
-  SESSION_ORGANIZATION_CHANGED = 'session:organization_changed',
-  SESSION_EXPIRED = 'session:expired',
+  // ============================================================================
+  // Session
+  // ============================================================================
+  SESSION_EXPIRED = 'SESSION_EXPIRED',
+  SESSION_AUTH_REQUIRED = 'SESSION_AUTH_REQUIRED',
+  SESSION_PERMISSION_CHANGED = 'SESSION_PERMISSION_CHANGED',
+  SESSION_ORGANIZATION_CHANGED = 'SESSION_ORGANIZATION_CHANGED',
 
-  // Navigation et UI pilotée par serveur
-  UI_NAVIGATION_REQUEST = 'ui:navigation_request',
-  UI_MODAL_DISPLAY = 'ui:modal_display',
-  UI_TOAST_DISPLAY = 'ui:toast_display',
-  UI_WORKFLOW_STEP = 'ui:workflow_step',
+  // ============================================================================
+  // UI Navigation (server-driven UI)
+  // ============================================================================
+  UI_NAVIGATION_REQUEST = 'UI_NAVIGATION_REQUEST',
+  UI_MODAL_DISPLAY = 'UI_MODAL_DISPLAY',
+  UI_TOAST_DISPLAY = 'UI_TOAST_DISPLAY',
+  UI_WORKFLOW_STEP = 'UI_WORKFLOW_STEP',
 
-  // Déploiements (legacy support)
-  DEPLOYMENT_LOG = 'deployment:log',
-  DEPLOYMENT_STATUS = 'deployment:status',
-  DEPLOYMENT_ERROR = 'deployment:error',
-  DEPLOYMENT_COMPLETE = 'deployment:complete',
+  // ============================================================================
+  // Déploiements
+  // ============================================================================
+  DEPLOYMENT_STATUS_CHANGED = 'DEPLOYMENT_STATUS_CHANGED',
+  DEPLOYMENT_LOGS_UPDATE = 'DEPLOYMENT_LOGS_UPDATE',
+  DEPLOYMENT_PROGRESS = 'DEPLOYMENT_PROGRESS',
 
+  // ============================================================================
   // Système
-  SYSTEM_EVENT = 'system_event',
-  HEARTBEAT_PONG = 'pong'
+  // ============================================================================
+  SYSTEM_MAINTENANCE = 'SYSTEM_MAINTENANCE',
+  SYSTEM_BROADCAST = 'SYSTEM_BROADCAST',
+
+  // ============================================================================
+  // Types système internes (ne passent pas par le système de plugins)
+  // ============================================================================
+  PONG = 'pong',
+  ERROR = 'error',
+  SUBSCRIBED = 'subscribed',
+  UNSUBSCRIBED = 'unsubscribed',
+  LOGS_SUBSCRIBED = 'logs_subscribed',
+  MESSAGE_RECEIVED = 'message_received',
+  TEXT_RECEIVED = 'text_received'
 }
 
 /**

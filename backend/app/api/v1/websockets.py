@@ -17,6 +17,7 @@ from ...database import get_db
 from ...models.deployment import Deployment
 from ...models.user import User
 from ...auth.dependencies import get_current_user_ws
+from ...schemas.websocket_events import WebSocketEventType, NotificationLevel, DeploymentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ async def general_websocket(
         # Envoyer un message de confirmation d'authentification
         from datetime import datetime
         await websocket.send_json({
-            "type": "auth_success",
+            "type": WebSocketEventType.AUTH_LOGIN_SUCCESS,
             "timestamp": datetime.utcnow().isoformat(),
             "data": {
                 "user_id": str(user.id),
@@ -416,29 +417,73 @@ async def broadcast_deployment_log(
     from datetime import datetime
 
     await manager.broadcast_to_deployment(deployment_id, {
-        "type": "log",
-        "timestamp": datetime.utcnow().isoformat(),
-        "message": message,
-        "level": level,
-        **extra_data
+        "type": WebSocketEventType.DEPLOYMENT_LOGS_UPDATE,
+        "data": {
+            "deploymentId": deployment_id,
+            "logs": [message],
+            "timestamp": datetime.utcnow().isoformat(),
+            "level": level,
+            **extra_data
+        }
     })
 
 
 async def broadcast_deployment_status(
     deployment_id: str,
-    status: str,
+    new_status: str,
+    deployment_name: str = "",
+    old_status: str = "",
     **extra_data
 ):
     """
     Fonction helper pour broadcaster un changement de statut.
+
+    Args:
+        deployment_id: ID du déploiement
+        new_status: Nouveau statut du déploiement
+        deployment_name: Nom du déploiement (optionnel)
+        old_status: Ancien statut (optionnel)
+        **extra_data: Données additionnelles
     """
     from datetime import datetime
 
     await manager.broadcast_to_deployment(deployment_id, {
-        "type": "status",
-        "timestamp": datetime.utcnow().isoformat(),
+        "type": WebSocketEventType.DEPLOYMENT_STATUS_CHANGED,
         "data": {
-            "status": status,
+            "deploymentId": deployment_id,
+            "deploymentName": deployment_name,
+            "oldStatus": old_status,
+            "newStatus": new_status,
+            "timestamp": datetime.utcnow().isoformat(),
+            **extra_data
+        }
+    })
+
+
+async def broadcast_deployment_progress(
+    deployment_id: str,
+    progress: int,
+    step: str,
+    **extra_data
+):
+    """
+    Fonction helper pour broadcaster la progression d'un déploiement.
+
+    Args:
+        deployment_id: ID du déploiement
+        progress: Pourcentage de progression (0-100)
+        step: Étape actuelle du déploiement
+        **extra_data: Données additionnelles
+    """
+    from datetime import datetime
+
+    await manager.broadcast_to_deployment(deployment_id, {
+        "type": WebSocketEventType.DEPLOYMENT_PROGRESS,
+        "data": {
+            "deploymentId": deployment_id,
+            "progress": progress,
+            "step": step,
+            "timestamp": datetime.utcnow().isoformat(),
             **extra_data
         }
     })
@@ -447,21 +492,25 @@ async def broadcast_deployment_status(
 async def broadcast_deployment_complete(
     deployment_id: str,
     success: bool = True,
+    deployment_name: str = "",
     **extra_data
 ):
     """
     Fonction helper pour broadcaster la fin d'un déploiement.
+
+    Envoie un DEPLOYMENT_STATUS_CHANGED avec status=success ou status=failed.
     """
     from datetime import datetime
 
-    await manager.broadcast_to_deployment(deployment_id, {
-        "type": "complete",
-        "timestamp": datetime.utcnow().isoformat(),
-        "data": {
-            "success": success,
-            **extra_data
-        }
-    })
+    final_status = "success" if success else "failed"
+
+    await broadcast_deployment_status(
+        deployment_id=deployment_id,
+        new_status=final_status,
+        deployment_name=deployment_name,
+        old_status="running",
+        **extra_data
+    )
 
 
 # Gestionnaire de connexions utilisateur pour l'endpoint général
