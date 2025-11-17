@@ -1,7 +1,11 @@
 /**
  * WebSocket/SSE Service
  * Real-time communication for deployment logs, notifications, status updates
+ * Extended with plugin system for easy extensibility
  */
+
+import { pluginManager } from './websocket/plugin'
+import { WebSocketEventType } from './websocket/types'
 
 type EventCallback = (data: unknown) => void
 
@@ -155,6 +159,14 @@ class WebSocketService {
       console.error('WebSocket server error:', data)
     }
 
+    // Dispatcher l'événement aux plugins si le type correspond à un WebSocketEventType
+    if (Object.values(WebSocketEventType).includes(type as WebSocketEventType)) {
+      pluginManager.dispatch(type as WebSocketEventType, data).catch(error => {
+        console.error('Error dispatching event to plugins:', error)
+      })
+    }
+
+    // Conserver le système de callbacks existant pour la compatibilité
     const callbacks = this.listeners.get(type)
 
     if (callbacks) {
