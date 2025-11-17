@@ -2,7 +2,7 @@
  * Main Application Entry Point
  */
 
-import { createApp } from 'vue'
+import { createApp, h } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus, { ElMessage } from 'element-plus'
 import 'element-plus/dist/index.css'
@@ -10,6 +10,7 @@ import '@unocss/reset/tailwind.css'
 import 'uno.css'
 
 import App from './App.vue'
+import SplashScreen from './components/SplashScreen.vue'
 import router from './router'
 import { useAuthStore } from './stores/auth'
 
@@ -18,24 +19,10 @@ import { pluginManager } from './services/websocket/plugin'
 import { defaultPlugins } from './services/websocket/plugins'
 import type { PluginContext } from './services/websocket/plugin'
 
-const app = createApp(App)
-const pinia = createPinia()
-
-// Register Pinia first
-app.use(pinia)
-
-// Initialize auth store from localStorage BEFORE router
-// This ensures the navigation guard has access to the correct auth state
-const authStore = useAuthStore()
-authStore.initFromStorage()
-
-// Register router after auth is initialized
-app.use(router)
-app.use(ElementPlus)
-
-// Initialize WebSocket plugins
-const initWebSocketPlugins = async () => {
-  // Créer le contexte pour les plugins
+/**
+ * Initialize WebSocket plugins
+ */
+const initWebSocketPlugins = async (pinia: any) => {
   const pluginContext: PluginContext = {
     router,
     pinia,
@@ -92,9 +79,63 @@ const initWebSocketPlugins = async () => {
   console.log('✅ WebSocket plugins initialized:', pluginManager.list().map(p => p.name))
 }
 
-// Initialiser les plugins après le montage
-initWebSocketPlugins().catch(error => {
-  console.error('Failed to initialize WebSocket plugins:', error)
-})
+/**
+ * Initialize application with splash screen
+ */
+async function initializeApp() {
+  // Create and mount splash screen
+  const splashApp = createApp({
+    render: () => h(SplashScreen, { message: 'Vérification de la session...' })
+  })
+  splashApp.mount('#app')
 
-app.mount('#app')
+  try {
+    // Create main app
+    const app = createApp(App)
+    const pinia = createPinia()
+
+    // Register Pinia
+    app.use(pinia)
+
+    // Initialize auth store from localStorage BEFORE router
+    // This ensures the navigation guard has access to the correct auth state
+    const authStore = useAuthStore()
+
+    console.log('🔐 Initializing authentication...')
+    const isAuthenticated = await authStore.initFromStorage()
+
+    if (isAuthenticated) {
+      console.log('✅ Authentication restored from storage')
+    } else {
+      console.log('ℹ️ No valid session found')
+    }
+
+    // Register router after auth is initialized
+    app.use(router)
+    app.use(ElementPlus)
+
+    // Initialize WebSocket plugins
+    console.log('🔌 Initializing WebSocket plugins...')
+    await initWebSocketPlugins(pinia)
+
+    // Unmount splash and mount main app
+    splashApp.unmount()
+    app.mount('#app')
+
+    console.log('🚀 Application initialized successfully')
+  } catch (error) {
+    console.error('❌ Failed to initialize application:', error)
+
+    // Show error on splash screen
+    splashApp.unmount()
+    const errorApp = createApp({
+      render: () => h(SplashScreen, {
+        message: 'Erreur d\'initialisation. Rechargez la page.'
+      })
+    })
+    errorApp.mount('#app')
+  }
+}
+
+// Start initialization
+initializeApp()

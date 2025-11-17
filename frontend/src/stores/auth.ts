@@ -114,14 +114,14 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('user', JSON.stringify(response.data))
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch user'
-      // If fetching current user fails, logout
-      await logout()
+      // Don't logout here - let the caller decide what to do
+      throw err
     } finally {
       loading.value = false
     }
   }
 
-  function initFromStorage(): void {
+  async function initFromStorage(): Promise<boolean> {
     const storedToken = localStorage.getItem('access_token')
     const storedUser = localStorage.getItem('user')
 
@@ -131,19 +131,52 @@ export const useAuthStore = defineStore('auth', () => {
         token.value = storedToken
         try {
           user.value = JSON.parse(storedUser)
+
           // Verify token is still valid with server
-          fetchCurrentUser()
-          // Connect WebSocket with token
-          wsService.connect(storedToken)
+          try {
+            await fetchCurrentUser()
+
+            // Only connect WebSocket if token is valid
+            wsService.connect(storedToken)
+
+            // Schedule token refresh
+            scheduleTokenRefresh()
+
+            return true
+          } catch (err: any) {
+            console.error('Failed to verify token with server:', err)
+
+            // Only logout if it's an authentication error (401)
+            // This means the token is actually invalid or expired
+            if (err?.response?.status === 401) {
+              console.warn('Token is invalid (401 Unauthorized), logging out')
+              await logout()
+              return false
+            }
+
+            // For other errors (network, timeout, 5xx server errors), keep the session
+            // The user can continue with cached data and the token might be valid
+            console.warn('Could not verify token with server (network/server error), keeping session for retry')
+
+            // Still connect WebSocket and schedule refresh to try again later
+            wsService.connect(storedToken)
+            scheduleTokenRefresh()
+
+            return true
+          }
         } catch (err) {
           console.error('Failed to parse stored user:', err)
-          logout()
+          await logout()
+          return false
         }
       } else {
         console.warn('Stored token is expired or invalid, clearing storage')
-        logout()
+        await logout()
+        return false
       }
     }
+
+    return false
   }
 
   function isTokenValid(token: string): boolean {
@@ -153,7 +186,7 @@ export const useAuthStore = defineStore('auth', () => {
         return false
       }
 
-      const payload = JSON.parse(atob(tokenParts[1]))
+      const payload = JSON.parse(window.atob(tokenParts[1]))
       const currentTime = Date.now() / 1000
 
       // Token is valid if it expires in more than 1 minute
@@ -171,7 +204,7 @@ export const useAuthStore = defineStore('auth', () => {
         return true // Consider invalid tokens as near expiry
       }
 
-      const payload = JSON.parse(atob(tokenParts[1]))
+      const payload = JSON.parse(window.atob(tokenParts[1]))
       const currentTime = Date.now() / 1000
 
       // Token is near expiry if it expires in less than threshold minutes
@@ -248,7 +281,7 @@ export const useAuthStore = defineStore('auth', () => {
         return 0
       }
 
-      const payload = JSON.parse(atob(tokenParts[1]))
+      const payload = JSON.parse(window.atob(tokenParts[1]))
       const currentTime = Date.now() / 1000
 
       // Refresh 2 minutes before expiry

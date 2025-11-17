@@ -36,6 +36,7 @@ declare module 'vue' {
     PasswordControlRenderer: typeof import('./components/marketplace/renderers/PasswordControlRenderer.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SplashScreen: typeof import('./components/SplashScreen.vue')['default']
     StackCard: typeof import('./components/marketplace/StackCard.vue')['default']
     StackDetailsModal: typeof import('./components/marketplace/StackDetailsModal.vue')['default']
     StackReviews: typeof import('./components/marketplace/StackReviews.vue')['default']
