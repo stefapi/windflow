@@ -17,8 +17,9 @@ interface WebSocketMessage {
 class WebSocketService {
   private ws: WebSocket | null = null
   private reconnectAttempts = 0
-  private maxReconnectAttempts = 5
-  private reconnectDelay = 3000
+  private maxReconnectAttempts = 3 // Aligned with HTTP retry logic
+  private reconnectDelays = [1000, 2000, 4000] // Exponential backoff: 1s, 2s, 4s
+  private isReconnecting = false // Prevent simultaneous reconnection attempts
   private listeners: Map<string, Set<EventCallback>> = new Map()
   private url: string
   private authenticated = false
@@ -52,6 +53,7 @@ class WebSocketService {
       this.ws.onopen = () => {
         console.log('🔗 WebSocket connected successfully!')
         this.reconnectAttempts = 0
+        this.isReconnecting = false
 
         // Authentifier immédiatement si un token est disponible
         if (this.authToken) {
@@ -78,6 +80,40 @@ class WebSocketService {
       this.ws.onclose = (event) => {
         console.log('WebSocket disconnected:', event.code, event.reason)
         this.authenticated = false
+
+        // Check for authentication/policy violation errors that should not retry
+        // Code 1008 = Policy Violation (used for auth errors by backend)
+        // Code 1003 = Unsupported Data
+        // Code 1011 = Internal Server Error
+        const authErrorCodes = [1008, 1003]
+        const authErrorReasons = [
+          'User not found or inactive',
+          'Invalid token',
+          'Authentication required',
+          'Authentication timeout'
+        ]
+
+        const isAuthError = authErrorCodes.includes(event.code) ||
+                           authErrorReasons.some(reason => event.reason?.includes(reason))
+
+        if (isAuthError) {
+          console.error(`WebSocket authentication error (code: ${event.code}, reason: ${event.reason}), logging out`)
+          this.reconnectAttempts = 0
+          this.isReconnecting = false
+
+          // Import and use auth store for logout
+          import('@/stores/auth').then(({ useAuthStore }) => {
+            const authStore = useAuthStore()
+            authStore.logout()
+          }).catch(error => {
+            console.error('Failed to logout after WebSocket auth error:', error)
+            // Fallback: redirect to login
+            window.location.href = '/login'
+          })
+          return
+        }
+
+        // For normal disconnections, attempt to reconnect
         this.attemptReconnect()
       }
     } catch (error) {
@@ -124,23 +160,45 @@ class WebSocketService {
       this.ws = null
     }
     this.reconnectAttempts = 0
+    this.isReconnecting = false
   }
 
   /**
-   * Attempt to reconnect with exponential backoff
+   * Attempt to reconnect with exponential backoff (aligned with HTTP retry logic)
    */
   private attemptReconnect(): void {
+    // If max attempts reached, logout user
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached')
+      console.error(`Max reconnection attempts (${this.maxReconnectAttempts}) reached, logging out`)
+      this.reconnectAttempts = 0
+      this.isReconnecting = false
+
+      // Import and use auth store for logout
+      import('@/stores/auth').then(({ useAuthStore }) => {
+        const authStore = useAuthStore()
+        authStore.logout()
+      }).catch(error => {
+        console.error('Failed to logout after max WebSocket reconnection attempts:', error)
+        // Fallback: redirect to login
+        window.location.href = '/login'
+      })
       return
     }
 
-    this.reconnectAttempts++
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
+    // Prevent simultaneous reconnection attempts
+    if (this.isReconnecting) {
+      console.warn('Reconnection already in progress, skipping')
+      return
+    }
 
-    console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`)
+    this.isReconnecting = true
+    const delay = this.reconnectDelays[this.reconnectAttempts]
+    this.reconnectAttempts++
+
+    console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
 
     setTimeout(() => {
+      this.isReconnecting = false
       this.connect()
     }, delay)
   }

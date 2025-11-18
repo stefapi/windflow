@@ -81,6 +81,7 @@ export const useAuthStore = defineStore('auth', () => {
       await authApi.logout()
     } catch (err) {
       console.error('Logout error:', err)
+      // Continue avec le nettoyage même si l'appel API échoue
     } finally {
       // Clear state
       user.value = null
@@ -97,6 +98,16 @@ export const useAuthStore = defineStore('auth', () => {
       wsService.disconnect()
 
       loading.value = false
+
+      // Redirection vers login - toujours exécutée, même si l'API logout échoue
+      // Import dynamique pour éviter les dépendances circulaires
+      import('@/router').then(({ default: router }) => {
+        router.push('/login')
+      }).catch((error) => {
+        console.error('Failed to redirect to login:', error)
+        // Fallback: redirection directe si le router n'est pas accessible
+        window.location.href = '/login'
+      })
     }
   }
 
@@ -143,12 +154,15 @@ export const useAuthStore = defineStore('auth', () => {
             scheduleTokenRefresh()
 
             return true
-          } catch (err: any) {
+          } catch (err: unknown) {
             console.error('Failed to verify token with server:', err)
 
             // Only logout if it's an authentication error (401)
             // This means the token is actually invalid or expired
-            if (err?.response?.status === 401) {
+            const isAuthError = err && typeof err === 'object' && 'response' in err &&
+                               (err as { response?: { status?: number } }).response?.status === 401
+
+            if (isAuthError) {
               console.warn('Token is invalid (401 Unauthorized), logging out')
               await logout()
               return false
@@ -182,7 +196,7 @@ export const useAuthStore = defineStore('auth', () => {
   function isTokenValid(token: string): boolean {
     try {
       const tokenParts = token.split('.')
-      if (tokenParts.length !== 3) {
+      if (tokenParts.length !== 3 || !tokenParts[1]) {
         return false
       }
 
@@ -200,7 +214,7 @@ export const useAuthStore = defineStore('auth', () => {
   function isTokenNearExpiry(token: string, minutesThreshold: number = 5): boolean {
     try {
       const tokenParts = token.split('.')
-      if (tokenParts.length !== 3) {
+      if (tokenParts.length !== 3 || !tokenParts[1]) {
         return true // Consider invalid tokens as near expiry
       }
 
@@ -225,16 +239,25 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await authApi.refreshToken(refreshToken.value)
 
       // Update tokens
-      token.value = response.data.access_token
-      refreshToken.value = response.data.refresh_token
+      const newAccessToken = response.data.access_token
+      const newRefreshToken = response.data.refresh_token
+
+      if (!newAccessToken || !newRefreshToken) {
+        console.error('Invalid token refresh response')
+        await logout()
+        return false
+      }
+
+      token.value = newAccessToken
+      refreshToken.value = newRefreshToken
 
       // Update localStorage
-      localStorage.setItem('access_token', response.data.access_token)
-      localStorage.setItem('refresh_token', response.data.refresh_token)
+      localStorage.setItem('access_token', newAccessToken)
+      localStorage.setItem('refresh_token', newRefreshToken)
 
       // Update WebSocket connection
       wsService.disconnect()
-      wsService.connect(response.data.access_token)
+      wsService.connect(newAccessToken)
 
       console.log('Token refreshed successfully')
       return true
@@ -247,7 +270,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function scheduleTokenRefresh(): void {
-    if (!token.value) {
+    const currentToken = token.value
+    if (!currentToken) {
       return
     }
 
@@ -257,7 +281,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     // Schedule refresh 2 minutes before expiry
-    const refreshTime = getTimeUntilRefresh()
+    const refreshTime = getTimeUntilRefresh(currentToken)
     if (refreshTime > 0) {
       refreshTimer = setTimeout(async () => {
         console.log('Auto-refreshing token...')
@@ -270,14 +294,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function getTimeUntilRefresh(): number {
-    if (!token.value) {
+  function getTimeUntilRefresh(tokenValue?: string | null): number {
+    const tokenToCheck = tokenValue ?? token.value
+    if (!tokenToCheck) {
       return 0
     }
 
     try {
-      const tokenParts = token.value.split('.')
-      if (tokenParts.length !== 3) {
+      const tokenParts = tokenToCheck.split('.')
+      if (tokenParts.length !== 3 || !tokenParts[1]) {
         return 0
       }
 

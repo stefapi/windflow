@@ -5,10 +5,17 @@
 
 import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import type { ApiError } from '@/types/api'
+import { useAuthStore } from '@/stores/auth'
+
+// Retry configuration for 401 errors
+const MAX_RETRY_ATTEMPTS = 3
+const RETRY_DELAYS = [1000, 2000, 4000] // Exponential backoff: 1s, 2s, 4s
+let retryAttempts = 0
+let isRetrying = false
 
 // Create axios instance with custom backend URL from environment
-const baseURL = import.meta.env.VITE_API_BASE_URL
-  ? `${import.meta.env.VITE_API_BASE_URL}/api/v1`
+const baseURL = import.meta.env['VITE_API_BASE_URL']
+  ? `${import.meta.env['VITE_API_BASE_URL']}/api/v1`
   : '/api/v1'
 
 // Display API address for debugging
@@ -39,69 +46,113 @@ http.interceptors.request.use(
 // Response interceptor - Handle errors
 http.interceptors.response.use(
   (response) => {
+    // Reset retry counter on successful response
+    retryAttempts = 0
+    isRetrying = false
     return response
   },
   async (error: AxiosError<ApiError>) => {
     if (error.response) {
       const { status, data } = error.response
 
-      // Handle 401 - Unauthorized with retry logic
+      // Handle 401 - Unauthorized with exponential backoff retry logic
       if (status === 401) {
         const token = localStorage.getItem('access_token')
 
-        // If no token, redirect immediately
+        // If no token, logout immediately
         if (!token) {
-          localStorage.removeItem('access_token')
-          localStorage.removeItem('user')
+          console.warn('No token found, redirecting to login')
+          const authStore = useAuthStore()
+          await authStore.logout()
           window.location.href = '/login'
           return Promise.reject(error)
         }
 
-        // Check if token is really expired or if it's a temporary issue
+        // Prevent multiple simultaneous retry attempts
+        if (isRetrying) {
+          return Promise.reject(error)
+        }
+
+        // Check if we've exceeded max retry attempts
+        if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
+          console.error(`Max retry attempts (${MAX_RETRY_ATTEMPTS}) reached, logging out`)
+          retryAttempts = 0
+          isRetrying = false
+
+          const authStore = useAuthStore()
+          await authStore.logout()
+          window.location.href = '/login'
+          return Promise.reject(error)
+        }
+
+        // Validate token structure and expiration
         try {
-          // Try to decode the token to check expiration
           const tokenParts = token.split('.')
-          if (tokenParts.length === 3) {
-            const payload = JSON.parse(atob(tokenParts[1]))
-            const currentTime = Date.now() / 1000
-
-            // If token is expired by more than 5 minutes, redirect
-            if (payload.exp && (currentTime - payload.exp) > 300) {
-              localStorage.removeItem('access_token')
-              localStorage.removeItem('user')
-              window.location.href = '/login'
-              return Promise.reject(error)
-            }
-
-            // If token is still valid or recently expired, try refreshing user data
-            // This handles edge cases where the token is valid but server rejects it
-            console.warn('Token validation issue, attempting to refresh user data')
-
-            // Try one more request to /auth/me to verify the token
-            try {
-              await http.get('/auth/me')
-              // If successful, the token is actually valid, return original error
-              return Promise.reject(error)
-            } catch (refreshError) {
-              // If refresh also fails, clear storage and redirect
-              localStorage.removeItem('access_token')
-              localStorage.removeItem('user')
-              window.location.href = '/login'
-              return Promise.reject(error)
-            }
-          } else {
-            // Malformed token, redirect immediately
-            localStorage.removeItem('access_token')
-            localStorage.removeItem('user')
+          if (tokenParts.length !== 3 || !tokenParts[1]) {
+            console.warn('Malformed token, logging out')
+            const authStore = useAuthStore()
+            await authStore.logout()
             window.location.href = '/login'
             return Promise.reject(error)
           }
+
+          const payload = JSON.parse(atob(tokenParts[1]))
+          const currentTime = Date.now() / 1000
+
+          // If token is expired by more than 5 minutes, don't retry
+          if (payload.exp && (currentTime - payload.exp) > 300) {
+            console.warn('Token expired by more than 5 minutes, logging out')
+            retryAttempts = 0
+            const authStore = useAuthStore()
+            await authStore.logout()
+            window.location.href = '/login'
+            return Promise.reject(error)
+          }
+
+          // Implement exponential backoff retry
+          isRetrying = true
+          const delay = RETRY_DELAYS[retryAttempts]
+          retryAttempts++
+
+          console.warn(
+            `Token validation issue, retrying in ${delay}ms (attempt ${retryAttempts}/${MAX_RETRY_ATTEMPTS})`
+          )
+
+          return new Promise((resolve, reject) => {
+            setTimeout(async () => {
+              try {
+                // Retry the original request
+                const retryConfig = { ...error.config }
+                const response = await axios.request(retryConfig)
+
+                // Success! Reset counters
+                retryAttempts = 0
+                isRetrying = false
+                resolve(response)
+              } catch (retryError) {
+                isRetrying = false
+
+                // If this was the last attempt, logout
+                if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
+                  console.error('All retry attempts failed, logging out')
+                  retryAttempts = 0
+                  const authStore = useAuthStore()
+                  await authStore.logout()
+                  window.location.href = '/login'
+                }
+
+                reject(retryError)
+              }
+            }, delay)
+          })
         } catch (decodeError) {
-          // Error decoding token, redirect immediately
-          localStorage.removeItem('access_token')
-          localStorage.removeItem('user')
+          console.error('Error decoding token:', decodeError)
+          console.warn('Invalid token format, logging out')
+          retryAttempts = 0
+          const authStore = useAuthStore()
+          await authStore.logout()
           window.location.href = '/login'
-          return Promise.reject(error)
+          return Promise.reject(decodeError instanceof Error ? decodeError : new Error('Token decode failed'))
         }
       }
 
