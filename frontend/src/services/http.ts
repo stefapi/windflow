@@ -59,12 +59,11 @@ http.interceptors.response.use(
       if (status === 401) {
         const token = localStorage.getItem('access_token')
 
-        // If no token, logout immediately
+        // If no token, logout immediately without API call
         if (!token) {
           console.warn('No token found, redirecting to login')
           const authStore = useAuthStore()
           await authStore.logout()
-          window.location.href = '/login'
           return Promise.reject(error)
         }
 
