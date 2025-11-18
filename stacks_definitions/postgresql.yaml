@@ -1,0 +1,482 @@
+# Configuration PostgreSQL pour WindFlow Marketplace
+# PostgreSQL - Système de gestion de base de données relationnelle
+# https://www.postgresql.org
+
+# ============================================================================
+# MÉTADONNÉES DU STACK
+# ============================================================================
+metadata:
+  name: "PostgreSQL Database Server"
+  version: "1.0.0"
+  category: "Database"
+  author: "PostgreSQL Global Development Group"
+  license: "PostgreSQL License"
+
+  description: |
+    PostgreSQL est un système de gestion de base de données relationnelle et objet
+    open-source puissant et fiable, reconnu pour sa robustesse et ses fonctionnalités avancées.
+
+    Fonctionnalités principales :
+    - Conformité ACID complète
+    - Support des transactions et des contraintes d'intégrité
+    - Réplication et haute disponibilité
+    - Extensions riches (PostGIS, pgcrypto, etc.)
+    - Types de données avancés (JSON, XML, Arrays, etc.)
+    - Indexation performante (B-tree, Hash, GiST, GIN)
+    - Requêtes complexes et optimiseur intelligent
+    - Support complet de SQL:2016
+
+    Ce stack déploie une instance PostgreSQL standalone prête pour la production
+    avec configuration optimisée et volumes persistants.
+
+  icon_url: "https://www.postgresql.org/media/img/about/press/elephant.png"
+  documentation_url: "https://www.postgresql.org/docs/"
+
+  screenshots:
+    - "https://www.postgresql.org/media/img/about/press/elephant.svg"
+
+  tags:
+    - database
+    - postgresql
+    - sql
+    - relational
+    - rdbms
+    - postgres
+
+  is_public: true
+
+  # Cible de déploiement : container Docker simple
+  target_type: "docker"
+
+# ============================================================================
+# TEMPLATE DOCKER (CONTAINER SIMPLE)
+# ============================================================================
+template:
+  # Image PostgreSQL officielle
+  image: "postgres:{{ postgres_version }}"
+
+  # Nom du container
+  container_name: "{{ container_name }}"
+
+  # Variables d'environnement
+  environment:
+    POSTGRES_USER: "{{ postgres_user }}"
+    POSTGRES_PASSWORD: "{{ postgres_password }}"
+    POSTGRES_DB: "{{ database_name }}"
+    POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale={{ locale }}"
+    PGDATA: "/var/lib/postgresql/data/pgdata"
+
+    # Configuration performance (optionnel)
+    POSTGRES_SHARED_BUFFERS: "{{ shared_buffers }}"
+    POSTGRES_MAX_CONNECTIONS: "{{ max_connections }}"
+    POSTGRES_WORK_MEM: "{{ work_mem }}"
+
+  # Mapping des ports
+  ports:
+    - "{{ host_port }}:5432"
+
+  # Volumes persistants
+  volumes:
+    - "{{ volume_name }}:/var/lib/postgresql/data"
+
+  # Politique de redémarrage
+  restart_policy: "unless-stopped"
+
+  # Health check
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U {{ postgres_user }} -d {{ database_name }}"]
+    interval: "10s"
+    timeout: "5s"
+    retries: 5
+    start_period: "30s"
+
+  # Labels pour gestion
+  labels:
+    app: "postgresql"
+    managed_by: "windflow"
+    stack: "postgresql"
+    version: "{{ postgres_version }}"
+    database: "{{ database_name }}"
+
+# ============================================================================
+# VARIABLES CONFIGURABLES
+# ============================================================================
+variables:
+  # Version PostgreSQL
+  postgres_version:
+    type: string
+    label: "Version PostgreSQL"
+    description: "Version de PostgreSQL à déployer"
+    default: "16"
+    enum:
+      - "16"
+      - "15"
+      - "14"
+      - "13"
+      - "12"
+      - "latest"
+    required: true
+    group: "Configuration générale"
+    help: "PostgreSQL 16 est la dernière version stable recommandée"
+
+  # Nom du container
+  container_name:
+    type: string
+    label: "Nom du container"
+    description: "Nom unique du container Docker"
+    default: "postgres_db"
+    required: true
+    pattern: "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+    group: "Configuration générale"
+    help: "Le nom doit être unique sur l'hôte Docker"
+
+  # Configuration base de données
+  database_name:
+    type: string
+    label: "Nom de la base de données"
+    description: "Nom de la base de données par défaut"
+    default: "mydb"
+    required: true
+    pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$"
+    min_length: 1
+    max_length: 63
+    group: "Configuration base de données"
+    help: "Nom valide PostgreSQL (lettres, chiffres, underscore)"
+
+  # Utilisateur PostgreSQL
+  postgres_user:
+    type: string
+    label: "Utilisateur PostgreSQL"
+    description: "Nom de l'utilisateur superadmin"
+    default: "postgres"
+    required: true
+    pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$"
+    min_length: 1
+    max_length: 63
+    group: "Configuration base de données"
+
+  # Mot de passe
+  postgres_password:
+    type: password
+    label: "Mot de passe PostgreSQL"
+    description: "Mot de passe du superadmin (généré automatiquement si vide)"
+    default: "{{ generate_password(24) }}"
+    required: true
+    min_length: 12
+    group: "Sécurité"
+    help: "Un mot de passe fort de 24 caractères sera généré automatiquement"
+
+  # Locale
+  locale:
+    type: string
+    label: "Locale système"
+    description: "Locale pour l'encodage et le tri des données"
+    default: "en_US.UTF-8"
+    enum:
+      - "en_US.UTF-8"
+      - "fr_FR.UTF-8"
+      - "de_DE.UTF-8"
+      - "es_ES.UTF-8"
+      - "C"
+    required: true
+    group: "Configuration base de données"
+    help: "La locale affecte le tri et les comparaisons de chaînes"
+
+  # Port hôte
+  host_port:
+    type: number
+    label: "Port hôte"
+    description: "Port exposé sur l'hôte Docker pour accéder à PostgreSQL"
+    default: 5432
+    minimum: 1
+    maximum: 65535
+    required: true
+    group: "Configuration réseau"
+    help: "Port standard PostgreSQL : 5432"
+
+  # Volume
+  volume_name:
+    type: string
+    label: "Nom du volume"
+    description: "Nom du volume Docker pour la persistance des données"
+    default: "postgres_data"
+    required: true
+    pattern: "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+    group: "Stockage"
+    help: "Volume Docker nommé pour la persistance"
+
+  # Performance - Shared Buffers
+  shared_buffers:
+    type: string
+    label: "Shared Buffers"
+    description: "Mémoire partagée pour le cache PostgreSQL"
+    default: "256MB"
+    enum:
+      - "128MB"
+      - "256MB"
+      - "512MB"
+      - "1GB"
+      - "2GB"
+      - "4GB"
+    required: false
+    group: "Performance"
+    help: "Recommandé: 25% de la RAM disponible"
+
+  # Performance - Max Connections
+  max_connections:
+    type: number
+    label: "Connexions maximales"
+    description: "Nombre maximum de connexions simultanées"
+    default: 100
+    minimum: 10
+    maximum: 1000
+    required: false
+    group: "Performance"
+    help: "Ajuster selon les besoins (chaque connexion consomme de la RAM)"
+
+  # Performance - Work Mem
+  work_mem:
+    type: string
+    label: "Work Memory"
+    description: "Mémoire allouée pour les opérations de tri et hash"
+    default: "4MB"
+    enum:
+      - "1MB"
+      - "2MB"
+      - "4MB"
+      - "8MB"
+      - "16MB"
+      - "32MB"
+    required: false
+    group: "Performance"
+    help: "Mémoire par opération (tri, hash join, etc.)"
+
+# ============================================================================
+# NOTES DE DÉPLOIEMENT
+# ============================================================================
+deployment_notes: |
+  ## Notes de déploiement PostgreSQL
+
+  ### 🚀 Démarrage rapide
+
+  Après le déploiement, PostgreSQL sera accessible sur le port {{ host_port }}.
+
+  **Connexion depuis l'hôte :**
+  ```bash
+  psql -h localhost -p {{ host_port }} -U {{ postgres_user }} -d {{ database_name }}
+  # Mot de passe : (voir les variables de déploiement)
+  ```
+
+  **Connexion depuis un autre container :**
+  ```bash
+  psql -h {{ container_name }} -p 5432 -U {{ postgres_user }} -d {{ database_name }}
+  ```
+
+  ### 📦 Volumes et persistance
+
+  Les données PostgreSQL sont stockées dans le volume Docker nommé : `{{ volume_name }}`
+
+  **Localisation du volume :**
+  ```bash
+  docker volume inspect {{ volume_name }}
+  ```
+
+  **Sauvegarde manuelle :**
+  ```bash
+  # Dump de toutes les bases
+  docker exec {{ container_name }} pg_dumpall -U {{ postgres_user }} > backup_all.sql
+
+  # Dump d'une base spécifique
+  docker exec {{ container_name }} pg_dump -U {{ postgres_user }} {{ database_name }} > backup.sql
+
+  # Dump avec compression
+  docker exec {{ container_name }} pg_dump -U {{ postgres_user }} -Fc {{ database_name }} > backup.dump
+  ```
+
+  **Restauration :**
+  ```bash
+  # Depuis un dump SQL
+  cat backup.sql | docker exec -i {{ container_name }} psql -U {{ postgres_user }} {{ database_name }}
+
+  # Depuis un dump compressé
+  docker exec -i {{ container_name }} pg_restore -U {{ postgres_user }} -d {{ database_name }} < backup.dump
+  ```
+
+  ### 🔒 Sécurité
+
+  **Mots de passe générés automatiquement :**
+  - Le mot de passe PostgreSQL est généré avec 24 caractères aléatoires
+  - Conservez-le dans un gestionnaire de mots de passe sécurisé
+
+  **Recommandations de sécurité :**
+  1. Ne pas exposer le port 5432 publiquement (utiliser un reverse proxy)
+  2. Utiliser des connexions SSL/TLS en production
+  3. Configurer pg_hba.conf pour restreindre les accès
+  4. Créer des utilisateurs avec privilèges limités
+
+  **Créer un utilisateur avec privilèges limités :**
+  ```sql
+  -- Connexion en tant que superadmin
+  CREATE USER myapp_user WITH PASSWORD 'secure_password';
+  CREATE DATABASE myapp_db OWNER myapp_user;
+  GRANT ALL PRIVILEGES ON DATABASE myapp_db TO myapp_user;
+  ```
+
+  ### ⚡ Performance
+
+  **Configuration actuelle :**
+  - Shared Buffers: {{ shared_buffers }}
+  - Max Connections: {{ max_connections }}
+  - Work Memory: {{ work_mem }}
+
+  **Optimisations recommandées :**
+
+  Pour **usage léger** (< 2GB RAM) :
+  - shared_buffers: 128MB
+  - max_connections: 50
+  - work_mem: 2MB
+
+  Pour **usage moyen** (4-8GB RAM) :
+  - shared_buffers: 512MB - 1GB
+  - max_connections: 100
+  - work_mem: 4MB
+
+  Pour **usage intensif** (16GB+ RAM) :
+  - shared_buffers: 2GB - 4GB
+  - max_connections: 200
+  - work_mem: 8MB - 16MB
+
+  **Monitoring des performances :**
+  ```sql
+  -- Connexions actives
+  SELECT count(*) FROM pg_stat_activity;
+
+  -- Taille des bases de données
+  SELECT pg_database.datname, pg_size_pretty(pg_database_size(pg_database.datname))
+  FROM pg_database;
+
+  -- Requêtes lentes
+  SELECT pid, now() - pg_stat_activity.query_start AS duration, query
+  FROM pg_stat_activity
+  WHERE state = 'active'
+  ORDER BY duration DESC;
+  ```
+
+  ### 🔧 Maintenance
+
+  **Logs PostgreSQL :**
+  ```bash
+  # Afficher les logs en temps réel
+  docker logs -f {{ container_name }}
+
+  # Dernières 100 lignes
+  docker logs --tail 100 {{ container_name }}
+  ```
+
+  **Vérification de la santé :**
+  ```bash
+  # Health check manuel
+  docker exec {{ container_name }} pg_isready -U {{ postgres_user }}
+
+  # Statistiques du container
+  docker stats {{ container_name }}
+  ```
+
+  **Opérations de maintenance :**
+  ```sql
+  -- VACUUM pour nettoyer les lignes mortes
+  VACUUM ANALYZE;
+
+  -- Réindexation
+  REINDEX DATABASE {{ database_name }};
+
+  -- Statistiques des tables
+  SELECT schemaname, tablename, n_live_tup, n_dead_tup
+  FROM pg_stat_user_tables
+  ORDER BY n_dead_tup DESC;
+  ```
+
+  ### 📊 Ressources recommandées
+
+  **Minimum (développement) :**
+  - CPU : 1 core
+  - RAM : 512 MB
+  - Disque : 1 GB
+
+  **Recommandé (production légère) :**
+  - CPU : 2 cores
+  - RAM : 2-4 GB
+  - Disque : 10 GB SSD
+
+  **Production intensive :**
+  - CPU : 4+ cores
+  - RAM : 8-16 GB
+  - Disque : 50+ GB SSD avec IOPS élevés
+
+  ### 🔌 Extensions populaires
+
+  ```sql
+  -- Activer des extensions utiles
+  CREATE EXTENSION IF NOT EXISTS "uuid-ossp";      -- Génération UUID
+  CREATE EXTENSION IF NOT EXISTS "pg_trgm";        -- Recherche floue
+  CREATE EXTENSION IF NOT EXISTS "pgcrypto";       -- Fonctions crypto
+  CREATE EXTENSION IF NOT EXISTS "hstore";         -- Type clé-valeur
+
+  -- Lister les extensions disponibles
+  SELECT * FROM pg_available_extensions ORDER BY name;
+
+  -- Lister les extensions actives
+  SELECT * FROM pg_extension;
+  ```
+
+  ### 🌐 Connexions depuis applications
+
+  **Connection strings :**
+
+  Python (psycopg2) :
+  ```python
+  import psycopg2
+  conn = psycopg2.connect(
+      host="localhost",
+      port={{ host_port }},
+      database="{{ database_name }}",
+      user="{{ postgres_user }}",
+      password="<your_password>"
+  )
+  ```
+
+  Node.js (pg) :
+  ```javascript
+  const { Client } = require('pg');
+  const client = new Client({
+    host: 'localhost',
+    port: {{ host_port }},
+    database: '{{ database_name }}',
+    user: '{{ postgres_user }}',
+    password: '<your_password>'
+  });
+  ```
+
+  Java (JDBC) :
+  ```java
+  String url = "jdbc:postgresql://localhost:{{ host_port }}/{{ database_name }}";
+  Connection conn = DriverManager.getConnection(url, "{{ postgres_user }}", "<password>");
+  ```
+
+  ### 📚 Support et documentation
+
+  - Documentation officielle : https://www.postgresql.org/docs/
+  - Wiki PostgreSQL : https://wiki.postgresql.org/
+  - Communauté : https://www.postgresql.org/community/
+  - Stack Overflow : https://stackoverflow.com/questions/tagged/postgresql
+
+  ### ⚠️ Avertissements
+
+  1. **Premier démarrage** : L'initialisation peut prendre 30-60 secondes
+  2. **Changement de version** : Ne pas changer de version majeure sans migration appropriée
+  3. **Backup** : Toujours effectuer des sauvegardes avant les mises à jour
+  4. **Production** : Considérer un setup haute disponibilité avec réplication
+
+  ---
+
+  **WindFlow** - Déploiement intelligent de containers Docker
