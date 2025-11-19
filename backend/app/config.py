@@ -86,6 +86,11 @@ class Settings(BaseSettings):
     default_org_name: str = "Default Organization"
     default_org_slug: str = "default"
 
+    # Stack Definitions Auto-loading
+    stack_definitions_path: str = "stacks_definitions"
+    auto_load_stack_definitions: bool = True
+    stack_update_strategy: str = "update_if_newer"  # skip_existing | update_if_newer | force_update
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING, List
 
 from ..database import Base
+from ..schemas.target import TargetType
 
 if TYPE_CHECKING:
     from .organization import Organization
@@ -51,6 +52,14 @@ class Stack(Base):
     version: Mapped[str] = mapped_column(String(50), nullable=False, default="1.0.0")
     category: Mapped[str] = mapped_column(String(100), nullable=True, index=True)
     tags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+
+    # Type de déploiement supporté
+    target_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=TargetType.DOCKER.value,
+        comment="Type de déploiement supporté par ce stack"
+    )
 
     # Marketplace (si le stack est public)
     is_public: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)

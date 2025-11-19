@@ -46,6 +46,9 @@ metadata:
 
   is_public: true
 
+  # Cible de déploiement : Docker Compose multi-services
+  target_type: "docker_compose"
+
 # ============================================================================
 # TEMPLATE DOCKER COMPOSE
 # ============================================================================

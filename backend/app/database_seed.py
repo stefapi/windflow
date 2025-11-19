@@ -90,6 +90,9 @@ async def seed_database(session: AsyncSession) -> None:
         print(f"  - Mot de passe par défaut: {settings.admin_password}")
         print(f"  ⚠️  IMPORTANT: Changez le mot de passe admin en production!")
 
+        # Charger les définitions de stacks
+        await seed_stack_definitions(session, default_org.id)
+
     except Exception as e:
         await session.rollback()
         print(f"✗ Erreur lors du seeding de la base de données: {e}")
@@ -190,6 +193,55 @@ def _infer_target_type_from_scan(scan_result: "ScanResult") -> "TargetType":
     if any(tool.available for tool in scan_result.virtualization.values()):
         return TargetType.VM
     return TargetType.PHYSICAL
+
+
+async def seed_stack_definitions(session: AsyncSession, organization_id: str) -> None:
+    """
+    Charge les définitions de stacks depuis les fichiers YAML.
+
+    Args:
+        session: Session de base de données async
+        organization_id: ID de l'organisation propriétaire des stacks
+
+    Note:
+        Cette fonction ne lève pas d'exceptions pour ne pas bloquer
+        le démarrage de l'application en cas d'erreur.
+    """
+    try:
+        # Vérifier si le chargement automatique est activé
+        if not settings.auto_load_stack_definitions:
+            print("  - Stack definitions: auto-chargement désactivé")
+            return
+
+        # Importer le loader
+        from .services.stack_definitions_loader import StackDefinitionsLoader
+
+        # Créer le loader
+        loader = StackDefinitionsLoader(settings.stack_definitions_path)
+
+        # Charger les définitions
+        created_count, updated_count, errors = await loader.load_into_database(
+            session,
+            organization_id,
+            strategy=settings.stack_update_strategy
+        )
+
+        # Afficher les résultats
+        if created_count > 0 or updated_count > 0:
+            print(f"  - Stack definitions: {created_count} créé(s), {updated_count} mis à jour")
+        else:
+            print("  - Stack definitions: aucun changement")
+
+        # Afficher les erreurs si présentes
+        if errors:
+            print(f"    ⚠️  {len(errors)} erreur(s) lors du chargement:")
+            for error in errors:
+                print(f"      • {error}")
+
+    except Exception as e:
+        # Logger l'erreur mais ne pas bloquer le démarrage
+        print(f"    ⚠️  Erreur lors du chargement des stack definitions: {e}")
+        # L'erreur est loggée mais ne remonte pas
 
 
 async def check_admin_exists(session: AsyncSession) -> bool:

@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, ConfigDict
 class TargetType(str, Enum):
     """Types de cibles de déploiement supportés."""
     DOCKER = "docker"
+    DOCKER_COMPOSE = "docker_compose"
     DOCKER_SWARM = "docker_swarm"
     KUBERNETES = "kubernetes"
     VM = "vm"
