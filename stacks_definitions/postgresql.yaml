@@ -33,7 +33,7 @@ metadata:
   documentation_url: "https://www.postgresql.org/docs/"
 
   screenshots:
-    - "https://www.postgresql.org/media/img/about/press/elephant.svg"
+    - "https://www.postgresql.org/media/img/about/press/elephant.png"
 
   tags:
     - database

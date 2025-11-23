@@ -57,13 +57,25 @@ http.interceptors.response.use(
 
       // Handle 401 - Unauthorized with exponential backoff retry logic
       if (status === 401) {
+        const requestUrl = error.config?.url || ''
+
+        // Ignore 401 errors on authentication endpoints (login, register, logout)
+        // These are expected when credentials are invalid
+        if (requestUrl.includes('/auth/login') ||
+            requestUrl.includes('/auth/register') ||
+            requestUrl.includes('/auth/logout')) {
+          console.warn('401 on auth endpoint, rejecting without retry')
+          return Promise.reject(error)
+        }
+
         const token = localStorage.getItem('access_token')
 
         // If no token, logout immediately without API call
         if (!token) {
           console.warn('No token found, redirecting to login')
           const authStore = useAuthStore()
-          await authStore.logout()
+          // Call logout with skipApiCall to avoid another 401
+          await authStore.logout(true)
           return Promise.reject(error)
         }
 

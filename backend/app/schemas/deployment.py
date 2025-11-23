@@ -22,8 +22,7 @@ class DeploymentStatus(str, Enum):
 
 class DeploymentBase(BaseModel):
     """Schema de base pour Deployment."""
-
-    name: str = Field(..., min_length=1, max_length=255, description="Nom du déploiement")
+    pass
 
 
 class DeploymentCreate(DeploymentBase):
@@ -31,8 +30,9 @@ class DeploymentCreate(DeploymentBase):
 
     stack_id: str = Field(..., description="ID du stack à déployer")
     target_id: str = Field(..., description="ID de la cible de déploiement")
-    config: Dict[str, Any] = Field(..., description="Configuration du déploiement (snapshot)")
-    variables: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Variables appliquées")
+    name: Optional[str] = Field(None, min_length=1, max_length=255, description="Nom du déploiement (auto-généré si absent)")
+    config: Optional[Dict[str, Any]] = Field(None, description="Configuration du déploiement (générée depuis le template si absente)")
+    variables: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Variables à appliquer (utilise les defaults du stack si absent)")
 
 
 class DeploymentUpdate(BaseModel):
@@ -45,9 +45,10 @@ class DeploymentUpdate(BaseModel):
     error_message: Optional[str] = Field(None, description="Message d'erreur")
 
 
-class DeploymentResponse(DeploymentBase):
+class DeploymentResponse(BaseModel):
     """Schema pour réponse Deployment."""
 
+    name: str = Field(..., min_length=1, max_length=255, description="Nom du déploiement")
     id: str = Field(..., description="ID unique du déploiement")
     stack_id: str = Field(..., description="ID du stack")
     target_id: str = Field(..., description="ID de la cible")

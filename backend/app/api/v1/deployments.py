@@ -99,27 +99,34 @@ async def create_deployment(
         DeploymentResponse: Déploiement créé
 
     Raises:
-        HTTPException: Si le nom existe déjà dans l'organisation
+        HTTPException: Si le nom existe déjà dans l'organisation ou si le stack n'existe pas
     """
-    # Vérifier que le nom n'existe pas déjà dans l'organisation
-    existing = await DeploymentService.get_by_name(
-        session,
-        current_user.organization_id,
-        deployment_data.name
-    )
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Déploiement avec le nom '{deployment_data.name}' existe déjà"
+    # Vérifier que le nom n'existe pas déjà dans l'organisation (seulement si fourni)
+    if deployment_data.name:
+        existing = await DeploymentService.get_by_name(
+            session,
+            current_user.organization_id,
+            deployment_data.name
         )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Déploiement avec le nom '{deployment_data.name}' existe déjà"
+            )
 
-    deployment = await DeploymentService.create(
-        session,
-        deployment_data,
-        current_user.organization_id,
-        current_user.id
-    )
-    return deployment
+    try:
+        deployment = await DeploymentService.create(
+            session,
+            deployment_data,
+            current_user.organization_id,
+            current_user.id
+        )
+        return deployment
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
 
 
 @router.put("/{deployment_id}", response_model=DeploymentResponse)
