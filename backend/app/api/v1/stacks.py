@@ -3,7 +3,6 @@ Routes de gestion des stacks Docker Compose.
 """
 
 from typing import List
-from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,7 +45,7 @@ async def list_stacks(
 
 @router.get("/{stack_id}", response_model=StackResponse)
 async def get_stack(
-    stack_id: UUID,
+    stack_id: str,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ):
@@ -54,7 +53,7 @@ async def get_stack(
     Récupère une stack par son ID.
 
     Args:
-        stack_id: ID de la stack
+        stack_id: ID de la stack (string UUID)
         current_user: Utilisateur courant
         session: Session de base de données
 
@@ -119,7 +118,7 @@ async def create_stack(
 
 @router.put("/{stack_id}", response_model=StackResponse)
 async def update_stack(
-    stack_id: UUID,
+    stack_id: str,
     stack_data: StackUpdate,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
@@ -173,7 +172,7 @@ async def update_stack(
 
 @router.delete("/{stack_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_stack(
-    stack_id: UUID,
+    stack_id: str,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ):

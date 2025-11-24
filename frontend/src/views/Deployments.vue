@@ -100,7 +100,7 @@
             v-for="field in dynamicFields"
             :key="field.key"
             :field="field"
-            v-model="dynamicFormData[field.key]"
+            v-model="form[field.key]"
           />
         </template>
 
@@ -138,6 +138,7 @@ import { ElMessage, type FormInstance } from 'element-plus'
 import type { DeploymentCreate } from '@/types/api'
 import DynamicFormField from '@/components/DynamicFormField.vue'
 import { useDynamicForm } from '@/composables/useDynamicForm'
+import { stacksApi } from '@/services/api'
 
 const router = useRouter()
 const deploymentsStore = useDeploymentsStore()
@@ -150,8 +151,8 @@ const showDialog = ref(false)
 const deploying = ref(false)
 const formRef = ref<FormInstance>()
 
-// Formulaire de base
-const form = reactive<DeploymentCreate & { name?: string }>({
+// Formulaire de base + champs dynamiques fusionnés
+const form = reactive<DeploymentCreate & { name?: string; [key: string]: any }>({
   stack_id: '',
   target_id: '',
   name: ''
@@ -164,26 +165,49 @@ const selectedStack = computed(() => {
 })
 
 // Initialisation du formulaire dynamique
-let dynamicFormInstance: ReturnType<typeof useDynamicForm> | null = null
-
-const dynamicFormData = computed(() => {
-  return dynamicFormInstance?.formData || {}
-})
+const dynamicFormInstance = ref<ReturnType<typeof useDynamicForm> | null>(null)
 
 const dynamicFields = computed(() => {
-  return dynamicFormInstance?.fields || []
+  return dynamicFormInstance.value?.fields || []
 })
 
 /**
  * Gestion du changement de stack.
  * Réinitialise le formulaire dynamique avec les variables du nouveau stack.
  */
-const onStackChange = () => {
-  if (selectedStack.value && selectedStack.value.variables) {
-    // Créer une nouvelle instance du formulaire dynamique
-    dynamicFormInstance = useDynamicForm(selectedStack.value.variables)
-  } else {
-    dynamicFormInstance = null
+const onStackChange = async () => {
+  // Nettoyer les anciens champs dynamiques du formulaire
+  const staticKeys = ['stack_id', 'target_id', 'name']
+  Object.keys(form).forEach(key => {
+    if (!staticKeys.includes(key)) {
+      delete form[key]
+    }
+  })
+
+  // Réinitialiser le formulaire dynamique avant chargement
+  dynamicFormInstance.value = null
+
+  try {
+    if (!form.stack_id) return
+
+    // Récupère les détails du stack (inclut les variables)
+    const { data } = await stacksApi.get(form.stack_id)
+
+    if (data && (data as any).variables && Object.keys((data as any).variables).length > 0) {
+      // Créer l'instance du formulaire dynamique
+      dynamicFormInstance.value = useDynamicForm((data as any).variables)
+
+      // Fusionner les valeurs par défaut dans le formulaire principal
+      Object.entries(dynamicFormInstance.value.formData).forEach(([key, value]) => {
+        form[key] = value
+      })
+    } else {
+      // Aucun champ de configuration requis
+      dynamicFormInstance.value = null
+    }
+  } catch (err: any) {
+    console.error('Erreur lors du chargement des détails du stack:', err)
+    ElMessage.error(err?.message || 'Impossible de charger la configuration du stack')
   }
 }
 
@@ -196,7 +220,7 @@ const openDialog = () => {
   form.stack_id = ''
   form.target_id = ''
   form.name = ''
-  dynamicFormInstance = null
+  dynamicFormInstance.value = null
 }
 
 /**
@@ -204,38 +228,44 @@ const openDialog = () => {
  */
 const closeDialog = () => {
   showDialog.value = false
-  form.stack_id = ''
-  form.target_id = ''
-  form.name = ''
-  dynamicFormInstance = null
+
+  // Nettoyer tous les champs du formulaire
+  const staticKeys = ['stack_id', 'target_id', 'name']
+  Object.keys(form).forEach(key => {
+    if (staticKeys.includes(key)) {
+      form[key] = ''
+    } else {
+      delete form[key]
+    }
+  })
+
+  dynamicFormInstance.value = null
+
+  // Reset la validation du formulaire
+  formRef.value?.resetFields()
 }
 
 /**
  * Gestion de la création du déploiement.
  */
 const handleCreate = async () => {
-  // Validation du formulaire de base
+  // Validation complète du formulaire (champs de base + dynamiques)
   if (!formRef.value) return
 
   try {
     await formRef.value.validate()
-  } catch {
-    ElMessage.warning('Veuillez remplir tous les champs requis')
+  } catch (validationError) {
+    console.error('Validation échouée:', validationError)
+    ElMessage.warning('Veuillez corriger les erreurs de validation')
     return
-  }
-
-  // Validation du formulaire dynamique si présent
-  if (dynamicFormInstance) {
-    const validation = dynamicFormInstance.validateRequired()
-    if (!validation.valid) {
-      ElMessage.warning(validation.errors.join(', '))
-      return
-    }
   }
 
   deploying.value = true
 
   try {
+    // Extraire les champs statiques
+    const staticKeys = ['stack_id', 'target_id', 'name']
+
     // Construire la payload
     const payload: any = {
       stack_id: form.stack_id,
@@ -247,9 +277,17 @@ const handleCreate = async () => {
       payload.name = form.name.trim()
     }
 
-    // Ajouter les variables si présentes
-    if (dynamicFormInstance) {
-      payload.variables = dynamicFormInstance.getAllValues()
+    // Extraire les champs dynamiques pour la configuration
+    const dynamicConfig: Record<string, any> = {}
+    Object.entries(form).forEach(([key, value]) => {
+      if (!staticKeys.includes(key)) {
+        dynamicConfig[key] = value
+      }
+    })
+
+    // Ajouter la configuration si présente
+    if (Object.keys(dynamicConfig).length > 0) {
+      payload.configuration = dynamicConfig
     }
 
     // Créer le déploiement

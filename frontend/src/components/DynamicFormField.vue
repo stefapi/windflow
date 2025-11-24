@@ -53,7 +53,7 @@
       v-model="localValue"
       :min="field.min"
       :max="field.max"
-      :precision="field.type === 'integer' ? 0 : 2"
+      :precision="isIntegerField ? 0 : 2"
       :placeholder="`Entrer ${field.label}`"
       style="width: 100%"
       controls-position="right"
@@ -100,6 +100,21 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+
+// Détecte si un champ number doit être affiché comme entier
+const isIntegerField = computed(() => {
+  if (props.field.type !== 'number') return false
+
+  // Si la valeur par défaut est un entier
+  const defaultIsInteger = Number.isInteger(props.field.default)
+
+  // Si min et max sont des entiers (ou undefined)
+  const minIsInteger = props.field.min === undefined || Number.isInteger(props.field.min)
+  const maxIsInteger = props.field.max === undefined || Number.isInteger(props.field.max)
+
+  // Considérer comme entier si toutes les valeurs sont entières
+  return defaultIsInteger && minIsInteger && maxIsInteger
+})
 
 // Valeur locale avec v-model bidirectionnel
 const localValue = computed({

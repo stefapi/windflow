@@ -88,8 +88,27 @@ function getValidationRules(variable: VariableDefinition): ValidationRule[] {
   // Validation pattern pour les strings
   if (variable.type === 'string' && variable.pattern) {
     rules.push({
-      pattern: new RegExp(variable.pattern),
-      message: `${variable.label} ne correspond pas au format attendu`,
+      validator: (rule: any, value: any, callback: any) => {
+        // Si valeur vide ou null
+        if (!value || value === '') {
+          // OK pour les champs non-requis, sinon géré par la règle required
+          callback()
+          return
+        }
+
+        // Tester le pattern uniquement si valeur présente
+        try {
+          const regex = new RegExp(variable.pattern!)
+          if (!regex.test(value)) {
+            callback(new Error(`${variable.label} ne correspond pas au format attendu`))
+          } else {
+            callback()
+          }
+        } catch (error) {
+          console.error(`Pattern regex invalide pour ${variable.label}:`, variable.pattern, error)
+          callback(new Error(`Configuration invalide du champ ${variable.label}`))
+        }
+      },
       trigger: 'blur'
     })
   }
