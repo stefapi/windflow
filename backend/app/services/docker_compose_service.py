@@ -11,19 +11,28 @@ from pathlib import Path
 import subprocess
 import logging
 
+from backend.app.helper.template_renderer import TemplateRenderer
+
 logger = logging.getLogger(__name__)
 
 
 class DockerComposeService:
     """Service de gestion Docker Compose."""
 
-    @staticmethod
+    def __init__(self):
+        """Initialise le service avec le renderer de templates."""
+        self.renderer = TemplateRenderer()
+
     def substitute_variables(
+        self,
         template: Dict[str, Any],
         variables: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Substitue les variables dans le template Docker Compose.
+
+        Utilise le TemplateRenderer centralisé qui supporte toutes les
+        fonctions Jinja2 disponibles (generate_password, generate_secret, etc.)
 
         Args:
             template: Template Docker Compose en format dict
@@ -33,28 +42,16 @@ class DockerComposeService:
             Template avec variables substituées
 
         Example:
+            >>> service = DockerComposeService()
             >>> template = {"services": {"app": {"image": "{{ app_image }}"}}}
             >>> variables = {"app_image": "nginx:latest"}
-            >>> result = DockerComposeService.substitute_variables(template, variables)
+            >>> result = service.substitute_variables(template, variables)
             >>> result["services"]["app"]["image"]
             'nginx:latest'
         """
-        # Convertir le template en YAML string
-        yaml_str = yaml.dump(template, default_flow_style=False, sort_keys=False)
+        return self.renderer.render_dict(template, variables)
 
-        # Substituer les variables {{ variable_name }}
-        for key, value in variables.items():
-            # Pattern pour {{ variable_name }}
-            pattern = r'\{\{\s*' + re.escape(key) + r'\s*\}\}'
-            replacement = str(value)
-            yaml_str = re.sub(pattern, replacement, yaml_str)
-
-        # Reconvertir en dict
-        result = yaml.safe_load(yaml_str)
-        return result
-
-    @staticmethod
-    def validate_compose(compose_data: Dict[str, Any]) -> tuple[bool, Optional[str]]:
+    def validate_compose(self, compose_data: Dict[str, Any]) -> tuple[bool, Optional[str]]:
         """
         Valide un fichier docker-compose.
 
@@ -86,8 +83,8 @@ class DockerComposeService:
         except Exception as e:
             return False, f"Erreur de validation: {str(e)}"
 
-    @staticmethod
     def generate_compose_file(
+        self,
         compose_data: Dict[str, Any],
         output_path: Path
     ) -> Path:
@@ -111,8 +108,8 @@ class DockerComposeService:
         logger.info(f"Fichier docker-compose généré: {output_path}")
         return output_path
 
-    @staticmethod
     async def deploy_compose(
+        self,
         compose_file: Path,
         project_name: str,
         env_vars: Optional[Dict[str, str]] = None
@@ -170,8 +167,8 @@ class DockerComposeService:
             logger.error(error_msg)
             return False, error_msg
 
-    @staticmethod
     async def get_compose_status(
+        self,
         project_name: str
     ) -> tuple[bool, Dict[str, Any]]:
         """
@@ -209,8 +206,8 @@ class DockerComposeService:
             logger.error(f"Erreur récupération statut: {e}")
             return False, {'error': str(e)}
 
-    @staticmethod
     async def stop_compose(
+        self,
         project_name: str
     ) -> tuple[bool, str]:
         """
@@ -244,8 +241,8 @@ class DockerComposeService:
             logger.error(error_msg)
             return False, error_msg
 
-    @staticmethod
     async def get_compose_logs(
+        self,
         project_name: str,
         service: Optional[str] = None,
         tail: int = 100
@@ -283,8 +280,8 @@ class DockerComposeService:
             logger.error(f"Erreur récupération logs: {e}")
             return False, str(e)
 
-    @staticmethod
     def extract_variables_from_compose(
+        self,
         compose_data: Dict[str, Any]
     ) -> Dict[str, Dict[str, Any]]:
         """
@@ -311,7 +308,7 @@ class DockerComposeService:
 
             if var_name not in variables:
                 # Déterminer le type basé sur le nom
-                var_type = DockerComposeService._guess_variable_type(var_name, default_value)
+                var_type = self._guess_variable_type(var_name, default_value)
 
                 variables[var_name] = {
                     'type': var_type,
@@ -329,8 +326,7 @@ class DockerComposeService:
 
         return variables
 
-    @staticmethod
-    def _guess_variable_type(var_name: str, default_value: Optional[str]) -> str:
+    def _guess_variable_type(self, var_name: str, default_value: Optional[str]) -> str:
         """
         Devine le type d'une variable basé sur son nom et valeur par défaut.
 

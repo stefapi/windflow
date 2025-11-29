@@ -155,6 +155,31 @@ class Database:
 db = Database()
 
 
+def AsyncSessionLocal() -> AsyncSession:
+    """
+    Crée et retourne une nouvelle session de base de données.
+
+    Cette fonction fournit une compatibilité avec l'ancien code qui utilisait
+    AsyncSessionLocal comme context manager.
+
+    Returns:
+        AsyncSession: Session SQLAlchemy async qui peut être utilisée avec async with
+
+    Raises:
+        RuntimeError: Si la base de données n'est pas initialisée
+
+    Example:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(User))
+            users = result.scalars().all()
+    """
+    if not db.session_factory:
+        raise RuntimeError("Database not initialized. Call db.connect() first.")
+
+    # Retourne une nouvelle session (qui est un context manager async)
+    return db.session_factory()
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency injection pour FastAPI.

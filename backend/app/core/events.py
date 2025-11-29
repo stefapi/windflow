@@ -186,6 +186,33 @@ class EventBus:
                 logger.error(f"Error in event handler: {e}", exc_info=True)
                 # Ne pas bloquer les autres handlers en cas d'erreur
 
+    async def emit(self, event_type: Any, event_data: Dict[str, Any]) -> None:
+        """
+        Alias pour publish() pour compatibilité avec le code WebSocket.
+
+        Cette méthode crée un Event à partir des données fournies et le publie.
+        Utile pour les plugins WebSocket qui utilisent event_type directement.
+
+        Args:
+            event_type: Type d'événement (EventType ou WebSocketEventType)
+            event_data: Données de l'événement sous forme de dictionnaire
+        """
+        # Créer un Event depuis les données
+        # Si event_type n'est pas un EventType, utiliser SYSTEM_ERROR par défaut
+        if isinstance(event_type, EventType):
+            evt_type = event_type
+        else:
+            # Pour les WebSocketEventType, on crée un événement système générique
+            evt_type = EventType.SYSTEM_ERROR
+            # Ajouter le type original dans les métadonnées
+            event_data = {**event_data, "_original_event_type": str(event_type)}
+
+        event = Event(
+            event_type=evt_type,
+            payload=event_data
+        )
+        await self.publish(event)
+
     async def _publish_to_redis(self, event: Event) -> None:
         """Publie l'événement dans Redis Streams."""
         try:
@@ -411,3 +438,8 @@ async def publish_event(event: Event) -> None:
     """
     bus = get_event_bus()
     await bus.publish(event)
+
+
+# Instance globale du bus d'événements pour import direct
+# Cette instance est créée au premier import du module
+event_bus = get_event_bus()

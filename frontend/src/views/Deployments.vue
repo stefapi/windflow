@@ -11,19 +11,45 @@
         <el-table-column prop="id" label="ID" width="100" />
         <el-table-column prop="status" label="Status">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">{{ row.status }}</el-tag>
+            <el-tag :type="getStatusType(getRealtimeStatus(row.id, row.status))">
+              {{ getRealtimeStatus(row.id, row.status) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="created_at" label="Created At" />
-        <el-table-column label="Actions" width="250">
+        <el-table-column label="Actions" width="320">
           <template #default="{ row }">
             <el-button size="small" @click="viewDetails(row.id)">Details</el-button>
+            <el-button
+              size="small"
+              type="success"
+              @click="viewLogs(row.id, row.stack?.name || 'Deployment')"
+            >
+              <span class="i-carbon-document-blank mr-1" />
+              Logs
+            </el-button>
             <el-button size="small" type="warning" @click="cancelDeployment(row.id)" v-if="row.status === 'running'">Cancel</el-button>
             <el-button size="small" type="info" @click="retryDeployment(row.id)" v-if="row.status === 'failed'">Retry</el-button>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
+
+    <!-- Drawer pour les logs en temps réel -->
+    <el-drawer
+      v-model="showLogsDrawer"
+      :title="`Logs - ${currentDeploymentName}`"
+      direction="rtl"
+      size="70%"
+      :close-on-click-modal="false"
+    >
+      <DeploymentLogs
+        v-if="currentDeploymentId"
+        :deployment-id="currentDeploymentId"
+        :deployment-name="currentDeploymentName"
+        :debug="false"
+      />
+    </el-drawer>
 
     <el-dialog
       v-model="showDialog"
@@ -137,7 +163,9 @@ import { useAuthStore } from '@/stores/auth'
 import { ElMessage, type FormInstance } from 'element-plus'
 import type { DeploymentCreate } from '@/types/api'
 import DynamicFormField from '@/components/DynamicFormField.vue'
+import DeploymentLogs from '@/components/DeploymentLogs.vue'
 import { useDynamicForm } from '@/composables/useDynamicForm'
+import { useDeploymentStatusMonitor } from '@/composables/useDeploymentWebSocket'
 import { stacksApi } from '@/services/api'
 
 const router = useRouter()
@@ -146,10 +174,18 @@ const stacksStore = useStacksStore()
 const targetsStore = useTargetsStore()
 const authStore = useAuthStore()
 
+// Surveillance des statuts en temps réel via WebSocket
+const { getStatus } = useDeploymentStatusMonitor()
+
 // État du dialog
 const showDialog = ref(false)
 const deploying = ref(false)
 const formRef = ref<FormInstance>()
+
+// État du drawer des logs
+const showLogsDrawer = ref(false)
+const currentDeploymentId = ref<string | null>(null)
+const currentDeploymentName = ref<string>('Deployment')
 
 // Formulaire de base + champs dynamiques fusionnés
 const form = reactive<DeploymentCreate & { name?: string; [key: string]: any }>({
@@ -319,6 +355,24 @@ const getStatusType = (status: string) => {
     cancelled: 'warning'
   }
   return map[status] || 'info'
+}
+
+/**
+ * Obtenir le statut en temps réel d'un déploiement
+ * Si un statut WebSocket est disponible, l'utiliser, sinon utiliser le statut du store
+ */
+const getRealtimeStatus = (deploymentId: string, fallbackStatus: string): string => {
+  const realtimeStatus = getStatus(deploymentId)
+  return realtimeStatus || fallbackStatus
+}
+
+/**
+ * Ouvrir le drawer des logs
+ */
+const viewLogs = (deploymentId: string, deploymentName: string) => {
+  currentDeploymentId.value = deploymentId
+  currentDeploymentName.value = deploymentName
+  showLogsDrawer.value = true
 }
 
 /**

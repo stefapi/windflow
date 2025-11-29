@@ -14,11 +14,96 @@ from backend.app.config import settings
 
 logger = logging.getLogger(__name__)
 
+
+def get_celery_broker_url() -> Optional[str]:
+    """
+    Retourne l'URL du broker Celery.
+
+    - Si celery_broker_url est définie, l'utilise directement
+    - Sinon, dérive depuis database_url selon celery_broker_type
+
+    Returns:
+        URL du broker Celery ou None si Celery désactivé
+    """
+    if not settings.celery_enabled:
+        return None
+
+    # URL explicite fournie
+    if settings.celery_broker_url:
+        return settings.celery_broker_url
+
+    # Dérivation depuis database_url
+    if settings.celery_broker_type == "database":
+        # Convertir l'URL async PostgreSQL en URL sync pour Celery
+        db_url = settings.database_url
+
+        # SQLite ne peut pas être utilisé comme broker Celery
+        if db_url.startswith("sqlite"):
+            logger.warning(
+                "SQLite ne peut pas être utilisé comme broker Celery. "
+                "Utilisez PostgreSQL ou configurez Redis."
+            )
+            return None
+
+        # Conversion asyncpg -> psycopg2 pour Celery
+        if "postgresql+asyncpg" in db_url:
+            broker_url = db_url.replace("postgresql+asyncpg", "db+postgresql+psycopg2")
+        elif "postgresql" in db_url and "psycopg2" not in db_url:
+            broker_url = f"db+postgresql+psycopg2{db_url.split('postgresql')[1]}"
+        else:
+            broker_url = f"db+{db_url}"
+
+        logger.info(f"Using database as Celery broker: {broker_url.split('@')[0]}@***")
+        return broker_url
+
+    elif settings.celery_broker_type == "redis":
+        logger.warning("celery_broker_type=redis but no celery_broker_url provided")
+        return None
+
+    return None
+
+
+def get_celery_result_backend() -> Optional[str]:
+    """
+    Retourne l'URL du result backend Celery.
+
+    Returns:
+        URL du result backend ou None si Celery désactivé
+    """
+    if not settings.celery_enabled:
+        return None
+
+    # URL explicite fournie
+    if settings.celery_result_backend:
+        return settings.celery_result_backend
+
+    # Dérivation depuis database_url
+    if settings.celery_broker_type == "database":
+        db_url = settings.database_url
+
+        if db_url.startswith("sqlite"):
+            logger.warning("SQLite ne peut pas être utilisé comme result backend Celery")
+            return None
+
+        # Conversion asyncpg -> psycopg2
+        if "postgresql+asyncpg" in db_url:
+            result_url = db_url.replace("postgresql+asyncpg", "db+postgresql+psycopg2")
+        elif "postgresql" in db_url and "psycopg2" not in db_url:
+            result_url = f"db+postgresql+psycopg2{db_url.split('postgresql')[1]}"
+        else:
+            result_url = f"db+{db_url}"
+
+        logger.info(f"Using database as Celery result backend: {result_url.split('@')[0]}@***")
+        return result_url
+
+    return None
+
+
 # Initialisation de l'application Celery
 celery_app = Celery(
     "windflow",
-    broker=settings.celery_broker_url if settings.celery_enabled else None,
-    backend=settings.celery_result_backend if settings.celery_enabled else None,
+    broker=get_celery_broker_url(),
+    backend=get_celery_result_backend(),
     include=[
         "backend.app.tasks.deployment_tasks",
         "backend.app.tasks.backup_tasks",
@@ -30,9 +115,9 @@ celery_app = Celery(
 class CeleryConfig:
     """Configuration Celery pour WindFlow."""
 
-    # Broker settings
-    broker_url = settings.celery_broker_url
-    result_backend = settings.celery_result_backend
+    # Broker settings - utilise les fonctions de dérivation
+    broker_url = get_celery_broker_url()
+    result_backend = get_celery_result_backend()
     broker_connection_retry_on_startup = True
 
     # Sérialisation
@@ -74,6 +159,16 @@ class CeleryConfig:
 
     # Beat scheduler pour tâches périodiques
     beat_schedule = {
+        # Retry des déploiements PENDING toutes les 5 minutes
+        "retry-pending-deployments": {
+            "task": "backend.app.tasks.deployment_tasks.retry_pending_deployments",
+            "schedule": crontab(minute="*/5"),
+            "options": {"queue": "deployments", "priority": 9},
+            "kwargs": {
+                "max_age_minutes": 2,  # Déploiements PENDING > 2min sont bloqués
+                "timeout_minutes": 60   # Déploiements PENDING > 60min sont FAILED
+            }
+        },
         # Health checks toutes les 5 minutes
         "health-check-all-targets": {
             "task": "backend.app.tasks.monitoring_tasks.check_all_targets_health",
@@ -283,6 +378,56 @@ def get_worker_stats() -> dict:
         "scheduled_tasks": inspect.scheduled(),
         "reserved_tasks": inspect.reserved(),
     }
+
+
+def is_celery_available(timeout: float = 1.0) -> bool:
+    """
+    Vérifie si au moins un worker Celery est disponible.
+
+    Cette fonction effectue un ping des workers actifs pour déterminer
+    si Celery est opérationnel. Elle est utilisée pour décider du
+    fallback vers asyncio en cas d'indisponibilité.
+
+    Args:
+        timeout: Timeout en secondes pour la vérification (défaut: 1.0s)
+
+    Returns:
+        True si au moins un worker est disponible, False sinon
+
+    Example:
+        >>> if is_celery_available():
+        >>>     task = deploy_stack.delay(...)
+        >>> else:
+        >>>     asyncio.create_task(execute_deployment_async(...))
+    """
+    if not settings.celery_enabled:
+        logger.debug("Celery is disabled in settings")
+        return False
+
+    try:
+        # Utiliser inspect() pour vérifier les workers actifs
+        inspect = celery_app.control.inspect(timeout=timeout)
+
+        # Tenter de récupérer les stats des workers
+        stats = inspect.stats()
+
+        # Si stats est None ou vide, aucun worker n'est disponible
+        if stats is None or len(stats) == 0:
+            logger.warning("No Celery workers available")
+            return False
+
+        # Au moins un worker est disponible
+        worker_count = len(stats)
+        logger.info(f"Celery is available with {worker_count} worker(s)")
+        return True
+
+    except Exception as e:
+        # En cas d'erreur (timeout, connexion refusée, etc.)
+        logger.warning(
+            f"Failed to check Celery availability: {e}",
+            extra={"exception_type": type(e).__name__}
+        )
+        return False
 
 
 if __name__ == "__main__":

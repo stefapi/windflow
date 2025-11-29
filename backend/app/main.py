@@ -34,6 +34,30 @@ async def lifespan(app: FastAPI):
 
     logger.info("=== Database initialized ===")
 
+    # Recovery des déploiements PENDING au démarrage
+    try:
+        from .services.deployment_service import DeploymentService
+        from .database import AsyncSessionLocal
+
+        logger.info("=== Lancement du recovery des déploiements PENDING au démarrage ===")
+
+        async with AsyncSessionLocal() as db_session:
+            stats = await DeploymentService.recover_pending_deployments(
+                db_session,
+                max_age_minutes=0,  # Réessayer tous les PENDING
+                timeout_minutes=60  # Marquer FAILED ceux > 60min
+            )
+
+            logger.info(
+                f"Recovery au démarrage terminé: {stats['retried']} réessayés, "
+                f"{stats['failed']} marqués FAILED, {stats['errors']} erreurs"
+            )
+    except Exception as e:
+        logger.error(f"Erreur lors du recovery au démarrage: {e}")
+        # Ne pas bloquer le démarrage si le recovery échoue
+
+    logger.info("=== Application ready ===")
+
     yield
 
     # Shutdown

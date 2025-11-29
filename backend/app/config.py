@@ -60,9 +60,11 @@ class Settings(BaseSettings):
     api_rate_limit: int = 100  # requests per minute
 
     # Celery Workers (optionnel - désactivé par défaut)
+    # Supporte PostgreSQL (recommandé) ou Redis comme broker
     celery_enabled: bool = False
-    celery_broker_url: str = "redis://localhost:6379/1"
-    celery_result_backend: str = "redis://localhost:6379/2"
+    celery_broker_url: str = ""  # Sera dérivé de database_url si vide
+    celery_result_backend: str = ""  # Sera dérivé de database_url si vide
+    celery_broker_type: str = "database"  # database | redis
 
     # LiteLLM (optionnel - désactivé par défaut)
     litellm_enabled: bool = False
