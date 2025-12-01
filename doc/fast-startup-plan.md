@@ -11,7 +11,7 @@
 Ce document définit la stratégie de développement de la Phase 1 (MVP) de WindFlow, un outil web intelligent de déploiement de containers Docker avec intelligence artificielle intégrée. L'objectif est de créer un MVP production-ready en 6 mois, intégrant les fonctionnalités essentielles d'orchestration multi-cible, workflows visuels, marketplace de templates et optimisation par IA, tout en posant des fondations architecturales solides pour les phases suivantes.
 
 **Alignement avec le Roadmap :**
-Ce plan correspond à la Phase 1 du roadmap global WindFlow (voir [doc/spec/18-roadmap.md](spec/18-roadmap.md)), qui définit les fondations du produit avec un périmètre fonctionnel complet et une architecture scalable.
+Ce plan correspond à la Phase 1 du roadmap global WindFlow (voir [doc/spec/18-roadmap.md](general_specs/18-roadmap.md)), qui définit les fondations du produit avec un périmètre fonctionnel complet et une architecture scalable.
 
 ## Philosophie de Développement
 

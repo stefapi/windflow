@@ -523,8 +523,8 @@ Any other information, screenshots, or examples.
 * [Development Rules](.clinerules/README.md) — Mandatory standards
 * [Development Workflow](doc/workflows/development-workflow.md) — Day-to-day process
 * [Testing Workflow](doc/workflows/testing-workflow.md) — Testing strategy
-* [Architecture](doc/spec/02-architecture.md) — Technical overview
-* [Technology Stack](doc/spec/03-technology-stack.md) — Technologies used
+* [Architecture](doc/general_specs/02-architecture.md) — Technical overview
+* [Technology Stack](doc/general_specs/03-technology-stack.md) — Technologies used
 
 ### Useful Tools
 
@@ -645,10 +645,10 @@ make docker-up
 
 ### WindFlow Specific
 
-* [Architecture Overview](doc/spec/02-architecture.md)
-* [API Design](doc/spec/07-api-design.md)
-* [Security Guidelines](doc/spec/13-security.md)
-* [Deployment Guide](doc/spec/15-deployment-guide.md)
+* [Architecture Overview](doc/general_specs/02-architecture.md)
+* [API Design](doc/general_specs/07-api-design.md)
+* [Security Guidelines](doc/general_specs/13-security.md)
+* [Deployment Guide](doc/general_specs/15-deployment-guide.md)
 
 ---
 

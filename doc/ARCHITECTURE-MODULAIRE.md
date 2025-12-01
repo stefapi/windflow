@@ -468,7 +468,7 @@ Orchestration: Kubernetes multi-cluster
 - [Guide d'Installation Rapide](../README.md#installation-rapide)
 - [Guide des Extensions](./EXTENSIONS-GUIDE.md)
 - [Guide CI/CD](./CI-CD-GUIDE.md)
-- [Spécifications Techniques](./spec/README.md)
+- [Spécifications Techniques](general_specs/README.md)
 
 ---
 

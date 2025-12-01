@@ -163,7 +163,7 @@ WindFlow recognizes and values all forms of contribution:
 * [Development Rules](/.clinerules/README.md)
 * [Contribution Workflow](/doc/workflows/contribution-workflow.md)
 * [Testing Guidelines](/doc/workflows/testing-workflow.md)
-* [Project Architecture](/doc/spec/02-architecture.md)
+* [Project Architecture](/doc/general_specs/02-architecture.md)
 
 ### Support Channels
 

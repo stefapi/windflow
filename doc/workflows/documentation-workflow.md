@@ -101,7 +101,7 @@ make setup  # Installation environnement
 ```
 
 ### Liens
-- [Lien interne](../spec/architecture.md)
+- [Lien interne](../general_specs/architecture.md)
 - [Lien externe](https://fastapi.tiangolo.com/)
 
 ### Admonitions

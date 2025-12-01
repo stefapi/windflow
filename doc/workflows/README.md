@@ -65,7 +65,7 @@ Processus de création et maintenance de la documentation :
 
 1. **📖 Lire la Documentation**
    - [README principal](../../README.md)
-   - [Architecture](../spec/02-architecture.md)
+   - [Architecture](../general_specs/02-architecture.md)
    - [Règles de développement](../../.clinerules/README.md)
 
 2. **🛠️ Setup Environnement**
@@ -113,7 +113,7 @@ type(scope): description
 ## Liens Utiles
 
 - [Règles de Développement](../../.clinerules/README.md)
-- [Documentation Technique](../spec/README.md)
+- [Documentation Technique](../general_specs/README.md)
 - [Issues GitHub](https://github.com/windflow/windflow/issues)
 - [Discussions](https://github.com/windflow/windflow/discussions)
 - [Actions CI/CD](https://github.com/windflow/windflow/actions)
