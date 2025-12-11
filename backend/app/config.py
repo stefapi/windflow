@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     celery_result_backend: str = ""  # Sera dérivé de database_url si vide
     celery_broker_type: str = "database"  # database | redis
 
+    # Celery Embedded Worker (auto-start local worker)
+    celery_auto_start_worker: bool = True  # Démarre automatiquement si aucun worker externe
+    celery_worker_concurrency: int = 2  # Nombre de workers concurrents
+    celery_worker_pool: str = "solo"  # solo, prefork, gevent, eventlet
+    celery_worker_loglevel: str = "info"  # debug, info, warning, error
+
     # LiteLLM (optionnel - désactivé par défaut)
     litellm_enabled: bool = False
     openai_api_key: Optional[str] = None

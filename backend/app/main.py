@@ -34,6 +34,35 @@ async def lifespan(app: FastAPI):
 
     logger.info("=== Database initialized ===")
 
+    # Gestion du worker Celery intégré
+    embedded_worker = None
+    if settings.celery_enabled and settings.celery_auto_start_worker:
+        try:
+            from .core.celery_manager import EmbeddedCeleryWorker, should_start_embedded_worker
+
+            if await should_start_embedded_worker():
+                logger.info("Démarrage du worker Celery intégré...")
+
+                embedded_worker = EmbeddedCeleryWorker(
+                    concurrency=settings.celery_worker_concurrency,
+                    pool=settings.celery_worker_pool,
+                    loglevel=settings.celery_worker_loglevel
+                )
+
+                if await embedded_worker.start():
+                    logger.info("Worker Celery intégré démarré avec succès")
+                    app.state.embedded_celery_worker = embedded_worker
+                else:
+                    logger.warning(
+                        "Échec du démarrage du worker intégré - "
+                        "utilisation du fallback asyncio"
+                    )
+            else:
+                logger.info("Workers Celery externes détectés - pas de worker intégré")
+        except Exception as e:
+            logger.error(f"Erreur lors de l'initialisation du worker Celery intégré: {e}")
+            logger.warning("Utilisation du fallback asyncio pour les déploiements")
+
     # Recovery des déploiements PENDING au démarrage
     try:
         from .services.deployment_service import DeploymentService
@@ -62,6 +91,16 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("=== Application shutdown ===")
+
+    # Arrêt du worker Celery intégré
+    if hasattr(app.state, 'embedded_celery_worker'):
+        logger.info("Arrêt du worker Celery intégré...")
+        try:
+            await app.state.embedded_celery_worker.stop()
+            logger.info("Worker Celery intégré arrêté")
+        except Exception as e:
+            logger.error(f"Erreur lors de l'arrêt du worker Celery intégré: {e}")
+
     await db.disconnect()
 
 
