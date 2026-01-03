@@ -34,53 +34,21 @@ async def lifespan(app: FastAPI):
 
     logger.info("=== Database initialized ===")
 
-    # Gestion du worker Celery intégré
-    embedded_worker = None
-    if settings.celery_enabled and settings.celery_auto_start_worker:
-        try:
-            from .core.celery_manager import EmbeddedCeleryWorker, should_start_embedded_worker
-
-            if await should_start_embedded_worker():
-                logger.info("Démarrage du worker Celery intégré...")
-
-                embedded_worker = EmbeddedCeleryWorker(
-                    concurrency=settings.celery_worker_concurrency,
-                    pool=settings.celery_worker_pool,
-                    loglevel=settings.celery_worker_loglevel
-                )
-
-                if await embedded_worker.start():
-                    logger.info("Worker Celery intégré démarré avec succès")
-                    app.state.embedded_celery_worker = embedded_worker
-                else:
-                    logger.warning(
-                        "Échec du démarrage du worker intégré - "
-                        "utilisation du fallback asyncio"
-                    )
-            else:
-                logger.info("Workers Celery externes détectés - pas de worker intégré")
-        except Exception as e:
-            logger.error(f"Erreur lors de l'initialisation du worker Celery intégré: {e}")
-            logger.warning("Utilisation du fallback asyncio pour les déploiements")
-
-    # Recovery des déploiements PENDING au démarrage
+    # Recovery des déploiements PENDING au démarrage avec DeploymentOrchestrator
     try:
-        from .services.deployment_service import DeploymentService
-        from .database import AsyncSessionLocal
+        from .services.deployment_orchestrator import DeploymentOrchestrator
 
         logger.info("=== Lancement du recovery des déploiements PENDING au démarrage ===")
 
-        async with AsyncSessionLocal() as db_session:
-            stats = await DeploymentService.recover_pending_deployments(
-                db_session,
-                max_age_minutes=0,  # Réessayer tous les PENDING
-                timeout_minutes=60  # Marquer FAILED ceux > 60min
-            )
+        stats = await DeploymentOrchestrator.recover_pending_deployments(
+            max_age_minutes=0,  # Réessayer tous les PENDING
+            timeout_minutes=60  # Marquer FAILED ceux > 60min
+        )
 
-            logger.info(
-                f"Recovery au démarrage terminé: {stats['retried']} réessayés, "
-                f"{stats['failed']} marqués FAILED, {stats['errors']} erreurs"
-            )
+        logger.info(
+            f"Recovery au démarrage terminé: {stats['retried']} réessayés, "
+            f"{stats['failed']} marqués FAILED, {stats['errors']} erreurs"
+        )
     except Exception as e:
         logger.error(f"Erreur lors du recovery au démarrage: {e}")
         # Ne pas bloquer le démarrage si le recovery échoue
@@ -91,15 +59,6 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("=== Application shutdown ===")
-
-    # Arrêt du worker Celery intégré
-    if hasattr(app.state, 'embedded_celery_worker'):
-        logger.info("Arrêt du worker Celery intégré...")
-        try:
-            await app.state.embedded_celery_worker.stop()
-            logger.info("Worker Celery intégré arrêté")
-        except Exception as e:
-            logger.error(f"Erreur lors de l'arrêt du worker Celery intégré: {e}")
 
     await db.disconnect()
 
@@ -182,18 +141,6 @@ async def health_check():
         "type": "sqlite" if "sqlite" in settings.database_url else "postgresql"
     }
 
-    # Check Redis (si activé)
-    if settings.redis_enabled:
-        health_status["services"]["redis"] = {
-            "status": "not_implemented",
-            "enabled": True
-        }
-    else:
-        health_status["services"]["redis"] = {
-            "status": "disabled",
-            "enabled": False
-        }
-
     # Check Vault (si activé)
     if settings.vault_enabled:
         health_status["services"]["vault"] = {
@@ -231,10 +178,8 @@ async def api_info():
         "environment": settings.environment,
         "features": {
             "database": "sqlite" if "sqlite" in settings.database_url else "postgresql",
-            "redis_cache": settings.redis_enabled,
             "keycloak_sso": settings.keycloak_enabled,
             "vault_secrets": settings.vault_enabled,
-            "celery_workers": settings.celery_enabled,
             "litellm_ai": settings.litellm_enabled,
             "prometheus_metrics": settings.prometheus_enabled
         },

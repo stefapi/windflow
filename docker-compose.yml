@@ -33,7 +33,6 @@ version: '3.8'
 #   make enable-database    # PostgreSQL
 #   make enable-cache       # Redis
 #   make enable-monitoring  # Prometheus + Grafana
-#   make enable-workers     # Celery workers
 #   make enable-secrets     # HashiCorp Vault
 #   make enable-sso         # Keycloak SSO
 #
@@ -114,7 +113,6 @@ services:
 #   ○ HashiCorp Vault (secrets management)
 #   ○ Keycloak (SSO/SAML)
 #   ○ Prometheus + Grafana (monitoring)
-#   ○ Celery + Flower (workers asynchrones)
 #
 # COMMANDES RAPIDES :
 #

@@ -24,12 +24,6 @@ class Settings(BaseSettings):
     database_max_overflow: int = 10
     database_pool_recycle: int = 3600
 
-    # Redis (optionnel - désactivé par défaut)
-    redis_enabled: bool = False
-    redis_url: str = "redis://localhost:6379/0"
-    cache_ttl: int = 300  # 5 minutes
-    session_ttl: int = 1800  # 30 minutes
-
     # JWT Authentication
     jwt_secret_key: str = "dev-secret-key-change-in-production-please-use-a-long-random-string-minimum-32-characters"
     jwt_algorithm: str = "HS256"
@@ -58,19 +52,6 @@ class Settings(BaseSettings):
     # API
     api_prefix: str = "/api/v1"
     api_rate_limit: int = 100  # requests per minute
-
-    # Celery Workers (optionnel - désactivé par défaut)
-    # Supporte PostgreSQL (recommandé) ou Redis comme broker
-    celery_enabled: bool = False
-    celery_broker_url: str = ""  # Sera dérivé de database_url si vide
-    celery_result_backend: str = ""  # Sera dérivé de database_url si vide
-    celery_broker_type: str = "database"  # database | redis
-
-    # Celery Embedded Worker (auto-start local worker)
-    celery_auto_start_worker: bool = True  # Démarre automatiquement si aucun worker externe
-    celery_worker_concurrency: int = 2  # Nombre de workers concurrents
-    celery_worker_pool: str = "solo"  # solo, prefork, gevent, eventlet
-    celery_worker_loglevel: str = "info"  # debug, info, warning, error
 
     # LiteLLM (optionnel - désactivé par défaut)
     litellm_enabled: bool = False

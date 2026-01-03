@@ -421,7 +421,7 @@ async def broadcast_deployment_log(
     """
     Fonction helper pour broadcaster un log à tous les clients connectés.
 
-    À appeler depuis les tasks Celery ou autres services.
+    À appeler depuis les tâches asyncio ou autres services.
     """
     from datetime import datetime
 

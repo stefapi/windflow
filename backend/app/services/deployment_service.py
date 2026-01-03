@@ -168,7 +168,7 @@ class DeploymentService:
         - Le nom du déploiement si non fourni
         - La configuration en rendant le template du stack avec les variables
         - Les variables mergées (defaults du stack + overrides utilisateur)
-        - Déclenche la tâche Celery de déploiement si activé
+        - Déclenche la tâche asyncio de déploiement via DeploymentOrchestrator
 
         Args:
             db: Session de base de données
@@ -222,89 +222,27 @@ class DeploymentService:
         await db.commit()
         await db.refresh(deployment)
 
-        # 6. Déclencher la tâche de déploiement (Celery ou fallback asyncio)
-        # Vérifier si Celery est activé ET disponible
-        from ..celery_app import is_celery_available
+        # 6. Déclencher la tâche de déploiement avec DeploymentOrchestrator
+        from .deployment_orchestrator import DeploymentOrchestrator
 
-        celery_available = settings.celery_enabled and is_celery_available()
+        # Mettre à jour le statut à DEPLOYING
+        deployment.status = DeploymentStatus.DEPLOYING
+        await db.commit()
+        await db.refresh(deployment)
 
-        if celery_available:
-            # Option 1: Celery est disponible - utilisation prioritaire
-            try:
-                from ..tasks.deployment_tasks import deploy_stack
+        # Lancer la tâche asynchrone avec l'orchestrateur
+        task = await DeploymentOrchestrator.start_deployment(
+            deployment_id=str(deployment.id),
+            stack_id=str(deployment.stack_id),
+            target_id=str(deployment.target_id),
+            user_id=str(user_id),
+            configuration=merged_variables
+        )
 
-                # Mettre à jour le statut à DEPLOYING
-                deployment.status = DeploymentStatus.DEPLOYING
-                await db.commit()
-                await db.refresh(deployment)
-
-                # Lancer la tâche asynchrone Celery
-                task = deploy_stack.delay(
-                    deployment_id=str(deployment.id),
-                    stack_id=str(deployment.stack_id),
-                    target_id=str(deployment.target_id),
-                    user_id=str(user_id),
-                    configuration=merged_variables
-                )
-
-                logger.info(
-                    f"Tâche Celery de déploiement lancée: {task.id} "
-                    f"pour deployment {deployment.id}"
-                )
-            except Exception as e:
-                logger.error(f"Erreur lors du lancement de la tâche Celery: {e}")
-                # En cas d'erreur Celery, fallback vers asyncio
-                logger.warning(f"Fallback vers asyncio pour deployment {deployment.id}")
-
-                from ..tasks.background_tasks import create_background_task, track_background_task
-
-                deployment.status = DeploymentStatus.DEPLOYING
-                await db.commit()
-                await db.refresh(deployment)
-
-                # Créer et tracker la tâche background
-                task = create_background_task(
-                    deployment_id=str(deployment.id),
-                    stack_id=str(deployment.stack_id),
-                    target_id=str(deployment.target_id),
-                    user_id=str(user_id),
-                    configuration=merged_variables
-                )
-                track_background_task(str(deployment.id), task)
-
-                logger.info(
-                    f"Tâche asyncio de déploiement lancée (fallback) "
-                    f"pour deployment {deployment.id}"
-                )
-        else:
-            # Option 2: Celery non disponible - fallback asyncio direct
-            logger.info(
-                f"Celery non disponible (enabled={settings.celery_enabled}, "
-                f"available={celery_available}), utilisation fallback asyncio "
-                f"pour deployment {deployment.id}"
-            )
-
-            from ..tasks.background_tasks import create_background_task, track_background_task
-
-            # Mettre à jour le statut à DEPLOYING
-            deployment.status = DeploymentStatus.DEPLOYING
-            await db.commit()
-            await db.refresh(deployment)
-
-            # Créer et tracker la tâche background asyncio
-            task = create_background_task(
-                deployment_id=str(deployment.id),
-                stack_id=str(deployment.stack_id),
-                target_id=str(deployment.target_id),
-                user_id=str(user_id),
-                configuration=merged_variables
-            )
-            track_background_task(str(deployment.id), task)
-
-            logger.info(
-                f"Tâche asyncio de déploiement lancée "
-                f"pour deployment {deployment.id}"
-            )
+        logger.info(
+            f"Tâche de déploiement lancée avec DeploymentOrchestrator "
+            f"pour deployment {deployment.id}"
+        )
 
         return deployment
 
@@ -588,64 +526,30 @@ class DeploymentService:
 
         logger.info(f"Retry du déploiement PENDING {deployment_id}")
 
-        # Vérifier si Celery est disponible
-        from ..celery_app import is_celery_available
-
-        celery_available = settings.celery_enabled and is_celery_available()
-
         try:
-            if celery_available:
-                # Option 1: Utiliser Celery
-                from ..tasks.deployment_tasks import deploy_stack
+            from .deployment_orchestrator import DeploymentOrchestrator
 
-                # Mettre à jour le statut
-                deployment.status = DeploymentStatus.DEPLOYING
-                if deployment.logs:
-                    deployment.logs += "\n[RETRY] Nouvelle tentative de déploiement (Celery)..."
-                else:
-                    deployment.logs = "[RETRY] Nouvelle tentative de déploiement (Celery)..."
-
-                await db.commit()
-                await db.refresh(deployment)
-
-                # Lancer la tâche
-                task = deploy_stack.delay(
-                    deployment_id=str(deployment.id),
-                    stack_id=str(deployment.stack_id),
-                    target_id=str(deployment.target_id),
-                    user_id=str(user_id) if user_id else "system",
-                    configuration=deployment.variables or {}
-                )
-
-                logger.info(f"Tâche Celery de retry lancée: {task.id} pour {deployment_id}")
-                return True
-
+            # Mettre à jour le statut
+            deployment.status = DeploymentStatus.DEPLOYING
+            if deployment.logs:
+                deployment.logs += "\n[RETRY] Nouvelle tentative de déploiement..."
             else:
-                # Option 2: Fallback asyncio
-                from ..tasks.background_tasks import create_background_task, track_background_task
+                deployment.logs = "[RETRY] Nouvelle tentative de déploiement..."
 
-                # Mettre à jour le statut
-                deployment.status = DeploymentStatus.DEPLOYING
-                if deployment.logs:
-                    deployment.logs += "\n[RETRY] Nouvelle tentative de déploiement (asyncio)..."
-                else:
-                    deployment.logs = "[RETRY] Nouvelle tentative de déploiement (asyncio)..."
+            await db.commit()
+            await db.refresh(deployment)
 
-                await db.commit()
-                await db.refresh(deployment)
+            # Lancer la tâche avec l'orchestrateur
+            task = await DeploymentOrchestrator.start_deployment(
+                deployment_id=str(deployment.id),
+                stack_id=str(deployment.stack_id),
+                target_id=str(deployment.target_id),
+                user_id=str(user_id) if user_id else "system",
+                configuration=deployment.variables or {}
+            )
 
-                # Créer et tracker la tâche
-                task = create_background_task(
-                    deployment_id=str(deployment.id),
-                    stack_id=str(deployment.stack_id),
-                    target_id=str(deployment.target_id),
-                    user_id=str(user_id) if user_id else "system",
-                    configuration=deployment.variables or {}
-                )
-                track_background_task(str(deployment.id), task)
-
-                logger.info(f"Tâche asyncio de retry lancée pour {deployment_id}")
-                return True
+            logger.info(f"Tâche de retry lancée avec DeploymentOrchestrator pour {deployment_id}")
+            return True
 
         except Exception as e:
             logger.error(f"Erreur lors du retry du déploiement {deployment_id}: {e}")
@@ -660,76 +564,3 @@ class DeploymentService:
             await db.commit()
             return False
 
-    @staticmethod
-    async def recover_pending_deployments(
-        db: AsyncSession,
-        max_age_minutes: int = 2,
-        timeout_minutes: int = 60
-    ) -> Dict[str, int]:
-        """
-        Recovery automatique des déploiements PENDING.
-
-        Cette méthode :
-        1. Réessaye les déploiements PENDING récents (< timeout)
-        2. Marque comme FAILED les déploiements trop anciens (> timeout)
-
-        Args:
-            db: Session de base de données
-            max_age_minutes: Âge minimum pour considérer un PENDING comme bloqué
-            timeout_minutes: Âge maximum avant de marquer comme FAILED
-
-        Returns:
-            Statistiques de recovery (retried, failed, skipped)
-        """
-        logger.info(
-            f"Lancement du recovery des déploiements PENDING "
-            f"(max_age={max_age_minutes}min, timeout={timeout_minutes}min)"
-        )
-
-        stats = {
-            "retried": 0,
-            "failed": 0,
-            "skipped": 0,
-            "errors": 0
-        }
-
-        # 1. Marquer comme FAILED les trop anciens
-        failed_count = await DeploymentService.mark_stale_as_failed(
-            db,
-            max_age_minutes=timeout_minutes
-        )
-        stats["failed"] = failed_count
-
-        # 2. Réessayer les récents
-        stale_deployments = await DeploymentService.get_stale_pending_deployments(
-            db,
-            max_age_minutes=max_age_minutes
-        )
-
-        for deployment in stale_deployments:
-            # Vérifier que le déploiement n'est pas trop ancien (déjà géré ci-dessus)
-            age_minutes = (datetime.utcnow() - deployment.created_at).total_seconds() / 60
-
-            if age_minutes >= timeout_minutes:
-                # Déjà marqué comme FAILED ci-dessus
-                stats["skipped"] += 1
-                continue
-
-            # Réessayer
-            success = await DeploymentService.retry_deployment(
-                db,
-                str(deployment.id),
-                user_id="system_recovery"
-            )
-
-            if success:
-                stats["retried"] += 1
-            else:
-                stats["errors"] += 1
-
-        logger.info(
-            f"Recovery terminé: {stats['retried']} retried, {stats['failed']} failed, "
-            f"{stats['skipped']} skipped, {stats['errors']} errors"
-        )
-
-        return stats

@@ -93,33 +93,6 @@ services:
       - "traefik.http.routers.api.rule=Host(`localhost`) && PathPrefix(`/api/`)"
       - "traefik.http.services.api.loadbalancer.server.port=8000"
 
-  # Worker Celery pour les tâches asynchrones
-  windflow-worker:
-    build:
-      context: .
-      dockerfile: infrastructure/docker/Dockerfile.worker
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql://windflow:${POSTGRES_PASSWORD:-windflow123}@postgres:5432/windflow
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis123}@redis:6379/0
-      VAULT_URL: http://vault:8200
-      VAULT_TOKEN: ${VAULT_TOKEN:-vault-dev-token}
-      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    volumes:
-      - ./backend:/app/backend
-      - ./logs:/app/logs
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      vault:
-        condition: service_started
-    networks:
-      - windflow-backend
-
   # Frontend Vue.js
   windflow-frontend:
     build:
@@ -190,21 +163,6 @@ services:
       - ./infrastructure/docker/grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
-    networks:
-      - windflow-backend
-
-  # Flower pour monitoring Celery
-  flower:
-    image: mher/flower:latest
-    restart: unless-stopped
-    ports:
-      - "5555:5555"
-    environment:
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis123}@redis:6379/0
-      FLOWER_PORT: 5555
-      FLOWER_BASIC_AUTH: ${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-flower123}
-    depends_on:
-      - redis
     networks:
       - windflow-backend
 

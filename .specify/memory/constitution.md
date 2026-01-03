@@ -137,9 +137,8 @@ The following stack decisions are foundational and MUST NOT be changed without c
 - FastAPI (Python 3.11+)
 - SQLAlchemy 2.0 with async support
 - Pydantic V2 for validation
-- PostgreSQL as primary database
-- Redis for caching and message brokering
-- Celery for async task processing
+- PostgreSQL as primary database (SQLite for development)
+- Asyncio for async task processing
 
 **Frontend**:
 - Vue.js 3 with Composition API

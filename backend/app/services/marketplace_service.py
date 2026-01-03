@@ -187,7 +187,7 @@ class MarketplaceService:
             user_id=user_id
         )
 
-        # Créer le déploiement (qui lancera la tâche Celery)
+        # Créer le déploiement (qui lancera la tâche asyncio)
         deployment = await deployment_service.create(db, deployment_create)
 
         return deployment.id
