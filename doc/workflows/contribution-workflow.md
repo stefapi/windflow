@@ -317,7 +317,7 @@ Add any other context or screenshots about the feature request here.
 ### Documentation Technique
 - [Development Workflow](development-workflow.md)
 - [Testing Guidelines](testing-workflow.md)
-- [Architecture Overview](../spec/02-architecture.md)
+- [Architecture Overview](../general_specs/02-architecture.md)
 - [Coding Rules](../../.clinerules/README.md)
 
 ### Outils Utiles

@@ -228,84 +228,131 @@ class DeploymentResponse(DeploymentBase):
 
 ## Tâches Asynchrones
 
-### Configuration Celery
+### DeploymentOrchestrator - Gestion des Tâches Asyncio
+
+WindFlow utilise **asyncio** pour la gestion des tâches asynchrones, avec un orchestrateur dédié qui fournit :
+- Retry automatique avec backoff exponentiel
+- Recovery après crash au démarrage
+- Tracking des tâches actives
+- Persistance en base de données
+
 ```python
-# core/celery_app.py
-from celery import Celery
-from core.config import settings
+# services/deployment_orchestrator.py
+from typing import Dict, Any
+import asyncio
+from datetime import datetime
 
-celery_app = Celery(
-    "windflow",
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
-    include=[
-        "windflow.tasks.deployment",
-        "windflow.tasks.monitoring",
-        "windflow.tasks.backup"
-    ]
-)
-
-celery_app.conf.update(
-    task_serializer="json",
-    accept_content=["json"],
-    result_serializer="json",
-    timezone="UTC",
-    enable_utc=True,
-    task_track_started=True,
-    task_time_limit=30 * 60,  # 30 minutes
-    task_soft_time_limit=25 * 60,  # 25 minutes
-    worker_prefetch_multiplier=1,
-    task_routes={
-        "windflow.tasks.deployment.*": {"queue": "deployment"},
-        "windflow.tasks.monitoring.*": {"queue": "monitoring"},
-        "windflow.tasks.backup.*": {"queue": "backup"}
-    }
-)
+class DeploymentOrchestrator:
+    """Orchestrateur de déploiements basé sur asyncio."""
+    
+    _active_tasks: Dict[str, asyncio.Task] = {}
+    MAX_RETRIES = 3
+    INITIAL_RETRY_DELAY = 60  # secondes
+    
+    @classmethod
+    async def start_deployment(
+        cls,
+        deployment_id: str,
+        stack_id: str,
+        target_id: str,
+        user_id: str,
+        configuration: Dict[str, Any]
+    ) -> asyncio.Task:
+        """Démarre un déploiement en arrière-plan."""
+        
+        # Marquer le démarrage
+        async with AsyncSessionLocal() as db:
+            deployment = await db.get(Deployment, deployment_id)
+            deployment.task_started_at = datetime.utcnow()
+            deployment.task_retry_count = 0
+            await db.commit()
+        
+        # Créer la tâche avec retry automatique
+        task = asyncio.create_task(
+            cls._execute_deployment_with_retry(
+                deployment_id, stack_id, target_id, 
+                user_id, configuration
+            )
+        )
+        
+        # Tracker la tâche
+        cls._active_tasks[deployment_id] = task
+        return task
 ```
 
-### Tâches avec Retry Policy
+### Tâches avec Retry Automatique
 ```python
-# tasks/deployment.py
-from celery import current_task
-from celery.exceptions import Retry
+# tasks/background_tasks.py
 import asyncio
+from typing import Dict, Any
 
-@celery_app.task(
-    bind=True,
-    autoretry_for=(DeploymentError,),
-    retry_kwargs={'max_retries': 3, 'countdown': 60},
-    retry_backoff=True
-)
-def deploy_stack_task(self, deployment_id: str):
-    """Tâche de déploiement d'un stack."""
+async def deploy_stack_async(
+    deployment_id: str,
+    stack_id: str,
+    target_id: str,
+    user_id: str,
+    configuration: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Déploiement asynchrone d'une stack.
     
-    try:
+    Le retry est géré automatiquement par DeploymentOrchestrator.
+    """
+    async with AsyncSessionLocal() as db:
         # Mise à jour du statut
-        current_task.update_state(
-            state='PROGRESS',
-            meta={'step': 'Initialisation', 'progress': 10}
+        await DeploymentService.update_status(
+            db, deployment_id, DeploymentStatus.DEPLOYING,
+            logs="[INFO] Démarrage du déploiement..."
         )
         
-        # Exécution du déploiement
-        result = asyncio.run(deploy_stack_async(UUID(deployment_id)))
+        # Charger la stack
+        stack = await db.get(Stack, stack_id)
+        if not stack:
+            raise ValueError(f"Stack {stack_id} non trouvé")
         
-        return {
-            'deployment_id': deployment_id,
-            'status': 'success',
-            'result': result
-        }
+        # Exécuter le déploiement selon le type
+        if stack.target_type == TargetType.DOCKER.value:
+            result = await deploy_docker_container(...)
+        else:
+            result = await deploy_docker_compose(...)
         
-    except DeploymentError as exc:
-        # Log de l'erreur avec contexte
-        logger.error(
-            "Échec du déploiement",
-            extra={
-                'deployment_id': deployment_id,
-                'error': str(exc),
-                'retry_count': self.request.retries
-            }
+        # Marquer comme réussi
+        await DeploymentService.update_status(
+            db, deployment_id, DeploymentStatus.RUNNING,
+            logs="[SUCCESS] Déploiement terminé avec succès"
         )
-        raise self.retry(countdown=60 * (2 ** self.request.retries))
+        
+        return result
+```
+
+### Recovery au Démarrage
+```python
+# main.py - Lifespan startup
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Gestion du cycle de vie de l'application."""
+    
+    # Startup
+    await db.connect()
+    await db.create_tables()
+    
+    # Recovery des déploiements PENDING/DEPLOYING
+    from services.deployment_orchestrator import DeploymentOrchestrator
+    
+    stats = await DeploymentOrchestrator.recover_pending_deployments(
+        max_age_minutes=0,  # Réessayer tous les PENDING
+        timeout_minutes=60  # Marquer FAILED ceux > 60min
+    )
+    
+    logger.info(
+        f"Recovery: {stats['retried']} relancés, "
+        f"{stats['failed']} marqués FAILED"
+    )
+    
+    yield
+    
+    # Shutdown
+    await db.disconnect()
 ```
 
 ## Configuration et Variables d'Environnement

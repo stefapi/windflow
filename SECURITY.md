@@ -163,10 +163,10 @@ We are evaluating the possibility of a formal bug bounty program as the project 
 
 ### Technical Documentation
 
-* [Secure Architecture](doc/spec/02-architecture.md) — Secure architectural principles
-* [Security Specifications](doc/spec/13-security.md) — Detailed technical documentation
-* [Authentication](doc/spec/05-authentication.md) — Complete authentication system
-* [RBAC Access Control](doc/spec/06-rbac-permissions.md) — Permission management
+* [Secure Architecture](doc/general_specs/02-architecture.md) — Secure architectural principles
+* [Security Specifications](doc/general_specs/13-security.md) — Detailed technical documentation
+* [Authentication](doc/general_specs/05-authentication.md) — Complete authentication system
+* [RBAC Access Control](doc/general_specs/06-rbac-permissions.md) — Permission management
 * [Development Rules](.clinerules/README.md) — Secure coding standards
 
 ### Standards & Frameworks

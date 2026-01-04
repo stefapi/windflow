@@ -86,6 +86,10 @@ class Deployment(Base):
     logs: Mapped[str] = mapped_column(Text, nullable=True)
     error_message: Mapped[str] = mapped_column(Text, nullable=True)
 
+    # Task tracking (pour asyncio orchestrator)
+    task_started_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    task_retry_count: Mapped[int] = mapped_column(nullable=False, default=0)
+
     # Métriques
     deploy_duration_seconds: Mapped[float] = mapped_column(nullable=True)
 

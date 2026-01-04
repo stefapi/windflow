@@ -308,13 +308,6 @@ services:
       APP_ENV: production
       LOG_LEVEL: INFO
 
-      # Celery
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
-      CELERY_WORKER_CONCURRENCY: 4
-      CELERY_TASK_SOFT_TIME_LIMIT: 1800
-      CELERY_TASK_TIME_LIMIT: 3600
-
       # LLM Configuration
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       LLM_MODEL: ${LLM_MODEL:-codellama:13b}
@@ -342,11 +335,11 @@ services:
       vault:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "celery", "-A", "windflow.tasks", "inspect", "ping"]
-      interval: 60s
-      timeout: 30s
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 40s
     labels:
       - "traefik.enable=false"
 

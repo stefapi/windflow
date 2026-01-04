@@ -13,7 +13,6 @@ version: '3.8'
 #   - secrets    : HashiCorp Vault (gestion des secrets)
 #   - sso        : Keycloak (authentification SSO/SAML)
 #   - monitoring : Prometheus + Grafana
-#   - workers    : Celery workers + Flower
 # ============================================================================
 
 services:
@@ -252,75 +251,6 @@ services:
       - "traefik.http.routers.grafana.entrypoints=web"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
 
-  # ==========================================================================
-  # EXTENSION: Celery Worker (Tâches asynchrones)
-  # Profile: workers
-  # Activation: make enable-workers
-  # Note: Nécessite Redis (profile cache)
-  # ==========================================================================
-  windflow-worker:
-    build:
-      context: .
-      dockerfile: infrastructure/docker/Dockerfile.worker
-    container_name: windflow-worker
-    restart: unless-stopped
-    profiles: ["workers"]
-    environment:
-      DATABASE_TYPE: ${DATABASE_TYPE:-sqlite}
-      DATABASE_URL: ${DATABASE_URL:-sqlite:///./data/windflow.db}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis123}@windflow-redis:6379/0
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis123}@windflow-redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis123}@windflow-redis:6379/1
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-please}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
-    volumes:
-      - ./backend:/app/backend
-      - windflow_data:/app/data
-      - windflow_logs:/app/logs
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - windflow-network
-    depends_on:
-      - windflow-redis
-    labels:
-      - "traefik.enable=false"
-
-  # ==========================================================================
-  # EXTENSION: Flower (Monitoring Celery)
-  # Profile: workers
-  # Activation: make enable-workers
-  # ==========================================================================
-  windflow-flower:
-    image: mher/flower:2.0
-    container_name: windflow-flower
-    restart: unless-stopped
-    profiles: ["workers"]
-    environment:
-      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-redis123}@windflow-redis:6379/0
-      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-redis123}@windflow-redis:6379/1
-      FLOWER_PORT: 5555
-      FLOWER_BASIC_AUTH: ${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-flower123}
-      FLOWER_PERSISTENT: "True"
-      FLOWER_DB: /data/flower.db
-    volumes:
-      - flower_data:/data
-    networks:
-      - windflow-network
-    depends_on:
-      - windflow-redis
-      - windflow-worker
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5555/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.flower.rule=Host(`flower.localhost`)"
-      - "traefik.http.routers.flower.entrypoints=web"
-      - "traefik.http.services.flower.loadbalancer.server.port=5555"
-
 # ==============================================================================
 # Volumes Persistants pour les Extensions
 # ==============================================================================
@@ -347,10 +277,6 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
-    driver: local
-
-  # Workers
-  flower_data:
     driver: local
 
   # Données partagées (définies dans minimal, réutilisées ici)

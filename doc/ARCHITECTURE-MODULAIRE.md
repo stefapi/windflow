@@ -29,7 +29,7 @@ WindFlow adopte une **architecture modulaire extensible** permettant de démarre
 │  │ • Redis         │  │ • Secrets (HashiCorp Vault)          │ │
 │  │ • Nginx         │  │ • SSO (Keycloak)                     │ │
 │  │ • Frontend      │  │ • IA (LiteLLM + Ollama)              │ │
-│  │ • Celery Worker │  │ • Orchestration (Kubernetes/Swarm)   │ │
+│  │              │  │ • Orchestration (Kubernetes/Swarm)   │ │
 │  └─────────────────┘  └──────────────────────────────────────┘ │
 │                                                                   │
 └─────────────────────────────────────────────────────────────────┘
@@ -59,18 +59,13 @@ WindFlow adopte une **architecture modulaire extensible** permettant de démarre
 - **Volumes** : `redis-data`
 - **Persistance** : AOF + RDB
 
-#### 4. **Celery Worker**
-- **Rôle** : Traitement asynchrone des tâches
-- **Configuration** : Auto-scaling selon charge
-- **Monitoring** : Flower (optionnel)
-
-#### 5. **Frontend (Vue.js 3)**
+#### 4. **Frontend (Vue.js 3)**
 - **Port** : 80 (via Nginx)
 - **Rôle** : Interface utilisateur web
 - **Build** : Production optimisée
 - **Configuration** : `infrastructure/docker/Dockerfile.frontend`
 
-#### 6. **Nginx (Reverse Proxy)**
+#### 5. **Nginx (Reverse Proxy)**
 - **Port** : 8080 → Frontend, 8080/api → Backend
 - **Rôle** : Load balancer, SSL termination
 - **Configuration** : `infrastructure/docker/nginx.conf`
@@ -468,7 +463,7 @@ Orchestration: Kubernetes multi-cluster
 - [Guide d'Installation Rapide](../README.md#installation-rapide)
 - [Guide des Extensions](./EXTENSIONS-GUIDE.md)
 - [Guide CI/CD](./CI-CD-GUIDE.md)
-- [Spécifications Techniques](./spec/README.md)
+- [Spécifications Techniques](general_specs/README.md)
 
 ---
 

@@ -500,8 +500,8 @@ alias wf-logs="cd ~/windflow && make logs"
 
 ### Liens Internes
 - [Règles de Développement](../../.clinerules/README.md)
-- [Architecture](../spec/02-architecture.md)
-- [Stack Technologique](../spec/03-technology-stack.md)
+- [Architecture](../general_specs/02-architecture.md)
+- [Stack Technologique](../general_specs/03-technology-stack.md)
 - [Testing Guidelines](testing-workflow.md)
 
 ### Outils Externes

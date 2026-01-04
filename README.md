@@ -224,21 +224,21 @@ The complete documentation is in the `doc/` directory:
 
 ### Main Documentation
 
-* **[Overview](doc/spec/01-overview.md)** — Project vision and goals
-* **[Architecture](doc/spec/02-architecture.md)** — Design principles
-* **[Technology Stack](doc/spec/03-technology-stack.md)** — Technologies used
-* **[Deployment Guide](doc/spec/15-deployment-guide.md)** — Installation and configuration
+* **[Overview](doc/general_specs/01-overview.md)** — Project vision and goals
+* **[Architecture](doc/general_specs/02-architecture.md)** — Design principles
+* **[Technology Stack](doc/general_specs/03-technology-stack.md)** — Technologies used
+* **[Deployment Guide](doc/general_specs/15-deployment-guide.md)** — Installation and configuration
 
 ### User Guides
 
-* **[Core Features](doc/spec/10-core-features.md)** — Detailed features
-* **[CLI Interface](doc/spec/08-cli-interface.md)** — Using the CLI/TUI
-* **[LLM Integration](doc/spec/17-llm-integration.md)** — Artificial intelligence
+* **[Core Features](doc/general_specs/10-core-features.md)** — Detailed features
+* **[CLI Interface](doc/general_specs/08-cli-interface.md)** — Using the CLI/TUI
+* **[LLM Integration](doc/general_specs/17-llm-integration.md)** — Artificial intelligence
 
 ### Developer Resources
 
-* **[Data Model](doc/spec/04-data-model.md)** — Data structure
-* **[API Design](doc/spec/07-api-design.md)** — API documentation
+* **[Data Model](doc/general_specs/04-data-model.md)** — Data structure
+* **[API Design](doc/general_specs/07-api-design.md)** — API documentation
 * **[Workflows](doc/workflows/README.md)** — Development processes
 * **[Development Rules](.clinerules/README.md)** — Standards and conventions
 
@@ -399,7 +399,7 @@ git commit -m "feat(api): add deployment optimization endpoint"
 * [ ] Extensible plugin system
 * [ ] Mobile app (React Native)
 
-See the **[Full Roadmap](doc/spec/18-roadmap.md)** for more details.
+See the **[Full Roadmap](doc/general_specs/18-roadmap.md)** for more details.
 
 ## 📄 License
 

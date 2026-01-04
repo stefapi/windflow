@@ -135,10 +135,10 @@ Règles spécifiques à l'utilisation de l'intelligence artificielle dans WindFl
 - Extension Vitest runner
 
 ### 📚 Ressources Complémentaires
-- [Documentation Projet](../doc/spec/README.md) - Spécifications complètes
-- [Architecture](../doc/spec/02-architecture.md) - Principes architecturaux
-- [Stack Technologique](../doc/spec/03-technology-stack.md) - Technologies détaillées
-- [Guide de Déploiement](../doc/spec/15-deployment-guide.md) - Installation
+- [Documentation Projet](../doc/general_specs/README.md) - Spécifications complètes
+- [Architecture](../doc/general_specs/02-architecture.md) - Principes architecturaux
+- [Stack Technologique](../doc/general_specs/03-technology-stack.md) - Technologies détaillées
+- [Guide de Déploiement](../doc/general_specs/15-deployment-guide.md) - Installation
 
 ## Exemples Pratiques
 

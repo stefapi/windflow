@@ -130,7 +130,7 @@ async def deploy_marketplace_stack(
     """
     Déploie un stack depuis la marketplace.
 
-    Lance une tâche Celery asynchrone pour le déploiement.
+    Lance une tâche asyncio pour le déploiement via DeploymentOrchestrator.
     Retourne l'ID du déploiement créé.
     """
     try:
