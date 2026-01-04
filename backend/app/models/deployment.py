@@ -82,6 +82,14 @@ class Deployment(Base):
     # Variables appliquées
     variables: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
+    # Paramètres de target rendus (snapshot des target_parameters du stack avec variables Jinja résolues)
+    rendered_target_parameters: Mapped[dict] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
+        comment="Target parameters rendus avec Jinja lors de la création du déploiement"
+    )
+
     # Logs et erreurs
     logs: Mapped[str] = mapped_column(Text, nullable=True)
     error_message: Mapped[str] = mapped_column(Text, nullable=True)

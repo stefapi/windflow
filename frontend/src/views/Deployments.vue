@@ -17,7 +17,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="created_at" label="Created At" />
-        <el-table-column label="Actions" width="320">
+        <el-table-column label="Actions" width="420">
           <template #default="{ row }">
             <el-button size="small" @click="viewDetails(row.id)">Details</el-button>
             <el-button
@@ -30,6 +30,7 @@
             </el-button>
             <el-button size="small" type="warning" @click="cancelDeployment(row.id)" v-if="row.status === 'pending' || row.status === 'installing'">Cancel</el-button>
             <el-button size="small" type="info" @click="retryDeployment(row.id)" v-if="row.status === 'failed'">Retry</el-button>
+            <el-button size="small" type="danger" @click="handleDelete(row.id, row.name)">Delete</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -164,7 +165,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDeploymentsStore, useStacksStore, useTargetsStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
-import { ElMessage, type FormInstance } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import type { DeploymentCreate } from '@/types/api'
 import DynamicFormField from '@/components/DynamicFormField.vue'
 import DeploymentLogs from '@/components/DeploymentLogs.vue'
@@ -412,6 +413,33 @@ const retryDeployment = async (id: string) => {
     ElMessage.success('Déploiement relancé')
   } catch {
     ElMessage.error('Échec du relancement du déploiement')
+  }
+}
+
+/**
+ * Suppression d'un déploiement avec confirmation.
+ */
+const handleDelete = async (id: string, name: string) => {
+  try {
+    await ElMessageBox.confirm(
+      `Êtes-vous sûr de vouloir supprimer le déploiement "${name}" ? Cette action arrêtera le déploiement et supprimera toutes les ressources associées (conteneurs, volumes, etc.). Cette action est irréversible.`,
+      'Confirmation de suppression',
+      {
+        confirmButtonText: 'Supprimer',
+        cancelButtonText: 'Annuler',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger',
+      }
+    )
+
+    // Si l'utilisateur confirme, procéder à la suppression
+    await deploymentsStore.deleteDeployment(id)
+    ElMessage.success('Déploiement supprimé avec succès')
+  } catch (error) {
+    // Si l'utilisateur annule, error sera 'cancel'
+    if (error !== 'cancel') {
+      ElMessage.error('Échec de la suppression du déploiement')
+    }
   }
 }
 

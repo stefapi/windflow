@@ -209,6 +209,7 @@ class StackDefinitionsLoader:
             target_type=definition.metadata.target_type,
             template=definition.template,
             variables=self._convert_variables_to_db_format(definition.variables),
+            target_parameters=definition.target_parameters,
             is_public=definition.metadata.is_public,
             icon_url=definition.metadata.icon_url,
             screenshots=definition.metadata.screenshots,
@@ -239,6 +240,7 @@ class StackDefinitionsLoader:
         stack.target_type = definition.metadata.target_type
         stack.template = definition.template
         stack.variables = self._convert_variables_to_db_format(definition.variables)
+        stack.target_parameters = definition.target_parameters
         stack.is_public = definition.metadata.is_public
         stack.icon_url = definition.metadata.icon_url
         stack.screenshots = definition.metadata.screenshots

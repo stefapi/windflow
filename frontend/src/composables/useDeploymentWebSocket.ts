@@ -347,12 +347,25 @@ export function useDeploymentStatusMonitor() {
         deploymentStatuses.value.set(event.deployment_id, event.new_status)
       }
     )
+
+    // S'abonner au topic "deployment_events" côté serveur
+    // pour recevoir tous les événements de déploiement
+    wsService.send('subscribe', {
+      event_type: 'deployment_events'
+    })
   }
 
   const disconnect = () => {
     if (unsubscribe) {
       unsubscribe()
       unsubscribe = null
+    }
+
+    // Se désabonner du topic côté serveur
+    if (wsService.isConnected()) {
+      wsService.send('unsubscribe', {
+        event_type: 'deployment_events'
+      })
     }
   }
 

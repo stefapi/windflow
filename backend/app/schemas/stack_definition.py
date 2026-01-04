@@ -99,6 +99,10 @@ class StackDefinition(BaseModel):
         default_factory=dict,
         description="Variables configurables"
     )
+    target_parameters: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Paramètres spécifiques à la target (ex: volumes à supprimer)"
+    )
     deployment_notes: Optional[str] = Field(
         None,
         description="Notes de déploiement (markdown)"

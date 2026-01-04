@@ -126,9 +126,9 @@ class DockerComposeService:
             Tuple[bool, str]: (Succès, Output/Error)
         """
         try:
-            # Construire la commande
+            # Construire la commande (Docker Compose V2)
             cmd = [
-                'docker-compose',
+                'docker', 'compose',
                 '-f', str(compose_file),
                 '-p', project_name,
                 'up', '-d'
@@ -181,7 +181,7 @@ class DockerComposeService:
             Tuple[bool, Dict]: (Succès, Statut des services)
         """
         try:
-            cmd = ['docker-compose', '-p', project_name, 'ps', '--format', 'json']
+            cmd = ['docker', 'compose', '-p', project_name, 'ps', '--format', 'json']
 
             result = subprocess.run(
                 cmd,
@@ -220,7 +220,7 @@ class DockerComposeService:
             Tuple[bool, str]: (Succès, Output/Error)
         """
         try:
-            cmd = ['docker-compose', '-p', project_name, 'down']
+            cmd = ['docker', 'compose', '-p', project_name, 'down']
 
             result = subprocess.run(
                 cmd,
@@ -238,6 +238,48 @@ class DockerComposeService:
 
         except Exception as e:
             error_msg = f"Erreur lors de l'arrêt: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+
+    async def remove_compose(
+        self,
+        project_name: str,
+        remove_volumes: bool = True
+    ) -> tuple[bool, str]:
+        """
+        Supprime complètement un projet Docker Compose (conteneurs, réseaux, volumes).
+
+        Args:
+            project_name: Nom du projet
+            remove_volumes: Si True, supprime aussi les volumes (défaut: True)
+
+        Returns:
+            Tuple[bool, str]: (Succès, Output/Error)
+        """
+        try:
+            cmd = ['docker', 'compose', '-p', project_name, 'down']
+
+            if remove_volumes:
+                cmd.append('-v')  # Supprime aussi les volumes
+
+            cmd.append('--remove-orphans')  # Supprime les conteneurs orphelins
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+
+            if result.returncode == 0:
+                logger.info(f"Projet supprimé complètement: {project_name}")
+                return True, result.stdout
+            else:
+                logger.error(f"Échec suppression: {result.stderr}")
+                return False, result.stderr
+
+        except Exception as e:
+            error_msg = f"Erreur lors de la suppression: {str(e)}"
             logger.error(error_msg)
             return False, error_msg
 
@@ -259,7 +301,7 @@ class DockerComposeService:
             Tuple[bool, str]: (Succès, Logs)
         """
         try:
-            cmd = ['docker-compose', '-p', project_name, 'logs', '--tail', str(tail)]
+            cmd = ['docker', 'compose', '-p', project_name, 'logs', '--tail', str(tail)]
 
             if service:
                 cmd.append(service)

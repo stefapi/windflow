@@ -95,6 +95,26 @@ export const useDeploymentsStore = defineStore('deployments', () => {
     }
   }
 
+  async function deleteDeployment(id: string): Promise<void> {
+    loading.value = true
+    error.value = null
+
+    try {
+      await deploymentsApi.delete(id)
+      // Retirer le déploiement de la liste
+      deployments.value = deployments.value.filter(d => d.id !== id)
+      // Réinitialiser currentDeployment si c'est celui qui a été supprimé
+      if (currentDeployment.value?.id === id) {
+        currentDeployment.value = null
+      }
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to delete deployment'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   function updateDeploymentInList(deployment: Deployment): void {
     const index = deployments.value.findIndex(d => d.id === deployment.id)
     if (index !== -1) {
@@ -133,6 +153,7 @@ export const useDeploymentsStore = defineStore('deployments', () => {
     createDeployment,
     cancelDeployment,
     retryDeployment,
+    deleteDeployment,
     updateDeploymentInList,
     subscribeToDeploymentLogs,
     subscribeToDeploymentStatus,

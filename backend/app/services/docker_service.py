@@ -331,7 +331,8 @@ class DockerService:
     async def remove_container(
         self,
         container_name: str,
-        force: bool = False
+        force: bool = False,
+        remove_volumes: bool = True
     ) -> Tuple[bool, str]:
         """
         Supprime un container Docker.
@@ -339,6 +340,7 @@ class DockerService:
         Args:
             container_name: Nom ou ID du container
             force: Forcer la suppression même si running
+            remove_volumes: Supprimer les volumes anonymes associés (défaut: True)
 
         Returns:
             Tuple[bool, str]: (Succès, Message)
@@ -347,6 +349,8 @@ class DockerService:
             cmd = ['docker', 'rm']
             if force:
                 cmd.append('-f')
+            if remove_volumes:
+                cmd.append('-v')  # Supprime les volumes anonymes associés
             cmd.append(container_name)
 
             result = subprocess.run(
@@ -447,5 +451,50 @@ class DockerService:
 
         except Exception as e:
             error_msg = f"Erreur lors du redémarrage: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+
+    async def remove_volume(
+        self,
+        volume_name: str,
+        force: bool = False
+    ) -> Tuple[bool, str]:
+        """
+        Supprime un volume Docker nommé.
+
+        Args:
+            volume_name: Nom du volume Docker
+            force: Forcer la suppression même si le volume est utilisé
+
+        Returns:
+            Tuple[bool, str]: (Succès, Message)
+        """
+        try:
+            cmd = ['docker', 'volume', 'rm']
+            if force:
+                cmd.append('-f')
+            cmd.append(volume_name)
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                logger.info(f"Volume supprimé: {volume_name}")
+                return True, f"Volume {volume_name} supprimé"
+            else:
+                error_msg = result.stderr.strip()
+                # Si le volume n'existe pas, considérer comme succès
+                if "no such volume" in error_msg.lower() or "not found" in error_msg.lower():
+                    logger.warning(f"Volume {volume_name} n'existe pas, considéré comme supprimé")
+                    return True, f"Volume {volume_name} n'existe pas (déjà supprimé)"
+                logger.error(f"Échec suppression volume: {error_msg}")
+                return False, error_msg
+
+        except Exception as e:
+            error_msg = f"Erreur lors de la suppression du volume: {str(e)}"
             logger.error(error_msg)
             return False, error_msg

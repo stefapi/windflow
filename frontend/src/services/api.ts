@@ -157,6 +157,9 @@ export const deploymentsApi = {
 
   retry: (id: string) =>
     http.post<Deployment>(`/deployments/${id}/retry`),
+
+  delete: (id: string) =>
+    http.delete(`/deployments/${id}`),
 }
 
 // Workflows API

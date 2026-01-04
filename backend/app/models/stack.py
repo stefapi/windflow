@@ -61,6 +61,14 @@ class Stack(Base):
         comment="Type de déploiement supporté par ce stack"
     )
 
+    # Paramètres spécifiques à la target (ex: volumes à supprimer)
+    target_parameters: Mapped[dict] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
+        comment="Paramètres spécifiques à la target (ex: volumes à supprimer)"
+    )
+
     # Marketplace (si le stack est public)
     is_public: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)
     downloads: Mapped[int] = mapped_column(default=0, nullable=False)

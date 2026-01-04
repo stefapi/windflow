@@ -93,17 +93,74 @@ class DeploymentOrchestrator:
                 del cls._active_tasks[deployment_id]
                 logger.debug(f"Tâche {deployment_id} nettoyée du tracking")
 
-            # Logger le résultat
-            try:
-                if t.exception():
-                    logger.error(f"Déploiement {deployment_id} échoué: {t.exception()}")
-                else:
-                    result = t.result()
-                    logger.info(f"Déploiement {deployment_id} terminé: {result.get('status', 'unknown')}")
-            except asyncio.CancelledError:
-                logger.warning(f"Déploiement {deployment_id} annulé")
-            except Exception as e:
-                logger.error(f"Erreur dans le callback du déploiement {deployment_id}: {e}")
+            # Logger le résultat et notifier via WebSocket
+            async def notify_completion():
+                """Notifie la fin du déploiement via WebSocket."""
+                try:
+                    async with AsyncSessionLocal() as db:
+                        from ..services.deployment_service import DeploymentService
+
+                        # Récupérer le déploiement actuel
+                        result = await db.execute(
+                            select(Deployment).where(Deployment.id == deployment_id)
+                        )
+                        deployment = result.scalar_one_or_none()
+
+                        if not deployment:
+                            logger.warning(f"Déploiement {deployment_id} non trouvé pour notification finale")
+                            return
+
+                        # Si le statut est déjà terminal (RUNNING, FAILED, STOPPED), ne rien faire
+                        # car deploy_stack_async a déjà notifié
+                        if deployment.status in [DeploymentStatus.RUNNING, DeploymentStatus.FAILED, DeploymentStatus.STOPPED]:
+                            logger.debug(f"Déploiement {deployment_id} déjà en statut terminal: {deployment.status.value}")
+                            return
+
+                        # Sinon, déterminer le statut final et notifier
+                        try:
+                            if t.exception():
+                                exception = t.exception()
+                                logger.error(f"Déploiement {deployment_id} échoué: {exception}")
+                                await DeploymentService.update_status(
+                                    db,
+                                    deployment_id,
+                                    DeploymentStatus.FAILED,
+                                    error_message=f"Erreur inattendue: {str(exception)}",
+                                    logs=f"[ERROR] Erreur inattendue dans la tâche asyncio: {str(exception)}"
+                                )
+                            else:
+                                task_result = t.result()
+                                logger.info(f"Déploiement {deployment_id} terminé: {task_result.get('status', 'unknown')}")
+                                # Le statut a normalement déjà été mis à jour par deploy_stack_async
+                                # Mais on émet quand même un événement pour être sûr
+                                await DeploymentService.update_status(
+                                    db,
+                                    deployment_id,
+                                    DeploymentStatus.RUNNING,
+                                    logs="[INFO] Déploiement terminé avec succès"
+                                )
+                        except asyncio.CancelledError:
+                            logger.warning(f"Déploiement {deployment_id} annulé")
+                            await DeploymentService.update_status(
+                                db,
+                                deployment_id,
+                                DeploymentStatus.STOPPED,
+                                logs="[SYSTEM] Déploiement annulé"
+                            )
+                        except Exception as e:
+                            logger.error(f"Erreur dans le callback du déploiement {deployment_id}: {e}")
+                            await DeploymentService.update_status(
+                                db,
+                                deployment_id,
+                                DeploymentStatus.FAILED,
+                                error_message=f"Erreur dans le callback: {str(e)}",
+                                logs=f"[ERROR] Erreur dans le callback: {str(e)}"
+                            )
+                except Exception as e:
+                    logger.error(f"Erreur lors de la notification de fin de déploiement {deployment_id}: {e}")
+
+            # Exécuter la notification de manière asynchrone
+            asyncio.create_task(notify_completion())
 
         task.add_done_callback(cleanup_callback)
 
@@ -130,7 +187,7 @@ class DeploymentOrchestrator:
                 logger.warning(f"Tâche de déploiement {deployment_id} déjà terminée")
                 return False
         else:
-            logger.warning(f"Aucune tâche active trouvée pour le déploiement {deployment_id}")
+            logger.debug(f"Aucune tâche active trouvée pour le déploiement {deployment_id}")
             return False
 
     @classmethod

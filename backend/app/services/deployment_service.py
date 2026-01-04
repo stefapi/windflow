@@ -206,6 +206,14 @@ class DeploymentService:
         # 3.6. Ajouter deployment_name aux variables pour qu'il soit disponible dans les templates
         rendered_variables['deployment_name'] = deployment_name
 
+        # 3.7. Rendre les target_parameters du stack avec les variables (pour snapshot)
+        rendered_target_parameters = None
+        if stack.target_parameters:
+            rendered_target_parameters = DeploymentService._render_template(
+                stack.target_parameters,
+                rendered_variables
+            )
+
         # 4. Générer le config en rendant le template avec les variables rendues
         config = deployment_data.config
         if not config:
@@ -221,6 +229,7 @@ class DeploymentService:
             "target_id": deployment_data.target_id,
             "config": config,
             "variables": rendered_variables,
+            "rendered_target_parameters": rendered_target_parameters,
             "organization_id": organization_id,
             "status": DeploymentStatus.PENDING
         }
@@ -274,15 +283,193 @@ class DeploymentService:
         return deployment
 
     @staticmethod
+    async def _remove_named_volumes(deployment: Deployment, docker_service) -> None:
+        """
+        Supprime les volumes nommés définis dans rendered_target_parameters du déploiement.
+
+        Utilise les target_parameters déjà rendus avec Jinja lors de la création du déploiement,
+        évitant ainsi de devoir re-rendre les templates lors de la suppression.
+
+        Args:
+            deployment: Déploiement contenant les rendered_target_parameters
+            docker_service: Instance de DockerService pour supprimer les volumes
+        """
+        try:
+            # Récupérer les target_parameters rendus du déploiement
+            rendered_target_parameters = deployment.rendered_target_parameters
+
+            logger.debug(f"rendered_target_parameters pour {deployment.id}: {rendered_target_parameters}")
+
+            if not rendered_target_parameters or 'volumes' not in rendered_target_parameters:
+                logger.debug(f"Pas de volumes définis dans rendered_target_parameters pour {deployment.id}")
+                return
+
+            volumes_list = rendered_target_parameters.get('volumes', [])
+            if not volumes_list:
+                logger.debug(f"Liste de volumes vide pour {deployment.id}")
+                return
+
+            logger.info(f"Suppression de {len(volumes_list)} volume(s) nommé(s) pour le déploiement {deployment.id}")
+
+            # Parcourir chaque volume défini (déjà rendus avec Jinja)
+            for volume_entry in volumes_list:
+                # Les volumes dans target_parameters sont de simples noms de volumes
+                # Format: "volume_name" (pas de mapping volume:path comme dans template.volumes)
+                if isinstance(volume_entry, str):
+                    volume_name = volume_entry.strip()
+
+                    logger.info(f"Suppression du volume nommé: {volume_name}")
+                    success, message = await docker_service.remove_volume(
+                        volume_name=volume_name,
+                        force=False
+                    )
+
+                    if success:
+                        logger.info(f"Volume {volume_name} supprimé avec succès: {message}")
+                    else:
+                        logger.warning(f"Échec de la suppression du volume {volume_name}: {message}")
+
+        except Exception as e:
+            logger.error(f"Erreur lors de la suppression des volumes nommés pour {deployment.id}: {e}")
+
+    @staticmethod
     async def delete(db: AsyncSession, deployment_id: str) -> bool:
-        """Supprime un déploiement."""
-        deployment = await DeploymentService.get_by_id(db, deployment_id)
+        """
+        Supprime complètement un déploiement.
+
+        Cette méthode:
+        1. Annule la tâche de déploiement en cours si elle existe
+        2. Arrête et supprime les conteneurs/pods et volumes selon le type de stack
+        3. Supprime l'entrée en base de données UNIQUEMENT si la destruction réussit
+
+        Args:
+            db: Session de base de données
+            deployment_id: ID du déploiement à supprimer
+
+        Returns:
+            bool: True si la suppression a réussi, False sinon
+        """
+        from sqlalchemy.orm import selectinload
+        from ..schemas.target import TargetType
+
+        # Charger le déploiement avec ses relations (stack)
+        result = await db.execute(
+            select(Deployment)
+            .options(selectinload(Deployment.stack))
+            .where(Deployment.id == deployment_id)
+        )
+        deployment = result.scalar_one_or_none()
+
         if not deployment:
+            logger.warning(f"Déploiement {deployment_id} non trouvé pour suppression")
             return False
 
-        await db.delete(deployment)
-        await db.commit()
-        return True
+        logger.info(f"Suppression du déploiement {deployment_id} (statut: {deployment.status.value}, stack: {deployment.stack.name}, target_type: {deployment.stack.target_type})")
+
+        # 1. Annuler la tâche en cours si elle existe
+        try:
+            from .deployment_orchestrator import DeploymentOrchestrator
+            await DeploymentOrchestrator.cancel_deployment(deployment_id)
+            logger.info(f"Tâche de déploiement {deployment_id} annulée")
+        except Exception as e:
+            logger.warning(f"Erreur lors de l'annulation de la tâche {deployment_id}: {e}")
+            # Continue même si l'annulation échoue (la tâche n'existe peut-être pas)
+
+        # 2. Supprimer les ressources selon le type de stack
+        resources_deleted = False
+        deletion_error = None
+
+        if deployment.status.value in ["running", "deploying", "pending"]:
+            try:
+                # Router vers le bon service selon le type de stack
+                if deployment.stack.target_type == TargetType.DOCKER.value:
+                    # === DOCKER NATIF ===
+                    logger.info(f"Suppression d'un container Docker natif: {deployment.name}")
+                    from .docker_service import DockerService
+                    docker_service = DockerService()
+
+                    # Supprimer le container (force=True pour supprimer même si running)
+                    success, output = await docker_service.remove_container(
+                        container_name=deployment.name,
+                        force=True,
+                        remove_volumes=True
+                    )
+
+                    if success:
+                        logger.info(f"Container Docker supprimé pour {deployment_id}: {output}")
+                        resources_deleted = True
+
+                        # Supprimer les volumes nommés explicitement définis dans le template
+                        await DeploymentService._remove_named_volumes(
+                            deployment=deployment,
+                            docker_service=docker_service
+                        )
+                    else:
+                        deletion_error = f"Échec de la suppression du container Docker: {output}"
+                        logger.error(deletion_error)
+                else:
+                    # === DOCKER COMPOSE / AUTRES ===
+                    logger.info(f"Suppression d'un projet Docker Compose: {deployment.name}")
+                    from .docker_compose_service import DockerComposeService
+                    docker_compose_service = DockerComposeService()
+
+                    # Supprimer complètement le projet (conteneurs + volumes)
+                    success, output = await docker_compose_service.remove_compose(
+                        project_name=deployment.name,
+                        remove_volumes=True
+                    )
+
+                    if success:
+                        logger.info(f"Projet Docker Compose supprimé pour {deployment_id}: {output}")
+                        resources_deleted = True
+                    else:
+                        deletion_error = f"Échec de la suppression du projet Docker Compose: {output}"
+                        logger.error(deletion_error)
+
+            except Exception as e:
+                deletion_error = f"Erreur lors de la suppression des ressources: {str(e)}"
+                logger.error(f"Erreur lors de la suppression des ressources pour {deployment_id}: {e}")
+        else:
+            # Déploiement déjà arrêté ou en échec, pas de ressources à supprimer
+            logger.info(f"Déploiement {deployment_id} en statut {deployment.status.value}, pas de ressources actives à supprimer")
+            resources_deleted = True
+
+        # 3. Gérer le résultat de la suppression
+        if not resources_deleted and deletion_error:
+            # La suppression des ressources a échoué
+            # Mettre le déploiement en statut FAILED au lieu de le supprimer
+            logger.warning(f"Impossible de supprimer les ressources pour {deployment_id}, mise en statut FAILED")
+            deployment.status = DeploymentStatus.FAILED
+            deployment.error_message = deletion_error
+            deployment.stopped_at = datetime.utcnow()
+
+            # Ajouter aux logs
+            error_log = f"\n[ERROR] Échec de la suppression des ressources: {deletion_error}"
+            if deployment.logs:
+                deployment.logs += error_log
+            else:
+                deployment.logs = error_log
+
+            try:
+                await db.commit()
+                await db.refresh(deployment)
+                logger.info(f"Déploiement {deployment_id} marqué comme FAILED")
+                return False
+            except Exception as e:
+                logger.error(f"Erreur lors de la mise à jour du statut FAILED pour {deployment_id}: {e}")
+                await db.rollback()
+                return False
+
+        # 4. Supprimer l'entrée en base de données (seulement si ressources supprimées)
+        try:
+            await db.delete(deployment)
+            await db.commit()
+            logger.info(f"Déploiement {deployment_id} supprimé de la base de données")
+            return True
+        except Exception as e:
+            logger.error(f"Erreur lors de la suppression en base de données du déploiement {deployment_id}: {e}")
+            await db.rollback()
+            return False
 
     @staticmethod
     async def update_status(
