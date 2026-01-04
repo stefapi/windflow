@@ -72,6 +72,7 @@ class Stack(Base):
     documentation_url: Mapped[str] = mapped_column(String(500), nullable=True)
     author: Mapped[str] = mapped_column(String(255), nullable=True)
     license: Mapped[str] = mapped_column(String(100), nullable=True, default="MIT")
+    deployment_name: Mapped[str] = mapped_column(String(255), nullable=True, comment="Nom par défaut du déploiement (template)")
 
     # Organisation (multi-tenant)
     organization_id: Mapped[str] = mapped_column(

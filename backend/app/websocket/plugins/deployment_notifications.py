@@ -151,9 +151,9 @@ class DeploymentNotificationsPlugin(WebSocketPlugin):
             await context.broadcast_to_user(user_id, message)
 
         # Broadcast to deployment log subscribers
-        if context.broadcast_to_event_subscribers:
-            await context.broadcast_to_event_subscribers(
-                f"deployment_logs_{deployment_id}",
+        if context.broadcast_deployment_log_to_subscribers:
+            await context.broadcast_deployment_log_to_subscribers(
+                deployment_id,
                 message
             )
 

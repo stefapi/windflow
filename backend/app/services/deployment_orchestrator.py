@@ -110,6 +110,30 @@ class DeploymentOrchestrator:
         return task
 
     @classmethod
+    async def cancel_deployment(cls, deployment_id: str) -> bool:
+        """
+        Annule un déploiement en cours.
+
+        Args:
+            deployment_id: ID du déploiement à annuler
+
+        Returns:
+            True si la tâche a été annulée, False si aucune tâche active
+        """
+        if deployment_id in cls._active_tasks:
+            task = cls._active_tasks[deployment_id]
+            if not task.done():
+                task.cancel()
+                logger.info(f"Tâche de déploiement {deployment_id} annulée")
+                return True
+            else:
+                logger.warning(f"Tâche de déploiement {deployment_id} déjà terminée")
+                return False
+        else:
+            logger.warning(f"Aucune tâche active trouvée pour le déploiement {deployment_id}")
+            return False
+
+    @classmethod
     async def _execute_deployment_with_retry(
         cls,
         deployment_id: str,

@@ -12,6 +12,9 @@ import base64
 import hashlib
 from typing import Optional, Literal
 
+from . import animalname
+from . import cosmicname
+from . import mythologyname
 
 class JinjaFunctions:
     """Collection de fonctions utilitaires pour templates Jinja2."""
@@ -303,6 +306,90 @@ class JinjaFunctions:
 
         return secrets.choice(choices)
 
+    @staticmethod
+    def generate_animalname(name="", style: Optional[str] = None) -> str:
+        """
+        Génère un nom de code aléatoire basé sur des animaux.
+
+        Utilise le générateur de noms d'animaux pour créer des noms
+        mémorables et uniques, idéal pour nommer des containers, serveurs, etc.
+
+        Args:
+            style: Style de génération (optionnel)
+                - "ubuntu": adjective + animal + suffix (ex: "bright-dolphin-a3f")
+                - "docker": adverb + animal + suffix (ex: "quietly-tiger-b4k2")
+                - "full": prefix + adverb + adjective + animal + suffix
+                - None: adjective + animal (défaut)
+
+        Returns:
+            Nom de code généré
+
+        Example:
+            >>> name = JinjaFunctions.generate_animalname("ubuntu")
+            >>> len(name.split('-'))
+            3
+            >>> name = JinjaFunctions.generate_animalname()
+            >>> len(name.split('-'))
+            2
+        """
+        return name+"-"+animalname.generate_codename(style=style)
+
+    @staticmethod
+    def generate_cosmicname(name="", style: Optional[str] = None) -> str:
+        """
+        Génère un nom de code aléatoire basé sur des astres.
+
+        Utilise le générateur de noms d'astres pour créer des noms
+        mémorables et uniques, idéal pour nommer des containers, serveurs, etc.
+
+        Args:
+            style: Style de génération (optionnel)
+                - "ubuntu": adjective + cosmic + suffix (ex: "bright-sun-a3f")
+                - "docker": adverb + cosmic + suffix (ex: "quietly-saturn-b4k2")
+                - "full": prefix + adverb + adjective + cosmic + suffix
+                - None: adjective + cosmic (défaut)
+
+        Returns:
+            Nom de code généré
+
+        Example:
+            >>> name = JinjaFunctions.generate_cosmicname("ubuntu")
+            >>> len(name.split('-'))
+            3
+            >>> name = JinjaFunctions.generate_cosmicname()
+            >>> len(name.split('-'))
+            2
+        """
+        return name+"-"+cosmicname.generate_codename(style=style)
+
+    @staticmethod
+    def generate_mythologyname(name="", style: Optional[str] = None) -> str:
+        """
+        Génère un nom de code aléatoire basé sur des êtres mythologiques.
+
+        Utilise le générateur de noms mythologiques pour créer des noms
+        mémorables et uniques, idéal pour nommer des containers, serveurs, etc.
+
+        Args:
+            style: Style de génération (optionnel)
+                - "ubuntu": adjective + mythology + suffix (ex: "bright-zeus-a3f")
+                - "docker": adverb + mythology + suffix (ex: "quietly-venus-b4k2")
+                - "full": prefix + adverb + adjective + mythology + suffix
+                - None: adjective + mythology (défaut)
+
+        Returns:
+            Nom de code généré
+
+        Example:
+            >>> name = JinjaFunctions.generate_mythologyname("ubuntu")
+            >>> len(name.split('-'))
+            3
+            >>> name = JinjaFunctions.generate_mythologyname()
+            >>> len(name.split('-'))
+            2
+        """
+        return name+"-"+mythologyname.generate_codename(style=style)
+
 
 # Dictionnaire des fonctions disponibles pour Jinja2
 JINJA_FUNCTIONS = {
@@ -318,4 +405,7 @@ JINJA_FUNCTIONS = {
     'env': JinjaFunctions.env,
     'now': JinjaFunctions.now,
     'random_choice': JinjaFunctions.random_choice,
+    'generate_animalname': JinjaFunctions.generate_animalname,
+    'generate_cosmicname': JinjaFunctions.generate_cosmicname,
+    'generate_mythologyname': JinjaFunctions.generate_mythologyname,
 }

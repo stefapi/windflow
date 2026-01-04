@@ -53,7 +53,7 @@ async def deploy_stack_async(
     from backend.app.services.deployment_service import DeploymentService
     from backend.app.database import AsyncSessionLocal
     from backend.app.models.stack import Stack
-    from backend.app.models.deployment import DeploymentStatus
+    from backend.app.models.deployment import DeploymentStatus, Deployment
     from backend.app.schemas.target import TargetType
     from sqlalchemy import select
 
@@ -72,7 +72,19 @@ async def deploy_stack_async(
                 logs="[INFO] Démarrage du déploiement (mode fallback asyncio)..."
             )
 
-            # 1. Charger le stack
+            # 1. Charger le deployment pour récupérer son nom
+            result = await db.execute(
+                select(Deployment).where(Deployment.id == deployment_id)
+            )
+            deployment = result.scalar_one_or_none()
+
+            if not deployment:
+                raise ValueError(f"Deployment {deployment_id} non trouvé")
+
+            deployment_name = deployment.name
+            logger.info(f"Deployment chargé: {deployment_name}")
+
+            # 2. Charger le stack
             result = await db.execute(
                 select(Stack).where(Stack.id == stack_id)
             )
@@ -120,7 +132,7 @@ async def deploy_stack_async(
                 )
 
                 # 4. Déployer le container
-                container_name = f"windflow-{deployment_id[:8]}"
+                container_name = deployment_name
                 await DeploymentService.update_status(
                     db, deployment_id, DeploymentStatus.DEPLOYING,
                     logs=f"[INFO] Lancement du container {container_name}..."
@@ -202,7 +214,7 @@ async def deploy_stack_async(
                 )
 
                 # 5. Déployer avec docker-compose
-                project_name = f"windflow-{deployment_id[:8]}"
+                project_name = deployment_name
                 await DeploymentService.update_status(
                     db, deployment_id, DeploymentStatus.DEPLOYING,
                     logs=f"[INFO] Lancement de docker-compose pour {project_name}..."

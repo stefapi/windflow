@@ -14,6 +14,7 @@
 import { ref, onMounted, onUnmounted, computed, type Ref } from 'vue'
 import wsService from '@/services/websocket'
 import { WebSocketEventType } from '@/services/websocket/types'
+import { deploymentsApi } from '@/services/api'
 import type {
   DeploymentStatusChangedEvent,
   DeploymentLogsUpdateEvent,
@@ -172,10 +173,51 @@ export function useDeploymentWebSocket(
   }
 
   /**
+   * Charger les logs initiaux depuis l'API REST
+   */
+  const loadInitialLogs = async () => {
+    try {
+      logDebug('Loading initial logs from API...')
+      const response = await deploymentsApi.get(getDeploymentId())
+      const deployment = response.data
+      logDebug('Deployment data received:', deployment)
+
+      // Initialiser le statut
+      if (deployment.status) {
+        status.value = deployment.status
+        logDebug('Status initialized:', deployment.status)
+      }
+
+      // Initialiser les logs si présents
+      if (deployment.logs) {
+        logDebug('Raw logs length:', deployment.logs.length)
+        const logLines = deployment.logs.split('\n').filter(line => line.trim())
+        logs.value = logLines
+        logDebug('Initial logs loaded:', logLines.length, 'lines')
+      } else {
+        logDebug('No logs in deployment object')
+      }
+
+      // Initialiser le message d'erreur si présent
+      if (deployment.error_message) {
+        errorMessage.value = deployment.error_message
+      }
+
+      lastUpdate.value = new Date()
+    } catch (error) {
+      logDebug('Error loading initial logs:', error)
+      // Ne pas bloquer la connexion WebSocket en cas d'erreur
+    }
+  }
+
+  /**
    * Se connecter aux événements WebSocket
    */
-  const connect = () => {
+  const connect = async () => {
     logDebug('Connecting to WebSocket for deployment:', getDeploymentId())
+
+    // Charger les logs initiaux avant de se connecter au WebSocket
+    await loadInitialLogs()
 
     // S'assurer que le service WebSocket est connecté
     if (!wsService.isConnected()) {
@@ -202,8 +244,7 @@ export function useDeploymentWebSocket(
     )
 
     // Envoyer une demande d'abonnement au serveur pour ce déploiement
-    wsService.send('subscribe', {
-      event_type: 'deployment',
+    wsService.send('deployment_logs', {
       deployment_id: getDeploymentId()
     })
 

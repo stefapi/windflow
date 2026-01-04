@@ -11,7 +11,7 @@ metadata:
   category: "Database"
   author: "PostgreSQL Global Development Group"
   license: "PostgreSQL License"
-
+  deployment_name: "{{ container_name }}"
   description: |
     PostgreSQL est un système de gestion de base de données relationnelle et objet
     open-source puissant et fiable, reconnu pour sa robustesse et ses fonctionnalités avancées.
@@ -56,7 +56,7 @@ template:
   image: "postgres:{{ postgres_version }}"
 
   # Nom du container
-  container_name: "{{ container_name }}"
+  container_name: "{{ deployment_name }}"
 
   # Variables d'environnement
   environment:
@@ -94,9 +94,9 @@ template:
   labels:
     app: "postgresql"
     managed_by: "windflow"
-    stack: "postgresql"
+    stack: "postgresql_docker"
     version: "{{ postgres_version }}"
-    database: "{{ database_name }}"
+    deployment_name: "{{ deployment_name }}"
 
 # ============================================================================
 # VARIABLES CONFIGURABLES
@@ -124,7 +124,7 @@ variables:
     type: string
     label: "Nom du container"
     description: "Nom unique du container Docker"
-    default: "postgres_db"
+    default: "{{generate_animalname('postgres')}}"
     required: true
     pattern: "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
     group: "Configuration générale"
@@ -199,7 +199,7 @@ variables:
     type: string
     label: "Nom du volume"
     description: "Nom du volume Docker pour la persistance des données"
-    default: "postgres_data"
+    default: "{{generate_cosmicname('postgres-data')}}"
     required: true
     pattern: "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
     group: "Stockage"

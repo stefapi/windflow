@@ -49,6 +49,9 @@ metadata:
   # Cible de déploiement : Docker Compose multi-services
   target_type: "docker_compose"
 
+  # Nom par défaut du déploiement
+  deployment_name: "deployment_name"
+
 # ============================================================================
 # TEMPLATE DOCKER COMPOSE
 # ============================================================================

@@ -345,7 +345,23 @@ export default wsService
 // Event-specific helpers
 export const deploymentEvents = {
   subscribeToLogs: (deploymentId: string, callback: (data: unknown) => void) => {
-    return wsService.on(`deployment:${deploymentId}:logs`, callback)
+    // S'abonner au type d'événement global DEPLOYMENT_LOGS_UPDATE
+    // et filtrer les messages pour ce deploymentId spécifique
+    const wrappedCallback = (data: any) => {
+      if (data && data.deploymentId === deploymentId) {
+        // Extraire les logs du message et les passer au callback
+        if (data.logs && Array.isArray(data.logs)) {
+          data.logs.forEach((log: string) => callback(log))
+        }
+      }
+    }
+
+    const unsubscribe = wsService.on(WebSocketEventType.DEPLOYMENT_LOGS_UPDATE, wrappedCallback)
+
+    // Envoyer un message pour s'abonner aux logs côté serveur
+    wsService.send('deployment_logs', { deployment_id: deploymentId })
+
+    return unsubscribe
   },
 
   subscribeToStatus: (deploymentId: string, callback: (data: unknown) => void) => {

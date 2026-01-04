@@ -64,6 +64,9 @@ class StackDefinitionMetadata(BaseModel):
     # Type de déploiement supporté (obligatoire)
     target_type: str = Field(..., description="Type de déploiement (docker, docker_compose, etc.)")
 
+    # Nom par défaut du déploiement (template)
+    deployment_name: Optional[str] = Field(None, description="Nom par défaut du déploiement (template)")
+
     @validator('version')
     def validate_version(cls, v):
         """Valide le format de la version."""

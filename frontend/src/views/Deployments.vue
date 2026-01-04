@@ -28,7 +28,7 @@
               <span class="i-carbon-document-blank mr-1" />
               Logs
             </el-button>
-            <el-button size="small" type="warning" @click="cancelDeployment(row.id)" v-if="row.status === 'running'">Cancel</el-button>
+            <el-button size="small" type="warning" @click="cancelDeployment(row.id)" v-if="row.status === 'pending' || row.status === 'installing'">Cancel</el-button>
             <el-button size="small" type="info" @click="retryDeployment(row.id)" v-if="row.status === 'failed'">Retry</el-button>
           </template>
         </el-table-column>
@@ -106,11 +106,15 @@
           </el-select>
         </el-form-item>
 
-        <!-- Nom du déploiement (optionnel) -->
-        <el-form-item label="Nom (optionnel)">
+        <!-- Nom du déploiement -->
+        <el-form-item
+          label="Nom"
+          :rules="[{ required: true, message: 'Nom', trigger: 'blur' }]"
+          prop="name"
+        >
           <el-input
             v-model="form.name"
-            placeholder="Auto-généré si vide"
+            placeholder="Nom du déploiement"
             clearable
           />
         </el-form-item>
@@ -229,6 +233,11 @@ const onStackChange = async () => {
     // Récupère les détails du stack (inclut les variables)
     const { data } = await stacksApi.get(form.stack_id)
 
+    // Pré-remplir le nom avec le default_name généré par le backend
+    if (data && (data as any).default_name) {
+      form.name = (data as any).default_name
+    }
+
     if (data && (data as any).variables && Object.keys((data as any).variables).length > 0) {
       // Créer l'instance du formulaire dynamique
       dynamicFormInstance.value = useDynamicForm((data as any).variables)
@@ -313,17 +322,17 @@ const handleCreate = async () => {
       payload.name = form.name.trim()
     }
 
-    // Extraire les champs dynamiques pour la configuration
-    const dynamicConfig: Record<string, any> = {}
+    // Extraire les champs dynamiques pour les variables
+    const dynamicVariables: Record<string, any> = {}
     Object.entries(form).forEach(([key, value]) => {
       if (!staticKeys.includes(key)) {
-        dynamicConfig[key] = value
+        dynamicVariables[key] = value
       }
     })
 
-    // Ajouter la configuration si présente
-    if (Object.keys(dynamicConfig).length > 0) {
-      payload.configuration = dynamicConfig
+    // Ajouter les variables si présentes
+    if (Object.keys(dynamicVariables).length > 0) {
+      payload.variables = dynamicVariables
     }
 
     // Créer le déploiement

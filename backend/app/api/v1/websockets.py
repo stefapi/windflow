@@ -125,7 +125,8 @@ async def general_websocket(
                 websocket=websocket,
                 logger=logger,
                 broadcast_to_user=lambda uid, msg: broadcast_to_user(uid, msg),
-                broadcast_to_event_subscribers=lambda evt, msg: broadcast_to_event_subscribers(evt, msg)
+                broadcast_to_event_subscribers=lambda evt, msg: broadcast_to_event_subscribers(evt, msg),
+                broadcast_deployment_log_to_subscribers=lambda dep_id, msg: broadcast_deployment_log_to_subscribers(dep_id, msg)
             )
 
             # Initialiser les plugins avec le contexte

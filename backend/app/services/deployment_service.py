@@ -16,6 +16,7 @@ from ..models.stack import Stack
 from ..schemas.deployment import DeploymentCreate, DeploymentUpdate
 from ..config import settings
 from .deployment_events import deployment_events
+from ..helper.template_renderer import TemplateRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,9 @@ class DeploymentService:
         """
         Rend un template (dict, list ou str) en remplaçant les variables Jinja2.
 
+        Utilise TemplateRenderer pour avoir accès aux fonctions personnalisées
+        comme generate_password(), generate_secret(), etc.
+
         Args:
             template_data: Données du template (peut être dict, list, str)
             variables: Variables à substituer
@@ -69,24 +73,18 @@ class DeploymentService:
         Returns:
             Template rendu avec variables substituées
         """
+        # Créer une instance de TemplateRenderer avec les fonctions Jinja2
+        renderer = TemplateRenderer()
+
         if isinstance(template_data, dict):
-            return {
-                key: DeploymentService._render_template(value, variables)
-                for key, value in template_data.items()
-            }
+            return renderer.render_dict(template_data, variables)
         elif isinstance(template_data, list):
             return [
                 DeploymentService._render_template(item, variables)
                 for item in template_data
             ]
         elif isinstance(template_data, str):
-            try:
-                # Rendre la chaîne avec Jinja2
-                template = Template(template_data)
-                return template.render(**variables)
-            except TemplateSyntaxError:
-                # Si erreur de syntaxe, retourner la chaîne originale
-                return template_data
+            return renderer.render_string(template_data, variables)
         else:
             # Pour les autres types (int, bool, None, etc.), retourner tel quel
             return template_data
@@ -198,12 +196,22 @@ class DeploymentService:
             deployment_data.variables
         )
 
-        # 4. Générer le config en rendant le template avec les variables
+        # 3.5. Rendre les variables mergées pour exécuter les macros (generate_password, etc.)
+        # Cela garantit que le frontend reçoit les valeurs générées, pas les macros brutes
+        rendered_variables = DeploymentService._render_template(
+            merged_variables,
+            {}  # Pas de variables utilisateur supplémentaires pour le rendu des variables
+        )
+
+        # 3.6. Ajouter deployment_name aux variables pour qu'il soit disponible dans les templates
+        rendered_variables['deployment_name'] = deployment_name
+
+        # 4. Générer le config en rendant le template avec les variables rendues
         config = deployment_data.config
         if not config:
             config = DeploymentService._render_template(
                 stack.template,
-                merged_variables
+                rendered_variables
             )
 
         # 5. Créer le déploiement avec statut initial PENDING
@@ -212,7 +220,7 @@ class DeploymentService:
             "stack_id": deployment_data.stack_id,
             "target_id": deployment_data.target_id,
             "config": config,
-            "variables": merged_variables,
+            "variables": rendered_variables,
             "organization_id": organization_id,
             "status": DeploymentStatus.PENDING
         }
@@ -236,7 +244,7 @@ class DeploymentService:
             stack_id=str(deployment.stack_id),
             target_id=str(deployment.target_id),
             user_id=str(user_id),
-            configuration=merged_variables
+            configuration=rendered_variables
         )
 
         logger.info(
@@ -501,7 +509,7 @@ class DeploymentService:
         user_id: Optional[str] = None
     ) -> bool:
         """
-        Réessaye un déploiement PENDING en relançant la tâche.
+        Réessaye un déploiement PENDING ou FAILED en relançant la tâche.
 
         Args:
             db: Session de base de données
@@ -517,14 +525,14 @@ class DeploymentService:
             logger.error(f"Déploiement {deployment_id} non trouvé pour retry")
             return False
 
-        if deployment.status != DeploymentStatus.PENDING:
+        if deployment.status not in [DeploymentStatus.PENDING, DeploymentStatus.FAILED]:
             logger.warning(
-                f"Déploiement {deployment_id} n'est pas PENDING (statut: {deployment.status}), "
+                f"Déploiement {deployment_id} n'est pas PENDING ou FAILED (statut: {deployment.status}), "
                 "skip retry"
             )
             return False
 
-        logger.info(f"Retry du déploiement PENDING {deployment_id}")
+        logger.info(f"Retry du déploiement {deployment.status.value} {deployment_id}")
 
         try:
             from .deployment_orchestrator import DeploymentOrchestrator

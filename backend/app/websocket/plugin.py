@@ -46,6 +46,9 @@ class PluginContext:
     broadcast_to_event_subscribers: Optional[Callable] = None
     """Broadcast message to all event subscribers."""
 
+    broadcast_deployment_log_to_subscribers: Optional[Callable] = None
+    """Broadcast deployment logs to subscribers of a specific deployment."""
+
     send_notification: Optional[Callable] = None
     """Send notification to specific user."""
 

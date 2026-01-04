@@ -22,6 +22,7 @@ import type {
   StackUpdate,
   Deployment,
   DeploymentCreate,
+  DeploymentLogsResponse,
   Workflow,
   WorkflowCreate,
   Template,
@@ -152,7 +153,7 @@ export const deploymentsApi = {
     http.post<Deployment>(`/deployments/${id}/cancel`),
 
   getLogs: (id: string) =>
-    http.get<{ logs: string }>(`/deployments/${id}/logs`),
+    http.get<DeploymentLogsResponse>(`/deployments/${id}/logs`),
 
   retry: (id: string) =>
     http.post<Deployment>(`/deployments/${id}/retry`),

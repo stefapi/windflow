@@ -24,14 +24,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDeploymentsStore } from '@/stores'
+import { deploymentsApi } from '@/services/api'
 
 const route = useRoute()
 const deploymentsStore = useDeploymentsStore()
 const logs = ref('')
-let unsubscribeLogs: (() => void) | null = null
 
 const getStatusType = (status: string) => {
   const map: Record<string, any> = {
@@ -45,18 +45,16 @@ const getStatusType = (status: string) => {
 }
 
 onMounted(async () => {
-  const id = route.params.id as string
+  const id = route.params['id'] as string
   await deploymentsStore.fetchDeployment(id)
-  
-  // Subscribe to real-time logs
-  unsubscribeLogs = deploymentsStore.subscribeToDeploymentLogs(id, (log: string) => {
-    logs.value += log + '\n'
-  })
-})
 
-onUnmounted(() => {
-  if (unsubscribeLogs) {
-    unsubscribeLogs()
+  // Fetch logs via REST API
+  try {
+    const response = await deploymentsApi.getLogs(id)
+    logs.value = response.data.logs || ''
+  } catch (error) {
+    console.error('Failed to fetch deployment logs:', error)
+    logs.value = 'Failed to load logs'
   }
 })
 </script>

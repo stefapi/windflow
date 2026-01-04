@@ -129,6 +129,7 @@ export interface Stack extends BaseModel {
   compose_content: string
   metadata: Record<string, unknown>
   organization_id: string
+  default_name?: string
 }
 
 export interface StackCreate {
@@ -164,6 +165,12 @@ export interface DeploymentCreate {
   stack_id: string
   target_id: string
   metadata?: Record<string, unknown>
+}
+
+export interface DeploymentLogsResponse {
+  deployment_id: string
+  logs: string | null
+  updated_at: string
 }
 
 // Workflow types

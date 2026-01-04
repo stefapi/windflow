@@ -215,6 +215,7 @@ class StackDefinitionsLoader:
             documentation_url=definition.metadata.documentation_url,
             author=definition.metadata.author,
             license=definition.metadata.license,
+            deployment_name=definition.metadata.deployment_name,
             organization_id=organization_id
         )
 
@@ -244,6 +245,7 @@ class StackDefinitionsLoader:
         stack.documentation_url = definition.metadata.documentation_url
         stack.author = definition.metadata.author
         stack.license = definition.metadata.license
+        stack.deployment_name = definition.metadata.deployment_name
 
         await session.flush()
 

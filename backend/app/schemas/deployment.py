@@ -62,3 +62,11 @@ class DeploymentResponse(BaseModel):
     updated_at: datetime = Field(..., description="Date de mise à jour")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DeploymentLogsResponse(BaseModel):
+    """Schema pour réponse des logs d'un déploiement."""
+
+    deployment_id: str = Field(..., description="ID du déploiement")
+    logs: Optional[str] = Field(None, description="Logs du déploiement")
+    updated_at: datetime = Field(..., description="Date de dernière mise à jour des logs")

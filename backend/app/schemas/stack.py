@@ -19,6 +19,7 @@ class StackBase(BaseModel):
     icon_url: Optional[str] = Field(None, max_length=500, description="URL de l'icône")
     author: Optional[str] = Field(None, max_length=255, description="Auteur du stack")
     license: Optional[str] = Field(default="MIT", max_length=100, description="Licence")
+    deployment_name: Optional[str] = Field(None, max_length=255, description="Nom par défaut du déploiement (template)")
 
 
 class StackCreate(StackBase):
@@ -44,6 +45,7 @@ class StackUpdate(BaseModel):
     category: Optional[str] = Field(None, max_length=100, description="Nouvelle catégorie")
     tags: Optional[List[str]] = Field(None, description="Nouveaux tags")
     is_public: Optional[bool] = Field(None, description="Statut public")
+    deployment_name: Optional[str] = Field(None, max_length=255, description="Nouveau nom par défaut du déploiement")
 
 
 class StackResponse(StackBase):
@@ -61,6 +63,7 @@ class StackResponse(StackBase):
     organization_id: str = Field(..., description="ID de l'organisation")
     created_at: datetime = Field(..., description="Date de création")
     updated_at: datetime = Field(..., description="Date de mise à jour")
+    default_name: Optional[str] = Field(None, description="Nom par défaut généré pour le déploiement")
 
     model_config = ConfigDict(from_attributes=True)
 
