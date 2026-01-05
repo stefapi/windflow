@@ -136,6 +136,7 @@ variables:
     description: "Nom unique du container Docker"
     default: "{{generate_animalname('postgres')}}"
     required: true
+    visible: false
     pattern: "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
     group: "Configuration générale"
     help: "Le nom doit être unique sur l'hôte Docker"
@@ -188,6 +189,12 @@ variables:
       - "de_DE.UTF-8"
       - "es_ES.UTF-8"
       - "C"
+    enum_labels:
+      "en_US.UTF-8": "English (United States)"
+      "fr_FR.UTF-8": "Français (France)"
+      "de_DE.UTF-8": "Deutsch (Deutschland)"
+      "es_ES.UTF-8": "Español (España)"
+      "C": "C (Default POSIX)"
     required: true
     group: "Configuration base de données"
     help: "La locale affecte le tri et les comparaisons de chaînes"

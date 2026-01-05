@@ -16,7 +16,7 @@
       <el-option
         v-for="option in field.enum"
         :key="option"
-        :label="option"
+        :label="getOptionLabel(option)"
         :value="option"
       />
     </el-select>
@@ -32,7 +32,7 @@
       <el-option
         v-for="option in field.enum"
         :key="option"
-        :label="String(option)"
+        :label="getOptionLabel(option)"
         :value="option"
       />
     </el-select>
@@ -162,6 +162,19 @@ const localValue = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value)
 })
+
+/**
+ * Retourne le libellé à afficher pour une option d'enum.
+ * Si enum_labels est défini et contient la clé, retourne le libellé.
+ * Sinon, retourne la valeur convertie en string.
+ */
+const getOptionLabel = (option: any): string => {
+  const optionStr = String(option)
+  if (props.field.enum_labels && props.field.enum_labels[optionStr]) {
+    return props.field.enum_labels[optionStr]
+  }
+  return optionStr
+}
 </script>
 
 <style scoped>

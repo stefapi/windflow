@@ -13,6 +13,7 @@ export interface VariableDefinition {
   default?: any
   required?: boolean
   enum?: string[] | number[]
+  enum_labels?: Record<string, string>
   min?: number
   max?: number
   pattern?: string
@@ -27,6 +28,7 @@ export interface FormField {
   description?: string
   required: boolean
   enum?: string[] | number[]
+  enum_labels?: Record<string, string>
   min?: number
   max?: number
   pattern?: string
@@ -204,6 +206,7 @@ export function useDynamicForm(variables: Record<string, VariableDefinition>) {
       description: variable.description,
       required: variable.required || false,
       enum: variable.enum,
+      enum_labels: variable.enum_labels,
       min: variable.min,
       max: variable.max,
       pattern: variable.pattern,

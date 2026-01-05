@@ -33,6 +33,10 @@ class StackDefinitionVariable(BaseModel):
     # Contraintes spécifiques selon le type
     pattern: Optional[str] = Field(None, description="Regex de validation (string)")
     enum: Optional[List[Any]] = Field(None, description="Liste de choix possibles")
+    enum_labels: Optional[Dict[str, str]] = Field(
+        None,
+        description="Libellés explicatifs pour les valeurs enum (optionnel)"
+    )
     minimum: Optional[int] = Field(None, description="Valeur minimale (number)")
     maximum: Optional[int] = Field(None, description="Valeur maximale (number)")
     min_length: Optional[int] = Field(None, description="Longueur minimale (string/password)")
@@ -47,6 +51,31 @@ class StackDefinitionVariable(BaseModel):
         None,
         description="Conditions d'affichage basées sur d'autres variables"
     )
+
+    @validator('enum_labels')
+    def validate_enum_labels(cls, v, values):
+        """Valide que les clés de enum_labels correspondent aux valeurs de enum."""
+        if v is None:
+            return v
+
+        enum_values = values.get('enum')
+        if enum_values is None:
+            raise ValueError(
+                "enum_labels ne peut être défini que si enum est également défini"
+            )
+
+        # Convertir les valeurs enum en strings pour la comparaison
+        enum_str_values = {str(val) for val in enum_values}
+        enum_labels_keys = set(v.keys())
+
+        # Vérifier que toutes les clés de enum_labels existent dans enum
+        invalid_keys = enum_labels_keys - enum_str_values
+        if invalid_keys:
+            raise ValueError(
+                f"Les clés suivantes dans enum_labels n'existent pas dans enum: {invalid_keys}"
+            )
+
+        return v
 
 
 class StackDefinitionMetadata(BaseModel):

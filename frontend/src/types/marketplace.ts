@@ -47,6 +47,7 @@ export interface StackVariable {
   min_length?: number
   max_length?: number
   options?: string[]
+  enum_labels?: Record<string, string>
   placeholder?: string
   generate?: boolean
   pattern?: string
