@@ -7,7 +7,7 @@
 import { reactive, computed, type ComputedRef } from 'vue'
 
 export interface VariableDefinition {
-  type: 'string' | 'password' | 'number' | 'boolean' | 'integer'
+  type: 'string' | 'password' | 'number' | 'boolean' | 'integer' | 'group'
   label: string
   description?: string
   default?: any
@@ -20,6 +20,7 @@ export interface VariableDefinition {
   pattern?: string
   has_macro?: boolean
   macro_template?: string
+  variables?: Record<string, VariableDefinition>  // Sous-variables pour les groupes
 }
 
 export interface FormField {
@@ -38,6 +39,8 @@ export interface FormField {
   validationRules: ValidationRule[]
   has_macro?: boolean
   macro_template?: string
+  groupLabel?: string  // Label du groupe parent (pour l'affichage)
+  isGroupHeader?: boolean  // Indique si c'est un header de groupe
 }
 
 export interface ValidationRule {
@@ -168,7 +171,46 @@ export function useDynamicForm(variables: Record<string, VariableDefinition>) {
   const formData = reactive<Record<string, any>>({})
 
   /**
+   * Initialise récursivement les valeurs par défaut pour un groupe et ses sous-groupes.
+   *
+   * @param variables - Variables à traiter
+   * @param prefix - Préfixe pour la notation pointée (ex: "performance" ou "performance.advanced")
+   */
+  const initializeGroupDefaults = (variables: Record<string, VariableDefinition>, prefix: string = '') => {
+    for (const [key, variable] of Object.entries(variables)) {
+      const fullKey = prefix ? `${prefix}.${key}` : key
+
+      // Gérer les groupes (récursif)
+      if (variable.type === 'group' && variable.variables) {
+        // Récursion pour les sous-variables du groupe
+        initializeGroupDefaults(variable.variables, fullKey)
+        continue
+      }
+
+      // Variables normales
+      if (variable.default === undefined) {
+        formData[fullKey] = null
+        continue
+      }
+
+      if (variable.type === 'integer') {
+        formData[fullKey] = coerceInteger(variable.default)
+        continue
+      }
+
+      if (variable.type === 'number') {
+        formData[fullKey] = coerceNumber(variable.default)
+        continue
+      }
+
+      formData[fullKey] = variable.default
+    }
+  }
+
+  /**
    * Initialise les valeurs par défaut du formulaire.
+   * Gère les variables groupées en créant des clés avec notation pointée.
+   * Supporte les groupes imbriqués à plusieurs niveaux.
    */
   const initializeDefaults = () => {
     // Réinitialiser le formulaire
@@ -176,51 +218,80 @@ export function useDynamicForm(variables: Record<string, VariableDefinition>) {
       delete formData[key]
     })
 
-    // Définir les valeurs par défaut
+    // Définir les valeurs par défaut (avec support récursif des groupes)
+    initializeGroupDefaults(variables)
+  }
+
+  /**
+   * Génère récursivement les champs pour un groupe et ses sous-groupes.
+   *
+   * @param variables - Variables à traiter
+   * @param prefix - Préfixe pour la notation pointée (ex: "performance" ou "performance.advanced")
+   * @param groupLabel - Label du groupe parent (pour l'affichage)
+   * @returns Liste des champs générés
+   */
+  const generateGroupFields = (
+    variables: Record<string, VariableDefinition>,
+    prefix: string = '',
+    groupLabel?: string
+  ): FormField[] => {
+    const result: FormField[] = []
+
     for (const [key, variable] of Object.entries(variables)) {
-      if (variable.default === undefined) {
-        formData[key] = null
-        continue
-      }
+      if (variable.visible === false) continue
 
-      if (variable.type === 'integer') {
-        formData[key] = coerceInteger(variable.default)
-        continue
-      }
+      const fullKey = prefix ? `${prefix}.${key}` : key
 
-      if (variable.type === 'number') {
-        formData[key] = coerceNumber(variable.default)
-        continue
-      }
+      // Gérer les groupes (récursif)
+      if (variable.type === 'group' && variable.variables) {
+        // Ajouter un header de groupe
+        result.push({
+          key: `__group_${fullKey}`,
+          type: 'group',
+          label: variable.label,
+          description: variable.description,
+          required: false,
+          visible: true,
+          validationRules: [],
+          isGroupHeader: true
+        })
 
-      formData[key] = variable.default
+        // Récursion pour les sous-champs du groupe
+        result.push(...generateGroupFields(variable.variables, fullKey, variable.label))
+      } else {
+        // Variable normale
+        result.push({
+          key: fullKey,
+          type: variable.type,
+          label: variable.label,
+          description: variable.description,
+          required: variable.required || false,
+          visible: variable.visible !== false,
+          enum: variable.enum,
+          enum_labels: variable.enum_labels,
+          min: variable.min,
+          max: variable.max,
+          pattern: variable.pattern,
+          default: variable.default,
+          validationRules: getValidationRules(variable),
+          has_macro: variable.has_macro || false,
+          macro_template: variable.macro_template,
+          groupLabel
+        })
+      }
     }
+
+    return result
   }
 
   /**
    * Génère la configuration des champs pour le rendu.
    * Filtre les champs invisibles (visible: false).
+   * Aplatit les groupes en créant des champs avec notation pointée.
+   * Supporte les groupes imbriqués à plusieurs niveaux.
    */
   const fields: ComputedRef<FormField[]> = computed(() => {
-    return Object.entries(variables)
-      .filter(([_key, variable]) => variable.visible !== false)
-      .map(([key, variable]) => ({
-        key,
-        type: variable.type,
-        label: variable.label,
-        description: variable.description,
-        required: variable.required || false,
-        visible: variable.visible !== false,
-        enum: variable.enum,
-        enum_labels: variable.enum_labels,
-        min: variable.min,
-        max: variable.max,
-        pattern: variable.pattern,
-        default: variable.default,
-        validationRules: getValidationRules(variable),
-        has_macro: variable.has_macro || false,
-        macro_template: variable.macro_template
-      }))
+    return generateGroupFields(variables)
   })
 
   /**

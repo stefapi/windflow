@@ -31,30 +31,96 @@ class DeploymentService:
         return f"{stack.name}-{timestamp}"
 
     @staticmethod
+    def _extract_group_defaults(var_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extrait récursivement les valeurs par défaut d'un groupe et de ses sous-groupes.
+
+        Args:
+            var_config: Configuration d'une variable de type 'group'
+
+        Returns:
+            Dict contenant les valeurs par défaut avec structure imbriquée
+        """
+        group_values = {}
+
+        if 'variables' not in var_config:
+            return group_values
+
+        for sub_var_name, sub_var_config in var_config['variables'].items():
+            if not isinstance(sub_var_config, dict):
+                continue
+
+            # Si c'est un sous-groupe, récursion
+            if sub_var_config.get('type') == 'group' and 'variables' in sub_var_config:
+                group_values[sub_var_name] = DeploymentService._extract_group_defaults(sub_var_config)
+            elif 'default' in sub_var_config:
+                group_values[sub_var_name] = sub_var_config['default']
+
+        return group_values
+
+    @staticmethod
+    def _set_nested_value(data: Dict[str, Any], key_path: str, value: Any) -> None:
+        """
+        Définit une valeur dans un dictionnaire imbriqué en utilisant la notation pointée.
+
+        Args:
+            data: Dictionnaire cible
+            key_path: Chemin avec notation pointée (ex: "performance.advanced.cache_size")
+            value: Valeur à définir
+        """
+        keys = key_path.split('.')
+        current = data
+
+        # Naviguer jusqu'à l'avant-dernier niveau
+        for key in keys[:-1]:
+            if key not in current:
+                current[key] = {}
+            elif not isinstance(current[key], dict):
+                current[key] = {}
+            current = current[key]
+
+        # Définir la valeur finale
+        current[keys[-1]] = value
+
+    @staticmethod
     def _merge_variables(stack_variables: Dict[str, Any], user_variables: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Merge les variables par défaut du stack avec celles fournies par l'utilisateur.
+
+        Gère les variables de type 'group' en créant une structure imbriquée accessible
+        avec la notation pointée (ex: performance.shared_buffers ou performance.advanced.cache_size).
+        Supporte les groupes imbriqués à plusieurs niveaux.
 
         Args:
             stack_variables: Variables définies dans le stack avec leurs defaults
             user_variables: Variables fournies par l'utilisateur (peuvent override les defaults)
 
         Returns:
-            Dict contenant les variables mergées
+            Dict contenant les variables mergées avec structure imbriquée pour les groupes
         """
         merged = {}
 
         # D'abord, extraire les valeurs par défaut du stack
         for var_name, var_config in stack_variables.items():
-            if isinstance(var_config, dict) and 'default' in var_config:
-                merged[var_name] = var_config['default']
+            if isinstance(var_config, dict):
+                # Vérifier si c'est un groupe
+                if var_config.get('type') == 'group' and 'variables' in var_config:
+                    # Extraire récursivement les valeurs par défaut du groupe
+                    merged[var_name] = DeploymentService._extract_group_defaults(var_config)
+                elif 'default' in var_config:
+                    merged[var_name] = var_config['default']
             else:
                 # Si pas de structure complexe, utiliser la valeur directement
                 merged[var_name] = var_config
 
         # Ensuite, appliquer les overrides de l'utilisateur
         if user_variables:
-            merged.update(user_variables)
+            for key, value in user_variables.items():
+                # Gérer les clés avec notation pointée (ex: "performance.shared_buffers" ou "performance.advanced.cache_size")
+                if '.' in key:
+                    DeploymentService._set_nested_value(merged, key, value)
+                else:
+                    merged[key] = value
 
         return merged
 

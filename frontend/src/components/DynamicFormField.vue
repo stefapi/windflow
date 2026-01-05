@@ -1,5 +1,13 @@
 <template>
+  <!-- Header de groupe -->
+  <div v-if="field.isGroupHeader" class="group-header">
+    <h4 class="group-title">{{ field.label }}</h4>
+    <p v-if="field.description" class="group-description">{{ field.description }}</p>
+  </div>
+
+  <!-- Champ de formulaire normal -->
   <el-form-item
+    v-else
     :label="field.label"
     :required="field.required"
     :prop="field.key"
@@ -178,6 +186,29 @@ const getOptionLabel = (option: any): string => {
 </script>
 
 <style scoped>
+/* Header de groupe */
+.group-header {
+  margin: 20px 0 12px 0;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  border-left: 4px solid #409eff;
+  border-radius: 4px;
+}
+
+.group-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.group-description {
+  margin: 6px 0 0 0;
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.5;
+}
+
 .field-description {
   display: flex;
   align-items: center;

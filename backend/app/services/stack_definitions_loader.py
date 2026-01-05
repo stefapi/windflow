@@ -258,6 +258,9 @@ class StackDefinitionsLoader:
         """
         Convertit les variables Pydantic en format dict pour la DB.
 
+        Pour les variables de type 'group', conserve la structure hiérarchique
+        pour l'affichage dans l'UI.
+
         Args:
             variables: Dictionnaire de StackDefinitionVariable
 
@@ -270,7 +273,14 @@ class StackDefinitionsLoader:
         db_variables = {}
         for var_name, var_def in variables.items():
             # Utiliser mode='json' pour forcer la sérialisation des Enums en string
-            db_variables[var_name] = var_def.model_dump(mode='json', exclude_none=True)
+            var_dict = var_def.model_dump(mode='json', exclude_none=True)
+
+            # Pour les groupes, s'assurer que les sous-variables sont bien sérialisées
+            if var_def.type == 'group' and var_def.variables:
+                # Récursion pour les sous-variables
+                var_dict['variables'] = self._convert_variables_to_db_format(var_def.variables)
+
+            db_variables[var_name] = var_dict
 
         return db_variables
 

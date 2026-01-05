@@ -17,6 +17,7 @@ class VariableType(str, Enum):
     BOOLEAN = "boolean"
     PASSWORD = "password"
     TEXTAREA = "textarea"
+    GROUP = "group"
 
 
 class StackDefinitionVariable(BaseModel):
@@ -51,6 +52,13 @@ class StackDefinitionVariable(BaseModel):
     depends_on: Optional[Dict[str, Any]] = Field(
         None,
         description="Conditions d'affichage basées sur d'autres variables"
+    )
+
+    # Sous-variables pour les groupes (récursif)
+    # Utilise une référence forward pour permettre la récursivité
+    variables: Optional[Dict[str, 'StackDefinitionVariable']] = Field(
+        None,
+        description="Sous-variables pour les groupes (type=group uniquement)"
     )
 
     @validator('enum_labels')
@@ -149,3 +157,7 @@ class StackDefinition(BaseModel):
         if not v or len(v) == 0:
             raise ValueError("Template ne peut pas être vide")
         return v
+
+
+# Résoudre la référence forward pour la récursivité
+StackDefinitionVariable.model_rebuild()

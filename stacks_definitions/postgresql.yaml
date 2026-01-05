@@ -77,9 +77,9 @@ template:
     PGDATA: "/var/lib/postgresql/data/pgdata"
 
     # Configuration performance (optionnel)
-    POSTGRES_SHARED_BUFFERS: "{{ shared_buffers }}"
-    POSTGRES_MAX_CONNECTIONS: "{{ max_connections }}"
-    POSTGRES_WORK_MEM: "{{ work_mem }}"
+    POSTGRES_SHARED_BUFFERS: "{{ performance.shared_buffers }}"
+    POSTGRES_MAX_CONNECTIONS: "{{ performance.max_connections }}"
+    POSTGRES_WORK_MEM: "{{ performance.work_mem }}"
 
   # Mapping des ports
   ports:
@@ -222,51 +222,55 @@ variables:
     group: "Stockage"
     help: "Volume Docker nommé pour la persistance"
 
-  # Performance - Shared Buffers
-  shared_buffers:
-    type: string
-    label: "Shared Buffers"
-    description: "Mémoire partagée pour le cache PostgreSQL"
-    default: "256MB"
-    enum:
-      - "128MB"
-      - "256MB"
-      - "512MB"
-      - "1GB"
-      - "2GB"
-      - "4GB"
-    required: false
-    group: "Performance"
-    help: "Recommandé: 25% de la RAM disponible"
+  performance:
+    type: group
+    label: "Paramètres de performance"
+    variables:
+      # Performance - Shared Buffers
+      shared_buffers:
+        type: string
+        label: "Shared Buffers"
+        description: "Mémoire partagée pour le cache PostgreSQL"
+        default: "256MB"
+        enum:
+          - "128MB"
+          - "256MB"
+          - "512MB"
+          - "1GB"
+          - "2GB"
+          - "4GB"
+        required: false
+        group: "Performance"
+        help: "Recommandé: 25% de la RAM disponible"
 
-  # Performance - Max Connections
-  max_connections:
-    type: integer
-    label: "Connexions maximales"
-    description: "Nombre maximum de connexions simultanées"
-    default: 100
-    minimum: 10
-    maximum: 1000
-    required: false
-    group: "Performance"
-    help: "Ajuster selon les besoins (chaque connexion consomme de la RAM)"
+      # Performance - Max Connections
+      max_connections:
+        type: integer
+        label: "Connexions maximales"
+        description: "Nombre maximum de connexions simultanées"
+        default: 100
+        minimum: 10
+        maximum: 1000
+        required: false
+        group: "Performance"
+        help: "Ajuster selon les besoins (chaque connexion consomme de la RAM)"
 
-  # Performance - Work Mem
-  work_mem:
-    type: string
-    label: "Work Memory"
-    description: "Mémoire allouée pour les opérations de tri et hash"
-    default: "4MB"
-    enum:
-      - "1MB"
-      - "2MB"
-      - "4MB"
-      - "8MB"
-      - "16MB"
-      - "32MB"
-    required: false
-    group: "Performance"
-    help: "Mémoire par opération (tri, hash join, etc.)"
+      # Performance - Work Mem
+      work_mem:
+        type: string
+        label: "Work Memory"
+        description: "Mémoire allouée pour les opérations de tri et hash"
+        default: "4MB"
+        enum:
+          - "1MB"
+          - "2MB"
+          - "4MB"
+          - "8MB"
+          - "16MB"
+          - "32MB"
+        required: false
+        group: "Performance"
+        help: "Mémoire par opération (tri, hash join, etc.)"
 
 # ============================================================================
 # NOTES DE DÉPLOIEMENT

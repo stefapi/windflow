@@ -37,7 +37,7 @@ export interface StackDetails extends MarketplaceStack {
  * Variable de configuration d'un stack
  */
 export interface StackVariable {
-  type: 'string' | 'number' | 'integer' | 'boolean' | 'password' | 'select'
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'password' | 'select' | 'group'
   label: string
   description?: string
   default?: any
@@ -52,6 +52,7 @@ export interface StackVariable {
   placeholder?: string
   generate?: boolean
   pattern?: string
+  variables?: Record<string, StackVariable>  // Sous-variables pour les groupes
 }
 
 /**
