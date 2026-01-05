@@ -132,6 +132,7 @@
             :key="field.key"
             :field="field"
             v-model="form[field.key]"
+            @regenerate="handleRegenerateVariable(field.key)"
           />
         </template>
 
@@ -254,6 +255,30 @@ const onStackChange = async () => {
   } catch (err: any) {
     console.error('Erreur lors du chargement des détails du stack:', err)
     ElMessage.error(err?.message || 'Impossible de charger la configuration du stack')
+  }
+}
+
+/**
+ * Régénère la valeur d'une variable contenant une macro.
+ */
+const handleRegenerateVariable = async (variableName: string) => {
+  if (!form.stack_id) {
+    ElMessage.warning('Aucun stack sélectionné')
+    return
+  }
+
+  try {
+    // Appeler l'API pour régénérer la variable
+    const { data } = await stacksApi.regenerateVariable(form.stack_id, variableName)
+
+    // Mettre à jour la valeur dans le formulaire
+    form[variableName] = data.new_value
+
+    // Afficher un message de succès
+    ElMessage.success(`Nouvelle valeur générée pour ${variableName}`)
+  } catch (err: any) {
+    console.error('Erreur lors de la régénération de la variable:', err)
+    ElMessage.error(err?.message || 'Impossible de régénérer la variable')
   }
 }
 

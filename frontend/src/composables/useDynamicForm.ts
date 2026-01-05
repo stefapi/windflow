@@ -16,6 +16,8 @@ export interface VariableDefinition {
   min?: number
   max?: number
   pattern?: string
+  has_macro?: boolean
+  macro_template?: string
 }
 
 export interface FormField {
@@ -30,6 +32,8 @@ export interface FormField {
   pattern?: string
   default?: any
   validationRules: ValidationRule[]
+  has_macro?: boolean
+  macro_template?: string
 }
 
 export interface ValidationRule {
@@ -204,7 +208,9 @@ export function useDynamicForm(variables: Record<string, VariableDefinition>) {
       max: variable.max,
       pattern: variable.pattern,
       default: variable.default,
-      validationRules: getValidationRules(variable)
+      validationRules: getValidationRules(variable),
+      has_macro: variable.has_macro || false,
+      macro_template: variable.macro_template
     }))
   })
 

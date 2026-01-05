@@ -136,6 +136,11 @@ export const stacksApi = {
 
   validate: (data: { compose_content: string }) =>
     http.post<{ valid: boolean; errors: string[] }>('/stacks/validate', data),
+
+  regenerateVariable: (stackId: string, variableName: string) =>
+    http.post<{ variable_name: string; new_value: unknown; macro_template: string }>(
+      `/stacks/${stackId}/regenerate-variable/${variableName}`
+    ),
 }
 
 // Deployments API

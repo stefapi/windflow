@@ -38,6 +38,10 @@ class StackDefinitionVariable(BaseModel):
     min_length: Optional[int] = Field(None, description="Longueur minimale (string/password)")
     max_length: Optional[int] = Field(None, description="Longueur maximale (string/password)")
 
+    # Métadonnées pour les macros
+    has_macro: bool = Field(False, description="Indique si la valeur par défaut contient une macro Jinja")
+    macro_template: Optional[str] = Field(None, description="Template Jinja original avant rendu")
+
     # Dépendances conditionnelles
     depends_on: Optional[Dict[str, Any]] = Field(
         None,

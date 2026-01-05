@@ -31,6 +31,8 @@ def _render_stack_variables(stack) -> StackResponse:
     Returns:
         StackResponse avec variables rendues
     """
+    import re
+
     # Convertir l'objet SQLAlchemy en StackResponse Pydantic
     stack_response = StackResponse.model_validate(stack)
 
@@ -40,8 +42,28 @@ def _render_stack_variables(stack) -> StackResponse:
     # Créer un renderer pour exécuter les macros
     renderer = TemplateRenderer()
 
+    # Pattern pour détecter les macros Jinja {{ ... }}
+    macro_pattern = re.compile(r'\{\{.*?\}\}')
+
+    # Parcourir les variables pour détecter et marquer les macros
+    variables_with_macro_info = {}
+    for var_name, var_def in stack_response.variables.items():
+        var_dict = dict(var_def) if isinstance(var_def, dict) else var_def
+
+        # Vérifier si la valeur par défaut contient une macro
+        default_value = var_dict.get('default')
+        if default_value and isinstance(default_value, str) and macro_pattern.search(default_value):
+            # Marquer comme ayant une macro et sauvegarder le template original
+            var_dict['has_macro'] = True
+            var_dict['macro_template'] = default_value
+        else:
+            var_dict['has_macro'] = False
+            var_dict['macro_template'] = None
+
+        variables_with_macro_info[var_name] = var_dict
+
     # Rendre les variables (qui peuvent contenir des macros dans les defaults)
-    rendered_variables = renderer.render_dict(stack_response.variables, {})
+    rendered_variables = renderer.render_dict(variables_with_macro_info, {})
 
     # Créer une copie du stack avec les variables rendues
     stack_dict = stack_response.model_dump()
@@ -257,3 +279,87 @@ async def delete_stack(
         )
 
     await StackService.delete(session, stack_id)
+
+
+@router.post("/{stack_id}/regenerate-variable/{variable_name}")
+async def regenerate_variable(
+    stack_id: str,
+    variable_name: str,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db)
+):
+    """
+    Régénère la valeur d'une variable contenant une macro Jinja.
+
+    Cette route permet de régénérer une nouvelle valeur pour les variables
+    qui contiennent des macros (comme generate_password, get_valid_port, etc.)
+    sans avoir à recharger tout le stack.
+
+    Args:
+        stack_id: ID du stack
+        variable_name: Nom de la variable à régénérer
+        current_user: Utilisateur courant
+        session: Session de base de données
+
+    Returns:
+        dict: Nouvelle valeur générée pour la variable
+
+    Raises:
+        HTTPException: Si le stack n'existe pas, accès refusé, variable introuvable ou pas de macro
+    """
+    # Vérifier que le stack existe
+    stack = await StackService.get_by_id(session, stack_id)
+    if not stack:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Stack {stack_id} non trouvé"
+        )
+
+    # Vérifier les permissions
+    if stack.organization_id != current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé à ce stack"
+        )
+
+    # Vérifier que la variable existe
+    if not stack.variables or variable_name not in stack.variables:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Variable '{variable_name}' non trouvée dans le stack"
+        )
+
+    variable_def = stack.variables[variable_name]
+
+    # Vérifier que la variable a une valeur par défaut
+    if 'default' not in variable_def:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Variable '{variable_name}' n'a pas de valeur par défaut"
+        )
+
+    default_value = variable_def['default']
+
+    # Vérifier que la valeur par défaut contient une macro
+    import re
+    macro_pattern = re.compile(r'\{\{.*?\}\}')
+    if not isinstance(default_value, str) or not macro_pattern.search(default_value):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Variable '{variable_name}' ne contient pas de macro à régénérer"
+        )
+
+    # Régénérer la valeur en rendant le template
+    renderer = TemplateRenderer()
+    try:
+        new_value = renderer.render_string(default_value, {})
+        return {
+            "variable_name": variable_name,
+            "new_value": new_value,
+            "macro_template": default_value
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la régénération de la macro: {str(e)}"
+        )

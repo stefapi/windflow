@@ -38,26 +38,52 @@
     </el-select>
 
     <!-- Password → Input type password avec bouton show/hide -->
-    <el-input
-      v-else-if="field.type === 'password'"
-      v-model="localValue"
-      type="password"
-      :placeholder="`Entrer ${field.label}`"
-      show-password
-      clearable
-    />
+    <div v-else-if="field.type === 'password'" class="input-with-regenerate">
+      <el-input
+        v-model="localValue"
+        type="password"
+        :placeholder="`Entrer ${field.label}`"
+        show-password
+        clearable
+      />
+      <el-tooltip
+        v-if="field.has_macro"
+        content="Régénérer une nouvelle valeur"
+        placement="top"
+      >
+        <el-button
+          class="regenerate-button"
+          :icon="Refresh"
+          @click="emit('regenerate')"
+          circle
+        />
+      </el-tooltip>
+    </div>
 
     <!-- Number → Input number avec min/max -->
-    <el-input-number
-      v-else-if="field.type === 'number' || field.type === 'integer'"
-      v-model="localValue"
-      :min="field.min"
-      :max="field.max"
-      :precision="isIntegerField ? 0 : 2"
-      :placeholder="`Entrer ${field.label}`"
-      style="width: 100%"
-      controls-position="right"
-    />
+    <div v-else-if="field.type === 'number' || field.type === 'integer'" class="input-with-regenerate">
+      <el-input-number
+        v-model="localValue"
+        :min="field.min"
+        :max="field.max"
+        :precision="isIntegerField ? 0 : 2"
+        :placeholder="`Entrer ${field.label}`"
+        style="width: 100%"
+        controls-position="right"
+      />
+      <el-tooltip
+        v-if="field.has_macro"
+        content="Régénérer une nouvelle valeur"
+        placement="top"
+      >
+        <el-button
+          class="regenerate-button"
+          :icon="Refresh"
+          @click="emit('regenerate')"
+          circle
+        />
+      </el-tooltip>
+    </div>
 
     <!-- Boolean → Switch -->
     <el-switch
@@ -67,12 +93,25 @@
     />
 
     <!-- String par défaut → Input text -->
-    <el-input
-      v-else
-      v-model="localValue"
-      :placeholder="`Entrer ${field.label}`"
-      clearable
-    />
+    <div v-else class="input-with-regenerate">
+      <el-input
+        v-model="localValue"
+        :placeholder="`Entrer ${field.label}`"
+        clearable
+      />
+      <el-tooltip
+        v-if="field.has_macro"
+        content="Régénérer une nouvelle valeur"
+        placement="top"
+      >
+        <el-button
+          class="regenerate-button"
+          :icon="Refresh"
+          @click="emit('regenerate')"
+          circle
+        />
+      </el-tooltip>
+    </div>
 
     <!-- Description (aide contextuelle) -->
     <template v-if="field.description" #extra>
@@ -86,7 +125,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { InfoFilled } from '@element-plus/icons-vue'
+import { InfoFilled, Refresh } from '@element-plus/icons-vue'
 import type { FormField } from '@/composables/useDynamicForm'
 
 interface Props {
@@ -96,6 +135,7 @@ interface Props {
 
 interface Emits {
   (e: 'update:modelValue', value: any): void
+  (e: 'regenerate'): void
 }
 
 const props = defineProps<Props>()
@@ -142,5 +182,21 @@ const localValue = computed({
 /* Style pour le switch avec label */
 :deep(.el-switch__label) {
   margin-left: 8px;
+}
+
+/* Container pour input avec bouton de régénération */
+.input-with-regenerate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.input-with-regenerate > :first-child {
+  flex: 1;
+}
+
+.regenerate-button {
+  flex-shrink: 0;
 }
 </style>
