@@ -27,6 +27,7 @@ class StackDefinitionVariable(BaseModel):
     description: Optional[str] = Field(None, description="Description détaillée")
     default: Any = Field(None, description="Valeur par défaut")
     required: bool = Field(False, description="Variable obligatoire ?")
+    visible: bool = Field(True, description="Variable visible dans l'interface ?")
     group: Optional[str] = Field(None, description="Groupe dans l'interface")
     help: Optional[str] = Field(None, description="Aide contextuelle (tooltip)")
 

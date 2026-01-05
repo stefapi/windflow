@@ -42,6 +42,7 @@ export interface StackVariable {
   description?: string
   default?: any
   required?: boolean
+  visible?: boolean
   min?: number
   max?: number
   min_length?: number

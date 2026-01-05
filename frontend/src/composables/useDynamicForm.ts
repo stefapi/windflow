@@ -12,6 +12,7 @@ export interface VariableDefinition {
   description?: string
   default?: any
   required?: boolean
+  visible?: boolean
   enum?: string[] | number[]
   enum_labels?: Record<string, string>
   min?: number
@@ -27,6 +28,7 @@ export interface FormField {
   label: string
   description?: string
   required: boolean
+  visible: boolean
   enum?: string[] | number[]
   enum_labels?: Record<string, string>
   min?: number
@@ -197,24 +199,28 @@ export function useDynamicForm(variables: Record<string, VariableDefinition>) {
 
   /**
    * Génère la configuration des champs pour le rendu.
+   * Filtre les champs invisibles (visible: false).
    */
   const fields: ComputedRef<FormField[]> = computed(() => {
-    return Object.entries(variables).map(([key, variable]) => ({
-      key,
-      type: variable.type,
-      label: variable.label,
-      description: variable.description,
-      required: variable.required || false,
-      enum: variable.enum,
-      enum_labels: variable.enum_labels,
-      min: variable.min,
-      max: variable.max,
-      pattern: variable.pattern,
-      default: variable.default,
-      validationRules: getValidationRules(variable),
-      has_macro: variable.has_macro || false,
-      macro_template: variable.macro_template
-    }))
+    return Object.entries(variables)
+      .filter(([_key, variable]) => variable.visible !== false)
+      .map(([key, variable]) => ({
+        key,
+        type: variable.type,
+        label: variable.label,
+        description: variable.description,
+        required: variable.required || false,
+        visible: variable.visible !== false,
+        enum: variable.enum,
+        enum_labels: variable.enum_labels,
+        min: variable.min,
+        max: variable.max,
+        pattern: variable.pattern,
+        default: variable.default,
+        validationRules: getValidationRules(variable),
+        has_macro: variable.has_macro || false,
+        macro_template: variable.macro_template
+      }))
   })
 
   /**
