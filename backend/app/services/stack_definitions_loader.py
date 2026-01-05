@@ -269,7 +269,8 @@ class StackDefinitionsLoader:
 
         db_variables = {}
         for var_name, var_def in variables.items():
-            db_variables[var_name] = var_def.model_dump(exclude_none=True)
+            # Utiliser mode='json' pour forcer la sérialisation des Enums en string
+            db_variables[var_name] = var_def.model_dump(mode='json', exclude_none=True)
 
         return db_variables
 

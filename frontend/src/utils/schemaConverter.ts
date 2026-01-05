@@ -6,7 +6,7 @@
  */
 
 interface SimpleVariable {
-  type: 'string' | 'number' | 'boolean' | 'password' | 'select'
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'password' | 'select'
   label: string
   description?: string
   default?: any
@@ -104,7 +104,7 @@ export function convertToJsonSchema(simpleConfig: SimpleConfig): ConvertedSchema
         }
         break
 
-      case 'number':
+      case 'integer':
         property.type = 'integer'
         if (variable.min !== undefined) {
           property.minimum = variable.min
@@ -113,7 +113,26 @@ export function convertToJsonSchema(simpleConfig: SimpleConfig): ConvertedSchema
           property.maximum = variable.max
         }
         if (variable.default !== undefined) {
-          property.default = variable.default
+          // Convertir explicitement en number pour éviter les erreurs de type avec ElInputNumber
+          property.default = typeof variable.default === 'string'
+            ? parseInt(variable.default, 10)
+            : Number(variable.default)
+        }
+        break
+
+      case 'number':
+        property.type = 'number'
+        if (variable.min !== undefined) {
+          property.minimum = variable.min
+        }
+        if (variable.max !== undefined) {
+          property.maximum = variable.max
+        }
+        if (variable.default !== undefined) {
+          // Convertir explicitement en number pour éviter les erreurs de type avec ElInputNumber
+          property.default = typeof variable.default === 'string'
+            ? parseFloat(variable.default)
+            : Number(variable.default)
         }
         break
 

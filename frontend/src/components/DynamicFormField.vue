@@ -103,16 +103,17 @@ const emit = defineEmits<Emits>()
 
 // Détecte si un champ number doit être affiché comme entier
 const isIntegerField = computed(() => {
+  // Si le type est explicitement integer, pas de décimales
+  if (props.field.type === 'integer') return true
+
+  // Heuristique: certains stacks peuvent déclarer `number` alors que la valeur
+  // attendue est un entier (defaults/min/max entiers).
   if (props.field.type !== 'number') return false
 
-  // Si la valeur par défaut est un entier
   const defaultIsInteger = Number.isInteger(props.field.default)
-
-  // Si min et max sont des entiers (ou undefined)
   const minIsInteger = props.field.min === undefined || Number.isInteger(props.field.min)
   const maxIsInteger = props.field.max === undefined || Number.isInteger(props.field.max)
 
-  // Considérer comme entier si toutes les valeurs sont entières
   return defaultIsInteger && minIsInteger && maxIsInteger
 })
 

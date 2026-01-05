@@ -37,7 +37,7 @@ export interface StackDetails extends MarketplaceStack {
  * Variable de configuration d'un stack
  */
 export interface StackVariable {
-  type: 'string' | 'number' | 'boolean' | 'password' | 'select'
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'password' | 'select'
   label: string
   description?: string
   default?: any

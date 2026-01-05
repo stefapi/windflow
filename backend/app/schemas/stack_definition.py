@@ -13,6 +13,7 @@ class VariableType(str, Enum):
     """Types de variables configurables."""
     STRING = "string"
     NUMBER = "number"
+    INTEGER = "integer"
     BOOLEAN = "boolean"
     PASSWORD = "password"
     TEXTAREA = "textarea"

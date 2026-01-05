@@ -29,6 +29,7 @@ export interface FormField {
   max?: number
   pattern?: string
   default?: any
+  validationRules: ValidationRule[]
 }
 
 export interface ValidationRule {
@@ -39,6 +40,18 @@ export interface ValidationRule {
   max?: number
   pattern?: RegExp
   validator?: (rule: any, value: any, callback: any) => void
+}
+
+function coerceInteger(value: unknown): number {
+  if (typeof value === 'number') return Math.trunc(value)
+  if (typeof value === 'string') return parseInt(value, 10)
+  return Math.trunc(Number(value))
+}
+
+function coerceNumber(value: unknown): number {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string') return parseFloat(value)
+  return Number(value)
 }
 
 /**
@@ -58,9 +71,29 @@ function getValidationRules(variable: VariableDefinition): ValidationRule[] {
 
   // Validation de type number/integer
   if (variable.type === 'number' || variable.type === 'integer') {
+    if (variable.type === 'integer') {
+      rules.push({
+        // Note: `rule` is unused but kept by Element Plus signature.
+        validator: (_rule: any, value: any, callback: any) => {
+          if (value === undefined || value === null || value === '') {
+            callback()
+            return
+          }
+
+          if (typeof value !== 'number' || !Number.isInteger(value)) {
+            callback(new Error(`${variable.label} doit être un entier`))
+            return
+          }
+
+          callback()
+        },
+        trigger: ['blur', 'change']
+      })
+    }
+
     if (variable.min !== undefined) {
       rules.push({
-        validator: (rule: any, value: any, callback: any) => {
+        validator: (_rule: any, value: any, callback: any) => {
           if (value !== undefined && value !== null && value < variable.min!) {
             callback(new Error(`${variable.label} doit être >= ${variable.min}`))
           } else {
@@ -73,7 +106,7 @@ function getValidationRules(variable: VariableDefinition): ValidationRule[] {
 
     if (variable.max !== undefined) {
       rules.push({
-        validator: (rule: any, value: any, callback: any) => {
+        validator: (_rule: any, value: any, callback: any) => {
           if (value !== undefined && value !== null && value > variable.max!) {
             callback(new Error(`${variable.label} doit être <= ${variable.max}`))
           } else {
@@ -88,7 +121,7 @@ function getValidationRules(variable: VariableDefinition): ValidationRule[] {
   // Validation pattern pour les strings
   if (variable.type === 'string' && variable.pattern) {
     rules.push({
-      validator: (rule: any, value: any, callback: any) => {
+      validator: (_rule: any, value: any, callback: any) => {
         // Si valeur vide ou null
         if (!value || value === '') {
           // OK pour les champs non-requis, sinon géré par la règle required
@@ -137,7 +170,22 @@ export function useDynamicForm(variables: Record<string, VariableDefinition>) {
 
     // Définir les valeurs par défaut
     for (const [key, variable] of Object.entries(variables)) {
-      formData[key] = variable.default !== undefined ? variable.default : null
+      if (variable.default === undefined) {
+        formData[key] = null
+        continue
+      }
+
+      if (variable.type === 'integer') {
+        formData[key] = coerceInteger(variable.default)
+        continue
+      }
+
+      if (variable.type === 'number') {
+        formData[key] = coerceNumber(variable.default)
+        continue
+      }
+
+      formData[key] = variable.default
     }
   }
 

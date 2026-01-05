@@ -305,7 +305,7 @@ variables:
 
   # Ports
   public_port:
-    type: number
+    type: integer
     label: "Port HTTP public"
     description: "Port d'accès HTTP (sera redirigé vers HTTPS)"
     default: 80
@@ -314,7 +314,7 @@ variables:
     group: "Configuration réseau"
 
   ssl_port:
-    type: number
+    type: integer
     label: "Port HTTPS public"
     description: "Port d'accès HTTPS sécurisé"
     default: 443
@@ -354,7 +354,7 @@ variables:
 
   # Performance
   max_workers:
-    type: number
+    type: integer
     label: "Nombre de workers"
     description: "Nombre de workers backend Baserow (recommandé: 2 × CPU cores)"
     default: 2
@@ -382,7 +382,7 @@ variables:
       enable_email: true
 
   email_port:
-    type: number
+    type: integer
     label: "Port SMTP"
     description: "Port du serveur SMTP (587 pour TLS, 465 pour SSL)"
     default: 587

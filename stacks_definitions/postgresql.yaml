@@ -194,10 +194,10 @@ variables:
 
   # Port hôte
   host_port:
-    type: number
+    type: integer
     label: "Port hôte"
     description: "Port exposé sur l'hôte Docker pour accéder à PostgreSQL"
-    default: 5432
+    default: "{{get_valid_port(5432)}}"
     minimum: 1
     maximum: 65535
     required: true
@@ -234,7 +234,7 @@ variables:
 
   # Performance - Max Connections
   max_connections:
-    type: number
+    type: integer
     label: "Connexions maximales"
     description: "Nombre maximum de connexions simultanées"
     default: 100

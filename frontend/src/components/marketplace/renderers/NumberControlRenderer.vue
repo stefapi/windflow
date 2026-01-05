@@ -28,7 +28,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { rendererProps, useJsonFormsControl } from '@jsonforms/vue'
-import { rankWith, isNumberControl } from '@jsonforms/core'
 
 const props = defineProps(rendererProps())
 
@@ -62,28 +61,27 @@ const precision = computed(() => {
   const precisionOption = props.uischema?.options?.precision
   if (precisionOption !== undefined) return precisionOption
 
+  // Debug: afficher le type du schéma
+  console.log('NumberControlRenderer - schema type:', props.schema?.type, 'for field:', control.value.path)
+
+  // Pour les entiers, pas de décimales
+  if (props.schema?.type === 'integer') {
+    console.log('Integer detected, setting precision to 0')
+    return 0
+  }
+
   // Pour les nombres à virgule, précision par défaut 2
-  if (props.schema?.type === 'number') return 2
+  if (props.schema?.type === 'number') {
+    console.log('Number detected, setting precision to 2')
+    return 2
+  }
+
+  console.log('No type match, defaulting to precision 0')
   return 0
 })
 
 const onChange = (value: number | null) => {
   control.value.handleChange(control.value.path, value)
-}
-</script>
-
-<script lang="ts">
-import { defineComponent } from 'vue'
-
-export default defineComponent({
-  name: 'NumberControlRenderer'
-})
-
-export const numberControlRendererEntry = {
-  renderer: defineComponent({
-    name: 'NumberControlRenderer'
-  }),
-  tester: rankWith(2, isNumberControl)
 }
 </script>
 

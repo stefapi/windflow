@@ -244,6 +244,60 @@ class JinjaFunctions:
         return secrets.randbelow(max_port - min_port + 1) + min_port
 
     @staticmethod
+    def get_valid_port(start_port: int = 5432, max_attempts: int = 100) -> int:
+        """
+        Trouve le premier port disponible à partir d'un port de départ.
+
+        Teste séquentiellement chaque port en essayant de créer un socket.
+        Retourne le premier port disponible trouvé.
+
+        Args:
+            start_port: Port de départ pour la recherche (défaut: 5432)
+            max_attempts: Nombre maximum de ports à tester (défaut: 100)
+
+        Returns:
+            Premier numéro de port disponible trouvé
+
+        Raises:
+            RuntimeError: Si aucun port disponible n'est trouvé après max_attempts tentatives
+
+        Example:
+            >>> port = JinjaFunctions.get_valid_port(5432)
+            >>> port >= 5432
+            True
+            >>> port = JinjaFunctions.get_valid_port(8000, max_attempts=50)
+            >>> 8000 <= port < 8050
+            True
+        """
+        import socket
+
+        for offset in range(max_attempts):
+            port = start_port + offset
+
+            # Vérifier que le port est dans la plage valide
+            if port > 65535:
+                raise RuntimeError(
+                    f"Aucun port disponible trouvé. Dépassement de la plage valide (65535)"
+                )
+
+            # Tester si le port est disponible
+            try:
+                # Créer un socket TCP et essayer de bind sur le port
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    sock.bind(('', port))
+                    # Si bind réussit, le port est disponible
+                    return port
+            except OSError:
+                # Port occupé ou erreur de permission, essayer le suivant
+                continue
+
+        # Aucun port disponible trouvé après max_attempts
+        raise RuntimeError(
+            f"Aucun port disponible trouvé entre {start_port} et {start_port + max_attempts - 1}"
+        )
+
+    @staticmethod
     def env(var_name: str, default: str = "") -> str:
         """
         Récupère une variable d'environnement.
@@ -402,6 +456,7 @@ JINJA_FUNCTIONS = {
     'base64_decode': JinjaFunctions.base64_decode,
     'hash_value': JinjaFunctions.hash_value,
     'random_port': JinjaFunctions.random_port,
+    'get_valid_port': JinjaFunctions.get_valid_port,
     'env': JinjaFunctions.env,
     'now': JinjaFunctions.now,
     'random_choice': JinjaFunctions.random_choice,
