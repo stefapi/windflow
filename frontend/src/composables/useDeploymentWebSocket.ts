@@ -81,7 +81,7 @@ export function useDeploymentWebSocket(
   const lastUpdate = ref<Date | null>(null)
 
   // Fonction helper pour logger en mode debug
-  const logDebug = (...args: any[]) => {
+  const logDebug = (...args: unknown[]) => {
     if (debug) {
       console.log('[useDeploymentWebSocket]', ...args)
     }
@@ -199,8 +199,8 @@ export function useDeploymentWebSocket(
       }
 
       // Initialiser le message d'erreur si présent
-      if (deployment.error_message) {
-        errorMessage.value = deployment.error_message
+      if ('error_message' in deployment && deployment.error_message) {
+        errorMessage.value = deployment.error_message as string
       }
 
       lastUpdate.value = new Date()
@@ -244,7 +244,8 @@ export function useDeploymentWebSocket(
     )
 
     // Envoyer une demande d'abonnement au serveur pour ce déploiement
-    wsService.send('deployment_logs', {
+    wsService.send('subscribe', {
+      event_type: 'deployment_logs',
       deployment_id: getDeploymentId()
     })
 
@@ -348,10 +349,10 @@ export function useDeploymentStatusMonitor() {
       }
     )
 
-    // S'abonner au topic "deployment_events" côté serveur
-    // pour recevoir tous les événements de déploiement
+    // S'abonner au type d'événement DEPLOYMENT_STATUS_CHANGED côté serveur
+    // pour recevoir tous les changements de statut de déploiement
     wsService.send('subscribe', {
-      event_type: 'deployment_events'
+      event_type: 'DEPLOYMENT_STATUS_CHANGED'
     })
   }
 
@@ -364,7 +365,7 @@ export function useDeploymentStatusMonitor() {
     // Se désabonner du topic côté serveur
     if (wsService.isConnected()) {
       wsService.send('unsubscribe', {
-        event_type: 'deployment_events'
+        event_type: 'DEPLOYMENT_STATUS_CHANGED'
       })
     }
   }

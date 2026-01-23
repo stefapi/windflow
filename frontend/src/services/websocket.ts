@@ -125,21 +125,16 @@ class WebSocketService {
    * Authenticate with the WebSocket server
    */
   private authenticate(token: string): void {
-    console.log('🔐 Attempting WebSocket authentication...')
-    console.log('🔐 WebSocket readyState:', this.ws?.readyState)
-    console.log('🔐 Token length:', token.length)
-
     if (this.ws?.readyState === WebSocket.OPEN) {
       const authMessage = {
         type: 'auth',
         token: token
       }
-      console.log('🔐 Sending auth message:', { type: 'auth', token: `${token.substring(0, 10)}...` })
       this.ws.send(JSON.stringify(authMessage))
-      console.log('✅ Authentication message sent successfully')
       this.authToken = token
+      console.log('🔐 WebSocket authentication sent')
     } else {
-      console.error('❌ Cannot authenticate: WebSocket not connected, readyState:', this.ws?.readyState)
+      console.error('❌ Cannot authenticate: WebSocket not connected')
     }
   }
 
@@ -214,7 +209,9 @@ class WebSocketService {
       this.authenticated = true
       console.log('WebSocket authentication successful')
     } else if (type === 'error') {
-      console.error('WebSocket server error:', data)
+      // Le backend peut envoyer soit {type: "error", data: ...} soit {type: "error", message: ...}
+      const errorMessage = (message as WebSocketMessage & { message?: string }).message || data || 'Unknown error'
+      console.error('WebSocket server error:', errorMessage)
     }
 
     // Dispatcher l'événement aux plugins si le type correspond à un WebSocketEventType
@@ -297,41 +294,26 @@ class WebSocketService {
    * Connect with automatic authentication using auth store
    */
   connectWithAuth(): void {
-    console.log('🔐 Attempting to connect with authentication...')
-
-    // Essayer d'abord le localStorage directement avec plus de détails
+    // Essayer d'abord le localStorage directement
     const storedToken = localStorage.getItem('access_token')
-    console.log('🔐 localStorage keys:', Object.keys(localStorage))
-    console.log('🔐 access_token key exists:', localStorage.getItem('access_token') !== null)
-    console.log('🔐 Token from localStorage:', storedToken ? `${storedToken.substring(0, 20)}...` : 'null')
 
     if (storedToken && storedToken.length > 0) {
-      console.log('🔐 Connecting with localStorage token...')
       this.connect(storedToken)
       return
     }
 
     // Fallback vers le store d'authentification si pas de token en localStorage
-    console.log('🔐 No token in localStorage, trying auth store...')
     import('@/stores/auth').then(({ useAuthStore }) => {
       const authStore = useAuthStore()
-      console.log('🔐 Auth store state:', {
-        hasToken: !!authStore.token,
-        hasUser: !!authStore.user,
-        isAuthenticated: authStore.isAuthenticated
-      })
 
       if (authStore.token) {
-        console.log('🔐 Connecting with store token...')
         this.connect(authStore.token)
       } else {
-        console.warn('⚠️ No authentication token available in store either - connecting without auth')
-        console.warn('🔐 This means the user is not logged in or the session expired')
+        console.warn('⚠️ No authentication token available')
         this.connect()
       }
     }).catch(error => {
       console.error('❌ Failed to load auth store:', error)
-      console.warn('⚠️ Falling back to connection without auth')
       this.connect()
     })
   }
@@ -347,11 +329,12 @@ export const deploymentEvents = {
   subscribeToLogs: (deploymentId: string, callback: (data: unknown) => void) => {
     // S'abonner au type d'événement global DEPLOYMENT_LOGS_UPDATE
     // et filtrer les messages pour ce deploymentId spécifique
-    const wrappedCallback = (data: any) => {
-      if (data && data.deploymentId === deploymentId) {
+    const wrappedCallback = (data: unknown) => {
+      const eventData = data as { deploymentId?: string; logs?: string[] }
+      if (eventData && eventData.deploymentId === deploymentId) {
         // Extraire les logs du message et les passer au callback
-        if (data.logs && Array.isArray(data.logs)) {
-          data.logs.forEach((log: string) => callback(log))
+        if (eventData.logs && Array.isArray(eventData.logs)) {
+          eventData.logs.forEach((log: string) => callback(log))
         }
       }
     }

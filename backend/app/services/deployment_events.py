@@ -3,14 +3,18 @@ Deployment Events Service.
 
 Service for emitting deployment-related events that will be
 broadcast to WebSocket clients via the plugin system.
+
+Note: Logs and progress updates are handled directly via WebSocket
+plugins (see backend/app/websocket/plugins/) for real-time streaming.
+This service focuses on deployment lifecycle events (status changes).
 """
 
 import logging
 from typing import Optional, Dict, Any
 from uuid import UUID
+from datetime import datetime
 
-from ..core.events import EventBus
-from ..schemas.websocket_events import WebSocketEventType
+from ..core.events import EventBus, EventType
 from ..schemas.deployment import DeploymentStatus
 
 
@@ -56,7 +60,7 @@ class DeploymentEventsService:
         """
         event_data = {
             "deployment_id": str(deployment_id),
-            "status": new_status.value if isinstance(new_status, DeploymentStatus) else new_status,
+            "new_status": new_status.value if isinstance(new_status, DeploymentStatus) else new_status,
             "old_status": old_status.value if isinstance(old_status, DeploymentStatus) else old_status if old_status else None,
             "user_id": str(user_id) if user_id else None,
         }
@@ -64,13 +68,33 @@ class DeploymentEventsService:
         if additional_data:
             event_data.update(additional_data)
 
+        # Map DeploymentStatus to EventType
+        status_str = new_status.value if isinstance(new_status, DeploymentStatus) else new_status
+        event_type_map = {
+            "pending": EventType.DEPLOYMENT_CREATED,
+            "deploying": EventType.DEPLOYMENT_STARTED,
+            "running": EventType.DEPLOYMENT_STARTED,  # Un déploiement "running" est démarré, pas terminé
+            "success": EventType.DEPLOYMENT_COMPLETED,
+            "failed": EventType.DEPLOYMENT_FAILED,
+            "rollback": EventType.DEPLOYMENT_ROLLED_BACK,
+        }
+
+        event_type = event_type_map.get(status_str, EventType.DEPLOYMENT_COMPLETED)
+
         logger.info(
-            f"📡 Emitting status change event: {deployment_id} → {new_status}"
+            f"📡 [STEP 1/4] Emitting status change event: {deployment_id} → {new_status} (EventType: {event_type})"
+        )
+        logger.debug(
+            f"Event data: {event_data}"
         )
 
         await self.event_bus.emit(
-            WebSocketEventType.DEPLOYMENT_STATUS_CHANGED,
+            event_type,
             event_data
+        )
+
+        logger.info(
+            f"✅ [STEP 1/4] Event emitted to EventBus successfully"
         )
 
     async def emit_logs_update(
@@ -81,64 +105,34 @@ class DeploymentEventsService:
         append: bool = True
     ) -> None:
         """
-        Emit a deployment logs update event.
+        Broadcast deployment logs update directly via WebSocket.
+
+        Note: Logs are broadcasted directly via WebSocket rather than through
+        the event bus, as they are real-time streaming data.
 
         Args:
             deployment_id: ID of the deployment
-            logs: New log content
-            user_id: ID of the user who initiated the deployment
-            append: If True, append to existing logs; if False, replace
+            logs: Log message(s) to send
+            user_id: ID of the user (optional)
+            append: Whether to append logs or replace (default: True)
         """
-        event_data = {
-            "deployment_id": str(deployment_id),
-            "logs": logs,
-            "user_id": str(user_id) if user_id else None,
-            "append": append
-        }
+        try:
+            # Import here to avoid circular dependency
+            from ..websocket import broadcast_deployment_log
 
-        logger.debug(
-            f"📝 Emitting logs update event: {deployment_id} ({len(logs)} chars)"
-        )
+            logger.debug(
+                f"📡 Broadcasting logs update via WebSocket: {deployment_id} (append={append})"
+            )
 
-        await self.event_bus.emit(
-            WebSocketEventType.DEPLOYMENT_LOGS_UPDATE,
-            event_data
-        )
+            # Broadcast directement via WebSocket
+            await broadcast_deployment_log(
+                deployment_id=str(deployment_id),
+                message=logs,
+                level="info"
+            )
 
-    async def emit_progress_update(
-        self,
-        deployment_id: UUID,
-        progress: int,
-        current_step: str,
-        total_steps: int = 100,
-        user_id: Optional[UUID] = None
-    ) -> None:
-        """
-        Emit a deployment progress update event.
-
-        Args:
-            deployment_id: ID of the deployment
-            progress: Progress percentage (0-100)
-            current_step: Description of current step
-            total_steps: Total number of steps
-            user_id: ID of the user who initiated the deployment
-        """
-        event_data = {
-            "deployment_id": str(deployment_id),
-            "progress": progress,
-            "current_step": current_step,
-            "total_steps": total_steps,
-            "user_id": str(user_id) if user_id else None
-        }
-
-        logger.debug(
-            f"⏳ Emitting progress event: {deployment_id} - {progress}% - {current_step}"
-        )
-
-        await self.event_bus.emit(
-            WebSocketEventType.DEPLOYMENT_PROGRESS,
-            event_data
-        )
+        except Exception as e:
+            logger.error(f"Failed to broadcast logs update: {e}", exc_info=True)
 
 
 # Singleton instance with lazy initialization to avoid circular imports

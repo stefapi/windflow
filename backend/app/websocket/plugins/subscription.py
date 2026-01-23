@@ -65,10 +65,14 @@ class SubscriptionHandler(WebSocketMessageHandler):
         Example message:
         {
             "type": "subscribe",
-            "event_type": "DEPLOYMENT_STATUS_CHANGED"
+            "data": {
+                "event_type": "DEPLOYMENT_STATUS_CHANGED"
+            }
         }
         """
-        event_type = message.get("event_type")
+        # Extract data from message payload
+        data = message.get("data", {})
+        event_type = data.get("event_type")
 
         if not event_type:
             return {
@@ -77,9 +81,8 @@ class SubscriptionHandler(WebSocketMessageHandler):
                 "timestamp": datetime.utcnow().isoformat()
             }
 
-        # Use the helper function from websockets.py
-        # This would need to be injected or imported
-        from ...api.v1.websockets import subscribe_to_event
+        # Use the helper function from broadcasting module
+        from ..broadcasting import subscribe_to_event
 
         user_id = str(context.user.id) if context.user else None
         if not user_id:
@@ -128,10 +131,14 @@ class SubscriptionHandler(WebSocketMessageHandler):
         Example message:
         {
             "type": "unsubscribe",
-            "event_type": "DEPLOYMENT_STATUS_CHANGED"
+            "data": {
+                "event_type": "DEPLOYMENT_STATUS_CHANGED"
+            }
         }
         """
-        event_type = message.get("event_type")
+        # Extract data from message payload
+        data = message.get("data", {})
+        event_type = data.get("event_type")
 
         if not event_type:
             return {
@@ -140,7 +147,7 @@ class SubscriptionHandler(WebSocketMessageHandler):
                 "timestamp": datetime.utcnow().isoformat()
             }
 
-        from ...api.v1.websockets import unsubscribe_from_event
+        from ..broadcasting import unsubscribe_from_event
 
         user_id = str(context.user.id) if context.user else None
         if not user_id:
@@ -189,10 +196,14 @@ class SubscriptionHandler(WebSocketMessageHandler):
         Example message:
         {
             "type": "deployment_logs",
-            "deployment_id": "uuid-here"
+            "data": {
+                "deployment_id": "uuid-here"
+            }
         }
         """
-        deployment_id = message.get("deployment_id")
+        # Extract data from message payload
+        data = message.get("data", {})
+        deployment_id = data.get("deployment_id")
 
         if not deployment_id:
             return {
@@ -201,7 +212,7 @@ class SubscriptionHandler(WebSocketMessageHandler):
                 "timestamp": datetime.utcnow().isoformat()
             }
 
-        from ...api.v1.websockets import subscribe_to_deployment_logs
+        from ..broadcasting import subscribe_to_deployment_logs
 
         user_id = str(context.user.id) if context.user else None
         if not user_id:

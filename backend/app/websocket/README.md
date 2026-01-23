@@ -1,42 +1,235 @@
-# WebSocket Plugin System - Backend
+# WebSocket System - Backend
 
-Système de plugins extensible pour gérer les événements WebSocket côté backend de WindFlow.
+Système modulaire et extensible pour gérer les connexions WebSocket et les événements temps-réel dans WindFlow.
 
 ## Vue d'ensemble
 
-Le système de plugins backend permet d'étendre les fonctionnalités WebSocket de manière modulaire et maintenable. Chaque plugin peut réagir à des événements WebSocket spécifiques sans modifier le code principal de l'endpoint WebSocket.
+Le système WebSocket backend est organisé en modules spécialisés pour une meilleure maintenabilité et réutilisabilité. Il permet de gérer les connexions, broadcaster des événements et étendre les fonctionnalités via un système de plugins.
 
-### Caractéristiques
-
-- **Architecture événementielle** : Les plugins s'abonnent à des événements spécifiques
-- **Exécution parallèle** : Les handlers s'exécutent en parallèle avec `asyncio.gather`
-- **Type-safe** : Utilisation de l'enum `WebSocketEventType` synchronisé avec le frontend
-- **Contexte partagé** : Accès aux dépendances via `PluginContext`
-- **Lifecycle management** : Hooks d'initialisation et de nettoyage
-
-## Architecture
+### Architecture
 
 ```
 websocket/
-├── __init__.py              # Exports publics
+├── __init__.py              # Exports publics du package
+├── connection_managers.py   # Gestion des connexions WebSocket
+├── broadcasting.py          # Fonctions de broadcasting
+├── event_bridge.py          # Pont entre événements internes et WebSocket
 ├── plugin.py                # Core du système de plugins
 ├── plugins/                 # Plugins par défaut
 │   ├── __init__.py
 │   ├── audit_logger.py      # Logging des événements de sécurité
-│   └── deployment_monitor.py # Monitoring des déploiements
+│   ├── deployment_monitor.py # Monitoring des déploiements
+│   └── subscription.py      # Gestion des abonnements
 └── README.md                # Cette documentation
 ```
 
-## Utilisation
+## Modules
 
-### Créer un plugin
+### 1. Connection Managers (`connection_managers.py`)
+
+Gère les connexions WebSocket actives et leur cycle de vie.
+
+#### BroadcastManager
+
+Gestionnaire de base avec support multi-connexions par entité :
 
 ```python
-from backend.app.websocket.plugin import WebSocketPlugin, PluginContext
+from backend.app.websocket import BroadcastManager
+
+manager = BroadcastManager()
+
+# Ajouter une connexion
+await manager.connect(entity_id, websocket)
+
+# Broadcaster à toutes les connexions d'une entité
+await manager.broadcast(entity_id, message)
+
+# Déconnecter
+manager.disconnect(entity_id, websocket)
+```
+
+#### ConnectionManager
+
+Gestionnaire spécialisé pour les déploiements avec une seule connexion par entité :
+
+```python
+from backend.app.websocket import ConnectionManager
+
+manager = ConnectionManager()
+
+# Connecter (remplace la connexion existante)
+await manager.connect(deployment_id, websocket)
+
+# Envoyer un message
+await manager.send_personal_message(message, deployment_id)
+
+# Broadcaster à tous les déploiements
+await manager.broadcast(message)
+```
+
+#### UserConnectionManager
+
+Gestionnaire pour les connexions utilisateurs avec support multi-connexions :
+
+```python
+from backend.app.websocket import UserConnectionManager
+
+user_manager = UserConnectionManager()
+
+# Connecter un utilisateur
+await user_manager.connect(user_id, websocket)
+
+# Broadcaster à toutes les connexions d'un utilisateur
+await user_manager.broadcast_to_user(user_id, message)
+
+# Déconnecter
+user_manager.disconnect(user_id, websocket)
+```
+
+**Instances globales** : Le module exporte `manager` (ConnectionManager) et `user_manager` (UserConnectionManager) prêts à l'emploi.
+
+### 2. Broadcasting (`broadcasting.py`)
+
+Fonctions utilitaires pour broadcaster des événements spécifiques.
+
+#### Broadcasts de déploiement
+
+```python
+from backend.app.websocket import (
+    broadcast_deployment_log,
+    broadcast_deployment_status,
+    broadcast_deployment_progress,
+    broadcast_deployment_complete
+)
+
+# Logs de déploiement
+await broadcast_deployment_log(
+    deployment_id="dep-123",
+    log_message="Starting deployment...",
+    level="info"
+)
+
+# Changement de statut
+await broadcast_deployment_status(
+    deployment_id="dep-123",
+    status="running",
+    message="Deployment in progress"
+)
+
+# Progression
+await broadcast_deployment_progress(
+    deployment_id="dep-123",
+    progress=50,
+    step="Installing dependencies",
+    total_steps=10,
+    current_step=5
+)
+
+# Déploiement terminé
+await broadcast_deployment_complete(
+    deployment_id="dep-123",
+    status="success",
+    message="Deployment completed",
+    result={"containers": ["web", "db"]}
+)
+```
+
+#### Broadcasts utilisateur
+
+```python
+from backend.app.websocket import (
+    broadcast_to_user,
+    broadcast_to_event_subscribers
+)
+
+# Broadcaster à un utilisateur spécifique
+await broadcast_to_user(
+    user_id="user-123",
+    message={
+        "type": "NOTIFICATION_SENT",
+        "data": {"title": "New notification"}
+    }
+)
+
+# Broadcaster à tous les abonnés d'un événement
+await broadcast_to_event_subscribers(
+    event_type="DEPLOYMENT_STATUS_CHANGED",
+    event_data={"deploymentId": "dep-123", "status": "running"}
+)
+```
+
+#### Gestion des connexions utilisateur
+
+```python
+from backend.app.websocket import (
+    add_user_connection,
+    remove_user_connection
+)
+
+# Ajouter une connexion
+await add_user_connection(user_id="user-123", websocket=websocket)
+
+# Retirer une connexion
+remove_user_connection(user_id="user-123", websocket=websocket)
+```
+
+#### Gestion des abonnements
+
+```python
+from backend.app.websocket import (
+    subscribe_to_event,
+    unsubscribe_from_event,
+    subscribe_to_deployment_logs
+)
+
+# S'abonner à un événement
+await subscribe_to_event(
+    websocket=websocket,
+    event_type="DEPLOYMENT_STATUS_CHANGED",
+    user_id="user-123"
+)
+
+# Se désabonner
+await unsubscribe_from_event(
+    websocket=websocket,
+    event_type="DEPLOYMENT_STATUS_CHANGED",
+    user_id="user-123"
+)
+
+# S'abonner aux logs d'un déploiement
+await subscribe_to_deployment_logs(
+    websocket=websocket,
+    deployment_id="dep-123",
+    user_id="user-123"
+)
+```
+
+### 3. Event Bridge (`event_bridge.py`)
+
+Pont entre les événements internes de l'application et le système WebSocket.
+
+```python
+from backend.app.websocket import EventBridge
+
+# Initialiser le pont
+bridge = EventBridge(redis_client)
+await bridge.start()
+
+# Les événements Redis sont automatiquement broadcastés via WebSocket
+```
+
+### 4. Plugin System (`plugin.py`)
+
+Système de plugins extensible pour réagir aux événements WebSocket.
+
+#### Créer un plugin
+
+```python
+from backend.app.websocket import WebSocketPlugin, PluginContext
 from backend.app.schemas.websocket_events import WebSocketEventType
 
-class MyCustomPlugin(WebSocketPlugin):
-    """Plugin personnalisé pour gérer des événements spécifiques."""
+class MyPlugin(WebSocketPlugin):
+    """Plugin personnalisé."""
     
     # Définir les événements écoutés
     event_types = [
@@ -45,10 +238,8 @@ class MyCustomPlugin(WebSocketPlugin):
     ]
     
     async def initialize(self, context: PluginContext) -> None:
-        """Initialisation du plugin lors de la connexion WebSocket."""
-        context.logger.info(f"MyCustomPlugin initialized for user {context.user.id}")
-        # Initialiser des ressources si nécessaire
-        self.some_state = {}
+        """Initialisation lors de la connexion."""
+        context.logger.info(f"Plugin initialized for user {context.user.id}")
     
     async def handle_event(
         self,
@@ -56,116 +247,81 @@ class MyCustomPlugin(WebSocketPlugin):
         event_data: dict,
         context: PluginContext
     ) -> None:
-        """Traiter un événement WebSocket."""
-        
-        if event_type == WebSocketEventType.DEPLOYMENT_STATUS_CHANGED:
-            await self._handle_deployment_status(event_data, context)
-        elif event_type == WebSocketEventType.NOTIFICATION_SENT:
-            await self._handle_notification(event_data, context)
-    
-    async def _handle_deployment_status(
-        self,
-        event_data: dict,
-        context: PluginContext
-    ) -> None:
-        """Gérer un changement de statut de déploiement."""
-        deployment_id = event_data.get('deploymentId')
-        new_status = event_data.get('newStatus')
-        
-        context.logger.info(
-            f"Deployment {deployment_id} status changed to {new_status}"
-        )
-        
-        # Logique métier du plugin
-        # ...
-    
-    async def _handle_notification(
-        self,
-        event_data: dict,
-        context: PluginContext
-    ) -> None:
-        """Gérer une notification."""
-        # Logique métier
-        pass
+        """Traiter un événement."""
+        context.logger.info(f"Handling {event_type}")
+        # Logique métier...
     
     async def cleanup(self, context: PluginContext) -> None:
-        """Nettoyage lors de la déconnexion WebSocket."""
-        context.logger.info("MyCustomPlugin cleaned up")
-        # Libérer les ressources
-        self.some_state.clear()
+        """Nettoyage lors de la déconnexion."""
+        context.logger.info("Plugin cleaned up")
 ```
 
-### Enregistrer un plugin
-
-Dans votre module (par exemple `backend/app/websocket/plugins/custom.py`) :
+#### Enregistrer un plugin
 
 ```python
-# Créer une instance du plugin
-my_plugin = MyCustomPlugin()
+from backend.app.websocket import plugin_manager
 
-# L'ajouter à la liste des plugins par défaut
-from backend.app.websocket.plugins import default_plugins
-default_plugins.append(my_plugin)
+# Enregistrer
+plugin_manager.register(MyPlugin())
+
+# Le plugin sera automatiquement appelé pour les événements configurés
 ```
 
-Ou enregistrer manuellement dans le code :
-
-```python
-from backend.app.websocket.plugin import plugin_manager
-from backend.app.websocket.plugins.custom import MyCustomPlugin
-
-# Enregistrer le plugin
-plugin_manager.register(MyCustomPlugin())
-```
-
-## Plugin Context
-
-Le `PluginContext` fournit l'accès aux dépendances et utilitaires :
+#### Plugin Context
 
 ```python
 @dataclass
 class PluginContext:
     """Contexte partagé entre tous les plugins."""
     
-    db: Optional[AsyncSession]              # Session base de données (peut être None)
+    db: Optional[AsyncSession]              # Session DB (peut être None)
     user: Optional[User]                    # Utilisateur authentifié
     websocket: WebSocket                    # Connexion WebSocket
     logger: logging.Logger                  # Logger structuré
-    broadcast_to_user: Optional[Callable]   # Fonction pour broadcaster à un utilisateur
-    broadcast_to_event_subscribers: Optional[Callable]  # Fonction pour broadcaster à des abonnés
+    broadcast_to_user: Optional[Callable]   # Fonction broadcast utilisateur
+    broadcast_to_event_subscribers: Optional[Callable]  # Fonction broadcast abonnés
 ```
 
-### Utiliser le contexte
+## Endpoints WebSocket
+
+Les endpoints sont définis dans `backend/app/api/v1/websockets.py` :
+
+### 1. Endpoint Global (`/ws`)
+
+Connexion WebSocket principale avec gestion d'événements via plugins :
 
 ```python
-async def handle_event(
-    self,
-    event_type: str,
-    event_data: dict,
-    context: PluginContext
-) -> None:
-    # Accéder à l'utilisateur
-    user_id = str(context.user.id)
-    
-    # Logger avec contexte
-    context.logger.info(
-        f"Processing event {event_type} for user {user_id}",
-        extra={"event_type": event_type, "user_id": user_id}
-    )
-    
-    # Broadcaster à l'utilisateur actuel
-    if context.broadcast_to_user:
-        await context.broadcast_to_user(user_id, {
-            "type": "custom_notification",
-            "message": "Event processed"
-        })
-    
-    # Broadcaster à tous les abonnés d'un événement
-    if context.broadcast_to_event_subscribers:
-        await context.broadcast_to_event_subscribers(
-            WebSocketEventType.CUSTOM_EVENT,
-            {"data": "some data"}
-        )
+# Frontend
+const ws = new WebSocket('ws://localhost:8000/api/v1/ws?token=<jwt_token>')
+
+# Envoyer un événement
+ws.send(JSON.stringify({
+    type: 'DEPLOYMENT_STATUS_CHANGED',
+    data: { deploymentId: 'dep-123', status: 'running' }
+}))
+
+# Recevoir des événements
+ws.onmessage = (event) => {
+    const message = JSON.parse(event.data)
+    console.log(message.type, message.data)
+}
+```
+
+### 2. Endpoint Déploiement (`/ws/deployment/{deployment_id}`)
+
+Connexion WebSocket spécifique à un déploiement :
+
+```python
+# Frontend
+const ws = new WebSocket('ws://localhost:8000/api/v1/ws/deployment/dep-123?token=<jwt_token>')
+
+# Recevoir les logs et mises à jour
+ws.onmessage = (event) => {
+    const message = JSON.parse(event.data)
+    if (message.type === 'log') {
+        console.log(message.message)
+    }
+}
 ```
 
 ## Événements disponibles
@@ -189,15 +345,66 @@ Les événements sont définis dans `backend/app/schemas/websocket_events.py` et
 - `DEPLOYMENT_PROGRESS` : Progression du déploiement
 - `DEPLOYMENT_CREATED` : Nouveau déploiement
 - `DEPLOYMENT_DELETED` : Déploiement supprimé
+- `DEPLOYMENT_COMPLETE` : Déploiement terminé
 
 ### Notifications
 - `NOTIFICATION_SENT` : Nouvelle notification
 - `NOTIFICATION_READ` : Notification lue
 
-### Autres
+### Système
 - `WEBSOCKET_ERROR` : Erreur WebSocket
 - `WEBSOCKET_PING` : Heartbeat
 - `WEBSOCKET_PONG` : Réponse heartbeat
+
+## Utilisation dans le code
+
+### Broadcaster depuis un service
+
+```python
+from backend.app.websocket import broadcast_deployment_status
+
+class DeploymentService:
+    async def update_status(self, deployment_id: str, status: str):
+        # Mettre à jour en base
+        await self.repository.update_status(deployment_id, status)
+        
+        # Broadcaster via WebSocket
+        await broadcast_deployment_status(
+            deployment_id=deployment_id,
+            status=status,
+            message=f"Deployment {status}"
+        )
+```
+
+### Broadcaster depuis une tâche background
+
+```python
+from backend.app.websocket import broadcast_deployment_log
+
+async def deploy_stack():
+    deployment_id = "dep-123"
+    
+    try:
+        await broadcast_deployment_log(
+            deployment_id,
+            "Starting deployment...",
+            level="info"
+        )
+        
+        # Logique de déploiement...
+        
+        await broadcast_deployment_log(
+            deployment_id,
+            "Deployment completed",
+            level="success"
+        )
+    except Exception as e:
+        await broadcast_deployment_log(
+            deployment_id,
+            f"Error: {e}",
+            level="error"
+        )
+```
 
 ## Plugins par défaut
 
@@ -218,23 +425,6 @@ from backend.app.websocket.plugins.audit_logger import AuditLoggerPlugin
 # - SESSION_ORGANIZATION_CHANGED
 ```
 
-Exemple de log produit :
-
-```json
-{
-  "timestamp": "2024-01-15T10:30:00Z",
-  "level": "INFO",
-  "message": "Security audit log",
-  "event_type": "AUTH_LOGIN_SUCCESS",
-  "user_id": "123e4567-e89b-12d3-a456-426614174000",
-  "organization_id": "org-123",
-  "event_data": {
-    "username": "john.doe",
-    "ip_address": "192.168.1.100"
-  }
-}
-```
-
 ### DeploymentMonitorPlugin
 
 Monitore le cycle de vie des déploiements :
@@ -248,52 +438,23 @@ from backend.app.websocket.plugins.deployment_monitor import DeploymentMonitorPl
 # - DEPLOYMENT_PROGRESS
 ```
 
-Exemple de log produit :
+### SubscriptionPlugin
 
-```json
-{
-  "timestamp": "2024-01-15T10:35:00Z",
-  "level": "INFO",
-  "message": "Deployment lifecycle event",
-  "event_type": "DEPLOYMENT_STATUS_CHANGED",
-  "deployment_id": "dep-456",
-  "old_status": "pending",
-  "new_status": "running"
-}
-```
-
-## Plugin Manager
-
-Le `WebSocketPluginManager` gère l'enregistrement et l'exécution des plugins :
+Gère les abonnements aux événements :
 
 ```python
-from backend.app.websocket.plugin import plugin_manager
+# Les clients peuvent s'abonner à des événements spécifiques
+ws.send(JSON.stringify({
+    type: 'subscribe',
+    event: 'DEPLOYMENT_STATUS_CHANGED'
+}))
 
-# Enregistrer un plugin
-plugin_manager.register(MyPlugin())
-
-# Initialiser tous les plugins
-await plugin_manager.initialize_all(context)
-
-# Dispatcher un événement à tous les plugins concernés
-await plugin_manager.dispatch(
-    WebSocketEventType.DEPLOYMENT_STATUS_CHANGED,
-    {"deploymentId": "dep-123", "newStatus": "running"},
-    context
-)
-
-# Nettoyer tous les plugins
-await plugin_manager.cleanup_all(context)
+# Se désabonner
+ws.send(JSON.stringify({
+    type: 'unsubscribe',
+    event: 'DEPLOYMENT_STATUS_CHANGED'
+}))
 ```
-
-### Méthodes du manager
-
-- `register(plugin)` : Enregistre un nouveau plugin
-- `initialize_all(context)` : Initialise tous les plugins
-- `dispatch(event_type, event_data, context)` : Dispatch un événement
-- `cleanup_all(context)` : Nettoie tous les plugins
-
-Les handlers sont exécutés **en parallèle** pour des performances optimales.
 
 ## Bonnes pratiques
 
@@ -302,110 +463,56 @@ Les handlers sont exécutés **en parallèle** pour des performances optimales.
 Toujours encapsuler la logique dans des try/except :
 
 ```python
-async def handle_event(
-    self,
-    event_type: str,
-    event_data: dict,
-    context: PluginContext
-) -> None:
+async def broadcast_something(entity_id: str):
     try:
-        # Logique du plugin
-        await self._process_event(event_data, context)
+        await manager.broadcast(entity_id, {"type": "update"})
     except Exception as e:
-        context.logger.error(
-            f"Error in plugin {self.__class__.__name__}: {e}",
-            exc_info=True,
-            extra={"event_type": event_type}
-        )
-        # Ne pas re-lever l'exception pour ne pas bloquer les autres plugins
+        logger.error(f"Broadcast error: {e}", exc_info=True)
+        # Ne pas bloquer l'exécution
 ```
 
-### 2. Logging structuré
+### 2. Performance
 
-Utiliser le logger du contexte avec des champs extra :
+- Les broadcasts sont asynchrones et non-bloquants
+- Les plugins s'exécutent en parallèle via `asyncio.gather`
+- Utiliser des timeouts pour les opérations réseau :
 
 ```python
-context.logger.info(
-    "Processing deployment event",
+async with asyncio.timeout(5):
+    await manager.broadcast(entity_id, message)
+```
+
+### 3. Logging structuré
+
+Utiliser des champs extra pour le contexte :
+
+```python
+logger.info(
+    "Broadcasting deployment status",
     extra={
-        "event_type": event_type,
-        "deployment_id": event_data.get('deploymentId'),
-        "user_id": str(context.user.id) if context.user else None,
-        "plugin": self.__class__.__name__
+        "deployment_id": deployment_id,
+        "status": status,
+        "user_id": user_id
     }
 )
 ```
 
-### 3. Performance
+### 4. Tests
 
-- Éviter les opérations bloquantes
-- Utiliser `asyncio` pour les opérations I/O
-- Ne pas garder de grosses structures en mémoire
-- Nettoyer les ressources dans `cleanup()`
-
-```python
-async def handle_event(self, event_type, event_data, context):
-    # ❌ MAUVAIS - opération bloquante
-    time.sleep(5)
-    
-    # ✅ BON - opération async
-    await asyncio.sleep(0)  # Yield control
-    
-    # ✅ BON - opération async avec timeout
-    async with asyncio.timeout(5):
-        await some_async_operation()
-```
-
-### 4. Accès à la base de données
-
-Le contexte peut avoir `db=None` car la session n'est pas gardée ouverte. Si vous avez besoin d'accéder à la base :
-
-```python
-async def handle_event(self, event_type, event_data, context):
-    # Créer une nouvelle session si nécessaire
-    from backend.app.database import db as database
-    
-    async with database.session() as db:
-        # Utiliser la session
-        result = await db.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
-```
-
-### 5. Tests
-
-Tester vos plugins avec des mocks :
+Tester les broadcasts avec des mocks :
 
 ```python
 import pytest
-from unittest.mock import AsyncMock, MagicMock
-from backend.app.websocket.plugin import PluginContext
-from backend.app.websocket.plugins.my_plugin import MyPlugin
+from unittest.mock import AsyncMock, patch
 
 @pytest.mark.asyncio
-async def test_my_plugin_handles_event():
-    # Arrange
-    plugin = MyPlugin()
-    context = PluginContext(
-        db=None,
-        user=MagicMock(id="user-123"),
-        websocket=AsyncMock(),
-        logger=MagicMock(),
-        broadcast_to_user=AsyncMock(),
-        broadcast_to_event_subscribers=AsyncMock()
-    )
-    
-    event_data = {"deploymentId": "dep-456", "newStatus": "running"}
-    
-    # Act
-    await plugin.handle_event(
-        WebSocketEventType.DEPLOYMENT_STATUS_CHANGED,
-        event_data,
-        context
-    )
-    
-    # Assert
-    context.logger.info.assert_called()
-    assert context.broadcast_to_user.called
+async def test_broadcast_deployment_status():
+    with patch('backend.app.websocket.broadcasting.manager') as mock_manager:
+        mock_manager.broadcast = AsyncMock()
+        
+        await broadcast_deployment_status("dep-123", "running")
+        
+        mock_manager.broadcast.assert_called_once()
 ```
 
 ## Synchronisation Frontend/Backend
@@ -417,112 +524,67 @@ Les événements sont **strictement synchronisés** entre frontend et backend vi
 
 Les noms d'événements doivent être identiques (UPPER_CASE).
 
-## Exemples avancés
-
-### Plugin avec état partagé
-
-```python
-class StatePlugin(WebSocketPlugin):
-    """Plugin avec état partagé entre connexions."""
-    
-    def __init__(self):
-        super().__init__()
-        self._shared_state = {}  # État partagé entre toutes les instances
-        self._lock = asyncio.Lock()
-    
-    async def handle_event(self, event_type, event_data, context):
-        async with self._lock:
-            # Accès thread-safe à l'état partagé
-            self._shared_state[event_type] = event_data
-```
-
-### Plugin avec périodicité
-
-```python
-class PeriodicPlugin(WebSocketPlugin):
-    """Plugin qui exécute une tâche périodique."""
-    
-    def __init__(self):
-        super().__init__()
-        self._task = None
-    
-    async def initialize(self, context):
-        # Démarrer une tâche périodique
-        self._task = asyncio.create_task(self._periodic_check(context))
-    
-    async def _periodic_check(self, context):
-        while True:
-            try:
-                await asyncio.sleep(60)  # Toutes les 60 secondes
-                # Faire quelque chose
-                context.logger.debug("Periodic check executed")
-            except asyncio.CancelledError:
-                break
-    
-    async def cleanup(self, context):
-        # Arrêter la tâche périodique
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-```
-
-### Plugin avec broadcast conditionnel
-
-```python
-class ConditionalBroadcastPlugin(WebSocketPlugin):
-    """Plugin qui broadcast selon des conditions."""
-    
-    event_types = [WebSocketEventType.DEPLOYMENT_STATUS_CHANGED]
-    
-    async def handle_event(self, event_type, event_data, context):
-        new_status = event_data.get('newStatus')
-        
-        # Ne broadcaster que si le statut est "failed"
-        if new_status == 'failed' and context.broadcast_to_event_subscribers:
-            await context.broadcast_to_event_subscribers(
-                WebSocketEventType.NOTIFICATION_SENT,
-                {
-                    "level": "error",
-                    "title": "Deployment Failed",
-                    "message": f"Deployment {event_data.get('deploymentId')} failed"
-                }
-            )
-```
-
 ## Dépannage
 
-### Le plugin ne reçoit pas les événements
+### Les messages ne sont pas reçus
 
-1. Vérifier que le plugin est bien enregistré :
+1. Vérifier la connexion WebSocket dans les DevTools réseau
+2. Vérifier l'authentification (token JWT valide)
+3. Vérifier les logs backend pour les erreurs de broadcast
+4. S'assurer que l'entité (deployment_id, user_id) est correcte
+
+### Les plugins ne réagissent pas
+
+1. Vérifier que le plugin est enregistré :
    ```python
-   from backend.app.websocket.plugin import plugin_manager
-   print(plugin_manager._plugins)  # Doit contenir votre plugin
+   from backend.app.websocket import plugin_manager
+   print(plugin_manager._plugins)
    ```
 
-2. Vérifier que `event_types` contient le bon événement :
-   ```python
-   assert WebSocketEventType.MY_EVENT in MyPlugin.event_types
-   ```
-
+2. Vérifier que `event_types` contient le bon événement
 3. Vérifier les logs pour les erreurs d'initialisation
 
-### Erreur "db is None"
+### Performance lente
 
-Le contexte n'a pas de session DB active. Créez-en une manuellement :
+1. Vérifier le nombre de connexions actives :
+   ```python
+   print(len(manager._connections))
+   print(len(user_manager._connections))
+   ```
 
-```python
-from backend.app.database import db as database
+2. Limiter la taille des messages broadcastés
+3. Utiliser des timeouts appropriés
+4. Considérer la pagination pour les gros volumes de logs
 
-async with database.session() as db:
-    # Utiliser db ici
+## Architecture de référence
+
+### Flux d'un événement
+
+```
+Service/Task → Broadcasting Function → Connection Manager → WebSocket → Frontend
+     ↓
+  Plugin Manager → Plugins (parallel execution)
 ```
 
-### Le plugin bloque les autres
+### Exemple complet
 
-Vérifiez que vous n'avez pas d'opérations bloquantes. Utilisez `asyncio` pour toutes les opérations I/O.
+```python
+# 1. Service émet un événement
+class DeploymentService:
+    async def start_deployment(self, deployment_id: str):
+        # Logique métier
+        deployment = await self.create(deployment_id)
+        
+        # 2. Broadcast via WebSocket
+        await broadcast_deployment_status(
+            deployment_id=deployment_id,
+            status="running",
+            message="Deployment started"
+        )
+        
+        # 3. Les plugins réagissent automatiquement
+        # 4. Le frontend reçoit la mise à jour temps-réel
+```
 
 ## Ressources
 
@@ -533,5 +595,6 @@ Vérifiez que vous n'avez pas d'opérations bloquantes. Utilisez `asyncio` pour 
 
 ---
 
-**Version** : 1.0  
-**Dernière mise à jour** : 17/11/2025
+**Version** : 2.0  
+**Dernière mise à jour** : 23/01/2026  
+**Refactoring** : Architecture modulaire avec séparation des responsabilités

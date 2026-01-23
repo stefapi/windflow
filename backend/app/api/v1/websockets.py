@@ -1,11 +1,13 @@
 """
 Endpoints WebSocket pour WindFlow.
 
-Gère les connexions WebSocket pour le streaming de logs en temps réel.
+Ce module contient uniquement les routes WebSocket.
+La logique métier a été déplacée dans backend/app/websocket/ pour une
+meilleure organisation et maintenabilité.
 """
 
-from typing import Dict, Set, Optional
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, status, Query
+from typing import Optional
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import asyncio
@@ -16,9 +18,24 @@ from datetime import datetime
 from ...database import get_db
 from ...models.deployment import Deployment
 from ...models.user import User
-from ...auth.dependencies import get_current_user_ws
-from ...schemas.websocket_events import WebSocketEventType, NotificationLevel, DeploymentStatus
-from ...websocket.plugin import PluginContext, plugin_manager
+from ...schemas.websocket_events import WebSocketEventType
+
+# Import depuis le package websocket
+from ...websocket import (
+    plugin_manager,
+    PluginContext,
+    manager,
+    user_manager,
+    add_user_connection,
+    remove_user_connection,
+    broadcast_deployment_log,
+    broadcast_deployment_status,
+    broadcast_deployment_progress,
+    broadcast_deployment_complete,
+    broadcast_to_user,
+    broadcast_to_event_subscribers,
+    broadcast_deployment_log_to_subscribers
+)
 from ...websocket.plugins import default_plugins, default_message_handlers
 
 logger = logging.getLogger(__name__)
@@ -34,7 +51,9 @@ for handler in default_message_handlers:
     plugin_manager.register_message_handler(handler)
 
 
-
+# ============================================================================
+# WEBSOCKET ENDPOINTS
+# ============================================================================
 
 @router.websocket("/")
 async def general_websocket(
@@ -106,7 +125,6 @@ async def general_websocket(
             return
 
         # Créer une session manuellement pour l'authentification
-        db_session = None
         async with database.session() as db:
             user = await UserService.get_by_id(db, token_data.user_id)
             logger.info(f"User found: {user is not None}, active: {user.is_active if user else 'N/A'}")
@@ -140,7 +158,6 @@ async def general_websocket(
             }
 
             # Envoyer un message de confirmation d'authentification
-            from datetime import datetime
             await websocket.send_json({
                 "type": WebSocketEventType.AUTH_LOGIN_SUCCESS,
                 "timestamp": datetime.utcnow().isoformat(),
@@ -218,61 +235,6 @@ async def general_websocket(
             # Nettoyer les plugins
             if 'plugin_context' in locals():
                 await plugin_manager.cleanup_all(plugin_context)
-
-
-class ConnectionManager:
-    """Gestionnaire de connexions WebSocket."""
-
-    def __init__(self):
-        # deployment_id -> set of WebSocket connections
-        self.active_connections: Dict[str, Set[WebSocket]] = {}
-        self._lock = asyncio.Lock()
-
-    async def connect(self, websocket: WebSocket, deployment_id: str):
-        """Accepte une nouvelle connexion WebSocket."""
-        await websocket.accept()
-
-        async with self._lock:
-            if deployment_id not in self.active_connections:
-                self.active_connections[deployment_id] = set()
-            self.active_connections[deployment_id].add(websocket)
-
-        logger.info(f"WebSocket connected for deployment {deployment_id}")
-
-    async def disconnect(self, websocket: WebSocket, deployment_id: str):
-        """Déconnecte un WebSocket."""
-        async with self._lock:
-            if deployment_id in self.active_connections:
-                self.active_connections[deployment_id].discard(websocket)
-
-                # Nettoyer si plus aucune connexion
-                if not self.active_connections[deployment_id]:
-                    del self.active_connections[deployment_id]
-
-        logger.info(f"WebSocket disconnected for deployment {deployment_id}")
-
-    async def broadcast_to_deployment(self, deployment_id: str, message: dict):
-        """Envoie un message à toutes les connexions d'un déploiement."""
-        if deployment_id not in self.active_connections:
-            return
-
-        disconnected = set()
-
-        for websocket in self.active_connections[deployment_id].copy():
-            try:
-                await websocket.send_json(message)
-            except Exception as e:
-                logger.error(f"Error sending to WebSocket: {e}")
-                disconnected.add(websocket)
-
-        # Nettoyer les connexions mortes
-        async with self._lock:
-            for ws in disconnected:
-                self.active_connections[deployment_id].discard(ws)
-
-
-# Instance globale du gestionnaire
-manager = ConnectionManager()
 
 
 async def verify_deployment_access(
@@ -390,7 +352,6 @@ async def deployment_logs_websocket(
 
                 # Le client peut envoyer "ping" pour maintenir la connexion
                 if data == "ping":
-                    from datetime import datetime
                     await websocket.send_json({
                         "type": "pong",
                         "timestamp": datetime.utcnow().isoformat()
@@ -411,330 +372,3 @@ async def deployment_logs_websocket(
 
     finally:
         await manager.disconnect(websocket, deployment_id)
-
-
-async def broadcast_deployment_log(
-    deployment_id: str,
-    message: str,
-    level: str = "info",
-    **extra_data
-):
-    """
-    Fonction helper pour broadcaster un log à tous les clients connectés.
-
-    À appeler depuis les tâches asyncio ou autres services.
-    """
-    from datetime import datetime
-
-    event_data = {
-        "deploymentId": deployment_id,
-        "logs": [message],
-        "timestamp": datetime.utcnow().isoformat(),
-        "level": level,
-        **extra_data
-    }
-
-    websocket_message = {
-        "type": WebSocketEventType.DEPLOYMENT_LOGS_UPDATE,
-        "data": event_data
-    }
-
-    # Broadcaster aux WebSocket
-    await manager.broadcast_to_deployment(deployment_id, websocket_message)
-
-    # Dispatcher aux plugins de tous les utilisateurs
-    await user_manager.dispatch_to_plugins(
-        WebSocketEventType.DEPLOYMENT_LOGS_UPDATE,
-        event_data
-    )
-
-
-async def broadcast_deployment_status(
-    deployment_id: str,
-    new_status: str,
-    deployment_name: str = "",
-    old_status: str = "",
-    **extra_data
-):
-    """
-    Fonction helper pour broadcaster un changement de statut.
-
-    Args:
-        deployment_id: ID du déploiement
-        new_status: Nouveau statut du déploiement
-        deployment_name: Nom du déploiement (optionnel)
-        old_status: Ancien statut (optionnel)
-        **extra_data: Données additionnelles
-    """
-    from datetime import datetime
-
-    event_data = {
-        "deploymentId": deployment_id,
-        "deploymentName": deployment_name,
-        "oldStatus": old_status,
-        "newStatus": new_status,
-        "timestamp": datetime.utcnow().isoformat(),
-        **extra_data
-    }
-
-    websocket_message = {
-        "type": WebSocketEventType.DEPLOYMENT_STATUS_CHANGED,
-        "data": event_data
-    }
-
-    # Broadcaster aux WebSocket
-    await manager.broadcast_to_deployment(deployment_id, websocket_message)
-
-    # Dispatcher aux plugins de tous les utilisateurs
-    await user_manager.dispatch_to_plugins(
-        WebSocketEventType.DEPLOYMENT_STATUS_CHANGED,
-        event_data
-    )
-
-
-async def broadcast_deployment_progress(
-    deployment_id: str,
-    progress: int,
-    step: str,
-    **extra_data
-):
-    """
-    Fonction helper pour broadcaster la progression d'un déploiement.
-
-    Args:
-        deployment_id: ID du déploiement
-        progress: Pourcentage de progression (0-100)
-        step: Étape actuelle du déploiement
-        **extra_data: Données additionnelles
-    """
-    from datetime import datetime
-
-    event_data = {
-        "deploymentId": deployment_id,
-        "progress": progress,
-        "step": step,
-        "timestamp": datetime.utcnow().isoformat(),
-        **extra_data
-    }
-
-    websocket_message = {
-        "type": WebSocketEventType.DEPLOYMENT_PROGRESS,
-        "data": event_data
-    }
-
-    # Broadcaster aux WebSocket
-    await manager.broadcast_to_deployment(deployment_id, websocket_message)
-
-    # Dispatcher aux plugins de tous les utilisateurs
-    await user_manager.dispatch_to_plugins(
-        WebSocketEventType.DEPLOYMENT_PROGRESS,
-        event_data
-    )
-
-
-async def broadcast_deployment_complete(
-    deployment_id: str,
-    success: bool = True,
-    deployment_name: str = "",
-    **extra_data
-):
-    """
-    Fonction helper pour broadcaster la fin d'un déploiement.
-
-    Envoie un DEPLOYMENT_STATUS_CHANGED avec status=success ou status=failed.
-    """
-    from datetime import datetime
-
-    final_status = "success" if success else "failed"
-
-    await broadcast_deployment_status(
-        deployment_id=deployment_id,
-        new_status=final_status,
-        deployment_name=deployment_name,
-        old_status="running",
-        **extra_data
-    )
-
-
-# Gestionnaire de connexions utilisateur pour l'endpoint général
-class UserConnectionManager:
-    """Gestionnaire de connexions WebSocket par utilisateur."""
-
-    def __init__(self):
-        # user_id -> set of WebSocket connections
-        self.user_connections: Dict[str, Set[WebSocket]] = {}
-        # user_id -> set of subscribed event types
-        self.user_subscriptions: Dict[str, Set[str]] = {}
-        # deployment_id -> set of user_ids subscribed to deployment logs
-        self.deployment_subscribers: Dict[str, Set[str]] = {}
-        # user_id -> PluginContext for dispatching events to plugins
-        self.user_plugin_contexts: Dict[str, PluginContext] = {}
-        self._lock = asyncio.Lock()
-
-    async def add_connection(self, user_id: str, websocket: WebSocket, context: Optional[PluginContext] = None):
-        """Ajoute une connexion utilisateur."""
-        async with self._lock:
-            if user_id not in self.user_connections:
-                self.user_connections[user_id] = set()
-            self.user_connections[user_id].add(websocket)
-
-            # Stocker le contexte du plugin pour ce user (si fourni)
-            if context and user_id not in self.user_plugin_contexts:
-                self.user_plugin_contexts[user_id] = context
-
-    async def remove_connection(self, user_id: str, websocket: WebSocket):
-        """Supprime une connexion utilisateur."""
-        async with self._lock:
-            if user_id in self.user_connections:
-                self.user_connections[user_id].discard(websocket)
-
-                # Nettoyer si plus aucune connexion
-                if not self.user_connections[user_id]:
-                    del self.user_connections[user_id]
-                    # Nettoyer aussi les abonnements
-                    if user_id in self.user_subscriptions:
-                        del self.user_subscriptions[user_id]
-                    # Nettoyer le contexte du plugin
-                    if user_id in self.user_plugin_contexts:
-                        del self.user_plugin_contexts[user_id]
-
-    async def subscribe_to_event(self, user_id: str, event_type: str, websocket: WebSocket):
-        """Abonne un utilisateur à un type d'événement."""
-        async with self._lock:
-            if user_id not in self.user_subscriptions:
-                self.user_subscriptions[user_id] = set()
-            self.user_subscriptions[user_id].add(event_type)
-
-    async def unsubscribe_from_event(self, user_id: str, event_type: str, websocket: WebSocket):
-        """Désabonne un utilisateur d'un type d'événement."""
-        async with self._lock:
-            if user_id in self.user_subscriptions:
-                self.user_subscriptions[user_id].discard(event_type)
-
-                # Nettoyer si plus d'abonnements
-                if not self.user_subscriptions[user_id]:
-                    del self.user_subscriptions[user_id]
-
-    async def subscribe_to_deployment_logs(self, user_id: str, deployment_id: str, websocket: WebSocket):
-        """Abonne un utilisateur aux logs d'un déploiement."""
-        async with self._lock:
-            if deployment_id not in self.deployment_subscribers:
-                self.deployment_subscribers[deployment_id] = set()
-            self.deployment_subscribers[deployment_id].add(user_id)
-
-    async def broadcast_to_user(self, user_id: str, message: dict):
-        """Envoie un message à toutes les connexions d'un utilisateur."""
-        if user_id not in self.user_connections:
-            return
-
-        disconnected = set()
-
-        for websocket in self.user_connections[user_id].copy():
-            try:
-                await websocket.send_json(message)
-            except Exception as e:
-                logger.error(f"Error sending to user WebSocket: {e}")
-                disconnected.add(websocket)
-
-        # Nettoyer les connexions mortes
-        async with self._lock:
-            for ws in disconnected:
-                await self.remove_connection(user_id, ws)
-
-    async def broadcast_to_event_subscribers(self, event_type: str, message: dict):
-        """Envoie un message à tous les utilisateurs abonnés à un événement."""
-        disconnected_users = set()
-
-        async with self._lock:
-            for user_id, subscriptions in self.user_subscriptions.items():
-                if event_type in subscriptions:
-                    if user_id in self.user_connections:
-                        for websocket in self.user_connections[user_id].copy():
-                            try:
-                                await websocket.send_json(message)
-                            except Exception as e:
-                                logger.error(f"Error sending to subscriber WebSocket: {e}")
-                                disconnected_users.add((user_id, websocket))
-
-        # Nettoyer les connexions mortes
-        for user_id, ws in disconnected_users:
-            await self.remove_connection(user_id, ws)
-
-    async def broadcast_deployment_log_to_subscribers(self, deployment_id: str, message: dict):
-        """Envoie un log de déploiement à tous les abonnés."""
-        if deployment_id not in self.deployment_subscribers:
-            return
-
-        disconnected_users = set()
-
-        async with self._lock:
-            for user_id in self.deployment_subscribers[deployment_id]:
-                if user_id in self.user_connections:
-                    for websocket in self.user_connections[user_id].copy():
-                        try:
-                            await websocket.send_json(message)
-                        except Exception as e:
-                            logger.error(f"Error sending deployment log to subscriber: {e}")
-                            disconnected_users.add((user_id, websocket))
-
-        # Nettoyer les connexions mortes
-        for user_id, ws in disconnected_users:
-            await self.remove_connection(user_id, ws)
-
-    async def dispatch_to_plugins(self, event_type: str, event_data: dict):
-        """Dispatch un événement à tous les plugins des utilisateurs connectés."""
-        async with self._lock:
-            contexts = list(self.user_plugin_contexts.values())
-
-        # Dispatcher à tous les contextes en parallèle
-        if contexts:
-            await asyncio.gather(
-                *[plugin_manager.dispatch(event_type, event_data, ctx) for ctx in contexts],
-                return_exceptions=True
-            )
-
-
-# Instance globale du gestionnaire de connexions utilisateur
-user_manager = UserConnectionManager()
-
-
-# Fonctions helper pour la gestion des connexions utilisateur
-async def add_user_connection(user_id: str, websocket: WebSocket, context: Optional[PluginContext] = None):
-    """Ajoute une connexion utilisateur."""
-    await user_manager.add_connection(user_id, websocket, context)
-
-
-async def remove_user_connection(user_id: str, websocket: WebSocket):
-    """Supprime une connexion utilisateur."""
-    await user_manager.remove_connection(user_id, websocket)
-
-
-async def subscribe_to_event(user_id: str, event_type: str, websocket: WebSocket):
-    """Abonne un utilisateur à un événement."""
-    await user_manager.subscribe_to_event(user_id, event_type, websocket)
-
-
-async def unsubscribe_from_event(user_id: str, event_type: str, websocket: WebSocket):
-    """Désabonne un utilisateur d'un événement."""
-    await user_manager.unsubscribe_from_event(user_id, event_type, websocket)
-
-
-async def subscribe_to_deployment_logs(user_id: str, deployment_id: str, websocket: WebSocket):
-    """Abonne un utilisateur aux logs d'un déploiement."""
-    await user_manager.subscribe_to_deployment_logs(user_id, deployment_id, websocket)
-
-
-# Fonctions helper pour le broadcast
-async def broadcast_to_user(user_id: str, message: dict):
-    """Envoie un message à un utilisateur spécifique."""
-    await user_manager.broadcast_to_user(user_id, message)
-
-
-async def broadcast_to_event_subscribers(event_type: str, message: dict):
-    """Envoie un message à tous les abonnés d'un événement."""
-    await user_manager.broadcast_to_event_subscribers(event_type, message)
-
-
-async def broadcast_deployment_log_to_subscribers(deployment_id: str, message: dict):
-    """Envoie un log de déploiement à tous les abonnés."""
-    await user_manager.broadcast_deployment_log_to_subscribers(deployment_id, message)

@@ -34,6 +34,11 @@ async def lifespan(app: FastAPI):
 
     logger.info("=== Database initialized ===")
 
+    # Setup Event Bridge: Connect EventBus to WebSocket system
+    from .websocket.event_bridge import setup_event_bridge
+    setup_event_bridge()
+    logger.info("=== Event bridge initialized ===")
+
     # Recovery des déploiements PENDING au démarrage avec DeploymentOrchestrator
     try:
         from .services.deployment_orchestrator import DeploymentOrchestrator
