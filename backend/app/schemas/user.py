@@ -21,7 +21,7 @@ class UserCreate(UserBase):
     """Schema pour création d'utilisateur."""
 
     password: str = Field(..., min_length=8, max_length=100, description="Mot de passe")
-    organization_id: str = Field(..., description="ID de l'organisation")
+    organization_id: Optional[str] = Field(None, description="ID de l'organisation (optionnel, utilise l'organisation du créateur par défaut)")
     is_superuser: bool = Field(default=False, description="Superutilisateur")
 
 

@@ -12,10 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
 from ..models.user import User
 from ..services.user_service import UserService
+from ..config import settings
 from .jwt import decode_access_token
 
 # Schéma OAuth2 pour extraction du token
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
 async def get_current_user(
@@ -24,6 +25,9 @@ async def get_current_user(
 ) -> User:
     """
     Récupère l'utilisateur courant à partir du token JWT.
+
+    En mode développement (DISABLE_AUTH=true), retourne automatiquement
+    le premier utilisateur superadmin trouvé en base de données.
 
     Args:
         token: Token JWT extrait de l'en-tête Authorization
@@ -35,6 +39,17 @@ async def get_current_user(
     Raises:
         HTTPException: Si le token est invalide ou l'utilisateur n'existe pas
     """
+    # Mode développement sans authentification
+    if settings.disable_auth:
+        user = await UserService.get_first_superadmin(session)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No superadmin user found in database for development mode"
+            )
+        return user
+
+    # Mode production avec authentification JWT normale
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -42,6 +57,8 @@ async def get_current_user(
     )
 
     # Décoder le token
+    if token == None:
+        raise credentials_exception
     token_data = decode_access_token(token)
     if token_data is None or token_data.user_id is None:
         raise credentials_exception
@@ -112,6 +129,9 @@ async def get_current_user_ws(
     """
     Récupère l'utilisateur courant à partir du token JWT pour WebSocket.
 
+    En mode développement (DISABLE_AUTH=true), retourne automatiquement
+    le premier utilisateur superadmin trouvé en base de données.
+
     L'authentification WebSocket se fait via query parameter:
     ws://host/path?token=JWT_TOKEN
 
@@ -128,6 +148,12 @@ async def get_current_user_ws(
         avec le code existant qui accepte les connexions non authentifiées).
         Pour forcer l'authentification, vérifier le retour dans l'endpoint.
     """
+    # Mode développement sans authentification
+    if settings.disable_auth:
+        user = await UserService.get_first_superadmin(session)
+        return user  # Peut être None si pas de superadmin en base
+
+    # Mode production avec authentification JWT
     if not token:
         # Pas de token fourni - connexion non authentifiée
         return None

@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     auto_load_stack_definitions: bool = True
     stack_update_strategy: str = "update_if_newer"  # skip_existing | update_if_newer | force_update
 
+    # Mode développement sans authentification
+    # ⚠️ DANGER : Ne JAMAIS activer en production !
+    # Utilise automatiquement le premier utilisateur superadmin trouvé en base
+    disable_auth: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -179,6 +179,27 @@ class UserService:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_first_superadmin(db: AsyncSession) -> Optional[User]:
+        """
+        Récupère le premier utilisateur superadmin actif de la base.
+
+        Utilisé principalement en mode développement avec DISABLE_AUTH=true.
+
+        Args:
+            db: Session de base de données async
+
+        Returns:
+            Premier User superadmin actif ou None si aucun trouvé
+        """
+        result = await db.execute(
+            select(User)
+            .where(User.is_superuser == True)
+            .where(User.is_active == True)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def list_by_organization(
         db: AsyncSession,
         organization_id: str,
