@@ -562,7 +562,7 @@ Ensure Redis is running:
 ```bash
 docker run -d -p 6379:6379 redis:alpine
 ```
-```
+
 
 ---
 
@@ -954,7 +954,7 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
     
     return JSONResponse(
         status_code=status.HTTP_
-
+```
 
 ## 4. Endpoint Documentation Standards
 
