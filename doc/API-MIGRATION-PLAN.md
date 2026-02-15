@@ -1811,22 +1811,33 @@ async def test_scalar_docs_accessible(client: AsyncClient):
 - [ ] Test documentation loads: Open `http://localhost:8000/docs`
 - [ ] Test security headers: `curl -I http://localhost:8000/health`
 
-### Phase 4: Endpoint Documentation - Auth (30 min)
+### Phase 4: Endpoint Documentation - Auth (30 min) ✅
 
-- [ ] Update `backend/app/api/v1/auth.py`:
-  - [ ] POST `/api/v1/auth/login`:
-    - [ ] Add summary and description
-    - [ ] Add 3 request examples (simple, with MFA, remember me)
-    - [ ] Document all responses (200, 400, 401, 429, 500)
-  - [ ] POST `/api/v1/auth/logout`:
-    - [ ] Add summary and description
-    - [ ] Document responses
-  - [ ] POST `/api/v1/auth/refresh`:
-    - [ ] Add summary and description
-    - [ ] Add request examples
-    - [ ] Document all responses
-  - [ ] POST `/api/v1/auth/register` (if exists):
-    - [ ] Add complete documentation
+- [x] Update `backend/app/api/v1/auth.py`:
+  - [x] POST `/api/v1/auth/login`:
+    - [x] Add summary and description
+    - [x] Add 3 request examples (username, email, simple)
+    - [x] Document all responses (200, 401, 403, 429, 500)
+    - [x] Add rate limiting (5 requests/minute)
+  - [x] POST `/api/v1/auth/logout`:
+    - [x] Add summary and description
+    - [x] Document responses (200, 401, 429, 500)
+    - [x] Add rate limiting (20 requests/minute)
+  - [x] POST `/api/v1/auth/refresh`:
+    - [x] Add summary and description
+    - [x] Add 3 request examples (standard, before expiration, after expiration)
+    - [x] Document all responses (200, 401 with 3 variants, 429, 500)
+    - [x] Add rate limiting (10 requests/minute)
+  - [x] POST `/api/v1/auth/register`:
+    - [x] Add complete documentation
+    - [x] Add 3 request examples (complete, minimal, organization user)
+    - [x] Document all responses (201, 400, 409 with 2 variants, 429, 500)
+    - [x] Add rate limiting (3 requests/minute)
+  - [x] GET `/api/v1/auth/me`:
+    - [x] Add summary and description
+    - [x] Add 2 response examples (regular user, superuser)
+    - [x] Document all responses (200, 401, 429, 500)
+    - [x] Add rate limiting (60 requests/minute)
 
 ### Phase 5: Endpoint Documentation - Deployments (45 min)
 
@@ -1926,10 +1937,10 @@ async def test_scalar_docs_accessible(client: AsyncClient):
   - [ ] Document all CRUD endpoints
 - [ ] Update `backend/app/api/v1/targets.py` (if exists):
   - [ ] Document all CRUD endpoints
-- [ ] Update `backend/app/api/v1/websockets.py`:
-  - [ ] Document WebSocket connection endpoint
-  - [ ] Add connection examples
-  - [ ] Document message formats
+- [x] Update `backend/app/api/v1/websockets.py`:
+  - [x] Document WebSocket connection endpoint
+  - [x] Add connection examples
+  - [x] Document message formats
 
 ### Phase 10: Model Documentation - Deployment Schemas (45 min)
 

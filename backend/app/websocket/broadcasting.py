@@ -235,8 +235,8 @@ async def broadcast_to_event_subscribers(event_type: str, message: dict):
     import logging
     logger = logging.getLogger(__name__)
 
-    logger.info(
-        f"📢 [STEP 3/4] Broadcasting to event subscribers: {event_type}"
+    logger.debug(
+        f"📢 Broadcasting to event subscribers: {event_type}"
     )
     logger.debug(
         f"Message: {message}"
@@ -244,8 +244,8 @@ async def broadcast_to_event_subscribers(event_type: str, message: dict):
 
     await user_manager.broadcast_to_event_subscribers(event_type, message)
 
-    logger.info(
-        f"✅ [STEP 3/4] Broadcast to event subscribers completed"
+    logger.debug(
+        f"✅ Broadcast to event subscribers completed"
     )
 
 

@@ -9,7 +9,7 @@ import logging
 from typing import Dict, Any
 from jinja2 import Template, TemplateSyntaxError, UndefinedError
 
-from backend.app.helper.jinja_functions import JINJA_FUNCTIONS
+from .jinja_functions import JINJA_FUNCTIONS
 
 logger = logging.getLogger(__name__)
 

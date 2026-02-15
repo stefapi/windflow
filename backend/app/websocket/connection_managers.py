@@ -79,10 +79,18 @@ class BroadcastManager:
             icon: Emoji pour le type de broadcast (📡 ou 🔌)
         """
         if sent_count > 0:
-            logger.info(
-                f"{icon} WebSocket broadcast: {message.get('type', 'unknown')} "
-                f"→ {sent_count}/{total_count} client(s) ({context})"
-            )
+            # Log debug pour détails, info uniquement pour événements importants
+            message_type = message.get('type', 'unknown')
+            if message_type in ['DEPLOYMENT_STATUS_CHANGED', 'DEPLOYMENT_COMPLETE', 'AUTH_LOGIN_SUCCESS']:
+                logger.info(
+                    f"{icon} WebSocket broadcast: {message_type} "
+                    f"→ {sent_count}/{total_count} client(s) ({context})"
+                )
+            else:
+                logger.debug(
+                    f"{icon} WebSocket broadcast: {message_type} "
+                    f"→ {sent_count}/{total_count} client(s) ({context})"
+                )
         elif total_count > 0:
             logger.debug(
                 f"{icon} No active connections despite {total_count} potential target(s) ({context})"
@@ -336,8 +344,8 @@ class UserConnectionManager:
         disconnected_users = set()
         subscriber_count = 0
 
-        logger.info(
-            f"📢 [STEP 4/4] Finding subscribers for event: {event_type}"
+        logger.debug(
+            f"📢 Finding subscribers for event: {event_type}"
         )
 
         async with self._lock:
@@ -350,8 +358,8 @@ class UserConnectionManager:
                             f"Found subscriber: user {user_id} with {len(self.user_connections[user_id])} connection(s)"
                         )
 
-        logger.info(
-            f"📢 [STEP 4/4] Found {subscriber_count} subscriber(s) with {len(all_connections)} total connection(s)"
+        logger.debug(
+            f"📢 Found {subscriber_count} subscriber(s) with {len(all_connections)} total connection(s)"
         )
 
         # Utiliser la logique commune de broadcast
@@ -362,18 +370,26 @@ class UserConnectionManager:
         )
 
         # Log standardisé avec info sur les subscribers
+        message_type = message.get('type', 'unknown')
         if sent_count > 0:
-            logger.info(
-                f"✅ [STEP 4/4] WebSocket broadcast successful: {message.get('type', 'unknown')} "
-                f"→ {sent_count} client(s) / {subscriber_count} subscriber(s) (event: {event_type})"
-            )
+            # Log important uniquement pour certains événements
+            if message_type in ['DEPLOYMENT_STATUS_CHANGED', 'DEPLOYMENT_COMPLETE', 'AUTH_LOGIN_SUCCESS']:
+                logger.info(
+                    f"✅ WebSocket broadcast successful: {message_type} "
+                    f"→ {sent_count} client(s) / {subscriber_count} subscriber(s) (event: {event_type})"
+                )
+            else:
+                logger.debug(
+                    f"✅ WebSocket broadcast successful: {message_type} "
+                    f"→ {sent_count} client(s) / {subscriber_count} subscriber(s) (event: {event_type})"
+                )
         elif subscriber_count > 0:
-            logger.warning(
-                f"⚠️ [STEP 4/4] Event {event_type} has {subscriber_count} subscriber(s) but NO active connections!"
+            logger.debug(
+                f"⚠️ Event {event_type} has {subscriber_count} subscriber(s) but NO active connections!"
             )
         else:
-            logger.warning(
-                f"⚠️ [STEP 4/4] No subscribers found for event {event_type}"
+            logger.debug(
+                f"No subscribers found for event {event_type}"
             )
 
         # Nettoyer les connexions mortes
@@ -450,7 +466,7 @@ class UserConnectionManager:
 
         # Log du dispatch
         if contexts:
-            logger.info(
+            logger.debug(
                 f"🔌 Plugin dispatch: {event_type} → {len(contexts)} plugin context(s)"
             )
 

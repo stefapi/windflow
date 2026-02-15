@@ -55,21 +55,43 @@ for handler in default_message_handlers:
 # WEBSOCKET ENDPOINTS
 # ============================================================================
 
-@router.websocket("/")
+@router.websocket(
+    "/",
+    name="general_websocket"
+)
 async def general_websocket(
     websocket: WebSocket
 ):
     """
-    WebSocket endpoint général pour notifications et événements système.
+    General WebSocket connection for real-time events.
 
-    Authentification via envoi de token dans le premier message JSON:
-    {"type": "auth", "token": "JWT_TOKEN"}
+    Connect to the general WebSocket endpoint for real-time system notifications and events.
 
-    Ce endpoint maintient une connexion WebSocket pour recevoir:
-    - Notifications système
-    - Événements globaux
-    - Mises à jour de statut générales
-    - Logs de déploiement en temps réel
+    Authentication Process:
+    1. Client connects to WebSocket endpoint
+    2. Server accepts connection
+    3. Client sends authentication message within 30 seconds: {"type": "auth", "token": "JWT_TOKEN"}
+    4. Server validates token and user status
+    5. Server sends authentication confirmation
+    6. Connection is established for bidirectional communication
+
+    Event Types Received:
+    - System Notifications: Global system events and alerts
+    - Deployment Updates: Real-time deployment status changes
+    - Deployment Logs: Live streaming of deployment logs
+    - User Events: User-specific notifications
+    - Organization Events: Organization-wide updates
+
+    Client Messages:
+    - Authentication: {"type": "auth", "token": "JWT_TOKEN"}
+    - Heartbeat: Send "ping" to keep connection alive
+    - Custom Messages: Plugin-based message handling
+
+    Server Responses:
+    - Authentication Success: {"type": "auth.login.success", "data": {...}}
+    - Pong: {"type": "pong", "timestamp": "..."}
+    - Events: Various event types based on subscriptions
+    - Errors: {"type": "error", "message": "..."}
     """
     try:
         await websocket.accept()
@@ -124,7 +146,7 @@ async def general_websocket(
             await websocket.close(code=1008, reason="Invalid token - could not decode")
             return
 
-        # Créer une session manuellement pour l'authentification
+        # Créer une session qui restera ouverte pendant toute la connexion
         async with database.session() as db:
             user = await UserService.get_by_id(db, token_data.user_id)
             logger.info(f"User found: {user is not None}, active: {user.is_active if user else 'N/A'}")
@@ -136,9 +158,9 @@ async def general_websocket(
             # Authentification réussie
             authenticated = True
 
-            # Créer le contexte pour les plugins (sans db car la session sera fermée)
+            # Créer le contexte pour les plugins avec la session DB disponible
             plugin_context = PluginContext(
-                db=None,  # On ne garde pas de session ouverte pendant toute la connexion
+                db=db,  # Session disponible pour toute la durée de la connexion
                 user=user,
                 websocket=websocket,
                 logger=logger,
@@ -173,50 +195,78 @@ async def general_websocket(
 
             logger.info(f"General WebSocket connected for user {user.id}")
 
-        # Ajouter l'utilisateur aux connexions actives (en dehors du bloc async with)
-        await add_user_connection(str(user.id), websocket, plugin_context)
+            # Ajouter l'utilisateur aux connexions actives
+            await add_user_connection(str(user.id), websocket, plugin_context)
 
-        # Boucle de maintien de connexion
-        try:
-            while True:
-                # Attendre un message du client (heartbeat)
-                data = await websocket.receive_text()
+            # Tâche de heartbeat serveur vers client
+            heartbeat_task = None
 
-                # Le client peut envoyer "ping" pour maintenir la connexion
-                if data == "ping":
-                    await websocket.send_json({
-                        "type": "pong",
-                        "timestamp": datetime.utcnow().isoformat()
-                    })
-                else:
-                    # Essayer de parser comme JSON pour d'autres types de messages
-                    try:
-                        message = json.loads(data)
+            async def send_heartbeat():
+                """Envoie un heartbeat périodique au client."""
+                try:
+                    while True:
+                        await asyncio.sleep(30)  # Toutes les 30 secondes
+                        await websocket.send_json({
+                            "type": "ping",
+                            "timestamp": datetime.utcnow().isoformat()
+                        })
+                except asyncio.CancelledError:
+                    pass  # Tâche annulée, normal lors de la déconnexion
+                except Exception as e:
+                    logger.error(f"Error in heartbeat task: {e}")
 
-                        # Utiliser le système de plugins pour gérer le message
-                        response = await plugin_manager.handle_client_message(message, plugin_context)
+            # Démarrer la tâche de heartbeat
+            heartbeat_task = asyncio.create_task(send_heartbeat())
 
-                        if response:
-                            # Le handler a retourné une réponse, l'envoyer au client
-                            await websocket.send_json(response)
-                        else:
-                            # Aucun handler n'a traité le message, répondre avec un écho
+            # Boucle de maintien de connexion
+            try:
+                while True:
+                    # Attendre un message du client
+                    data = await websocket.receive_text()
+
+                    # Le client peut envoyer "ping" pour maintenir la connexion
+                    if data == "ping":
+                        await websocket.send_json({
+                            "type": "pong",
+                            "timestamp": datetime.utcnow().isoformat()
+                        })
+                    else:
+                        # Essayer de parser comme JSON pour d'autres types de messages
+                        try:
+                            message = json.loads(data)
+
+                            # Utiliser le système de plugins pour gérer le message
+                            response = await plugin_manager.handle_client_message(message, plugin_context)
+
+                            if response:
+                                # Le handler a retourné une réponse, l'envoyer au client
+                                await websocket.send_json(response)
+                            else:
+                                # Aucun handler n'a traité le message, répondre avec un écho
+                                await websocket.send_json({
+                                    "type": "message_received",
+                                    "timestamp": datetime.utcnow().isoformat(),
+                                    "data": message
+                                })
+
+                        except json.JSONDecodeError:
+                            # Message texte simple
                             await websocket.send_json({
-                                "type": "message_received",
+                                "type": "text_received",
                                 "timestamp": datetime.utcnow().isoformat(),
-                                "data": message
+                                "data": data
                             })
 
-                    except json.JSONDecodeError:
-                        # Message texte simple
-                        await websocket.send_json({
-                            "type": "text_received",
-                            "timestamp": datetime.utcnow().isoformat(),
-                            "data": data
-                        })
-
-        except WebSocketDisconnect:
-            logger.info(f"General WebSocket disconnected for user {user.id}")
+            except WebSocketDisconnect:
+                logger.info(f"General WebSocket disconnected for user {user.id}")
+            finally:
+                # Annuler la tâche de heartbeat
+                if heartbeat_task:
+                    heartbeat_task.cancel()
+                    try:
+                        await heartbeat_task
+                    except asyncio.CancelledError:
+                        pass
 
     except Exception as e:
         logger.error(f"General WebSocket error: {e}")
@@ -235,6 +285,7 @@ async def general_websocket(
             # Nettoyer les plugins
             if 'plugin_context' in locals():
                 await plugin_manager.cleanup_all(plugin_context)
+        # Note: La session DB sera fermée automatiquement à la sortie du bloc async with
 
 
 async def verify_deployment_access(
@@ -271,24 +322,44 @@ async def verify_deployment_access(
     return deployment
 
 
-@router.websocket("/deployments/{deployment_id}/logs")
+@router.websocket(
+    "/deployments/{deployment_id}/logs",
+    name="deployment_logs_websocket"
+)
 async def deployment_logs_websocket(
     websocket: WebSocket,
     deployment_id: str
 ):
     """
-    WebSocket endpoint pour streamer les logs de déploiement en temps réel.
+    Stream deployment logs in real-time.
 
-    Authentification via query parameter: ?token=JWT_TOKEN
+    Connect to a specific deployment's log stream for real-time monitoring.
 
-    Le client reçoit des messages JSON avec cette structure:
-    {
-        "type": "log" | "status" | "error" | "complete",
-        "timestamp": "ISO8601",
-        "message": "Log message",
-        "level": "info" | "warning" | "error",
-        "data": {...}  # Données additionnelles selon le type
-    }
+    Authentication:
+    Authentication is performed via query parameter: ?token=JWT_TOKEN
+
+    Connection Flow:
+    1. Client connects with deployment ID and token in query string
+    2. Server validates token and user permissions
+    3. Server verifies user has access to the deployment
+    4. Server sends initial deployment status
+    5. Client receives real-time log updates as they occur
+
+    Message Types Received:
+    - Status: Initial deployment status
+    - Log: Real-time log entries
+    - Progress: Deployment progress updates
+    - Complete: Deployment completion notification
+    - Error: Error notifications
+
+    Client Messages:
+    - Heartbeat: Send "ping" to keep connection alive
+    - Server Response: Receives {"type": "pong", "timestamp": "..."}
+
+    Access Control:
+    - User must be authenticated with valid JWT token
+    - User must belong to the same organization as the deployment
+    - Superadmins can access all deployments
     """
     # Extract token from query parameters manually
     token = websocket.query_params.get('token')
