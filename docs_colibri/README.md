@@ -1,6 +1,6 @@
 # Documentation Windflow-sample - Guide de reproduction
 
-Cette documentation vous permet de **reproduire les fonctionnalités clés** du projet Windflow-sample dans votre propre stack technique.
+Cette documentation vous permet de **reproduire les fonctionnalités clés** du projet Windflow-sample dans votre propre stack windflow.
 
 ## 📚 Documents disponibles
 
