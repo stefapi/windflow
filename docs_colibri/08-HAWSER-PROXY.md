@@ -4,13 +4,13 @@
 
 ## 🌐 Vue d'ensemble
 
-Hawser est un système de proxy WebSocket bidirectionnel permettant de gérer des environnements Docker distants derrière NAT/Firewall. Les agents Hawser se connectent à Windflow-sample via WebSocket, éliminant le besoin d'ouvrir des ports ou d'exposer des API Docker.
+Hawser est un système de proxy WebSocket bidirectionnel permettant de gérer des environnements Docker distants derrière NAT/Firewall. Les agents Hawser se connectent à Colibri via WebSocket, éliminant le besoin d'ouvrir des ports ou d'exposer des API Docker.
 
 ## 🏗️ Architecture
 
 ```
 ┌─────────────────┐                    ┌──────────────────┐
-│   Windflow-sample      │                    │  Hawser Agent    │
+│   Colibri      │                    │  Hawser Agent    │
 │                 │                    │                  │
 │                 │                    │                  │
 │  ┌───────────┐  │                    │  ┌────────────┐  │
@@ -26,11 +26,11 @@ Hawser est un système de proxy WebSocket bidirectionnel permettant de gérer de
 
 **Flux de connexion Edge:**
 1. Agent Hawser démarre avec un token
-2. Connexion WebSocket à `wss://Windflow-sample/api/hawser/edge`
+2. Connexion WebSocket à `wss://Colibri/api/hawser/edge`
 3. Envoi du message `hello` avec token, version, capabilities
-4. Windflow-sample valide le token (Argon2id) et répond `welcome`
+4. Colibri valide le token (Argon2id) et répond `welcome`
 5. Connexion établie, heartbeat automatique toutes les 30s
-6. Windflow-sample route les requêtes Docker via l'agent
+6. Colibri route les requêtes Docker via l'agent
 
 ## 1. Protocole WebSocket
 
@@ -39,22 +39,22 @@ Hawser est un système de proxy WebSocket bidirectionnel permettant de gérer de
 ```typescript
 // src/lib/server/hawser.ts
 export const MessageType = {
-    HELLO: 'hello',           // Agent → Windflow-sample (connexion)
-    WELCOME: 'welcome',       // Windflow-sample → Agent (confirmation)
-    REQUEST: 'request',       // Windflow-sample → Agent (requête Docker)
-    RESPONSE: 'response',     // Agent → Windflow-sample (réponse)
-    STREAM: 'stream',         // Agent → Windflow-sample (chunk streaming)
+    HELLO: 'hello',           // Agent → Colibri (connexion)
+    WELCOME: 'welcome',       // Colibri → Agent (confirmation)
+    REQUEST: 'request',       // Colibri → Agent (requête Docker)
+    RESPONSE: 'response',     // Agent → Colibri (réponse)
+    STREAM: 'stream',         // Agent → Colibri (chunk streaming)
     STREAM_END: 'stream_end', // Bi-directionnel (fin stream)
-    METRICS: 'metrics',       // Agent → Windflow-sample (métriques)
-    PING: 'ping',             // Windflow-sample → Agent (heartbeat)
-    PONG: 'pong',             // Agent → Windflow-sample (heartbeat)
+    METRICS: 'metrics',       // Agent → Colibri (métriques)
+    PING: 'ping',             // Colibri → Agent (heartbeat)
+    PONG: 'pong',             // Agent → Colibri (heartbeat)
     ERROR: 'error'            // Bi-directionnel (erreur)
 } as const;
 
 export const HAWSER_PROTOCOL_VERSION = '1.0';
 ```
 
-### Message Hello (Agent → Windflow-sample)
+### Message Hello (Agent → Colibri)
 
 ```typescript
 interface HelloMessage {
@@ -69,7 +69,7 @@ interface HelloMessage {
 }
 ```
 
-### Message Request (Windflow-sample → Agent)
+### Message Request (Colibri → Agent)
 
 ```typescript
 interface RequestMessage {
@@ -83,7 +83,7 @@ interface RequestMessage {
 }
 ```
 
-### Message Response (Agent → Windflow-sample)
+### Message Response (Agent → Colibri)
 
 ```typescript
 interface ResponseMessage {
@@ -96,7 +96,7 @@ interface ResponseMessage {
 }
 ```
 
-### Message Stream (Agent → Windflow-sample)
+### Message Stream (Agent → Colibri)
 
 ```typescript
 interface StreamMessage {
@@ -553,7 +553,7 @@ export async function handleEdgeMetrics(
 ### Messages exec
 
 ```typescript
-// Windflow-sample → Agent : Démarrer exec
+// Colibri → Agent : Démarrer exec
 interface ExecStartMessage {
     type: 'exec_start';
     execId: string;           // UUID unique
@@ -564,20 +564,20 @@ interface ExecStartMessage {
     rows: number;             // Terminal height
 }
 
-// Agent → Windflow-sample : Exec prêt
+// Agent → Colibri : Exec prêt
 interface ExecReadyMessage {
     type: 'exec_ready';
     execId: string;
 }
 
-// Windflow-sample → Agent : Input utilisateur
+// Colibri → Agent : Input utilisateur
 interface ExecInputMessage {
     type: 'exec_input';
     execId: string;
     data: string;             // Base64-encoded
 }
 
-// Agent → Windflow-sample : Output du conteneur
+// Agent → Colibri : Output du conteneur
 interface ExecOutputMessage {
     type: 'exec_output';
     execId: string;

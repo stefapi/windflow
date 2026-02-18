@@ -4,7 +4,7 @@
 
 ## 🔐 Vue d'ensemble
 
-Windflow-sample supporte **4 providers d'authentification** :
+Colibri supporte **4 providers d'authentification** :
 1. **Local** : Argon2id + sessions sécurisées
 2. **LDAP/Active Directory** : Bind + search avec mapping de groupes
 3. **OIDC/OAuth2** : Keycloak, Google, Azure AD, etc.
@@ -565,7 +565,7 @@ async def login(
     
     # Cookie de session
     response.set_cookie(
-        key="windflow_session",
+        key="colibri_session",
         value=session.id,
         httponly=True,
         secure=True,  # HTTPS only en production

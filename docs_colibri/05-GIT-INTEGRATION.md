@@ -4,7 +4,7 @@
 
 ## 🔄 Vue d'ensemble
 
-Windflow-sample intègre une solution CI/CD pour déployer des stacks Docker Compose depuis Git.
+Colibri intègre une solution CI/CD pour déployer des stacks Docker Compose depuis Git.
 
 ## 🏗️ Architecture
 
@@ -77,7 +77,7 @@ class GitOperations:
         auth_config = await self.credential_manager.setup_auth(credential, repo_url)
         
         if not target_dir:
-            target_dir = tempfile.mkdtemp(prefix="windflow_git_")
+            target_dir = tempfile.mkdtemp(prefix="colibri_git_")
         
         repo_path = Path(target_dir)
         

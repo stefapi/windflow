@@ -4,7 +4,7 @@
 
 ## 🚀 Vue d'ensemble
 
-Guide de déploiement de Windflow-sample en production avec Docker Compose.
+Guide de déploiement de Colibri en production avec Docker Compose.
 
 ## 1. Docker Compose Production
 
@@ -13,17 +13,17 @@ Guide de déploiement de Windflow-sample en production avec Docker Compose.
 version: '3.8'
 
 services:
-  Windflow-sample:
-    image: Windflow-sample/Windflow-sample:latest
-    container_name: Windflow-sample
+  Colibri:
+    image: Colibri/Colibri:latest
+    container_name: Colibri
     restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - Windflow-sample-data:/app/data
+      - Colibri-data:/app/data
     environment:
-      - DATABASE_URL=postgresql://Windflow-sample:password@postgres:5432/Windflow-sample
+      - DATABASE_URL=postgresql://Colibri:password@postgres:5432/Colibri
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - SESSION_SECRET=${SESSION_SECRET}
     depends_on:
@@ -32,22 +32,22 @@ services:
 
   postgres:
     image: postgres:15-alpine
-    container_name: Windflow-sample-postgres
+    container_name: Colibri-postgres
     restart: unless-stopped
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_USER=Windflow-sample
+      - POSTGRES_USER=Colibri
       - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=Windflow-sample
+      - POSTGRES_DB=Colibri
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U Windflow-sample"]
+      test: ["CMD-SHELL", "pg_isready -U Colibri"]
       interval: 10s
       timeout: 5s
       retries: 5
 
 volumes:
-  Windflow-sample-data:
+  Colibri-data:
   postgres-data:
 ```
 
@@ -56,7 +56,7 @@ volumes:
 ```bash
 # .env.production
 # Base de données
-DATABASE_URL=postgresql://Windflow-sample:password@postgres:5432/Windflow-sample
+DATABASE_URL=postgresql://Colibri:password@postgres:5432/Colibri
 
 # Sécurité (générer avec: openssl rand -base64 32)
 ENCRYPTION_KEY=your-encryption-key-here
@@ -64,7 +64,7 @@ SESSION_SECRET=your-session-secret-here
 
 # Optionnel: OIDC
 OIDC_ISSUER_URL=https://keycloak.example.com/realms/myrealm
-OIDC_CLIENT_ID=Windflow-sample
+OIDC_CLIENT_ID=Colibri
 OIDC_CLIENT_SECRET=your-client-secret
 
 # Optionnel: LDAP
@@ -132,16 +132,16 @@ websockets>=11.0
 # nginx.conf
 server {
     listen 80;
-    server_name Windflow-sample.example.com;
+    server_name Colibri.example.com;
     return 301 https://$server_name$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name Windflow-sample.example.com;
+    server_name Colibri.example.com;
 
-    ssl_certificate /etc/letsencrypt/live/Windflow-sample.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/Windflow-sample.example.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/Colibri.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/Colibri.example.com/privkey.pem;
 
     client_max_body_size 100M;
 
@@ -191,10 +191,10 @@ DATE=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR="/backups"
 
 # Backup database
-docker exec Windflow-sample-postgres pg_dump -U Windflow-sample Windflow-sample > $BACKUP_DIR/db_$DATE.sql
+docker exec Colibri-postgres pg_dump -U Colibri Colibri > $BACKUP_DIR/db_$DATE.sql
 
 # Backup data
-tar -czf $BACKUP_DIR/data_$DATE.tar.gz -C /var/lib/docker/volumes/Windflow-sample-data/_data .
+tar -czf $BACKUP_DIR/data_$DATE.tar.gz -C /var/lib/docker/volumes/Colibri-data/_data .
 
 # Keep only last 7 days
 find $BACKUP_DIR -name "*.sql" -mtime +7 -delete

@@ -1,6 +1,6 @@
-# Documentation Windflow-sample - Guide de reproduction
+# Documentation Colibri - Guide de reproduction
 
-Cette documentation vous permet de **reproduire les fonctionnalités clés** du projet Windflow-sample dans votre propre stack windflow.
+Cette documentation vous permet de **reproduire les fonctionnalités clés** du projet Colibri dans votre propre stack colibri.
 
 ## 📚 Documents disponibles
 
@@ -208,8 +208,8 @@ Streaming des événements Docker via :
 
 ## 📞 Support
 
-Cette documentation est générée à partir du projet Windflow-sample original :
-- **GitHub** : https://github.com/stefapi/Windflow-sample
+Cette documentation est générée à partir du projet Colibri original :
+- **GitHub** : https://github.com/stefapi/Colibri
 - **Licence** : Apache 2.0
 
 Les exemples Python et Vue 3 sont fournis pour faciliter la reproduction dans d'autres stacks.

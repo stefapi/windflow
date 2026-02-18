@@ -65,9 +65,9 @@ async def create_volume_helper_container(
             "NetworkMode": "none"  # Pas d'accès réseau nécessaire
         },
         "Labels": {
-            "Windflow-sample.type": "volume-helper",
-            "Windflow-sample.volume": volume_name,
-            "Windflow-sample.created": datetime.now().isoformat()
+            "Colibri.type": "volume-helper",
+            "Colibri.volume": volume_name,
+            "Colibri.created": datetime.now().isoformat()
         }
     }
     
@@ -490,10 +490,10 @@ async def cleanup_stale_volume_helpers(environments: List[Environment]):
     
     for env in environments:
         try:
-            # Lister tous les conteneurs avec label Windflow-sample.type=volume-helper
+            # Lister tous les conteneurs avec label Colibri.type=volume-helper
             containers = await docker.list_containers(
                 all=True,
-                filters={"label": ["Windflow-sample.type=volume-helper"]},
+                filters={"label": ["Colibri.type=volume-helper"]},
                 env_id=env.id
             )
             

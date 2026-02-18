@@ -133,7 +133,7 @@ class AutoUpdateExecutor:
 
             # 2. Pull nouvelle image avec tag temporaire
             logs.append(f"Pulling image {image_name}...")
-            temp_tag = f"{image_name.split(':')[0]}:Windflow-sample-pending"
+            temp_tag = f"{image_name.split(':')[0]}:Colibri-pending"
             await self.docker.pull_image(image_name, None, env_id)
 
             # 3. Scan de vulnérabilités

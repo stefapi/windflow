@@ -635,8 +635,8 @@ const SCANNER_IMAGE_PATTERNS = [
   'ghcr.io/aquasecurity/trivy'
 ];
 
-// Exclure conteneurs internes Windflow-sample
-const EXCLUDED_CONTAINER_PREFIXES = ['Windflow-sample-browse-'];
+// Exclure conteneurs internes Colibri
+const EXCLUDED_CONTAINER_PREFIXES = ['Colibri-browse-'];
 
 function processEvent(event: DockerEvent, envId: number) {
   const image = event.Actor?.Attributes?.image;
@@ -813,7 +813,7 @@ process.on('message', (command: MainProcessCommand) => {
 
 ```typescript
 // Persister PIDs entre HMR reloads
-const GLOBAL_KEY = '__windflow_subprocess_pids__';
+const GLOBAL_KEY = '__colibri_subprocess_pids__';
 
 interface SubprocessPids {
   metrics: number | null;

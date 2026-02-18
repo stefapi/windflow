@@ -674,7 +674,7 @@ async function dockerLogin(registry: Registry) {
 
 3. **Rotation de clé**
    - Définir nouvelle `ENCRYPTION_KEY` dans env
-   - Redémarrer Windflow-sample
+   - Redémarrer Colibri
    - Migration automatique au démarrage
    - Fichier supprimé automatiquement
 

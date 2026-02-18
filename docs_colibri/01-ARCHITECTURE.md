@@ -1,4 +1,4 @@
-# Architecture du projet Windflow-sample
+# Architecture du projet Colibri
 
 [← Retour](00-OVERVIEW.md) | [Suivant : Module Docker →](02-DOCKER-API-MODULE.md)
 
@@ -110,7 +110,7 @@ flowchart TD
 sequenceDiagram
     participant Git as Git Remote
     participant Webhook as Webhook
-    participant API as Windflow-sample API
+    participant API as Colibri API
     participant Docker as Docker Daemon
 
     Git->>Webhook: Push event

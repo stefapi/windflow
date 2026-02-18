@@ -1,8 +1,8 @@
-# Windflow-sample - Vue d'ensemble du projet
+# Colibri - Vue d'ensemble du projet
 
 ## 📋 Description
 
-**Windflow-sample** est une interface web moderne de gestion Docker, alternative open-source à Portainer. Développé avec Vue 3 + TypeScript et FastAPI, il offre une solution complète pour gérer des environnements Docker locaux et distants.
+**Colibri** est une interface web moderne de gestion Docker, alternative open-source à Portainer. Développé avec Vue 3 + TypeScript et FastAPI, il offre une solution complète pour gérer des environnements Docker locaux et distants.
 
 ## 🎯 Objectif du projet
 
@@ -49,7 +49,7 @@ Fournir une interface web intuitive et performante pour :
 ### 2. Multi-environnements
 ```
 ┌─────────────────────────────────────┐
-│   Windflow-sample (Interface Web)   │
+│   Colibri (Interface Web)   │
 ├─────────────────────────────────────┤
 │  ┌──────┐  ┌──────┐  ┌──────┐      │
 │  │ Env1 │  │ Env2 │  │ Env3 │      │
@@ -124,7 +124,7 @@ Auth : OIDC + MFA
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Windflow-sample Web UI               │
+│                    Colibri Web UI               │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
 │  │Containers│  │  Images  │  │  Stacks  │             │
 │  └──────────┘  └──────────┘  └──────────┘             │
@@ -181,7 +181,7 @@ Proxy Docker pour environnements NAT/Firewall :
 ## 📁 Structure du projet
 
 ```
-windflow-sample/
+colibri/
 ├── backend/                 # Backend Python / FastAPI
 │   ├── app/
 │   │   ├── api/            # Routers FastAPI (/api/v1/*)
@@ -250,7 +250,7 @@ Les exemples de code sont fournis en :
 
 ## 📄 Licence
 
-Le projet Windflow-sample est sous licence Apache 2.0 (voir LICENSE.txt).
+Le projet Colibri est sous licence Apache 2.0 (voir LICENSE.txt).
 
 ---
 

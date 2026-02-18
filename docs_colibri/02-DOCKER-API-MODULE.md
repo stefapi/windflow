@@ -4,7 +4,7 @@
 
 ## 🎯 Vue d'ensemble
 
-Le module `docker.ts` (2800+ lignes) est le **cœur technique** de Windflow-sample. Il implémente l'intégralité de l'API Docker v1.41+ **sans dépendance externe** (pas de dockerode), en communiquant directement avec le daemon Docker via :
+Le module `docker.ts` (2800+ lignes) est le **cœur technique** de Colibri. Il implémente l'intégralité de l'API Docker v1.41+ **sans dépendance externe** (pas de dockerode), en communiquant directement avec le daemon Docker via :
 - Unix socket (`/var/run/docker.sock`)
 - HTTP/HTTPS avec TLS (mTLS)
 - WebSocket (Hawser Edge mode)

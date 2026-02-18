@@ -4,7 +4,7 @@
 
 ## 📊 Vue d'ensemble
 
-Windflow-sample utilise **SQLAlchemy 2.0** avec support dual SQLite (développement) et PostgreSQL (production).
+Colibri utilise **SQLAlchemy 2.0** avec support dual SQLite (développement) et PostgreSQL (production).
 
 ## 🗄️ Schéma relationnel complet
 
@@ -678,10 +678,10 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
 # SQLite (développement)
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/Windflow-sample.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/Colibri.db")
 
 # PostgreSQL (production)
-# DATABASE_URL = "postgresql+asyncpg://user:pass@localhost/Windflow-sample"
+# DATABASE_URL = "postgresql+asyncpg://user:pass@localhost/Colibri"
 
 # Engine async
 engine = create_async_engine(
