@@ -2,7 +2,7 @@
 
 ## 📋 Description
 
-**Windflow-sample** est une interface web moderne de gestion Docker, alternative open-source à Portainer. Développé avec Vue3, il offre une solution complète pour gérer des environnements Docker locaux et distants.
+**Windflow-sample** est une interface web moderne de gestion Docker, alternative open-source à Portainer. Développé avec Vue 3 + TypeScript et FastAPI, il offre une solution complète pour gérer des environnements Docker locaux et distants.
 
 ## 🎯 Objectif du projet
 
@@ -15,23 +15,25 @@ Fournir une interface web intuitive et performante pour :
 
 ## 🏗️ Stack technique
 
-### Backend (Python)
-- **Runtime** : Fastapi
-- **Framework** : Fastapi
-- **ORM** : sqlalchemy ORM (SQLite/PostgreSQL)
-- **Auth** : argon2, LDAP, OIDC, MFA (TOTP)
-- **Docker** : API native v1.41+ (pas de dockerode)
+### Backend (Python / FastAPI)
+- **Framework** : FastAPI (async, OpenAPI auto-généré)
+- **ORM** : SQLAlchemy 2.0 (async) avec support SQLite / PostgreSQL
+- **Auth** : argon2-cffi (hashing), python-ldap3 (LDAP), authlib (OIDC), pyotp (TOTP)
+- **Docker** : API native v1.41+ via httpx (pas de dockerode ni de SDK officiel)
+- **Serveur** : Uvicorn (dev) / Gunicorn + Uvicorn workers (prod)
 
-### Frontend (vue3)
-- **Framework** : Vue3
-- **UI** : TailwindCSS 4, bits-ui, vue3
-- **Charts** : LayerChart (D3-based)
+### Frontend (Vue 3 / TypeScript / Vite)
+- **Framework** : Vue 3 (Composition API, `<script setup>`)
+- **Build** : Vite
+- **Langage** : TypeScript strict
+- **UI** : TailwindCSS 4, composants personnalisés
+- **Charts** : D3.js ou équivalent
 - **Terminal** : xterm.js avec WebSocket
-- **Icons** : vue3
+- **State** : Pinia
 
 ### Infrastructure
 - **Base de données** : SQLite (défaut) ou PostgreSQL
-- **Reverse proxy** : Traefik/Nginx (optionnel)
+- **Reverse proxy** : Traefik / Nginx (optionnel)
 - **Docker** : 20.10+ ou Podman 4.0+
 - **Agents** : Hawser (Go) pour environnements distants
 
@@ -47,7 +49,7 @@ Fournir une interface web intuitive et performante pour :
 ### 2. Multi-environnements
 ```
 ┌─────────────────────────────────────┐
-│   Windflow-sample (Interface Web)          │
+│   Windflow-sample (Interface Web)   │
 ├─────────────────────────────────────┤
 │  ┌──────┐  ┌──────┐  ┌──────┐      │
 │  │ Env1 │  │ Env2 │  │ Env3 │      │
@@ -77,16 +79,16 @@ Fournir une interface web intuitive et performante pour :
 - Historique des déploiements
 
 ### 5. Sécurité avancée
-- Auth local (bcrypt) + sessions sécurisées
-- LDAP/Active Directory
-- OIDC/OAuth2 (Google, GitHub, Keycloak)
-- MFA (2FA) avec QR codes TOTP
+- Auth local (Argon2id) + sessions sécurisées (cookies HttpOnly)
+- LDAP/Active Directory (via `ldap3`)
+- OIDC/OAuth2 (Google, GitHub, Keycloak) avec PKCE
+- MFA (2FA) avec QR codes TOTP (via `pyotp`)
 - RBAC (Role-Based Access Control)
 - Audit logs détaillés
 
 ### 6. Monitoring
 - Métriques CPU/RAM en temps réel
-- Événements Docker streamés
+- Événements Docker streamés (SSE)
 - Dashboard d'activité
 - Alertes configurables
 - Historique 30 jours (configurable)
@@ -122,19 +124,20 @@ Auth : OIDC + MFA
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Windflow-sample Web UI                       │
+│                    Windflow-sample Web UI               │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
 │  │Containers│  │  Images  │  │  Stacks  │             │
 │  └──────────┘  └──────────┘  └──────────┘             │
+│        Vue 3 + TypeScript + Vite                        │
 ├─────────────────────────────────────────────────────────┤
-│              FastAPI API Routes                        │
+│              FastAPI API Routes (/api/v1/*)             │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
 │  │  Docker  │  │   Auth   │  │    Git   │             │
 │  │   API    │  │  Layer   │  │  Sync    │             │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘             │
 ├───────┼─────────────┼─────────────┼──────────────────────┤
 │  ┌────▼─────┐  ┌────▼─────┐  ┌────▼─────┐             │
-│  │ Docker   │  │ Database │  │  Git     │             │
+│  │ Docker   │  │ SQLAlch. │  │  Git     │             │
 │  │ Socket   │  │SQLite/PG │  │  Repos   │             │
 │  └──────────┘  └──────────┘  └──────────┘             │
 └─────────────────────────────────────────────────────────┘
@@ -156,7 +159,7 @@ Un environnement représente une connexion à un daemon Docker :
 ### Stack Docker Compose
 Un ensemble de conteneurs déployés ensemble :
 - Fichier `docker-compose.yml`
-- Variables d'environnement chiffrées
+- Variables d'environnement chiffrées (AES-256-GCM)
 - Source : Git ou interne (créé via UI)
 - Versioning et rollback
 
@@ -178,30 +181,37 @@ Proxy Docker pour environnements NAT/Firewall :
 ## 📁 Structure du projet
 
 ```
-Windflow-sample/
-├── src/
-│   ├── lib/
-│   │   ├── server/          # Backend (Python/FastAPI)
-│   │   │   ├── docker.py    # API Docker (2800+ lignes)
-│   │   │   ├── auth.py      # Auth multi-provider
-│   │   │   ├── db.py        # sqlalchemy ORM
-│   │   │   ├── git.py       # Git integration
-│   │   │   └── hawser.py    # Hawser proxy
-│   │   ├── components/      # Composants vue3
-│   │   └── stores/          # State management
-│   ├── routes/              # Pages et API routes
-│   └── hooks.server.py      # Middleware global
-├── scripts/                 # Build et maintenance
-├── static/                  # Assets statiques
-└── docs/                    # Documentation (ce dossier)
+windflow-sample/
+├── backend/                 # Backend Python / FastAPI
+│   ├── app/
+│   │   ├── api/            # Routers FastAPI (/api/v1/*)
+│   │   ├── auth/           # Authentification (local, LDAP, OIDC, MFA)
+│   │   ├── core/           # Config, DB, securité
+│   │   ├── models/         # Modèles SQLAlchemy
+│   │   ├── schemas/        # Schémas Pydantic
+│   │   ├── services/       # Logique métier (docker, git, etc.)
+│   │   ├── tasks/          # Tâches asyncio background
+│   │   └── main.py         # Point d'entrée FastAPI
+│   └── tests/
+├── frontend/                # Frontend Vue 3 / TypeScript / Vite
+│   ├── src/
+│   │   ├── components/     # Composants Vue 3
+│   │   ├── composables/    # Composables TypeScript
+│   │   ├── stores/         # State Pinia
+│   │   ├── services/       # Appels API TypeScript
+│   │   ├── views/          # Pages principales
+│   │   └── main.ts         # Point d'entrée
+│   ├── vite.config.ts
+│   └── tsconfig.json
+├── docker-compose.yml
+└── docs/                   # Documentation (ce dossier)
 ```
 
 ## 🎓 Prérequis pour reproduire
 
 ### Connaissances requises
-- TypeScript/JavaScript moderne (ES2022+)
-- Python 3.10+ (pour exemples backend alternatifs)
-- Vue 3 Composition API (pour frontend alternatif)
+- Python 3.11+ (FastAPI, SQLAlchemy 2.0, async/await)
+- TypeScript moderne (ES2022+, Vue 3 Composition API)
 - Docker API et concepts
 - SQL (SQLite ou PostgreSQL)
 - REST API et WebSocket
@@ -209,9 +219,9 @@ Windflow-sample/
 
 ### Outils nécessaires
 - Docker 20.10+ ou Podman 4.0+
+- Python 3.11+
+- Node.js 20+ avec pnpm (ou npm)
 - Git 2.30+
-- Python 3.10+ (pour exemples)
-- Vue CLI ou Vite (pour exemples frontend)
 
 ## 📚 Comment utiliser cette documentation
 
@@ -225,24 +235,22 @@ Windflow-sample/
 8. **07-VULNERABILITY-SCANNING.md** : Scanner de vulnérabilités
 9. **08-HAWSER-PROXY.md** : Système Hawser pour NAT
 10. **09-SCHEDULER.md** : Tâches programmées (cron)
-11. **10-BACKGROUND-PROCESSES.md** : Processus métriques/événements
-12. **11-ENCRYPTION.md** : Chiffrement des secrets
-13. **12-TERMINAL-WEBSOCKET.md** : Terminal web
-14. **13-VOLUME-BROWSER.md** : Navigateur de volumes
-15. **14-CODE-SNIPPETS.md** : Extraits réutilisables
-16. **15-DEPLOYMENT.md** : Guide de déploiement
+11. **10-ENCRYPTION.md** : Chiffrement des secrets
+12. **11-TERMINAL-WEBSOCKET.md** : Terminal web
+13. **12-VOLUME-BROWSER.md** : Navigateur de volumes
+14. **13-BACKGROUND-PROCESSES.md** : Processus métriques/événements
+15. **14-DEPLOYMENT.md** : Guide de déploiement
+16. **15-CODE-SNIPPETS.md** : Extraits réutilisables
 
 ## 🤝 Contribuer
 
 Les exemples de code sont fournis en :
-- **Backend** : Python (FastAPI/Flask) pour reproduction
-- **Frontend** : Vue 3 + TypeScript
-
-Le projet original utilise TypeScript, mais les concepts sont transposables à d'autres stacks.
+- **Backend** : Python (FastAPI, SQLAlchemy 2.0)
+- **Frontend** : Vue 3 + TypeScript (Composition API, `<script setup>`)
 
 ## 📄 Licence
 
-Le projet Windflow-sample est sous licence Apache 2.0 (voir LICENSE.txt dans src/).
+Le projet Windflow-sample est sous licence Apache 2.0 (voir LICENSE.txt).
 
 ---
 

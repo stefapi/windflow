@@ -19,7 +19,7 @@ Windflow-sample supporte **4 providers d'authentification** :
 │                                                      │
 │  ┌─────────┐    ┌──────────────┐    ┌───────────┐  │
 │  │  Login  │───►│ Auth Provider│───►│  Session  │  │
-│  │  Form   │    │              │    │  Cookie   │  │
+│  │  Form   │    │              │    │  DB/Cookie│  │
 │  └─────────┘    └──────────────┘    └───────────┘  │
 │                      │                              │
 │         ┌────────────┼────────────┐                │
@@ -42,63 +42,69 @@ Windflow-sample supporte **4 providers d'authentification** :
 
 ### Configuration
 
-```typescript
-// src/lib/server/auth.ts
+```python
+# auth/password.py
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, InvalidHash
+import secrets
 
-// Paramètres Argon2id (correspondant à poetry.password)
-const ARGON2_MEMORY_COST = 65536;  // 64 MB en kibibytes
-const ARGON2_TIME_COST = 3;        // 3 itérations
-const ARGON2_PARALLELISM = 1;      // Single-threaded
-const ARGON2_HASH_LENGTH = 32;     // 256-bit output
-const ARGON2_SALT_LENGTH = 16;     // 128-bit salt
+# Paramètres Argon2id (sécurité optimale)
+ARGON2_TIME_COST = 3           # 3 itérations
+ARGON2_MEMORY_COST = 65536     # 64 MB
+ARGON2_PARALLELISM = 1         # Single-threaded
+ARGON2_HASH_LENGTH = 32        # 256-bit output
+ARGON2_SALT_LENGTH = 16        # 128-bit salt
+
+# Hasher global
+password_hasher = PasswordHasher(
+    time_cost=ARGON2_TIME_COST,
+    memory_cost=ARGON2_MEMORY_COST,
+    parallelism=ARGON2_PARALLELISM,
+    hash_len=ARGON2_HASH_LENGTH,
+    salt_len=ARGON2_SALT_LENGTH,
+    type=argon2.Type.ID  # Argon2id
+)
 ```
 
 ### Fonction hashPassword
 
-```typescript
-export async function hashPassword(password: string): Promise<string> {
-    // Sur vieux kernels (<3.17), poetry.password.hash() crashe
-    // car il utilise getrandom() en interne.
-    // Utiliser hash-wasm comme fallback (WASM pur, sans getrandom)
-    if (usingFallback()) {
-        const salt = secureRandomBytes(ARGON2_SALT_LENGTH);
-        return argon2id({
-            password,
-            salt,
-            iterations: ARGON2_TIME_COST,
-            parallelism: ARGON2_PARALLELISM,
-            memorySize: ARGON2_MEMORY_COST,
-            hashLength: ARGON2_HASH_LENGTH,
-            outputType: 'encoded'  // Format PHC: $argon2id$v=19$m=65536,t=3,p=1$...
-        });
-    }
-
-    return Poetry.password.hash(password, {
-        algorithm: 'argon2id',
-        memoryCost: ARGON2_MEMORY_COST,
-        timeCost: ARGON2_TIME_COST
-    });
-}
+```python
+def hash_password(password: str) -> str:
+    """Hash un mot de passe avec Argon2id.
+    
+    Args:
+        password: Mot de passe en clair
+        
+    Returns:
+        Hash au format PHC: $argon2id$v=19$m=65536,t=3,p=1$...
+    """
+    return password_hasher.hash(password)
 ```
 
 ### Fonction verifyPassword
 
-```typescript
-export async function verifyPassword(
-    password: string,
-    hash: string
-): Promise<boolean> {
-    try {
-        // Sur vieux kernels, utiliser hash-wasm
-        if (usingFallback()) {
-            return await argon2Verify({ password, hash });
-        }
-
-        return await Poetry.password.verify(password, hash);
-    } catch {
-        return false;
-    }
-}
+```python
+def verify_password(password: str, hash: str) -> bool:
+    """Vérifie un mot de passe contre son hash.
+    
+    Args:
+        password: Mot de passe en clair
+        hash: Hash Argon2id
+        
+    Returns:
+        True si le mot de passe correspond
+    """
+    try:
+        password_hasher.verify(hash, password)
+        
+        # Rehash si paramètres obsolètes
+        if password_hasher.check_needs_rehash(hash):
+            # Signal pour MAJ dans la DB (non géré ici)
+            pass
+            
+        return True
+    except (VerifyMismatchError, InvalidHash):
+        return False
 ```
 
 **Avantages Argon2id:**
@@ -109,1106 +115,862 @@ export async function verifyPassword(
 
 ## 2. Gestion des sessions
 
+### Configuration
+
+```python
+# auth/session.py
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
+from datetime import datetime, timedelta
+import secrets
+from typing import Optional
+
+from models.user import Session, User
+from auth.config import get_auth_settings
+
+SESSION_TOKEN_BYTES = 32  # 256 bits d'entropie
+```
+
 ### Génération de token
 
-```typescript
-function generateSessionToken(): string {
-    // 32 bytes = 256 bits d'entropie
-    return secureRandomBytes(32).toString('base64url');
-}
+```python
+def generate_session_token() -> str:
+    """Génère un token de session cryptographiquement sécurisé."""
+    return secrets.token_urlsafe(SESSION_TOKEN_BYTES)
 ```
 
 ### Création de session
 
-```typescript
-export async function createUserSession(
-    userId: number,
-    provider: string,  // 'local', 'ldap:AD', 'oidc:Keycloak', etc.
-    cookies: Cookies
-): Promise<Session> {
-    // Nettoyer sessions expirées
-    await deleteExpiredSessions();
-
-    // Générer token sécurisé
-    const sessionId = generateSessionToken();
-
-    // Récupérer timeout depuis settings
-    const settings = await getAuthSettings();
-    const sessionTimeout = settings?.sessionTimeout || 86400; // 24h par défaut
-
-    const expiresAt = new Date(Date.now() + sessionTimeout * 1000).toISOString();
-
-    // Créer en DB
-    const session = await dbCreateSession(sessionId, userId, provider, expiresAt);
-
-    // Cookie HttpOnly sécurisé
-    cookies.set('windflow_session', sessionId, {
-        path: '/',
-        httpOnly: true,                     // XSS protection
-        secure: process.env.NODE_ENV === 'production', // HTTPS only en prod
-        sameSite: 'strict',                 // CSRF protection
-        maxAge: sessionTimeout
-    });
-
-    // Mettre à jour lastLogin
-    await updateUser(userId, { lastLogin: new Date().toISOString() });
-
-    return session;
-}
+```python
+async def create_user_session(
+    db: AsyncSession,
+    user_id: int,
+    provider: str,  # 'local', 'ldap:AD', 'oidc:Keycloak'
+) -> Session:
+    """Crée une nouvelle session utilisateur.
+    
+    Args:
+        db: Session de base de données
+        user_id: ID de l'utilisateur
+        provider: Provider d'authentification
+        
+    Returns:
+        Session créée
+    """
+    # Nettoyer sessions expirées
+    await delete_expired_sessions(db)
+    
+    # Générer token sécurisé
+    session_id = generate_session_token()
+    
+    # Récupérer timeout depuis settings
+    settings = await get_auth_settings(db)
+    session_timeout = settings.session_timeout if settings else 86400  # 24h défaut
+    
+    expires_at = datetime.utcnow() + timedelta(seconds=session_timeout)
+    
+    # Créer en DB
+    session = Session(
+        id=session_id,
+        user_id=user_id,
+        provider=provider,
+        expires_at=expires_at
+    )
+    db.add(session)
+    
+    # Mettre à jour lastLogin
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user:
+        user.last_login = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(session)
+    
+    return session
 ```
 
 ### Validation de session
 
-```typescript
-export async function validateSession(
-    cookies: Cookies
-): Promise<AuthenticatedUser | null> {
-    const sessionId = cookies.get('windflow_session');
-    if (!sessionId) return null;
-
-    const session = await dbGetSession(sessionId);
-    if (!session) return null;
-
-    // Vérifier expiration
-    const expiresAt = new Date(session.expiresAt);
-    if (expiresAt < new Date()) {
-        await dbDeleteSession(sessionId);
-        return null;
-    }
-
-    const user = await getUser(session.userId);
-    if (!user || !user.isActive) return null;
-
-    return await buildAuthenticatedUser(
-        user,
-        session.provider as 'local' | 'ldap' | 'oidc'
-    );
-}
+```python
+async def validate_session(
+    db: AsyncSession,
+    session_id: str
+) -> Optional[User]:
+    """Valide une session et retourne l'utilisateur.
+    
+    Args:
+        db: Session de base de données
+        session_id: ID de session
+        
+    Returns:
+        Utilisateur si session valide, None sinon
+    """
+    if not session_id:
+        return None
+    
+    # Récupérer session
+    result = await db.execute(
+        select(Session)
+        .where(Session.id == session_id)
+        .where(Session.expires_at > datetime.utcnow())
+    )
+    session = result.scalar_one_or_none()
+    
+    if not session:
+        return None
+    
+    # Récupérer utilisateur
+    result = await db.execute(
+        select(User)
+        .where(User.id == session.user_id)
+        .where(User.is_active == True)
+    )
+    user = result.scalar_one_or_none()
+    
+    return user
 ```
 
 ### Destruction de session (logout)
 
-```typescript
-export async function destroySession(cookies: Cookies): Promise<void> {
-    const sessionId = cookies.get('windflow_session');
-    if (sessionId) {
-        await dbDeleteSession(sessionId);
-    }
+```python
+async def destroy_session(
+    db: AsyncSession,
+    session_id: str
+) -> None:
+    """Détruit une session (logout).
+    
+    Args:
+        db: Session de base de données
+        session_id: ID de session à détruire
+    """
+    if session_id:
+        await db.execute(
+            delete(Session).where(Session.id == session_id)
+        )
+        await db.commit()
 
-    cookies.delete('windflow_session', { path: '/' });
-}
+
+async def delete_expired_sessions(db: AsyncSession) -> None:
+    """Nettoie les sessions expirées."""
+    await db.execute(
+        delete(Session).where(Session.expires_at < datetime.utcnow())
+    )
+    await db.commit()
 ```
 
 ## 3. Rate Limiting
 
 ### Configuration
 
-```typescript
-// src/lib/server/auth.ts
+```python
+# auth/rate_limit.py
+from datetime import datetime, timedelta
+from typing import Dict, Optional
+import asyncio
+from dataclasses import dataclass
 
-const RATE_LIMIT_MAX_ATTEMPTS = 5;           // 5 tentatives max
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const RATE_LIMIT_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes de blocage
+RATE_LIMIT_MAX_ATTEMPTS = 5           # 5 tentatives max
+RATE_LIMIT_WINDOW_SECONDS = 900       # 15 minutes
+RATE_LIMIT_LOCKOUT_SECONDS = 900      # 15 minutes de blocage
+
+@dataclass
+class RateLimitEntry:
+    attempts: int
+    last_attempt: datetime
+    locked_until: Optional[datetime] = None
 ```
 
-### Structure de données
+### Store en mémoire
 
-```typescript
-interface RateLimitEntry {
-    attempts: number;
-    lastAttempt: number;
-    lockedUntil: number | null;
-}
+```python
+class RateLimitStore:
+    """Store in-memory pour rate limiting."""
+    
+    def __init__(self):
+        self._store: Dict[str, RateLimitEntry] = {}
+        self._lock = asyncio.Lock()
+        
+        # Cleanup automatique toutes les 5 minutes
+        asyncio.create_task(self._cleanup_loop())
+    
+    async def _cleanup_loop(self):
+        """Nettoyage périodique des entrées expirées."""
+        while True:
+            await asyncio.sleep(300)  # 5 minutes
+            await self.cleanup()
+    
+    async def cleanup(self):
+        """Nettoie les entrées expirées."""
+        async with self._lock:
+            now = datetime.utcnow()
+            expired_keys = [
+                key for key, entry in self._store.items()
+                if (now - entry.last_attempt).total_seconds() > RATE_LIMIT_WINDOW_SECONDS
+            ]
+            for key in expired_keys:
+                del self._store[key]
+    
+    async def get(self, identifier: str) -> Optional[RateLimitEntry]:
+        """Récupère une entrée."""
+        async with self._lock:
+            return self._store.get(identifier)
+    
+    async def set(self, identifier: str, entry: RateLimitEntry):
+        """Définit une entrée."""
+        async with self._lock:
+            self._store[identifier] = entry
+    
+    async def delete(self, identifier: str):
+        """Supprime une entrée."""
+        async with self._lock:
+            self._store.pop(identifier, None)
 
-// Store in-memory (Map)
-const rateLimitStore = new Map<string, RateLimitEntry>();
-
-// Cleanup automatique toutes les 5 minutes
-setInterval(() => {
-    const now = Date.now();
-    for (const [key, entry] of rateLimitStore) {
-        if (now - entry.lastAttempt > RATE_LIMIT_WINDOW_MS) {
-            rateLimitStore.delete(key);
-        }
-    }
-}, 5 * 60 * 1000);
+# Instance globale
+rate_limit_store = RateLimitStore()
 ```
 
 ### Vérification de limitation
 
-```typescript
-export function isRateLimited(
-    identifier: string  // username ou IP
-): { limited: boolean; retryAfter?: number } {
-    const entry = rateLimitStore.get(identifier);
-    const now = Date.now();
-
-    if (!entry) return { limited: false };
-
-    // Vérifier si bloqué
-    if (entry.lockedUntil && entry.lockedUntil > now) {
-        return {
-            limited: true,
-            retryAfter: Math.ceil((entry.lockedUntil - now) / 1000)
-        };
-    }
-
-    // Réinitialiser si hors fenêtre
-    if (now - entry.lastAttempt > RATE_LIMIT_WINDOW_MS) {
-        rateLimitStore.delete(identifier);
-        return { limited: false };
-    }
-
-    return { limited: false };
-}
+```python
+async def is_rate_limited(identifier: str) -> tuple[bool, Optional[int]]:
+    """Vérifie si un identifiant est rate limited.
+    
+    Args:
+        identifier: Username ou IP
+        
+    Returns:
+        (limited, retry_after_seconds)
+    """
+    entry = await rate_limit_store.get(identifier)
+    now = datetime.utcnow()
+    
+    if not entry:
+        return False, None
+    
+    # Vérifier si bloqué
+    if entry.locked_until and entry.locked_until > now:
+        retry_after = int((entry.locked_until - now).total_seconds())
+        return True, retry_after
+    
+    # Réinitialiser si hors fenêtre
+    if (now - entry.last_attempt).total_seconds() > RATE_LIMIT_WINDOW_SECONDS:
+        await rate_limit_store.delete(identifier)
+        return False, None
+    
+    return False, None
 ```
 
 ### Enregistrement d'échec
 
-```typescript
-export function recordFailedAttempt(identifier: string): void {
-    const now = Date.now();
-    const entry = rateLimitStore.get(identifier);
-
-    if (!entry || now - entry.lastAttempt > RATE_LIMIT_WINDOW_MS) {
-        rateLimitStore.set(identifier, {
-            attempts: 1,
-            lastAttempt: now,
-            lockedUntil: null
-        });
-        return;
-    }
-
-    entry.attempts++;
-    entry.lastAttempt = now;
-
-    if (entry.attempts >= RATE_LIMIT_MAX_ATTEMPTS) {
-        entry.lockedUntil = now + RATE_LIMIT_LOCKOUT_MS;
-    }
-}
+```python
+async def record_failed_attempt(identifier: str) -> None:
+    """Enregistre une tentative échouée.
+    
+    Args:
+        identifier: Username ou IP
+    """
+    now = datetime.utcnow()
+    entry = await rate_limit_store.get(identifier)
+    
+    if not entry or (now - entry.last_attempt).total_seconds() > RATE_LIMIT_WINDOW_SECONDS:
+        # Nouvelle entrée
+        await rate_limit_store.set(
+            identifier,
+            RateLimitEntry(attempts=1, last_attempt=now)
+        )
+        return
+    
+    # Incrémenter compteur
+    entry.attempts += 1
+    entry.last_attempt = now
+    
+    # Bloquer si trop de tentatives
+    if entry.attempts >= RATE_LIMIT_MAX_ATTEMPTS:
+        entry.locked_until = now + timedelta(seconds=RATE_LIMIT_LOCKOUT_SECONDS)
+    
+    await rate_limit_store.set(identifier, entry)
 ```
 
 ### Nettoyage sur succès
 
-```typescript
-export function clearRateLimit(identifier: string): void {
-    rateLimitStore.delete(identifier);
-}
+```python
+async def clear_rate_limit(identifier: str) -> None:
+    """Nettoie le rate limit sur succès."""
+    await rate_limit_store.delete(identifier)
 ```
 
 ## 4. Authentification Locale
 
-### Flow complet
+### Service d'authentification
 
-```typescript
-export async function authenticateLocal(
-    username: string,
-    password: string
-): Promise<LoginResult> {
-    const user = await getUserByUsername(username);
+```python
+# auth/local.py
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from typing import Optional
+from dataclasses import dataclass
 
-    if (!user) {
-        // Utiliser constant time pour prévenir timing attacks
-        await hashPassword('dummy');
-        return { success: false, error: 'Invalid username or password' };
-    }
+from models.user import User
+from auth.password import verify_password, hash_password
 
-    if (!user.isActive) {
-        return { success: false, error: 'Account is disabled' };
-    }
-
-    const validPassword = await verifyPassword(password, user.passwordHash);
-    if (!validPassword) {
-        return { success: false, error: 'Invalid username or password' };
-    }
-
-    // MFA requis?
-    if (user.mfaEnabled) {
-        return { success: true, requiresMfa: true };
-    }
-
-    return {
-        success: true,
-        user: await buildAuthenticatedUser(user, 'local')
-    };
-}
+@dataclass
+class LoginResult:
+    success: bool
+    user: Optional[User] = None
+    requires_mfa: bool = False
+    error: Optional[str] = None
 ```
 
-### API Route
+### Flow complet
 
-```typescript
-// routes/api/auth/login/+server.ts
-import { authenticateLocal, createUserSession, isRateLimited, recordFailedAttempt, clearRateLimit } from '$lib/server/auth';
+```python
+async def authenticate_local(
+    db: AsyncSession,
+    username: str,
+    password: str
+) -> LoginResult:
+    """Authentifie un utilisateur en mode local.
+    
+    Args:
+        db: Session de base de données
+        username: Nom d'utilisateur
+        password: Mot de passe en clair
+        
+    Returns:
+        Résultat de l'authentification
+    """
+    # Récupérer utilisateur
+    result = await db.execute(
+        select(User).where(User.username == username)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        # Protection timing attack : hash dummy
+        hash_password('dummy_password')
+        return LoginResult(
+            success=False,
+            error='Invalid username or password'
+        )
+    
+    if not user.is_active:
+        return LoginResult(
+            success=False,
+            error='Account is disabled'
+        )
+    
+    # Vérifier mot de passe
+    if not verify_password(password, user.password_hash):
+        return LoginResult(
+            success=False,
+            error='Invalid username or password'
+        )
+    
+    # MFA requis?
+    if user.mfa_enabled:
+        return LoginResult(
+            success=True,
+            user=user,
+            requires_mfa=True
+        )
+    
+    return LoginResult(
+        success=True,
+        user=user
+    )
+```
 
-export async function POST({ request, cookies, getClientAddress }) {
-    const { username, password } = await request.json();
+### API Route FastAPI
 
-    // Rate limiting par username et IP
-    const clientIP = getClientAddress();
-    const rateLimit = isRateLimited(username) || isRateLimited(clientIP);
+```python
+# api/v1/auth.py
+from fastapi import APIRouter, Depends, Response, Request, status
+from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel
 
-    if (rateLimit.limited) {
-        return json({
-            error: `Too many failed attempts. Try again in ${rateLimit.retryAfter} seconds.`
-        }, { status: 429 });
+from database import get_db
+from auth.local import authenticate_local
+from auth.session import create_user_session
+from auth.rate_limit import is_rate_limited, record_failed_attempt, clear_rate_limit
+
+router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    success: bool
+    requires_mfa: bool = False
+    user: Optional[dict] = None
+    error: Optional[str] = None
+
+@router.post("/login")
+async def login(
+    request: Request,
+    response: Response,
+    body: LoginRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Endpoint de login local."""
+    
+    username = body.username
+    password = body.password
+    
+    # Rate limiting par username et IP
+    client_ip = request.client.host
+    
+    limited_user, retry_user = await is_rate_limited(username)
+    limited_ip, retry_ip = await is_rate_limited(client_ip)
+    
+    if limited_user or limited_ip:
+        retry_after = retry_user or retry_ip
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "error": f"Too many failed attempts. Try again in {retry_after} seconds."
+            }
+        )
+    
+    # Authentification
+    result = await authenticate_local(db, username, password)
+    
+    if not result.success:
+        await record_failed_attempt(username)
+        await record_failed_attempt(client_ip)
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": result.error}
+        )
+    
+    if result.requires_mfa:
+        # Stocker temporairement user ID pour vérification MFA
+        # (peut utiliser session temporaire ou JWT)
+        response.set_cookie(
+            key="mfa_pending",
+            value=str(result.user.id),
+            httponly=True,
+            samesite="strict",
+            max_age=300  # 5 minutes
+        )
+        return {"requires_mfa": True}
+    
+    # Succès - créer session
+    await clear_rate_limit(username)
+    await clear_rate_limit(client_ip)
+    
+    session = await create_user_session(db, result.user.id, 'local')
+    
+    # Cookie de session
+    response.set_cookie(
+        key="windflow_session",
+        value=session.id,
+        httponly=True,
+        secure=True,  # HTTPS only en production
+        samesite="strict",
+        max_age=session.expires_at.timestamp() - datetime.utcnow().timestamp()
+    )
+    
+    return {
+        "success": True,
+        "user": {
+            "id": result.user.id,
+            "username": result.user.username,
+            "email": result.user.email,
+            "display_name": result.user.display_name
+        }
     }
-
-    const result = await authenticateLocal(username, password);
-
-    if (!result.success) {
-        recordFailedAttempt(username);
-        recordFailedAttempt(clientIP);
-        return json({ error: result.error }, { status: 401 });
-    }
-
-    if (result.requiresMfa) {
-        // Stocker temporairement user ID pour vérification MFA
-        // (peut utiliser cookie signé ou store temporaire)
-        return json({ requiresMfa: true });
-    }
-
-    // Succès - créer session
-    clearRateLimit(username);
-    clearRateLimit(clientIP);
-
-    await createUserSession(result.user!.id, 'local', cookies);
-
-    return json({ user: result.user });
-}
 ```
 
 ## 5. LDAP / Active Directory
 
 ### Configuration
 
-```sql
--- drizzle/0000_initial_schema.sql
-CREATE TABLE ldap_config (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    enabled INTEGER DEFAULT 1,
-    server_url TEXT NOT NULL,           -- ldap://host:389 ou ldaps://host:636
-    bind_dn TEXT,                       -- cn=admin,dc=example,dc=com
-    bind_password TEXT,                 -- CHIFFRÉ avec encryption.ts
-    base_dn TEXT NOT NULL,              -- ou=users,dc=example,dc=com
-    user_filter TEXT NOT NULL,          -- (uid={{username}})
-    username_attribute TEXT DEFAULT 'uid',
-    email_attribute TEXT DEFAULT 'mail',
-    display_name_attribute TEXT DEFAULT 'cn',
-    group_base_dn TEXT,                 -- ou=groups,dc=example,dc=com
-    group_filter TEXT,                  -- (member={{user_dn}})
-    admin_group TEXT,                   -- docker-admins
-    role_mappings TEXT,                 -- JSON: [{"groupDn": "...", "roleId": 1}]
-    tls_enabled INTEGER DEFAULT 0,
-    tls_ca TEXT,                        -- Certificat CA PEM
-    created_at TEXT DEFAULT (datetime('now'))
-);
+```python
+# auth/ldap_auth.py
+from ldap3 import Server, Connection, ALL, SUBTREE
+from ldap3.core.exceptions import LDAPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from typing import Optional, List
+import ssl
+
+from models.user import User, LDAPConfig
+from auth.local import LoginResult
 ```
 
 ### Fonction d'authentification
 
-```typescript
-export async function authenticateLdap(
-    username: string,
-    password: string,
-    configId?: number
-): Promise<LoginResult & { providerName?: string }> {
-    // Récupérer configs LDAP actives
-    const configs = configId
-        ? [await getLdapConfig(configId)].filter(Boolean) as LdapConfig[]
-        : await getEnabledLdapConfigs();
-
-    if (configs.length === 0) {
-        return { success: false, error: 'No LDAP configuration available' };
-    }
-
-    // Essayer chaque config
-    for (const config of configs) {
-        const result = await tryLdapAuth(username, password, config);
-        if (result.success) {
-            return { ...result, providerName: config.name };
-        }
-    }
-
-    return { success: false, error: 'Invalid username or password' };
-}
+```python
+async def authenticate_ldap(
+    db: AsyncSession,
+    username: str,
+    password: str,
+    config_id: Optional[int] = None
+) -> tuple[LoginResult, Optional[str]]:
+    """Authentifie via LDAP/Active Directory.
+    
+    Args:
+        db: Session de base de données
+        username: Nom d'utilisateur
+        password: Mot de passe
+        config_id: ID de configuration LDAP (optionnel)
+        
+    Returns:
+        (LoginResult, provider_name)
+    """
+    # Récupérer configs LDAP actives
+    if config_id:
+        result = await db.execute(
+            select(LDAPConfig)
+            .where(LDAPConfig.id == config_id)
+            .where(LDAPConfig.enabled == True)
+        )
+        configs = result.scalars().all()
+    else:
+        result = await db.execute(
+            select(LDAPConfig).where(LDAPConfig.enabled == True)
+        )
+        configs = result.scalars().all()
+    
+    if not configs:
+        return (
+            LoginResult(success=False, error='No LDAP configuration available'),
+            None
+        )
+    
+    # Essayer chaque config
+    for config in configs:
+        result, provider = await try_ldap_auth(db, username, password, config)
+        if result.success:
+            return result, provider
+    
+    return (
+        LoginResult(success=False, error='Invalid username or password'),
+        None
+    )
 ```
 
 ### Flow LDAP
 
-```typescript
-async function tryLdapAuth(
-    username: string,
-    password: string,
-    config: LdapConfig
-): Promise<LoginResult> {
-    const client = new LdapClient({
-        url: config.serverUrl,
-        tlsOptions: config.tlsEnabled ? {
-            rejectUnauthorized: !config.tlsCa,
-            ca: config.tlsCa ? [config.tlsCa] : undefined
-        } : undefined
-    });
-
-    try {
-        // 1. Bind avec service account pour rechercher l'utilisateur
-        if (config.bindDn && config.bindPassword) {
-            await client.bind(config.bindDn, config.bindPassword);
-        }
-
-        // 2. Rechercher l'utilisateur
-        const filter = config.userFilter.replace('{{username}}', username);
-        const { searchEntries } = await client.search(config.baseDn, {
-            scope: 'sub',
-            filter: filter,
-            sizeLimit: 1,
-            attributes: [
-                'dn',
-                config.usernameAttribute,
-                config.emailAttribute,
-                config.displayNameAttribute
+```python
+async def try_ldap_auth(
+    db: AsyncSession,
+    username: str,
+    password: str,
+    config: LDAPConfig
+) -> tuple[LoginResult, Optional[str]]:
+    """Tente l'authentification LDAP avec une config."""
+    
+    try:
+        # Configurer TLS
+        tls_config = None
+        if config.tls_enabled:
+            tls_config = ssl.create_default_context()
+            if config.tls_ca:
+                # Charger CA cert
+                pass
+        
+        # Serveur LDAP
+        server = Server(
+            config.server_url,
+            get_info=ALL,
+            tls=tls_config
+        )
+        
+        # 1. Bind avec service account pour rechercher
+        if config.bind_dn and config.bind_password:
+            conn = Connection(
+                server,
+                user=config.bind_dn,
+                password=config.bind_password,
+                auto_bind=True
+            )
+        else:
+            conn = Connection(server, auto_bind=True)
+        
+        # 2. Rechercher l'utilisateur
+        user_filter = config.user_filter.replace('{{username}}', username)
+        
+        conn.search(
+            search_base=config.base_dn,
+            search_filter=user_filter,
+            search_scope=SUBTREE,
+            attributes=[
+                config.username_attribute,
+                config.email_attribute,
+                config.display_name_attribute
             ]
-        });
-
-        if (searchEntries.length === 0) {
-            await client.unbind();
-            return { success: false, error: 'User not found' };
-        }
-
-        const userEntry = searchEntries[0];
-        const userDn = userEntry.dn;
-
-        await client.unbind();
-
-        // 3. Bind en tant qu'utilisateur (authentification)
-        const userClient = new LdapClient({
-            url: config.serverUrl,
-            tlsOptions: config.tlsEnabled ? {
-                rejectUnauthorized: !config.tlsCa,
-                ca: config.tlsCa ? [config.tlsCa] : undefined
-            } : undefined
-        });
-
-        try {
-            await userClient.bind(userDn, password);
-            await userClient.unbind();
-        } catch (bindError) {
-            return { success: false, error: 'Invalid username or password' };
-        }
-
-        // 4. Extraire attributs utilisateur
-        const ldapUsername = getAttributeValue(userEntry, config.usernameAttribute) || username;
-        const email = getAttributeValue(userEntry, config.emailAttribute);
-        const displayName = getAttributeValue(userEntry, config.displayNameAttribute);
-
-        // 5. Vérifier appartenance groupe admin
-        let shouldBeAdmin = false;
-        if (config.adminGroup) {
-            shouldBeAdmin = await checkLdapGroupMembership(
-                config,
-                userDn,
-                config.adminGroup
-            );
-        }
-
-        const authProvider = `ldap:${config.name}`;
-
-        // 6. Créer ou mettre à jour l'utilisateur local
-        let user = await getUserByUsername(ldapUsername);
-        if (!user) {
-            user = await createUser({
-                username: ldapUsername,
-                email: email || undefined,
-                displayName: displayName || undefined,
-                passwordHash: '', // Pas de mot de passe local pour LDAP
-                authProvider
-            });
-        } else {
-            await updateUser(user.id, {
-                email: email || undefined,
-                displayName: displayName || undefined,
-                authProvider
-            });
-            user = (await getUser(user.id))!;
-        }
-
-        // 7. Gérer rôle Admin
-        const adminRole = await getRoleByName('Admin');
-        if (adminRole) {
-            const hasAdminRole = await userHasAdminRole(user.id);
-            if (shouldBeAdmin && !hasAdminRole) {
-                await assignUserRole(user.id, adminRole.id, null);
-            }
-        }
-
-        // 8. Mapper rôles depuis groupes LDAP (Enterprise)
-        const roleMappings = typeof config.roleMappings === 'string'
-            ? JSON.parse(config.roleMappings)
-            : config.roleMappings;
-
-        if (roleMappings && await isEnterprise()) {
-            for (const mapping of roleMappings) {
-                const isInGroup = await checkLdapGroupMembership(
-                    config,
-                    userDn,
-                    mapping.groupDn
-                );
-                if (isInGroup) {
-                    await assignUserRole(user.id, mapping.roleId, undefined);
-                }
-            }
-        }
-
-        if (!user.isActive) {
-            return { success: false, error: 'Account is disabled' };
-        }
-
-        if (user.mfaEnabled) {
-            return { success: true, requiresMfa: true };
-        }
-
-        return {
-            success: true,
-            user: await buildAuthenticatedUser(user, 'ldap')
-        };
-    } catch (error: any) {
-        console.error('[LDAP] Authentication error:', error.message);
-        return { success: false, error: 'LDAP authentication failed' };
-    }
-}
+        )
+        
+        if not conn.entries:
+            conn.unbind()
+            return (
+                LoginResult(success=False, error='User not found'),
+                None
+            )
+        
+        user_entry = conn.entries[0]
+        user_dn = user_entry.entry_dn
+        
+        conn.unbind()
+        
+        # 3. Bind en tant qu'utilisateur (authentification)
+        try:
+            user_conn = Connection(
+                server,
+                user=user_dn,
+                password=password,
+                auto_bind=True
+            )
+            user_conn.unbind()
+        except LDAPException:
+            return (
+                LoginResult(success=False, error='Invalid username or password'),
+                None
+            )
+        
+        # 4. Extraire attributs utilisateur
+        ldap_username = getattr(
+            user_entry,
+            config.username_attribute,
+            username
+        ).value
+        email = getattr(user_entry, config.email_attribute, None)
+        email = email.value if email else None
+        display_name = getattr(user_entry, config.display_name_attribute, None)
+        display_name = display_name.value if display_name else None
+        
+        # 5. Vérifier groupe admin
+        should_be_admin = False
+        if config.admin_group:
+            should_be_admin = await check_ldap_group_membership(
+                config, user_dn, config.admin_group
+            )
+        
+        auth_provider = f"ldap:{config.name}"
+        
+        # 6. Créer ou mettre à jour utilisateur local
+        result = await db.execute(
+            select(User).where(User.username == ldap_username)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            user = User(
+                username=ldap_username,
+                email=email,
+                display_name=display_name,
+                password_hash='',  # Pas de mot de passe local pour LDAP
+                auth_provider=auth_provider
+            )
+            db.add(user)
+        else:
+            user.email = email
+            user.display_name = display_name
+            user.auth_provider = auth_provider
+        
+        await db.commit()
+        await db.refresh(user)
+        
+        # 7. Gérer rôle Admin (à implémenter selon votre logique RBAC)
+        # if should_be_admin:
+        #     await assign_admin_role(db, user.id)
+        
+        if not user.is_active:
+            return (
+                LoginResult(success=False, error='Account is disabled'),
+                None
+            )
+        
+        if user.mfa_enabled:
+            return (
+                LoginResult(success=True, user=user, requires_mfa=True),
+                config.name
+            )
+        
+        return (
+            LoginResult(success=True, user=user),
+            config.name
+        )
+        
+    except LDAPException as e:
+        print(f"[LDAP] Authentication error: {e}")
+        return (
+            LoginResult(success=False, error='LDAP authentication failed'),
+            None
+        )
 ```
 
 ### Vérification appartenance groupe
 
-```typescript
-async function checkLdapGroupMembership(
-    config: LdapConfig,
-    userDn: string,
-    groupDnOrName: string
-): Promise<boolean> {
-    const client = new LdapClient({ url: config.serverUrl });
-
-    try {
-        if (config.bindDn && config.bindPassword) {
-            await client.bind(config.bindDn, config.bindPassword);
-        }
-
-        // Détecter si DN complet ou juste nom
-        const isFullDn = groupDnOrName.includes('=') && groupDnOrName.includes(',');
-
-        let searchBase: string;
-        let groupFilter: string;
-
-        if (config.groupFilter) {
-            // Filtre personnalisé
-            searchBase = config.groupBaseDn || groupDnOrName;
-            groupFilter = config.groupFilter
-                .replace('{{username}}', userDn)
-                .replace('{{user_dn}}', userDn)
-                .replace('{{group}}', groupDnOrName);
-        } else if (isFullDn) {
-            // DN complet
-            searchBase = groupDnOrName;
-            groupFilter = `(member=${userDn})`;
-        } else {
-            // Nom de groupe seulement
-            if (!config.groupBaseDn) {
-                await client.unbind();
-                return false;
-            }
-            searchBase = config.groupBaseDn;
-            groupFilter = `(&(cn=${groupDnOrName})(member=${userDn}))`;
-        }
-
-        const { searchEntries } = await client.search(searchBase, {
-            scope: isFullDn && !config.groupFilter ? 'base' : 'sub',
-            filter: groupFilter,
-            sizeLimit: 1
-        });
-
-        await client.unbind();
-        return searchEntries.length > 0;
-    } catch (error) {
-        console.error('[LDAP] Group membership check failed:', error);
-        try { await client.unbind(); } catch {}
-        return false;
-    }
-}
+```python
+async def check_ldap_group_membership(
+    config: LDAPConfig,
+    user_dn: str,
+    group_dn_or_name: str
+) -> bool:
+    """Vérifie l'appartenance à un groupe LDAP."""
+    
+    try:
+        server = Server(config.server_url, get_info=ALL)
+        
+        if config.bind_dn and config.bind_password:
+            conn = Connection(
+                server,
+                user=config.bind_dn,
+                password=config.bind_password,
+                auto_bind=True
+            )
+        else:
+            conn = Connection(server, auto_bind=True)
+        
+        # Détecter si DN complet ou juste nom
+        is_full_dn = '=' in group_dn_or_name and ',' in group_dn_or_name
+        
+        if config.group_filter:
+            # Filtre personnalisé
+            search_base = config.group_base_dn or group_dn_or_name
+            group_filter = (
+                config.group_filter
+                .replace('{{user_dn}}', user_dn)
+                .replace('{{group}}', group_dn_or_name)
+            )
+        elif is_full_dn:
+            # DN complet
+            search_base = group_dn_or_name
+            group_filter = f"(member={user_dn})"
+        else:
+            # Nom de groupe seulement
+            if not config.group_base_dn:
+                conn.unbind()
+                return False
+            search_base = config.group_base_dn
+            group_filter = f"(&(cn={group_dn_or_name})(member={user_dn}))"
+        
+        conn.search(
+            search_base=search_base,
+            search_filter=group_filter,
+            search_scope=SUBTREE
+        )
+        
+        result = len(conn.entries) > 0
+        conn.unbind()
+        
+        return result
+        
+    except LDAPException as e:
+        print(f"[LDAP] Group membership check failed: {e}")
+        return False
 ```
 
 ## 6. OIDC / OAuth2
 
 ### Configuration
 
-```sql
--- drizzle/0000_initial_schema.sql
-CREATE TABLE oidc_config (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,                 -- Keycloak, Azure AD, Google
-    enabled INTEGER DEFAULT 1,
-    issuer_url TEXT NOT NULL,           -- https://auth.example.com/realms/myrealm
-    client_id TEXT NOT NULL,
-    client_secret TEXT NOT NULL,        -- CHIFFRÉ
-    redirect_uri TEXT NOT NULL,         -- https://Windflow-sample.example.com/api/auth/oidc/callback
-    scopes TEXT DEFAULT 'openid profile email',
-    username_claim TEXT DEFAULT 'preferred_username',
-    email_claim TEXT DEFAULT 'email',
-    display_name_claim TEXT DEFAULT 'name',
-    admin_claim TEXT,                   -- roles
-    admin_value TEXT,                   -- admin,docker-admin (comma-separated)
-    role_mappings TEXT,                 -- JSON: [{"claimValue": "...", "roleId": 1}]
-    role_mappings_claim TEXT DEFAULT 'groups',
-    created_at TEXT DEFAULT (datetime('now'))
-);
+```python
+# auth/oidc.py
+from authlib.integrations.httpx_client import AsyncOAuth2Client
+from authlib.jose import jwt
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+import secrets
+from typing import Dict, Optional
+from datetime import datetime, timedelta
+
+from models.user import User, OIDCConfig
+from auth.local import LoginResult
 ```
 
-### Flow OIDC
+### Store temporaire pour state/nonce
 
-```typescript
-// 1. Générer URL d'autorisation
-export async function buildOidcAuthorizationUrl(
-    configId: number,
-    redirectUrl: string = '/'
-): Promise<{ url: string; state: string } | { error: string }> {
-    const config = await getOidcConfig(configId);
-    if (!config || !config.enabled) {
-        return { error: 'OIDC configuration not found' };
-    }
-
-    try {
-        const discovery = await getOidcDiscovery(config.issuerUrl);
-
-        // Générer state, nonce, PKCE
-        const state = secureRandomBytes(32).toString('base64url');
-        const nonce = secureRandomBytes(16).toString('base64url');
-        const { codeVerifier, codeChallenge } = generatePkce();
-
-        // Stocker state (expire 10 min)
-        oidcStateStore.set(state, {
-            configId,
-            codeVerifier,
-            nonce,
-            redirectUrl,
-            expiresAt: Date.now() + 600000
-        });
-
-        // Construire URL
-        const params = new URLSearchParams({
-            response_type: 'code',
-            client_id: config.clientId,
-            redirect_uri: config.redirectUri,
-            scope: config.scopes || 'openid profile email',
-            state,
-            nonce,
-            code_challenge: codeChallenge,
-            code_challenge_method: 'S256'
-        });
-
-        const authUrl = `${discovery.authorization_endpoint}?${params.toString()}`;
-        return { url: authUrl, state };
-    } catch (error: any) {
-        return { error: error.message || 'Failed to initialize SSO' };
-    }
-}
-
-// 2. Callback OIDC
-export async function handleOidcCallback(
-    code: string,
-    state: string
-): Promise<LoginResult & { redirectUrl?: string }> {
-    // Valider state
-    const stateData = oidcStateStore.get(state);
-    if (!stateData) {
-        return { success: false, error: 'Invalid or expired state' };
-    }
-
-    oidcStateStore.delete(state);
-
-    if (stateData.expiresAt < Date.now()) {
-        return { success: false, error: 'SSO session expired' };
-    }
-
-    const config = await getOidcConfig(stateData.configId);
-    if (!config) {
-        return { success: false, error: 'OIDC configuration not found' };
-    }
-
-    try {
-        const discovery = await getOidcDiscovery(config.issuerUrl);
-
-        // Échanger code contre tokens
-        const tokenResponse = await fetch(discovery.token_endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                grant_type: 'authorization_code',
-                code,
-                redirect_uri: config.redirectUri,
-                client_id: config.clientId,
-                client_secret: config.clientSecret,
-                code_verifier: stateData.codeVerifier
-            })
-        });
-
-        if (!tokenResponse.ok) {
-            return { success: false, error: 'Failed to exchange code' };
-        }
-
-        const tokens = await tokenResponse.json();
-
-        // Décoder ID token
-        let claims: Record<string, any> = {};
-
-        if (tokens.id_token) {
-            const idTokenParts = tokens.id_token.split('.');
-            if (idTokenParts.length === 3) {
-                claims = JSON.parse(
-                    Buffer.from(idTokenParts[1], 'base64url').toString()
-                );
-            }
-        }
-
-        // Fetch userinfo si disponible
-        if (discovery.userinfo_endpoint && tokens.access_token) {
-            const userinfoResponse = await fetch(discovery.userinfo_endpoint, {
-                headers: { 'Authorization': `Bearer ${tokens.access_token}` }
-            });
-            if (userinfoResponse.ok) {
-                const userinfo = await userinfoResponse.json();
-                claims = { ...claims, ...userinfo };
-            }
-        }
-
-        // Valider nonce
-        if (claims.nonce && claims.nonce !== stateData.nonce) {
-            return { success: false, error: 'Invalid nonce' };
-        }
-
-        // Extraire infos utilisateur
-        const username = claims[config.usernameClaim] 
-                      || claims.preferred_username 
-                      || claims.sub;
-        const email = claims[config.emailClaim] || claims.email;
-        const displayName = claims[config.displayNameClaim] || claims.name;
-
-        if (!username) {
-            return { success: false, error: 'Username claim not found' };
-        }
-
-        // Vérifier admin
-        let shouldBeAdmin = false;
-        if (config.adminClaim && config.adminValue) {
-            const adminClaimValue = claims[config.adminClaim];
-            const adminValues = config.adminValue.split(',').map(v => v.trim());
-            
-            if (Array.isArray(adminClaimValue)) {
-                shouldBeAdmin = adminClaimValue.some(v => adminValues.includes(v));
-            } else {
-                shouldBeAdmin = adminValues.includes(adminClaimValue);
-            }
-        }
-
-        const authProvider = `oidc:${config.name}`;
-
-        // Créer ou MAJ utilisateur
-        let user = await getUserByUsername(username);
-        if (!user) {
-            user = await createUser({
-                username,
-                email: email || undefined,
-                displayName: displayName || undefined,
-                passwordHash: '',
-                authProvider
-            });
-        } else {
-            await updateUser(user.id, {
-                email: email || undefined,
-                displayName: displayName || undefined,
-                authProvider
-            });
-            user = (await getUser(user.id))!;
-        }
-
-        // Gérer rôle Admin
-        const adminRole = await getRoleByName('Admin');
-        if (adminRole && shouldBeAdmin) {
-            const hasAdminRole = await userHasAdminRole(user.id);
-            if (!hasAdminRole) {
-                await assignUserRole(user.id, adminRole.id, null);
-            }
-        }
-
-        // Mapper rôles depuis claims
-        if (config.roleMappings) {
-            const roleMappings = typeof config.roleMappings === 'string'
-                ? JSON.parse(config.roleMappings)
-                : config.roleMappings;
-
-            const roleMappingsClaim = config.roleMappingsClaim || 'groups';
-            const claimValue = claims[roleMappingsClaim];
-
-            if (Array.isArray(roleMappings) && claimValue) {
-                const claimValues = Array.isArray(claimValue) 
-                    ? claimValue 
-                    : [claimValue];
-
-                for (const mapping of roleMappings) {
-                    if (mapping.claimValue 
-                        && mapping.roleId 
-                        && claimValues.includes(mapping.claimValue)) {
-                        await assignUserRole(user.id, mapping.roleId, null);
-                    }
-                }
-            }
-        }
-
-        if (!user.isActive) {
-            return { success: false, error: 'Account is disabled' };
-        }
-
-        // OIDC bypass MFA (authentifié via IdP)
-        return {
-            success: true,
-            user: await buildAuthenticatedUser(user, 'oidc'),
-            redirectUrl: stateData.redirectUrl,
-            providerName: config.name
-        };
-    } catch (error: any) {
-        console.error('[OIDC] Callback error:', error.message);
-        return { success: false, error: 'SSO authentication failed' };
-    }
-}
-```
-
-## 7. MFA (TOTP) avec codes de backup
-
-### Structure MfaData
-
-```typescript
-interface MfaData {
-    secret: string;           // Secret TOTP (base32)
-    backupCodes: string[];    // Codes de backup hashés (non utilisés)
-}
-```
-
-### Génération du setup MFA
-
-```typescript
-export async function generateMfaSetup(userId: number): Promise<{
-    secret: string;
-    qrDataUrl: string;
-} | null> {
-    const user = await getUser(userId);
-    if (!user) return null;
-
-    // Issuer avec hostname
-    const hostname = process.env.WINDFLOW_HOSTNAME || os.hostname();
-    const issuer = `Windflow-sample (${hostname})`;
-
-    // Créer secret TOTP
-    const totpSecret = new OTPAuth.Secret({ size: 20 });
-    const totp = new OTPAuth.TOTP({
-        issuer,
-        label: user.username,
-        algorithm: 'SHA1',
-        digits: 6,
-        period: 30,
-        secret: totpSecret
-    });
-
-    const secretBase32 = totp.secret.base32;
-    const otpauthUrl = totp.toString();
-
-    // Générer QR code
-    const qrDataUrl = await QRCode.toDataURL(otpauthUrl, {
-        width: 200,
-        margin: 2
-    });
-
-    // Stocker temporairement (pas encore activé)
-    const mfaData: MfaData = { secret: secretBase32, backupCodes: [] };
-    await updateUser(userId, { mfaSecret: JSON.stringify(mfaData) });
-
-    return { secret: secretBase32, qrDataUrl };
-}
-```
-
-### Activation MFA avec vérification
-
-```typescript
-export async function verifyAndEnableMfa(
-    userId: number,
-    token: string
-): Promise<{ success: false } | { success: true; backupCodes: string[] }> {
-    const user = await getUser(userId);
-    if (!user || !user.mfaSecret) return { success: false };
-
-    const mfaData = parseMfaData(user.mfaSecret);
-    if (!mfaData) return { success: false };
-
-    const totp = new OTPAuth.TOTP({
-        issuer: 'Windflow-sample',
-        label: user.username,
-        algorithm: 'SHA1',
-        digits: 6,
-        period: 30,
-        secret: OTPAuth.Secret.fromBase32(mfaData.secret)
-    });
-
-    const delta = totp.validate({ token, window: 1 });
-    if (delta === null) return { success: false };
-
-    // Générer codes de backup
-    const plainBackupCodes = generateBackupCodes();
-    const hashedBackupCodes = await Promise.all(
-        plainBackupCodes.map(hashBackupCode)
-    );
-
-    // Activer MFA
-    const updatedMfaData: MfaData = {
-        secret: mfaData.secret,
-        backupCodes: hashedBackupCodes
-    };
-    await updateUser(userId, {
-        mfaEnabled: true,
-        mfaSecret: JSON.stringify(updatedMfaData)
-    });
-
-    // Retourner codes en clair (affichés une seule fois)
-    return { success: true, backupCodes: plainBackupCodes };
-}
-```
-
-### Vérification MFA (TOTP ou backup code)
-
-```typescript
-export async function verifyMfaToken(
-    userId: number,
-    token: string
-): Promise<boolean> {
-    const user = await getUser(userId);
-    if (!user || !user.mfaEnabled || !user.mfaSecret) return false;
-
-    const mfaData = parseMfaData(user.mfaSecret);
-    if (!mfaData) return false;
-
-    // 1. Essayer TOTP
-    const totp = new OTPAuth.TOTP({
-        issuer: 'Windflow-sample',
-        label: user.username,
-        algorithm: 'SHA1',
-        digits: 6,
-        period: 30,
-        secret: OTPAuth.Secret.fromBase32(mfaData.secret)
-    });
-
-    const delta = totp.validate({ token, window: 1 });
-    if (delta !== null) return true;
-
-    // 2. Essayer backup code
-    if (mfaData.backupCodes && mfaData.backupCodes.length > 0) {
-        const hashedInput = await hashBackupCode(token);
-        const codeIndex = mfaData.backupCodes.indexOf(hashedInput);
-
-        if (codeIndex !== -1) {
-            // Retirer code utilisé
-            const updatedBackupCodes = [...mfaData.backupCodes];
-            updatedBackupCodes.splice(codeIndex, 1);
-
-            const updatedMfaData: MfaData = {
-                secret: mfaData.secret,
-                backupCodes: updatedBackupCodes
-            };
-            await updateUser(userId, {
-                mfaSecret: JSON.stringify(updatedMfaData)
-            });
-
-            return true;
-        }
-    }
-
-    return false;
-}
-```
-
-### Génération des codes de backup
-
-```typescript
-function generateBackupCodes(): string[] {
-    const codes: string[] = [];
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Sans 0,O,1,I
+```python
+class OIDCStateStore:
+    """Store temporaire pour OIDC state/nonce."""
     
-    for (let i = 0; i < 10; i++) {
-        let code = '';
-        for (let j = 0; j < 8; j++) {
-            code += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        codes.push(code);
-    }
+    def __init__(self):
+        self._store: Dict[str, dict] = {}
     
-    return codes;
-}
+    def set(self, state: str, data: dict):
+        """Stocke les données d'état."""
+        self._store[state] = {
+            **data,
+            'expires_at': datetime.utcnow() + timedelta(minutes=10)
+        }
+    
+    def get(self, state: str) -> Optional[dict]:
+        """Récupère les données d'état."""
+        data = self._store.get(state)
+        if data and data['expires_at'] > datetime.utcnow():
+            return data
+        return None
+    
+    def delete(self, state: str):
+        """Supprime les données d'état."""
+        self._store.pop(state, None)
 
-async function hashBackupCode(code: string): Promise<string> {
-    // Normaliser: majuscules, sans espaces/tirets
-    const normalized = code.toUpperCase().replace(/[\s-]/g, '');
-    const hasher = new Poetry.CryptoHasher('sha256');
-    hasher.update(normalized);
-    return hasher.digest('hex');
-}
+oidc_state_store = OIDCStateStore()
 ```
 
-## 8. Permissions et RBAC
+### Génération URL d'autorisation
 
-### Structure des permissions
-
-```typescript
-interface Permissions {
-    containers: string[];      // ['view', 'start', 'stop', 'create', 'delete', 'exec']
-    images: string[];         // ['view', 'pull', 'push', 'delete']
-    volumes: string[];        // ['view', 'create', 'delete']
-    networks: string[];       // ['view', 'create', 'delete']
-    stacks: string[];         // ['view', 'deploy', 'delete']
-    environments: string[];   // ['view', 'manage']
-    registries: string[];     // ['view', 'manage']
-    notifications: string[];  // ['view', 'manage']
-    configsets: string[];     // ['view', 'manage']
-    settings: string[];       // ['view', 'manage']
-    users: string[];          // ['view', 'manage']
-    git: string[];            // ['view', 'manage']
-    license: string[];        // ['view', 'manage']
-    audit_logs: string[];     // ['view']
-    activity: string[];       // ['view']
-    schedules: string[];      // ['view', 'manage']
-}
-```
-
-### Vérification de permission
-
-```typescript
-export async function checkPermission(
-    user: AuthenticatedUser,
-    resource: keyof Permissions,
-    action: string,
-    environmentId?: number
-): Promise<boolean> {
-    // Free edition: tous les utilisateurs ont accès complet
-    if (!(await isEnterprise())) return true;
-
-    // Admins: accès complet
-    if (await userHasAdminRole(user.id)) return true;
-
-    // Permissions spécifiques à l'environnement
-    if (environmentId !== undefined) {
-        const permissions = await getUserPermissionsForEnvironment(
-            user.id,
-            environmentId
-        );
-        return permissions[resource]?.includes(action) ?? false;
-    }
-
-    // Permissions globales
-    return user.permissions[resource]?.includes(action) ?? false;
-}
-```
-
-### Middleware de permission
-
-```typescript
-// routes/api/containers/[id]/start/+server.ts
-import { checkPermission } from '$lib/server/auth';
-
-export async function POST({ params, locals }) {
-    const user = locals.user;
-    if (!user) {
-        return json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const envId = Number(params.envId);
-    const hasPermission = await checkPermission(
-        user,
-        'containers',
-        'start',
-        envId
-    );
-
-    if (!hasPermission) {
-        return json({ error: 'Permission denied' }, { status: 403 });
-    }
-
-    // Démarrer le conteneur...
-    return json({ success: true });
-}
-```
-
-## 9. Sécurité
-
-### Mesures de sécurité implémentées
-
-1. **Hashing robuste**
-   - Argon2id (memory-hard, résistant GPU)
-   - Fallback hash-wasm pour vieux kernels
-   - Salt unique par mot de passe
-
-2. **Sessions sécurisées**
-   - Tokens cryptographiques (256 bits)
-   - Cookies HttpOnly (XSS protection)
-   - Secure flag en production (HTTPS only)
-   - SameSite=Strict (CSRF protection)
-
-3. **Rate limiting**
-   - 5 tentatives max en 15 minutes
-   - Blocage 15 minutes après 5 échecs
-   - Par username ET par IP
-
-4. **Protection timing attacks**
-   - Constant-time password verification
-   - Dummy hash sur username invalide
-
-5. **MFA**
-   - TOTP standard (RFC 6238)
-   - Codes de backup hashés SHA-256
-   - QR code pour setup facile
-
-6. **LDAP sécurisé**
-   - TLS optionnel
-   - Validation certificat CA
-   - Bind de service séparé
-
-7. **OIDC sécurisé**
-   - PKCE (code_challenge)
-   - State pour CSRF protection
-   - Nonce validation
-   - Discovery automatique
-
-### Recommandations production
-
-```bash
-# 1. Variables d'environnement
-NODE_ENV=production
-ENCRYPTION_KEY=<generated-key>
-ORIGIN=https://Windflow-sample.example.com
-
-# 2. HTTPS obligatoire
-# Utiliser reverse proxy (Nginx, Traefik)
-
-# 3. Session timeout
-# Configurer dans Settings > Auth (défaut: 24h)
-
-# 4. Activer authentification
-# Settings > Auth > Enable Authentication
-
-# 5. MFA recommandée pour admins
-# User Profile > Security > Enable MFA
-
-# 6. Rate limiting
-# Déjà activé par défaut (in-memory)
-# Pour multi-instance: utiliser Redis
-
-# 7. Audit logs
-# Enterprise: logs d'authentification automatiques
-```
-
----
-
-[← Base de données](03-DATABASE-SCHEMA.md) | [Suivant : Git Integration →](05-GIT-INTEGRATION.md)
+```python
+async def build_oidc_authorization_url(
+    db: AsyncSession,
+    config_id: int,
+    redirect_url: str = '/'
+) -> dict:
+    """Génère l'URL d'autorisation OIDC.
+    
+    Args:
+        db: Session de base de données
+        config_id: ID de configuration OIDC
+        redirect_url: URL de redirection après login
+        
+    Returns:
+        {"url": "...", "state": "..."} ou {"error": "..."}
+    """
+    # Récupérer config
+    result = await db.execute(
+        select(OIDCConfig)
+        .where(OIDCConfig.id == config_id)
+        .where(OIDCConfig.enabled == True)
+    )
+    config = result.scalar_one_or_none()
+    
+    if not config:
+        return {"error": "OIDC configuration not found"}
+    
+    try:
+        # Créer client OAuth2
+        client = AsyncOAuth2Client(
+            client_id=config.client_id,
+            client_secret=config.client_secret,
+            redirect_uri=config.redirect_uri
+        )
+        
+        # Découverte OIDC
+        metadata = await client.fetch_openid_provider_configuration(
+            config.issuer_url
+        )
+        
+        # Générer state et nonce
+        state = secrets.token_urlsafe(32)
+        nonce = secrets.token_urlsafe(16)
+        
+        # PKCE
+        code_verifier = secrets.token_urlsafe(32)
+        code_challenge = jwt.create_s256_code_challenge(code_verifier)
+        
+        # Stocker state
+        oidc_state_store.set(state, {
+            'config_id': config_id,
+            'code_verifier': code_verifier,
+            'nonce': nonce,
+            'redirect_url': redirect_url
+        })
+        
+        # Construire URL
+        auth_url, _ = client.create_authorization

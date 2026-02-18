@@ -18,42 +18,42 @@
           │ HTTP/SSE         │ WS              │ WS
           │                  │                  │
 ┌─────────▼──────────────────▼──────────────────▼────────────┐
-│               Python FastAPI                          │
+│               Python FastAPI (Uvicorn)                      │
 │  ┌────────────────────────────────────────────────────┐    │
-│  │              API Routes (/api/*)                    │    │
+│  │              API Routes (/api/v1/*)                 │    │
 │  │  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐          │    │
 │  │  │Docker│  │Images│  │Stacks│  │ Auth │          │    │
 │  │  └───┬──┘  └───┬──┘  └───┬──┘  └───┬──┘          │    │
 │  └──────┼─────────┼─────────┼─────────┼──────────────┘    │
 │  ┌──────▼─────────▼─────────▼─────────▼──────────────┐    │
-│  │           Server Modules (src/lib/server/)         │    │
+│  │           Services / Modules backend                │    │
 │  │  ┌────────────────────────────────────────────┐   │    │
-│  │  │  docker.ts (API Docker native - 2800L)     │   │    │
-│  │  │  - dockerFetch()                           │   │    │
+│  │  │  docker_service.py (API Docker native)     │   │    │
+│  │  │  - docker_fetch()                          │   │    │
 │  │  │  - Container operations                    │   │    │
 │  │  │  - Image operations                        │   │    │
 │  │  │  - Volume/Network management               │   │    │
 │  │  └────────────────────────────────────────────┘   │    │
 │  │  ┌────────────────────────────────────────────┐   │    │
-│  │  │  auth.ts (Multi-provider authentication)   │   │    │
-│  │  │  - Local (bcrypt)                          │   │    │
-│  │  │  - LDAP/AD                                 │   │    │
-│  │  │  - OIDC/OAuth2                             │   │    │
-│  │  │  - MFA (TOTP)                              │   │    │
+│  │  │  auth_service.py (Multi-provider auth)     │   │    │
+│  │  │  - Local (Argon2id via argon2-cffi)        │   │    │
+│  │  │  - LDAP/AD (via ldap3)                     │   │    │
+│  │  │  - OIDC/OAuth2 (via authlib)               │   │    │
+│  │  │  - MFA TOTP (via pyotp)                    │   │    │
 │  │  └────────────────────────────────────────────┘   │    │
 │  │  ┌────────────────────────────────────────────┐   │    │
-│  │  │  db.ts (Drizzle ORM)                       │   │    │
-│  │  │  hawser.ts (WebSocket proxy)               │   │    │
-│  │  │  git.ts (Git integration)                  │   │    │
-│  │  │  scheduler.ts (Cron jobs)                  │   │    │
+│  │  │  database.py (SQLAlchemy 2.0 async)        │   │    │
+│  │  │  hawser_service.py (WebSocket proxy)       │   │    │
+│  │  │  git_service.py (Git integration)          │   │    │
+│  │  │  scheduler.py (asyncio background tasks)   │   │    │
 │  │  └────────────────────────────────────────────┘   │    │
 │  └────────────────────────────────────────────────────┘    │
 └────────────┬──────────────────┬──────────────────┬─────────┘
              │                  │                  │
     ┌────────▼────────┐  ┌──────▼──────┐  ┌──────▼──────┐
     │  Background     │  │  Database   │  │   Docker    │
-    │  Processes      │  │  SQLite/PG  │  │   Daemon    │
-    │  - Metrics      │  │             │  │             │
+    │  Tasks asyncio  │  │  SQLite/PG  │  │   Daemon    │
+    │  - Metrics      │  │ (SQLAlchemy)│  │             │
     │  - Events       │  │             │  │             │
     └─────────────────┘  └─────────────┘  └─────────────┘
 ```
@@ -69,10 +69,10 @@ sequenceDiagram
     participant Docker
     participant DB
 
-    Client->>API: POST /api/containers/start
-    API->>Docker: dockerFetch("/containers/{id}/start")
+    Client->>API: POST /api/v1/containers/{id}/start
+    API->>Docker: docker_fetch("/containers/{id}/start", "POST")
     Docker-->>API: 204 No Content
-    API->>DB: Log audit event
+    API->>DB: Log audit event (SQLAlchemy)
     API-->>Client: 200 OK {status: "started"}
     
     Note over API,Docker: Événements en temps réel via SSE
@@ -84,7 +84,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    A[Scheduler déclenche] --> B{Check nouvelle image}
+    A[Scheduler asyncio déclenche] --> B{Check nouvelle image}
     B -->|Oui| C[Pull temp image]
     B -->|Non| Z[Fin]
     C --> D[Scan vulnérabilités]
@@ -114,13 +114,13 @@ sequenceDiagram
     participant Docker as Docker Daemon
 
     Git->>Webhook: Push event
-    Webhook->>API: POST /api/git/webhook/{id}
+    Webhook->>API: POST /api/v1/git/webhook/{id}
     Note over Webhook,API: HMAC signature verification
-    API->>API: Clone/pull repository
+    API->>API: Clone/pull repository (subprocess git)
     API->>API: Parse compose file
-    API->>Docker: Deploy stack
+    API->>Docker: Deploy stack (docker compose up)
     Docker-->>API: Containers created
-    API->>API: Store deployment event
+    API->>API: Store deployment event (SQLAlchemy)
     API-->>Webhook: 200 OK
 ```
 
@@ -173,302 +173,207 @@ sequenceDiagram
 ### 1. Socket Unix (Local)
 
 ```python
-# Backend Python équivalent
-import socket
-import json
+# backend/app/services/docker_service.py
+import httpx
 
-def docker_request_unix(path: str, method: str = "GET"):
-    """Requête Docker via Unix socket"""
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.connect("/var/run/docker.sock")
+async def docker_fetch_unix(path: str, method: str = "GET", **kwargs) -> httpx.Response:
+    """Requête Docker via Unix socket avec httpx"""
+    transport = httpx.AsyncHTTPTransport(uds="/var/run/docker.sock")
     
-    request = f"{method} {path} HTTP/1.1\r\n"
-    request += "Host: localhost\r\n"
-    request += "Connection: close\r\n\r\n"
-    
-    sock.sendall(request.encode())
-    response = sock.recv(4096)
-    sock.close()
-    
-    # Parse HTTP response
-    headers, body = response.split(b'\r\n\r\n', 1)
-    return json.loads(body)
+    async with httpx.AsyncClient(transport=transport) as client:
+        url = f"http://localhost{path}"
+        response = await client.request(method, url, **kwargs)
+        response.raise_for_status()
+        return response
 
 # Usage
-containers = docker_request_unix("/containers/json", "GET")
-print(f"Found {len(containers)} containers")
+async def list_containers():
+    response = await docker_fetch_unix("/containers/json?all=true")
+    return response.json()
 ```
 
 ### 2. HTTP/HTTPS avec TLS
 
 ```python
-# Backend Python avec TLS client
-import requests
+# backend/app/services/docker_service.py
+import httpx
 from pathlib import Path
+import tempfile
 
-def docker_request_tls(
+async def docker_fetch_tls(
     host: str,
     port: int,
     path: str,
     ca_cert: str,
     client_cert: str,
     client_key: str
-):
+) -> httpx.Response:
     """Requête Docker via HTTPS avec mTLS"""
     
-    # Écrire les certificats temporairement
-    ca_path = Path("/tmp/ca.crt")
-    cert_path = Path("/tmp/client.crt")
-    key_path = Path("/tmp/client.key")
+    # Écrire les certificats dans des fichiers temporaires
+    with tempfile.NamedTemporaryFile(suffix=".crt", delete=False) as ca_f:
+        ca_f.write(ca_cert.encode())
+        ca_path = ca_f.name
     
-    ca_path.write_text(ca_cert)
-    cert_path.write_text(client_cert)
-    key_path.write_text(client_key)
+    with tempfile.NamedTemporaryFile(suffix=".crt", delete=False) as cert_f:
+        cert_f.write(client_cert.encode())
+        cert_path = cert_f.name
     
-    url = f"https://{host}:{port}{path}"
-    response = requests.get(
-        url,
-        verify=str(ca_path),
-        cert=(str(cert_path), str(key_path))
-    )
+    with tempfile.NamedTemporaryFile(suffix=".key", delete=False) as key_f:
+        key_f.write(client_key.encode())
+        key_path = key_f.name
     
-    return response.json()
-
-# Usage
-env = {
-    "host": "docker.example.com",
-    "port": 2376,
-    "ca_cert": "-----BEGIN CERTIFICATE-----\n...",
-    "client_cert": "-----BEGIN CERTIFICATE-----\n...",
-    "client_key": "-----BEGIN RSA PRIVATE KEY-----\n..."
-}
-
-containers = docker_request_tls(
-    env["host"], env["port"], "/containers/json",
-    env["ca_cert"], env["client_cert"], env["client_key"]
-)
+    try:
+        async with httpx.AsyncClient(
+            verify=ca_path,
+            cert=(cert_path, key_path)
+        ) as client:
+            url = f"https://{host}:{port}{path}"
+            response = await client.get(url)
+            return response
+    finally:
+        for p in [ca_path, cert_path, key_path]:
+            Path(p).unlink(missing_ok=True)
 ```
 
 ### 3. Hawser Edge (WebSocket)
 
 ```python
-# Backend Python - Client WebSocket
+# backend/app/services/hawser_service.py
 import asyncio
 import websockets
 import json
-import base64
+import uuid
+from typing import Dict, Any, Optional
 
 class HawserEdgeClient:
-    """Client pour Hawser Edge via WebSocket"""
+    """Client pour Hawser Edge via WebSocket bidirectionnel"""
     
-    def __init__(self, ws_url: str, env_id: int):
-        self.ws_url = ws_url
-        self.env_id = env_id
-        self.ws = None
+    def __init__(self):
+        # Connexions actives : env_id -> websocket
+        self.connections: Dict[int, Any] = {}
+        # Requêtes en attente : request_id -> asyncio.Future
+        self.pending: Dict[str, asyncio.Future] = {}
+    
+    async def send_request(
+        self,
+        env_id: int,
+        method: str,
+        path: str,
+        body: Optional[dict] = None
+    ) -> dict:
+        """Envoyer une requête Docker via l'agent Hawser"""
+        ws = self.connections.get(env_id)
+        if not ws:
+            raise RuntimeError(f"Hawser agent not connected for env {env_id}")
         
-    async def connect(self):
-        """Établir connexion WebSocket"""
-        self.ws = await websockets.connect(self.ws_url)
+        request_id = str(uuid.uuid4())
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
+        self.pending[request_id] = future
         
-    async def docker_request(self, method: str, path: str, body=None):
-        """Envoyer requête Docker via WebSocket"""
         message = {
-            "type": "docker_request",
-            "environment_id": self.env_id,
+            "type": "request",
+            "requestId": request_id,
             "method": method,
             "path": path,
-            "body": body,
-            "request_id": "req_" + str(time.time())
+            "body": body
         }
         
-        await self.ws.send(json.dumps(message))
+        await ws.send(json.dumps(message))
         
-        # Attendre réponse
-        response_raw = await self.ws.recv()
-        response = json.loads(response_raw)
-        
-        # Décoder body si base64
-        if response.get("isBinary"):
-            body = base64.b64decode(response["body"])
-        else:
-            body = response["body"]
-            
-        return {
-            "status": response["statusCode"],
-            "body": body,
-            "headers": response["headers"]
-        }
-
-# Usage
-async def main():
-    client = HawserEdgeClient("ws://localhost:3000/hawser/edge", env_id=2)
-    await client.connect()
+        try:
+            return await asyncio.wait_for(future, timeout=30.0)
+        finally:
+            self.pending.pop(request_id, None)
     
-    result = await client.docker_request("GET", "/containers/json")
-    containers = json.loads(result["body"])
-    print(f"Found {len(containers)} containers")
+    async def handle_message(self, env_id: int, raw_message: str):
+        """Traiter un message reçu de l'agent"""
+        msg = json.loads(raw_message)
+        
+        if msg["type"] == "response":
+            future = self.pending.get(msg["requestId"])
+            if future and not future.done():
+                future.set_result(msg)
+        
+        elif msg["type"] == "pong":
+            # Heartbeat reçu
+            pass
 
-asyncio.run(main())
+# Singleton global
+hawser_client = HawserEdgeClient()
 ```
 
 ## 📦 Architecture des modules principaux
 
-### Module Docker (`docker.ts`)
+### Structure backend (FastAPI)
 
-```typescript
-// Structure du module (TypeScript original)
-export class DockerClient {
-  // Cache des environnements
-  private static envCache = new Map<number, Environment>();
-  
-  // Configuration client
-  async getConfig(envId: number): Promise<DockerConfig> {
-    // Check cache first
-    // Fetch from DB if not cached
-  }
-  
-  // Requête HTTP/Socket/WebSocket
-  async dockerFetch(path: string, options): Promise<Response> {
-    const config = await this.getConfig(envId);
-    
-    if (config.connectionType === 'socket') {
-      return this.fetchUnixSocket(path, options);
-    } else if (config.connectionType === 'hawser-edge') {
-      return this.fetchHawserEdge(path, options);
-    } else {
-      return this.fetchHttps(path, options);
-    }
-  }
-  
-  // Opérations conteneurs
-  async listContainers(all: boolean): Promise<Container[]>
-  async startContainer(id: string): Promise<void>
-  async stopContainer(id: string): Promise<void>
-  async removeContainer(id: string): Promise<void>
-  async inspectContainer(id: string): Promise<ContainerInspect>
-  async execInContainer(id: string, cmd: string[]): Promise<string>
-  
-  // Opérations images
-  async listImages(): Promise<Image[]>
-  async pullImage(name: string, onProgress): Promise<void>
-  async removeImage(id: string): Promise<void>
-  
-  // ... etc
-}
+```
+backend/app/
+├── api/
+│   └── v1/
+│       ├── containers.py    # GET/POST /api/v1/containers
+│       ├── images.py        # GET/POST /api/v1/images
+│       ├── stacks.py        # GET/POST /api/v1/stacks
+│       ├── auth.py          # POST /api/v1/auth/login|logout
+│       ├── git.py           # GET/POST /api/v1/git/stacks
+│       ├── environments.py  # CRUD /api/v1/environments
+│       └── websockets.py    # WS  /ws/terminal/{id}
+├── services/
+│   ├── docker_service.py    # Client Docker API (httpx)
+│   ├── auth_service.py      # Authentification multi-provider
+│   ├── git_service.py       # Clone/pull/webhook Git
+│   ├── hawser_service.py    # Proxy WebSocket Hawser
+│   ├── scanner_service.py   # Grype/Trivy integration
+│   └── notif_service.py     # Notifications email/webhook
+├── models/
+│   ├── user.py              # User, Session, Role, UserRole
+│   ├── environment.py       # Environment, HostMetric
+│   ├── git.py               # GitCredential, GitRepository, GitStack
+│   └── audit.py             # AuditLog, AuthSettings
+├── schemas/
+│   ├── user.py              # Pydantic schemas pour users
+│   ├── container.py         # Pydantic schemas pour containers
+│   └── ...
+├── core/
+│   ├── database.py          # Engine SQLAlchemy, get_db()
+│   ├── security.py          # Password hashing, JWT
+│   └── config.py            # Settings (pydantic-settings)
+├── tasks/
+│   ├── metrics_collector.py # Collecte CPU/RAM asyncio
+│   └── events_collector.py  # Stream événements Docker
+└── main.py                  # FastAPI app, lifespan, routers
 ```
 
-### Équivalent Python moderne
+### Structure frontend (Vue 3 / Vite)
 
-```python
-from typing import Optional, Dict, List, Callable
-from dataclasses import dataclass
-import httpx
-import asyncio
-
-@dataclass
-class DockerConfig:
-    """Configuration connexion Docker"""
-    connection_type: str  # 'socket' | 'http' | 'hawser-edge'
-    socket_path: Optional[str] = None
-    host: Optional[str] = None
-    port: Optional[int] = None
-    ca_cert: Optional[str] = None
-    client_cert: Optional[str] = None
-    client_key: Optional[str] = None
-
-class DockerClient:
-    """Client Docker API natif"""
-    
-    def __init__(self, config: DockerConfig):
-        self.config = config
-        self._client = None
-        
-    async def __aenter__(self):
-        """Context manager pour connexions"""
-        if self.config.connection_type == 'socket':
-            self._client = httpx.AsyncClient(
-                transport=httpx.AsyncHTTPTransport(
-                    uds=self.config.socket_path
-                )
-            )
-        else:
-            self._client = httpx.AsyncClient(
-                verify=self.config.ca_cert,
-                cert=(self.config.client_cert, self.config.client_key)
-            )
-        return self
-        
-    async def __aexit__(self, *args):
-        await self._client.aclose()
-        
-    async def docker_fetch(
-        self, 
-        path: str, 
-        method: str = "GET",
-        **kwargs
-    ) -> httpx.Response:
-        """Requête vers API Docker"""
-        if self.config.connection_type == 'socket':
-            url = f"http://localhost{path}"
-        else:
-            url = f"https://{self.config.host}:{self.config.port}{path}"
-            
-        response = await self._client.request(method, url, **kwargs)
-        response.raise_for_status()
-        return response
-        
-    async def list_containers(self, all: bool = True) -> List[Dict]:
-        """Lister les conteneurs"""
-        response = await self.docker_fetch(
-            f"/containers/json?all={str(all).lower()}"
-        )
-        return response.json()
-        
-    async def start_container(self, container_id: str):
-        """Démarrer un conteneur"""
-        await self.docker_fetch(
-            f"/containers/{container_id}/start",
-            method="POST"
-        )
-        
-    async def pull_image(
-        self, 
-        image: str, 
-        on_progress: Optional[Callable] = None
-    ):
-        """Pull une image avec progression"""
-        response = await self.docker_fetch(
-            f"/images/create?fromImage={image}",
-            method="POST"
-        )
-        
-        # Stream des événements de progression
-        async for line in response.aiter_lines():
-            if line:
-                import json
-                event = json.loads(line)
-                if on_progress:
-                    on_progress(event)
-
-# Usage
-async def example():
-    config = DockerConfig(
-        connection_type='socket',
-        socket_path='/var/run/docker.sock'
-    )
-    
-    async with DockerClient(config) as docker:
-        containers = await docker.list_containers()
-        print(f"Containers: {len(containers)}")
-        
-        # Pull image avec progression
-        def progress(event):
-            if 'status' in event:
-                print(f"{event['status']}: {event.get('progress', '')}")
-                
-        await docker.pull_image("nginx:latest", on_progress=progress)
-
-asyncio.run(example())
+```
+frontend/src/
+├── components/
+│   ├── ContainerList.vue    # Liste des conteneurs
+│   ├── ContainerCard.vue    # Carte conteneur
+│   ├── Terminal.vue         # Terminal xterm.js
+│   ├── LogViewer.vue        # Viewer de logs
+│   └── ...
+├── composables/
+│   ├── useDocker.ts         # Logique containers
+│   ├── useAuth.ts           # Authentification
+│   └── useWebSocket.ts      # WebSocket générique
+├── stores/
+│   ├── auth.ts              # Pinia: user, session
+│   ├── environment.ts       # Pinia: env sélectionné
+│   └── docker.ts            # Pinia: containers cache
+├── services/
+│   ├── api.ts               # Axios instance + interceptors
+│   ├── container.service.ts # Appels API containers
+│   └── image.service.ts     # Appels API images
+├── views/
+│   ├── Dashboard.vue
+│   ├── Containers.vue
+│   └── Settings.vue
+├── router/
+│   └── index.ts             # Vue Router
+└── main.ts                  # Point d'entrée Vite/Vue
 ```
 
 ## 🔐 Architecture de sécurité
@@ -478,28 +383,28 @@ asyncio.run(example())
 ```
 ┌────────────────────────────────────────────────┐
 │  1. Auth Layer (Multi-provider)                │
-│     - Local (bcrypt + salt)                    │
-│     - LDAP/AD (bind + search)                  │
-│     - OIDC (JWT validation)                    │
-│     - MFA (TOTP)                               │
+│     - Local (Argon2id via argon2-cffi)         │
+│     - LDAP/AD (bind + search via ldap3)        │
+│     - OIDC (JWT validation via authlib)        │
+│     - MFA (TOTP via pyotp)                     │
 └────────────────┬───────────────────────────────┘
                  │
 ┌────────────────▼───────────────────────────────┐
-│  2. Session Management                         │
+│  2. Session Management (FastAPI cookies)       │
 │     - Cookie-based (httpOnly, secure, sameSite)│
 │     - Expiration (24h default)                 │
-│     - Cleanup automatique                      │
+│     - Cleanup automatique (asyncio task)       │
 └────────────────┬───────────────────────────────┘
                  │
 ┌────────────────▼───────────────────────────────┐
 │  3. RBAC (Role-Based Access Control)           │
 │     - Permissions par ressource                │
-│     - Environment-specific roles               │
+│     - Environment-specific roles              │
 │     - Admin vs User vs Viewer                  │
 └────────────────┬───────────────────────────────┘
                  │
 ┌────────────────▼───────────────────────────────┐
-│  4. Audit Logging                              │
+│  4. Audit Logging (SQLAlchemy)                 │
 │     - Toutes actions utilisateur               │
 │     - IP + User-Agent                          │
 │     - Timestamp précis                         │
@@ -508,7 +413,7 @@ asyncio.run(example())
                  │
 ┌────────────────▼───────────────────────────────┐
 │  5. Secret Encryption                          │
-│     - AES-256-GCM                              │
+│     - AES-256-GCM (via cryptography lib)       │
 │     - Key derivation (scrypt)                  │
 │     - Rotation automatique                     │
 └────────────────────────────────────────────────┘
@@ -519,175 +424,137 @@ asyncio.run(example())
 ```mermaid
 sequenceDiagram
     participant User
-    participant Windflow-sample
+    participant Frontend as Vue 3 Frontend
+    participant API as FastAPI Backend
     participant OIDC as OIDC Provider
 
-    User->>Windflow-sample: Click "Login with OIDC"
-    Windflow-sample->>OIDC: Redirect to /authorize
+    User->>Frontend: Click "Login with OIDC"
+    Frontend->>API: GET /api/v1/auth/oidc/authorize
+    API->>OIDC: Redirect to /authorize (PKCE)
     OIDC->>User: Show login page
     User->>OIDC: Enter credentials
-    OIDC->>Windflow-sample: Redirect with code
-    Windflow-sample->>OIDC: POST /token (exchange code)
-    OIDC-->>Windflow-sample: { access_token, id_token }
-    Windflow-sample->>Windflow-sample: Validate JWT signature
-    Windflow-sample->>Windflow-sample: Extract claims (email, name, groups)
-    Windflow-sample->>Windflow-sample: Create/update user in DB
-    Windflow-sample->>Windflow-sample: Create session
-    Windflow-sample-->>User: Set session cookie + redirect
+    OIDC->>API: Redirect with code + state
+    API->>OIDC: POST /token (exchange code + verifier)
+    OIDC-->>API: { access_token, id_token }
+    API->>API: Validate JWT (authlib)
+    API->>API: Extract claims (email, name, groups)
+    API->>API: Create/update user in DB (SQLAlchemy)
+    API->>API: Create session cookie
+    API-->>Frontend: Set-Cookie + redirect
 ```
 
-## 🔄 Processus en arrière-plan
+## 🔄 Tâches en arrière-plan (asyncio)
 
-### Architecture multi-process
+### Architecture asyncio tasks
 
 ```
 ┌──────────────────────────────────────────┐
-│       Main Process                       │
-│  - Web Server                            │
+│       Main FastAPI Process               │
+│  - Web Server (Uvicorn)                  │
 │  - API Routes                            │
 │  - WebSocket handling                    │
 └────────┬─────────────────────┬───────────┘
-         │                     │
+         │ asyncio.create_task  │
     ┌────▼─────┐        ┌─────▼──────┐
     │ Metrics  │        │  Events    │
     │Collector │        │ Collector  │
+    │(asyncio) │        │ (asyncio)  │
     └────┬─────┘        └─────┬──────┘
          │                     │
     ┌────▼─────┐        ┌─────▼──────┐
-    │ metrics. │        │ events.    │
-    │ json     │        │ jsonl      │
+    │ SQLAlch. │        │ SQLAlch.   │
+    │ host_    │        │ container_ │
+    │ metrics  │        │ events     │
     └──────────┘        └────────────┘
          │                     │
          └──────────┬──────────┘
-                    │
+                    │ SSE broadcast
          ┌──────────▼──────────┐
-         │   Database          │
-         │   (persist data)    │
+         │   FastAPI SSE       │
+         │   /api/v1/events    │
          └─────────────────────┘
 ```
 
-### Python équivalent - Metrics Collector
+### Metrics Collector (Python asyncio)
 
 ```python
-# metrics_collector.py
+# backend/app/tasks/metrics_collector.py
 import asyncio
-import json
+import psutil
 from datetime import datetime
-from pathlib import Path
-from typing import Dict, List
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.environment import HostMetric
+from app.services.docker_service import DockerService
 
 class MetricsCollector:
-    """Collecteur de métriques Docker"""
+    """Collecteur de métriques Docker - tâche asyncio longue durée"""
     
-    def __init__(self, docker_client, data_dir: Path):
-        self.docker = docker_client
-        self.data_dir = data_dir
-        self.metrics_file = data_dir / "metrics.json"
-        
-    async def collect_host_metrics(self) -> Dict:
+    def __init__(self, docker_service: DockerService, db_session_factory):
+        self.docker = docker_service
+        self.db_factory = db_session_factory
+        self.interval = 30  # secondes
+        self._running = False
+    
+    async def collect_host_metrics(self, env_id: int) -> dict:
         """Collecter métriques système"""
-        import psutil
-        
         return {
             "cpu_percent": psutil.cpu_percent(interval=1),
             "memory_percent": psutil.virtual_memory().percent,
             "memory_used": psutil.virtual_memory().used,
             "memory_total": psutil.virtual_memory().total,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow()
         }
-        
-    async def collect_container_stats(self) -> List[Dict]:
-        """Collecter stats de tous les conteneurs"""
-        containers = await self.docker.list_containers(all=False)
-        stats = []
-        
-        for container in containers:
-            try:
-                response = await self.docker.docker_fetch(
-                    f"/containers/{container['Id']}/stats?stream=false"
-                )
-                stat_data = response.json()
-                
-                # Calculer CPU %
-                cpu_delta = (stat_data['cpu_stats']['cpu_usage']['total_usage'] -
-                            stat_data['precpu_stats']['cpu_usage']['total_usage'])
-                system_delta = (stat_data['cpu_stats']['system_cpu_usage'] -
-                               stat_data['precpu_stats']['system_cpu_usage'])
-                cpu_percent = (cpu_delta / system_delta) * 100.0
-                
-                # Calculer Memory %
-                mem_usage = stat_data['memory_stats']['usage']
-                mem_limit = stat_data['memory_stats']['limit']
-                mem_percent = (mem_usage / mem_limit) * 100.0
-                
-                stats.append({
-                    "container_id": container['Id'],
-                    "container_name": container['Names'][0].lstrip('/'),
-                    "cpu_percent": cpu_percent,
-                    "memory_percent": mem_percent,
-                    "memory_usage": mem_usage,
-                    "timestamp": datetime.utcnow().isoformat()
-                })
-            except Exception as e:
-                print(f"Error collecting stats for {container['Id']}: {e}")
-                
-        return stats
-        
-    async def write_metrics(self, data: Dict):
-        """Écrire métriques dans fichier JSON"""
-        self.metrics_file.write_text(json.dumps(data, indent=2))
-        
-    async def run(self, interval: int = 10):
-        """Boucle principale de collecte"""
-        print(f"Starting metrics collector (interval: {interval}s)")
-        
-        while True:
-            try:
-                host_metrics = await self.collect_host_metrics()
-                container_stats = await self.collect_container_stats()
-                
-                data = {
-                    "host": host_metrics,
-                    "containers": container_stats,
-                    "collected_at": datetime.utcnow().isoformat()
-                }
-                
-                await self.write_metrics(data)
-                print(f"✓ Collected metrics at {data['collected_at']}")
-                
-            except Exception as e:
-                print(f"✗ Error collecting metrics: {e}")
-                
-            await asyncio.sleep(interval)
-
-# Runner
-if __name__ == "__main__":
-    from docker_client import DockerClient, DockerConfig
     
-    config = DockerConfig(
-        connection_type='socket',
-        socket_path='/var/run/docker.sock'
-    )
-    
-    async def main():
-        async with DockerClient(config) as docker:
-            collector = MetricsCollector(
-                docker,
-                Path("./data")
+    async def save_metrics(self, env_id: int, data: dict):
+        """Persister en base avec SQLAlchemy async"""
+        async with self.db_factory() as session:
+            metric = HostMetric(
+                environment_id=env_id,
+                cpu_percent=data["cpu_percent"],
+                memory_percent=data["memory_percent"],
+                memory_used=data["memory_used"],
+                memory_total=data["memory_total"],
+                timestamp=data["timestamp"]
             )
-            await collector.run(interval=10)
+            session.add(metric)
+            await session.commit()
     
-    asyncio.run(main())
+    async def run(self):
+        """Boucle principale (tâche asyncio longue durée)"""
+        self._running = True
+        while self._running:
+            try:
+                # Collecter pour tous les environnements actifs
+                for env_id in await self._get_active_env_ids():
+                    data = await self.collect_host_metrics(env_id)
+                    await self.save_metrics(env_id, data)
+            except Exception as e:
+                print(f"Metrics collection error: {e}")
+            
+            await asyncio.sleep(self.interval)
+    
+    def stop(self):
+        self._running = False
+
+# Démarrage dans le lifespan FastAPI (main.py)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    collector = MetricsCollector(docker_service, AsyncSessionLocal)
+    task = asyncio.create_task(collector.run())
+    yield
+    collector.stop()
+    task.cancel()
 ```
 
 ## 🎯 Points clés de l'architecture
 
-1. **Découplage** : Modules indépendants communiquant via interfaces claires
-2. **Scalabilité** : Support multi-environnements sans limite
-3. **Résilience** : Retry logic, circuit breakers, fallbacks
-4. **Performance** : Cache intelligent, stream processing, async/await
-5. **Sécurité** : Defence in depth, encryption at rest, audit trail
-6. **Maintenabilité** : Code modulaire, tests unitaires, documentation
+1. **Découplage** : Modules indépendants (services, models, schemas, api)
+2. **Async partout** : FastAPI + SQLAlchemy 2.0 async + httpx async
+3. **Scalabilité** : Support multi-environnements sans limite
+4. **Résilience** : Retry logic, reconnexion WebSocket, fallbacks
+5. **Performance** : Cache intelligent, stream processing, async/await
+6. **Sécurité** : Defence in depth, encryption at rest, audit trail
+7. **Maintenabilité** : Code modulaire, Pydantic schemas, typing strict
 
 ---
 

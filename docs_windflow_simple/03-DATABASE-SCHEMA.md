@@ -4,7 +4,7 @@
 
 ## 📊 Vue d'ensemble
 
-Windflow-sample utilise **Drizzle ORM** avec support dual SQLite (développement) et PostgreSQL (production).
+Windflow-sample utilise **SQLAlchemy 2.0** avec support dual SQLite (développement) et PostgreSQL (production).
 
 ## 🗄️ Schéma relationnel complet
 
