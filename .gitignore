@@ -5,7 +5,7 @@
 *$py.class
 
 # frontend/.env.development
-docs/site/
+docs_windflow_simple/site/
 *temp/*
 .secret
 frontend/dist/
