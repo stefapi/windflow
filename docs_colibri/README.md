@@ -54,6 +54,10 @@ Cette documentation vous permet de **reproduire les fonctionnalités clés** du 
 16. **[15-CODE-SNIPPETS.md](15-CODE-SNIPPETS.md)** - Extraits réutilisables
     - Validation, retry, cache, notifications, rate limiting
 
+17. **[116-VOLUME-BROWSER.md](16-VOLUME-BROWSER.md)** - Editeur de volume docker
+
+18. **[17-ARCHITECTURE_DOCKER_COMPOSE_EDITOR.md](17-ARCHITECTURE_DOCKER_COMPOSE_EDITOR.md)** - Editeur graphique de docker-compose
+
 ## 🚀 Guide de démarrage rapide
 
 ### 1. Comprendre le projet
@@ -205,49 +209,3 @@ Streaming des événements Docker via :
 - **PostgreSQL** pour base de données
 - **Redis** pour cache (optionnel)
 - **Prometheus** + **Grafana** pour monitoring
-
-## 📞 Support
-
-Cette documentation est générée à partir du projet Colibri original :
-- **GitHub** : https://github.com/stefapi/Colibri
-- **Licence** : Apache 2.0
-
-Les exemples Python et Vue 3 sont fournis pour faciliter la reproduction dans d'autres stacks.
-
-## ✅ Checklist d'implémentation
-
-### Minimum Viable Product (MVP)
-
-- [ ] Client Docker (socket Unix)
-- [ ] API : Lister conteneurs
-- [ ] API : Start/Stop conteneurs
-- [ ] API : Lister images
-- [ ] UI : Liste conteneurs avec actions
-- [ ] UI : Logs conteneurs
-- [ ] Base de données (SQLite)
-
-### Version 1.0
-
-- [ ] Multi-environnements (HTTP/TLS)
-- [ ] Pull images avec progression
-- [ ] Gestion volumes et networks
-- [ ] Docker Compose stacks
-- [ ] Authentification locale
-- [ ] Terminal web
-- [ ] Auto-updates basiques
-
-### Version 2.0
-
-- [ ] Git integration
-- [ ] Vulnerability scanning
-- [ ] LDAP/OIDC auth
-- [ ] RBAC complet
-- [ ] Hawser proxy
-- [ ] Monitoring avancé
-- [ ] Notifications
-
----
-
-**Bon développement !** 🚀
-
-N'hésitez pas à adapter ces exemples à votre stack et vos besoins spécifiques.

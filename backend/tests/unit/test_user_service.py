@@ -37,10 +37,10 @@ class TestUserService:
 
         assert hashed != long_password
         assert len(hashed) > 0
-        # Vérifier que le mot de passe tronqué fonctionne
+        # Vérifier que le mot de passe complet fonctionne
         assert UserService.verify_password(long_password, hashed)
-        # Vérifier que les 72 premiers bytes sont suffisants
-        assert UserService.verify_password(long_password[:72], hashed)
+        # Vérifier qu'un mot de passe tronqué ne fonctionne pas (argon2 utilise le mot de passe complet)
+        assert not UserService.verify_password(long_password[:72], hashed)
 
     async def test_create_user(self, db_session: AsyncSession, test_organization: Organization):
         """Test de création d'utilisateur."""

@@ -14,6 +14,7 @@ from ...schemas.deployment import DeploymentResponse, DeploymentCreate, Deployme
 from ...services.deployment_service import DeploymentService
 from ...auth.dependencies import get_current_active_user
 from ...models.user import User
+from ...core.rate_limit import conditional_rate_limiter
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -87,7 +88,8 @@ Deployments are returned in reverse chronological order (newest first).
             }
         }
     },
-    tags=["deployments"]
+    tags=["deployments"],
+    dependencies=[Depends(conditional_rate_limiter(100, 60))]
 )
 async def list_deployments(
     request: Request,
@@ -131,6 +133,7 @@ async def list_deployments(
 @router.get(
     "/{deployment_id}",
     response_model=DeploymentResponse,
+    dependencies=[Depends(conditional_rate_limiter(100, 60))],
     summary="Get deployment by ID",
     description="""
 Retrieve detailed information about a specific deployment.
@@ -270,6 +273,7 @@ async def get_deployment(
 
 @router.get(
     "/{deployment_id}/logs",
+    dependencies=[Depends(conditional_rate_limiter(60, 60))],
     response_model=DeploymentLogsResponse,
     summary="Get deployment logs",
     description="""
@@ -408,6 +412,7 @@ async def get_deployment_logs(
     "",
     response_model=DeploymentResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(conditional_rate_limiter(20, 60))],
     summary="Create a new deployment",
     description="""
 Create a new Docker deployment from a stack configuration.
@@ -669,6 +674,7 @@ async def create_deployment(
 @router.put(
     "/{deployment_id}",
     response_model=DeploymentResponse,
+    dependencies=[Depends(conditional_rate_limiter(30, 60))],
     summary="Update deployment",
     description="""
 Update an existing deployment's configuration.
@@ -888,6 +894,7 @@ async def update_deployment(
 @router.post(
     "/{deployment_id}/retry",
     response_model=DeploymentResponse,
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
     summary="Retry failed deployment",
     description="""
 Retry a failed or pending deployment.
@@ -1078,6 +1085,7 @@ async def retry_deployment(
 @router.post(
     "/{deployment_id}/cancel",
     response_model=DeploymentResponse,
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
     summary="Cancel running deployment",
     description="""
 Cancel a deployment that is currently in progress.
@@ -1268,6 +1276,7 @@ async def cancel_deployment(
 @router.delete(
     "/{deployment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
     summary="Delete deployment",
     description="""
 Delete a deployment permanently.

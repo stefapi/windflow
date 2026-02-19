@@ -3,7 +3,8 @@ Routes de gestion des stacks Docker Compose.
 """
 
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+import logging
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_db
@@ -13,8 +14,10 @@ from ...auth.dependencies import get_current_active_user
 from ...models.user import User
 from ...helper.template_renderer import TemplateRenderer
 from ...helper.jinja_functions import JinjaFunctions
+from ...core.rate_limit import conditional_rate_limiter
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _render_stack_variables(stack) -> StackResponse:
@@ -172,9 +175,11 @@ The following macros are automatically rendered:
             }
         }
     },
-    tags=["stacks"]
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(100, 60))]
 )
 async def list_stacks(
+    request: Request,
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
@@ -187,6 +192,7 @@ async def list_stacks(
     sont rendues pour que le frontend reçoive des valeurs concrètes.
 
     Args:
+        request: Requête HTTP (pour correlation_id)
         skip: Nombre d'éléments à ignorer pour la pagination
         limit: Nombre maximum d'éléments à retourner
         current_user: Utilisateur courant
@@ -195,6 +201,18 @@ async def list_stacks(
     Returns:
         List[StackResponse]: Liste des stacks avec variables rendues
     """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        "Listing stacks for organization",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "organization_id": str(current_user.organization_id),
+            "skip": skip,
+            "limit": limit
+        }
+    )
+
     stacks = await StackService.list_by_organization(
         session,
         current_user.organization_id,
@@ -320,9 +338,11 @@ This allows users to get fresh values without modifying the stack template.
             }
         }
     },
-    tags=["stacks"]
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(100, 60))]
 )
 async def get_stack(
+    request: Request,
     stack_id: str,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
@@ -334,6 +354,7 @@ async def get_stack(
     sont rendues pour que le frontend reçoive des valeurs concrètes.
 
     Args:
+        request: Requête HTTP (pour correlation_id)
         stack_id: ID de la stack (string UUID)
         current_user: Utilisateur courant
         session: Session de base de données
@@ -344,6 +365,12 @@ async def get_stack(
     Raises:
         HTTPException: Si la stack n'existe pas ou accès refusé
     """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Getting stack {stack_id}",
+        extra={"correlation_id": correlation_id, "stack_id": stack_id}
+    )
+
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
         raise HTTPException(
@@ -696,9 +723,11 @@ spec:
             }
         }
     },
-    tags=["stacks"]
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(20, 60))]
 )
 async def create_stack(
+    request: Request,
     stack_data: StackCreate,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
@@ -707,6 +736,7 @@ async def create_stack(
     Crée une nouvelle stack Docker Compose.
 
     Args:
+        request: Requête HTTP (pour correlation_id)
         stack_data: Données de la stack à créer
         current_user: Utilisateur courant
         session: Session de base de données
@@ -717,6 +747,16 @@ async def create_stack(
     Raises:
         HTTPException: Si le nom existe déjà dans l'organisation
     """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Creating stack '{stack_data.name}'",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "organization_id": str(current_user.organization_id),
+            "stack_name": stack_data.name
+        }
+    )
     # Vérifier que le nom n'existe pas déjà dans l'organisation
     existing = await StackService.get_by_name(
         session,
@@ -929,9 +969,11 @@ services:
             }
         }
     },
-    tags=["stacks"]
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(30, 60))]
 )
 async def update_stack(
+    request: Request,
     stack_id: str,
     stack_data: StackUpdate,
     current_user: User = Depends(get_current_active_user),
@@ -941,6 +983,7 @@ async def update_stack(
     Met à jour une stack Docker Compose.
 
     Args:
+        request: Requête HTTP (pour correlation_id)
         stack_id: ID de la stack à modifier
         stack_data: Nouvelles données de la stack
         current_user: Utilisateur courant
@@ -952,6 +995,15 @@ async def update_stack(
     Raises:
         HTTPException: Si la stack n'existe pas, accès refusé ou nom en conflit
     """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Updating stack {stack_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "stack_id": stack_id
+        }
+    )
     # Vérifier que la stack existe
     existing_stack = await StackService.get_by_id(session, stack_id)
     if not existing_stack:
@@ -1062,9 +1114,11 @@ This operation is **irreversible**. The stack definition will be permanently del
             }
         }
     },
-    tags=["stacks"]
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(10, 60))]
 )
 async def delete_stack(
+    request: Request,
     stack_id: str,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
@@ -1073,6 +1127,7 @@ async def delete_stack(
     Supprime une stack Docker Compose.
 
     Args:
+        request: Requête HTTP (pour correlation_id)
         stack_id: ID de la stack à supprimer
         current_user: Utilisateur courant
         session: Session de base de données
@@ -1080,6 +1135,15 @@ async def delete_stack(
     Raises:
         HTTPException: Si la stack n'existe pas ou accès refusé
     """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Deleting stack {stack_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "stack_id": stack_id
+        }
+    )
     # Vérifier que la stack existe
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
@@ -1247,9 +1311,11 @@ Returns the newly generated value along with the original macro template for ref
             }
         }
     },
-    tags=["stacks"]
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(30, 60))]
 )
 async def regenerate_variable(
+    request: Request,
     stack_id: str,
     variable_name: str,
     current_user: User = Depends(get_current_active_user),
@@ -1263,6 +1329,7 @@ async def regenerate_variable(
     sans avoir à recharger tout le stack.
 
     Args:
+        request: Requête HTTP (pour correlation_id)
         stack_id: ID du stack
         variable_name: Nom de la variable à régénérer
         current_user: Utilisateur courant
@@ -1274,6 +1341,16 @@ async def regenerate_variable(
     Raises:
         HTTPException: Si le stack n'existe pas, accès refusé, variable introuvable ou pas de macro
     """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Regenerating variable '{variable_name}' for stack {stack_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "stack_id": stack_id,
+            "variable_name": variable_name
+        }
+    )
     # Vérifier que le stack existe
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:

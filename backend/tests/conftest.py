@@ -304,13 +304,11 @@ async def test_target(db_session: AsyncSession, test_organization: Organization)
     """
     target = Target(
         name="Test Docker Target",
-        slug="test-docker",
+        host="localhost",
+        port=2375,
         type=TargetType.DOCKER,
-        status=TargetStatus.READY,
-        connection_config={
-            "host": "localhost",
-            "port": 2375
-        },
+        status=TargetStatus.ONLINE,
+        credentials={},
         organization_id=test_organization.id
     )
     db_session.add(target)
@@ -333,17 +331,17 @@ async def test_stack(db_session: AsyncSession, test_organization: Organization) 
     """
     stack = Stack(
         name="Test Stack",
-        slug="test-stack",
         description="A test stack for unit testing",
-        compose_content="""
-version: '3.8'
-services:
-  web:
-    image: nginx:latest
-    ports:
-      - "80:80"
-""",
-        variables_schema={
+        template={
+            "version": "3.8",
+            "services": {
+                "web": {
+                    "image": "nginx:latest",
+                    "ports": ["80:80"]
+                }
+            }
+        },
+        variables={
             "port": {"type": "integer", "default": 80}
         },
         organization_id=test_organization.id

@@ -4,9 +4,10 @@ Routes de gestion des cibles de déploiement.
 
 from __future__ import annotations
 
+import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_active_user
@@ -25,6 +26,7 @@ from ...services.target_scanner_service import TargetScannerService
 from ...services.target_service import TargetService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 VIRTUALIZATION_CAPABILITY_TYPES: set[CapabilityType] = {
     CapabilityType.LIBVIRT,
@@ -130,12 +132,24 @@ Default limit is 100 targets per request.
     tags=["targets"]
 )
 async def list_targets(
+    request: Request,
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ) -> List[TargetResponse]:
     """List deployment targets for the organization."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        "Listing targets for organization",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "organization_id": str(current_user.organization_id),
+            "skip": skip,
+            "limit": limit
+        }
+    )
     targets = await TargetService.list_by_organization(
         session,
         current_user.organization_id,
@@ -253,11 +267,17 @@ Attempting to access targets from other organizations returns 403 Forbidden.
     tags=["targets"]
 )
 async def get_target(
+    request: Request,
     target_id: str,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ) -> TargetResponse:
     """Retrieve a deployment target by ID."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Getting target {target_id}",
+        extra={"correlation_id": correlation_id, "target_id": target_id}
+    )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
         raise HTTPException(
@@ -461,11 +481,21 @@ Attempting to create a target with an existing name returns 409 Conflict.
     tags=["targets"]
 )
 async def create_target(
+    request: Request,
     target_data: TargetCreate,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ) -> TargetResponse:
     """Create a new deployment target."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Creating target '{target_data.name}'",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "target_name": target_data.name
+        }
+    )
     existing = await TargetService.get_by_name(
         session,
         current_user.organization_id,
@@ -661,12 +691,22 @@ Attempting to use an existing name returns 409 Conflict.
     tags=["targets"]
 )
 async def update_target(
+    request: Request,
     target_id: str,
     target_data: TargetUpdate,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ) -> TargetResponse:
     """Update a deployment target."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Updating target {target_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "target_id": target_id
+        }
+    )
     existing_target = await TargetService.get_by_id(session, target_id)
     if not existing_target:
         raise HTTPException(
@@ -790,11 +830,21 @@ Returns 204 No Content on successful deletion (empty response body).
     tags=["targets"]
 )
 async def delete_target(
+    request: Request,
     target_id: str,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ) -> None:
     """Delete a deployment target permanently."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Deleting target {target_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "target_id": target_id
+        }
+    )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
         raise HTTPException(
@@ -1034,11 +1084,21 @@ If no preferred type is specified, the system automatically selects:
     tags=["targets"]
 )
 async def discover_target(
+    request: Request,
     discovery_request: TargetDiscoveryRequest,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ) -> TargetDiscoveryResponse:
     """Discover target capabilities and create deployment target."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Discovering target at {discovery_request.host}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "host": discovery_request.host
+        }
+    )
     organization_id = discovery_request.organization_id or current_user.organization_id
     if organization_id != current_user.organization_id:
         raise HTTPException(
@@ -1248,11 +1308,21 @@ Users can only scan targets belonging to their organization.
     tags=["targets"]
 )
 async def scan_target(
+    request: Request,
     target_id: str,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ) -> TargetResponse:
     """Scan target capabilities and update information."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Scanning target {target_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "target_id": target_id
+        }
+    )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
         raise HTTPException(
@@ -1409,12 +1479,18 @@ Retrieve all capabilities detected for a specific target.
     tags=["targets"]
 )
 async def get_target_capabilities(
+    request: Request,
     target_id: str,
     capability_type: Optional[CapabilityType] = None,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ) -> TargetCapabilitiesResponse:
     """Retrieve target capabilities with optional filtering."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Getting capabilities for target {target_id}",
+        extra={"correlation_id": correlation_id, "target_id": target_id}
+    )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
         raise HTTPException(
@@ -1572,12 +1648,18 @@ Returns 404 if the capability type is not found for the target.
     tags=["targets"]
 )
 async def get_target_capability_by_type(
+    request: Request,
     target_id: str,
     capability_type: CapabilityType,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ) -> TargetCapabilityResponse:
     """Retrieve a specific capability by type for a target."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Getting capability {capability_type} for target {target_id}",
+        extra={"correlation_id": correlation_id, "target_id": target_id, "capability_type": str(capability_type)}
+    )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
         raise HTTPException(
@@ -1732,11 +1814,17 @@ Returns an array of virtualization capabilities, which may be empty if no virtua
     tags=["targets"]
 )
 async def get_target_virtualization_capabilities(
+    request: Request,
     target_id: str,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ) -> List[TargetCapabilityResponse]:
     """Retrieve virtualization capabilities for a target."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Getting virtualization capabilities for target {target_id}",
+        extra={"correlation_id": correlation_id, "target_id": target_id}
+    )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
         raise HTTPException(

@@ -4,7 +4,7 @@ Unit tests for target scanner related utilities.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -179,7 +179,7 @@ class TestInferTargetType:
         """Docker Swarm should win over other capabilities."""
         scan_result = ScanResult(
             host="127.0.0.1",
-            scan_date=None,
+            scan_date=datetime.now(timezone.utc),
             success=True,
             docker=DockerCapabilities(
                 installed=True,
@@ -204,7 +204,7 @@ class TestInferTargetType:
         """Kubernetes capability should produce a KUBERNETES target."""
         scan_result = ScanResult(
             host="192.168.1.10",
-            scan_date=None,
+            scan_date=datetime.now(timezone.utc),
             success=True,
             docker=None,
             virtualization={},
@@ -234,7 +234,7 @@ class TestInferTargetType:
         """Default fallback should be PHYSICAL."""
         scan_result = ScanResult(
             host="host",
-            scan_date=None,
+            scan_date=datetime.now(timezone.utc),
             success=True,
             docker=None,
             virtualization={},

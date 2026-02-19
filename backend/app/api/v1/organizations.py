@@ -4,6 +4,7 @@ Routes de gestion des organisations.
 
 from typing import List
 from uuid import UUID
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +16,7 @@ from ...models.user import User
 from ...core.rate_limit import conditional_rate_limiter
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get(
@@ -112,6 +114,7 @@ List all organizations in the system.
     }
 )
 async def list_organizations(
+    request: Request,
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(require_superuser),
@@ -121,6 +124,7 @@ async def list_organizations(
     Liste toutes les organisations (superuser uniquement).
 
     Args:
+        request: Requête HTTP (pour correlation_id)
         skip: Nombre d'éléments à ignorer pour la pagination
         limit: Nombre maximum d'éléments à retourner
         current_user: Utilisateur courant (doit être superuser)
@@ -129,6 +133,17 @@ async def list_organizations(
     Returns:
         List[OrganizationResponse]: Liste des organisations
     """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        "Listing all organizations",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "skip": skip,
+            "limit": limit
+        }
+    )
+
     organizations = await OrganizationService.list_all(session, skip, limit)
     return organizations
 
@@ -231,6 +246,7 @@ Returns complete organization information including:
     }
 )
 async def get_organization(
+    request: Request,
     organization_id: UUID,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
@@ -239,6 +255,7 @@ async def get_organization(
     Récupère une organisation par son ID.
 
     Args:
+        request: Requête HTTP (pour correlation_id)
         organization_id: ID de l'organisation
         current_user: Utilisateur courant
         session: Session de base de données
@@ -249,6 +266,11 @@ async def get_organization(
     Raises:
         HTTPException: Si l'organisation n'existe pas ou accès refusé
     """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Getting organization {organization_id}",
+        extra={"correlation_id": correlation_id, "organization_id": str(organization_id)}
+    )
     # Vérifier que l'utilisateur appartient à l'organisation ou est superuser
     if not current_user.is_superuser and current_user.organization_id != organization_id:
         raise HTTPException(
@@ -421,6 +443,7 @@ After creating an organization, you typically need to:
     }
 )
 async def create_organization(
+    request: Request,
     organization_data: OrganizationCreate,
     current_user: User = Depends(require_superuser),
     session: AsyncSession = Depends(get_db)
@@ -429,6 +452,7 @@ async def create_organization(
     Crée une nouvelle organisation (superuser uniquement).
 
     Args:
+        request: Requête HTTP (pour correlation_id)
         organization_data: Données de l'organisation à créer
         current_user: Utilisateur courant (doit être superuser)
         session: Session de base de données
@@ -439,6 +463,15 @@ async def create_organization(
     Raises:
         HTTPException: Si le nom existe déjà
     """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Creating organization '{organization_data.name}'",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "org_name": organization_data.name
+        }
+    )
     # Vérifier que le nom n'existe pas déjà
     existing = await OrganizationService.get_by_name(session, organization_data.name)
     if existing:
@@ -627,6 +660,7 @@ Setting `is_active` to False will:
     }
 )
 async def update_organization(
+    request: Request,
     organization_id: UUID,
     organization_data: OrganizationUpdate,
     current_user: User = Depends(require_superuser),
@@ -636,6 +670,7 @@ async def update_organization(
     Met à jour une organisation (superuser uniquement).
 
     Args:
+        request: Requête HTTP (pour correlation_id)
         organization_id: ID de l'organisation à modifier
         organization_data: Nouvelles données de l'organisation
         current_user: Utilisateur courant (doit être superuser)
@@ -647,6 +682,15 @@ async def update_organization(
     Raises:
         HTTPException: Si l'organisation n'existe pas ou nom en conflit
     """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Updating organization {organization_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "organization_id": str(organization_id)
+        }
+    )
     # Vérifier que l'organisation existe
     existing_org = await OrganizationService.get_by_id(session, organization_id)
     if not existing_org:
@@ -766,6 +810,7 @@ Instead of deletion, consider:
     }
 )
 async def delete_organization(
+    request: Request,
     organization_id: UUID,
     current_user: User = Depends(require_superuser),
     session: AsyncSession = Depends(get_db)
@@ -774,6 +819,7 @@ async def delete_organization(
     Supprime une organisation (superuser uniquement).
 
     Args:
+        request: Requête HTTP (pour correlation_id)
         organization_id: ID de l'organisation à supprimer
         current_user: Utilisateur courant (doit être superuser)
         session: Session de base de données
@@ -781,6 +827,15 @@ async def delete_organization(
     Raises:
         HTTPException: Si l'organisation n'existe pas
     """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Deleting organization {organization_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "organization_id": str(organization_id)
+        }
+    )
     # Vérifier que l'organisation existe
     organization = await OrganizationService.get_by_id(session, organization_id)
     if not organization:

@@ -4,6 +4,7 @@ Routes de gestion des utilisateurs.
 
 from typing import List
 from uuid import UUID
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,7 @@ from ...services.organization_service import OrganizationService
 from ...core.rate_limit import conditional_rate_limiter
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get(
@@ -146,12 +148,25 @@ Use `skip` and `limit` parameters for pagination:
     }
 )
 async def list_users(
+    request: Request,
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ):
     """List all users within the current user's organization."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        "Listing users for organization",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "organization_id": str(current_user.organization_id),
+            "skip": skip,
+            "limit": limit
+        }
+    )
+
     users = await UserService.list_by_organization(
         session,
         current_user.organization_id,
@@ -159,6 +174,50 @@ async def list_users(
         limit
     )
     return users
+
+
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get current user profile",
+    description="""
+Get the profile of the currently authenticated user.
+
+## Use Cases
+- Display user info in UI
+- Verify user roles and permissions
+- Confirm user is still authenticated
+
+**Authentication Required**
+""",
+    dependencies=[Depends(conditional_rate_limiter(60, 60))],
+    responses={
+        200: {
+            "description": "User profile retrieved successfully"
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Not authenticated"}
+                }
+            }
+        }
+    },
+    tags=["users"]
+)
+async def get_current_user_me(
+    request: Request,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Retourne le profil de l'utilisateur authentifié."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        "Getting current user profile",
+        extra={"correlation_id": correlation_id, "user_id": str(current_user.id)}
+    )
+    return current_user
 
 
 @router.get(
@@ -268,11 +327,18 @@ Retrieve detailed information about a specific user.
     }
 )
 async def get_user(
+    request: Request,
     user_id: UUID,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ):
     """Retrieve detailed information about a specific user."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Getting user {user_id}",
+        extra={"correlation_id": correlation_id, "target_user_id": str(user_id)}
+    )
+
     user = await UserService.get_by_id(session, user_id)
     if not user:
         raise HTTPException(
@@ -470,11 +536,21 @@ Create a new user within an organization.
     }
 )
 async def create_user(
+    request: Request,
     user_data: UserCreate,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ):
     """Create a new user within an organization."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Creating user '{user_data.email}'",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "new_user_email": user_data.email
+        }
+    )
     # Vérifier que l'email n'existe pas déjà
     existing = await UserService.get_by_email(session, user_data.email)
     if existing:
@@ -716,12 +792,22 @@ Update an existing user's information.
     }
 )
 async def update_user(
+    request: Request,
     user_id: UUID,
     user_data: UserUpdate,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ):
     """Update an existing user's information."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Updating user {user_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "target_user_id": str(user_id)
+        }
+    )
     # Vérifier que l'utilisateur existe
     existing_user = await UserService.get_by_id(session, user_id)
     if not existing_user:
@@ -862,11 +948,21 @@ Permanently delete a user account.
     }
 )
 async def delete_user(
+    request: Request,
     user_id: UUID,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db)
 ):
     """Permanently delete a user account."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Deleting user {user_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "target_user_id": str(user_id)
+        }
+    )
     # Empêcher l'auto-suppression
     if user_id == current_user.id:
         raise HTTPException(

@@ -7,8 +7,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from backend.app.api.v1.stacks import _render_stack_variables
-from backend.app.schemas.stack import StackResponse
+from app.api.v1.stacks import _render_stack_variables
+from app.schemas.stack import StackResponse
 
 
 class TestStacksAPIVariablesRendering:

@@ -1,7 +1,7 @@
 """Test simple pour valider le rendu des templates Jinja2 avec fonctions personnalisées."""
 
 import pytest
-from backend.app.services.deployment_service import DeploymentService
+from app.services.deployment_service import DeploymentService
 
 
 def test_render_template_with_generate_password():
