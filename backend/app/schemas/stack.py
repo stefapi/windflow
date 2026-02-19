@@ -476,6 +476,45 @@ class MarketplaceStackResponse(BaseModel):
     )
 
 
+class StackListResponse(BaseModel):
+    """
+    Schema pour réponse Liste de Stacks.
+
+    Retourne uniquement les informations essentielles demandées pour le listing.
+    """
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "example": {
+                "id": "stack-550e8400",
+                "version": "1.0.0",
+                "category": "web",
+                "name": "Nginx Reverse Proxy",
+                "description": "Nginx reverse proxy with SSL termination",
+                "icon_url": "https://cdn.windflow.io/icons/nginx.svg",
+                "author": "WindFlow Team",
+                "license": "MIT",
+                "rating": 4.5,
+                "tags": ["web", "proxy", "nginx"],
+                "downloads": 1250
+            }
+        }
+    )
+
+    id: str = Field(..., description="ID unique du stack")
+    version: str = Field(..., description="Version du stack")
+    category: Optional[str] = Field(None, description="Catégorie du stack")
+    name: str = Field(..., description="Nom du stack")
+    description: Optional[str] = Field(None, description="Description du stack")
+    icon_url: Optional[str] = Field(None, description="URL de l'icône")
+    author: Optional[str] = Field(None, description="Auteur du stack")
+    license: Optional[str] = Field(None, description="Licence du stack")
+    rating: float = Field(0.0, description="Note moyenne")
+    tags: List[str] = Field(default_factory=list, description="Tags du stack")
+    downloads: int = Field(0, description="Nombre de téléchargements")
+
+
 class DeploymentConfigRequest(BaseModel):
     """Schema pour configuration de déploiement."""
 

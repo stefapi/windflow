@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_db
-from ...schemas.stack import StackResponse, StackCreate, StackUpdate
+from ...schemas.stack import StackResponse, StackCreate, StackUpdate, StackListResponse
 from ...services.stack_service import StackService
 from ...auth.dependencies import get_current_active_user
 from ...models.user import User
@@ -48,25 +48,38 @@ def _render_stack_variables(stack) -> StackResponse:
     # Pattern pour détecter les macros Jinja {{ ... }}
     macro_pattern = re.compile(r'\{\{.*?\}\}')
 
-    # Parcourir les variables pour détecter et marquer les macros
-    variables_with_macro_info = {}
+    # Parcourir les variables pour détecter les macros
+    variables_to_render = {}
+    macro_info = {}
+
     for var_name, var_def in stack_response.variables.items():
         var_dict = dict(var_def) if isinstance(var_def, dict) else var_def
+
+        # Copier pour ne pas modifier l'original avant le rendu
+        var_to_render = var_dict.copy()
 
         # Vérifier si la valeur par défaut contient une macro
         default_value = var_dict.get('default')
         if default_value and isinstance(default_value, str) and macro_pattern.search(default_value):
-            # Marquer comme ayant une macro et sauvegarder le template original
-            var_dict['has_macro'] = True
-            var_dict['macro_template'] = default_value
+            macro_info[var_name] = {
+                'has_macro': True,
+                'macro_template': default_value
+            }
         else:
-            var_dict['has_macro'] = False
-            var_dict['macro_template'] = None
+            macro_info[var_name] = {
+                'has_macro': False,
+                'macro_template': None
+            }
 
-        variables_with_macro_info[var_name] = var_dict
+        variables_to_render[var_name] = var_to_render
 
-    # Rendre les variables (qui peuvent contenir des macros dans les defaults)
-    rendered_variables = renderer.render_dict(variables_with_macro_info, {})
+    # Rendre uniquement les variables (leurs champs default, description, etc.)
+    rendered_variables = renderer.render_dict(variables_to_render, {})
+
+    # Réintégrer les informations de macro sans les rendre
+    for var_name, info in macro_info.items():
+        if var_name in rendered_variables:
+            rendered_variables[var_name].update(info)
 
     # Créer une copie du stack avec les variables rendues
     stack_dict = stack_response.model_dump()
@@ -85,7 +98,7 @@ def _render_stack_variables(stack) -> StackResponse:
 
 @router.get(
     "/",
-    response_model=List[StackResponse],
+    response_model=List[StackListResponse],
     status_code=status.HTTP_200_OK,
     summary="List all stacks in organization",
     description="""
@@ -93,18 +106,11 @@ List all Docker Compose stacks available in the current user's organization.
 
 ## Features
 - **Pagination**: Use `skip` and `limit` parameters for pagination
-- **Macro Rendering**: Variables with Jinja macros (like `{{ generate_password(24) }}`) are automatically rendered with concrete values
 - **Organization Scoped**: Only returns stacks belonging to the user's organization
-
-## Variable Macros
-The following macros are automatically rendered:
-- `{{ generate_password(length) }}`: Generates a secure random password
-- `{{ get_valid_port() }}`: Returns an available port number
-- `{{ random_string(length) }}`: Generates a random alphanumeric string
+- **Lightweight Response**: Returns only essential metadata for listing (id, name, version, category, etc.)
 
 ## Use Cases
 - Display available stacks in the UI
-- Select a stack for deployment
 - Browse stack catalog
 
 **Authentication Required**
@@ -117,35 +123,16 @@ The following macros are automatically rendered:
                     "example": [
                         {
                             "id": "550e8400-e29b-41d4-a716-446655440000",
+                            "version": "1.0.0",
+                            "category": "web",
                             "name": "nginx-stack",
                             "description": "Nginx web server",
-                            "target_type": "docker",
-                            "organization_id": "org-123",
-                            "variables": {
-                                "PORT": {
-                                    "default": "8080",
-                                    "description": "HTTP port"
-                                }
-                            },
-                            "created_at": "2026-01-02T10:00:00Z",
-                            "updated_at": "2026-01-02T10:00:00Z"
-                        },
-                        {
-                            "id": "660e8400-e29b-41d4-a716-446655440001",
-                            "name": "postgres-stack",
-                            "description": "PostgreSQL database",
-                            "target_type": "docker",
-                            "organization_id": "org-123",
-                            "variables": {
-                                "POSTGRES_PASSWORD": {
-                                    "default": "aB3$xY9#mK2@pL7!",
-                                    "description": "Database password",
-                                    "has_macro": True,
-                                    "macro_template": "{{ generate_password(24) }}"
-                                }
-                            },
-                            "created_at": "2026-01-02T11:00:00Z",
-                            "updated_at": "2026-01-02T11:00:00Z"
+                            "icon_url": "https://cdn.windflow.io/icons/nginx.svg",
+                            "author": "WindFlow Team",
+                            "license": "MIT",
+                            "rating": 4.8,
+                            "tags": ["web", "server"],
+                            "downloads": 150
                         }
                     ]
                 }
@@ -188,8 +175,7 @@ async def list_stacks(
     """
     Liste les stacks Docker Compose de l'organisation.
 
-    Les macros dans les variables par défaut (comme {{ generate_password(24) }})
-    sont rendues pour que le frontend reçoive des valeurs concrètes.
+    Retourne une version allégée des stacks pour le listing.
 
     Args:
         request: Requête HTTP (pour correlation_id)
@@ -199,7 +185,7 @@ async def list_stacks(
         session: Session de base de données
 
     Returns:
-        List[StackResponse]: Liste des stacks avec variables rendues
+        List[StackListResponse]: Liste des stacks (champs restreints)
     """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
@@ -220,10 +206,7 @@ async def list_stacks(
         limit
     )
 
-    # Rendre les macros dans les variables de chaque stack
-    rendered_stacks = [_render_stack_variables(stack) for stack in stacks]
-
-    return rendered_stacks
+    return stacks
 
 
 @router.get(

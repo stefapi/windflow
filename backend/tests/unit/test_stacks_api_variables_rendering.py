@@ -8,11 +8,20 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.api.v1.stacks import _render_stack_variables
-from app.schemas.stack import StackResponse
+from app.schemas.stack import StackResponse, StackListResponse
 
 
 class TestStacksAPIVariablesRendering:
     """Tests pour le rendu des macros dans les variables des stacks."""
+
+    def test_stack_list_response_fields(self):
+        """Vérifie que StackListResponse contient uniquement les champs demandés."""
+        fields = StackListResponse.model_fields.keys()
+        expected_fields = {
+            "id", "version", "category", "name", "description",
+            "icon_url", "author", "license", "rating", "tags", "downloads"
+        }
+        assert set(fields) == expected_fields
 
     def test_render_stack_variables_with_password_macro(self):
         """Test que les macros generate_password sont rendues dans les variables."""
