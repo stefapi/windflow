@@ -257,3 +257,41 @@ export interface ApiError {
   detail: string
   status_code: number
 }
+
+// Dashboard types
+export interface TargetHealthItem {
+  id: string
+  name: string
+  status: string
+  host: string
+  last_check: string | null
+}
+
+export interface ActivityFeedItem {
+  id: string
+  type: string
+  title: string
+  status: string
+  timestamp: string
+  details: string | null
+}
+
+export interface DeploymentMetrics {
+  total: number
+  success: number
+  failed: number
+  running: number
+  success_rate: number
+}
+
+export interface DashboardStats {
+  total_targets: number
+  online_targets: number
+  total_stacks: number
+  active_deployments: number
+  total_workflows: number
+  target_health: Record<string, number>
+  targets_detail: TargetHealthItem[]
+  deployment_metrics: DeploymentMetrics
+  recent_activity: ActivityFeedItem[]
+}

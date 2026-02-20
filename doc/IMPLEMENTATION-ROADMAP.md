@@ -32,11 +32,11 @@ Ce document recense les travaux d'implémentation identifiés pour WindFlow, cla
 **État actuel** : 4 statistiques simples (Total Targets, Total Stacks, Active Deployments, Workflows) + tableau des déploiements récents.
 
 **Travaux à réaliser** :
-- [ ] Graphiques temps réel CPU/RAM (ECharts ou Element Plus charts)
-- [ ] Widget d'activité récente (déploiements, scans, erreurs)
-- [ ] Statut de santé des targets connectées (pastilles vert/orange/rouge)
+- [ ] Graphiques temps réel CPU/RAM (ECharts)
+- [ ] Widget d'activité récente (déploiements, scans, erreurs) ✅ Implémenté (ActivityFeedWidget)
+- [ ] Statut de santé des targets connectées (pastilles vert/orange/rouge) ✅ Implémenté (TargetHealthWidget)
 - [ ] Widget d'alertes et notifications
-- [ ] Métriques de performance des déploiements (taux de succès, durée moyenne)
+- [ ] Métriques de performance des déploiements (taux de succès, durée moyenne) ✅ Implémenté (DeploymentMetricsWidget)
 
 **Ressources existantes** :
 - Stores Pinia : `targets`, `deployments`, `stacks`, `workflows`

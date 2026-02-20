@@ -27,6 +27,7 @@ import type {
   WorkflowCreate,
   Template,
   PaginatedResponse,
+  DashboardStats,
 } from '@/types/api'
 
 // Auth API
@@ -215,6 +216,14 @@ export const templatesApi = {
     http.get<Template[]>('/templates/popular', { params: { limit } }),
 }
 
+// Dashboard API
+export const dashboardApi = {
+  getStats: (organizationId?: string) => {
+    const params = organizationId ? { organization_id: organizationId } : {}
+    return http.get<DashboardStats>('/stats/dashboard', { params })
+  },
+}
+
 export default {
   auth: authApi,
   users: usersApi,
@@ -224,4 +233,5 @@ export default {
   deployments: deploymentsApi,
   workflows: workflowsApi,
   templates: templatesApi,
+  dashboard: dashboardApi,
 }
