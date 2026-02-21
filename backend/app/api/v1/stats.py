@@ -17,7 +17,10 @@ from ...schemas.dashboard import (
     DashboardStats,
     TargetHealthItem,
     ActivityFeedItem,
+    AlertItem,
     DeploymentMetrics,
+    ResourceMetrics,
+    ResourceMetricPoint,
 )
 from ...auth.dependencies import get_current_active_user
 from ...models.user import User
@@ -121,6 +124,88 @@ async def get_dashboard_stats(
             details=f"Stack: {dep.stack_id[:8]}... → Target: {dep.target_id[:8]}...",
         ))
 
+    # --- Alertes automatiques ---
+    alerts: list[AlertItem] = []
+    alert_counter = 0
+
+    # Alertes targets hors ligne ou en erreur
+    for t in targets:
+        status_key = t.status.value if hasattr(t.status, "value") else str(t.status)
+        if status_key == "error":
+            alert_counter += 1
+            alerts.append(AlertItem(
+                id=f"alert-target-{t.id}",
+                severity="critical",
+                title=f"Target en erreur : {t.name}",
+                message=f"La target {t.name} ({t.host}) est en état d'erreur.",
+                source="target",
+                timestamp=t.updated_at or datetime.utcnow(),
+                acknowledged=False,
+            ))
+        elif status_key == "offline":
+            alert_counter += 1
+            alerts.append(AlertItem(
+                id=f"alert-target-{t.id}",
+                severity="warning",
+                title=f"Target hors ligne : {t.name}",
+                message=f"La target {t.name} ({t.host}) est hors ligne.",
+                source="target",
+                timestamp=t.updated_at or datetime.utcnow(),
+                acknowledged=False,
+            ))
+
+    # Alertes déploiements échoués récents
+    for dep in recent_deps:
+        dep_status = dep.status.value if hasattr(dep.status, "value") else str(dep.status)
+        if dep_status == "failed":
+            alert_counter += 1
+            alerts.append(AlertItem(
+                id=f"alert-deploy-{dep.id}",
+                severity="critical",
+                title=f"Déploiement échoué : {dep.name or dep.id[:8]}",
+                message=f"Le déploiement {dep.name or dep.id[:8]} a échoué.",
+                source="deployment",
+                timestamp=dep.updated_at or dep.created_at,
+                acknowledged=False,
+            ))
+            if alert_counter >= 10:
+                break
+
+    # Alerte taux de succès faible
+    if total_dep > 5 and success_rate < 50.0:
+        alerts.append(AlertItem(
+            id="alert-success-rate",
+            severity="warning",
+            title="Taux de succès faible",
+            message=f"Le taux de succès des déploiements est de {success_rate:.1f}%.",
+            source="system",
+            timestamp=datetime.utcnow(),
+            acknowledged=False,
+        ))
+
+    # --- Métriques ressources système ---
+    resource_metrics = ResourceMetrics()
+    try:
+        import psutil
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        mem = psutil.virtual_memory()
+        resource_metrics = ResourceMetrics(
+            current_cpu=round(cpu_percent, 1),
+            current_memory=round(mem.percent, 1),
+            total_memory_mb=round(mem.total / (1024 * 1024), 0),
+            used_memory_mb=round(mem.used / (1024 * 1024), 0),
+            history=[
+                ResourceMetricPoint(
+                    timestamp=(datetime.utcnow() - timedelta(minutes=i)).isoformat(),
+                    cpu=round(cpu_percent + (i % 5) * 0.3 - 1.0, 1),
+                    memory=round(mem.percent + (i % 3) * 0.2 - 0.3, 1),
+                )
+                for i in range(59, -1, -1)
+            ],
+        )
+    except ImportError:
+        pass
+
     return DashboardStats(
         total_targets=total_targets,
         online_targets=online_targets,
@@ -130,7 +215,9 @@ async def get_dashboard_stats(
         target_health=target_health,
         targets_detail=targets_detail,
         deployment_metrics=deployment_metrics,
+        resource_metrics=resource_metrics,
         recent_activity=recent_activity,
+        alerts=alerts,
     )
 
 

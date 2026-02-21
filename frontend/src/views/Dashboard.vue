@@ -34,6 +34,13 @@
       </el-col>
     </el-row>
 
+    <!-- Graphiques temps réel CPU/RAM -->
+    <el-row :gutter="20" style="margin-top: 20px">
+      <el-col :span="24">
+        <ResourceChartsWidget :metrics="dashboardStore.resourceMetrics" />
+      </el-col>
+    </el-row>
+
     <!-- Métriques déploiements -->
     <el-row :gutter="20" style="margin-top: 20px">
       <el-col :span="24">
@@ -41,15 +48,22 @@
       </el-col>
     </el-row>
 
-    <!-- Santé targets + Activité récente -->
+    <!-- Alertes + Santé targets -->
     <el-row :gutter="20" style="margin-top: 20px">
+      <el-col :span="12">
+        <AlertsNotificationsWidget :alerts="dashboardStore.alerts" />
+      </el-col>
       <el-col :span="12">
         <TargetHealthWidget
           :target-health="dashboardStore.targetHealth"
           :targets-detail="dashboardStore.targetsDetail"
         />
       </el-col>
-      <el-col :span="12">
+    </el-row>
+
+    <!-- Activité récente -->
+    <el-row :gutter="20" style="margin-top: 20px">
+      <el-col :span="24">
         <ActivityFeedWidget :activities="dashboardStore.recentActivity" />
       </el-col>
     </el-row>
@@ -77,6 +91,8 @@ import { useAuthStore } from '@/stores/auth'
 import TargetHealthWidget from '@/components/dashboard/TargetHealthWidget.vue'
 import ActivityFeedWidget from '@/components/dashboard/ActivityFeedWidget.vue'
 import DeploymentMetricsWidget from '@/components/dashboard/DeploymentMetricsWidget.vue'
+import AlertsNotificationsWidget from '@/components/dashboard/AlertsNotificationsWidget.vue'
+import ResourceChartsWidget from '@/components/dashboard/ResourceChartsWidget.vue'
 
 const authStore = useAuthStore()
 const dashboardStore = useDashboardStore()

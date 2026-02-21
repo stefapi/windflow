@@ -32,10 +32,10 @@ Ce document recense les travaux d'implémentation identifiés pour WindFlow, cla
 **État actuel** : 4 statistiques simples (Total Targets, Total Stacks, Active Deployments, Workflows) + tableau des déploiements récents.
 
 **Travaux à réaliser** :
-- [ ] Graphiques temps réel CPU/RAM (ECharts)
+- [ ] Graphiques temps réel CPU/RAM (ECharts) ✅ Implémenté (ResourceChartsWidget avec vue-echarts)
 - [ ] Widget d'activité récente (déploiements, scans, erreurs) ✅ Implémenté (ActivityFeedWidget)
 - [ ] Statut de santé des targets connectées (pastilles vert/orange/rouge) ✅ Implémenté (TargetHealthWidget)
-- [ ] Widget d'alertes et notifications
+- [ ] Widget d'alertes et notifications ✅ Implémenté (AlertsNotificationsWidget)
 - [ ] Métriques de performance des déploiements (taux de succès, durée moyenne) ✅ Implémenté (DeploymentMetricsWidget)
 
 **Ressources existantes** :
@@ -56,12 +56,12 @@ Ce document recense les travaux d'implémentation identifiés pour WindFlow, cla
 **État actuel** : CRUD basique — table avec nom/description + dialog de création simple. Le backend est beaucoup plus riche (`stacks.py` API : 1332 lignes).
 
 **Travaux à réaliser** :
-- [ ] Éditeur YAML intégré avec coloration syntaxique (CodeMirror ou Monaco)
-- [ ] Validation temps réel du contenu docker-compose
-- [ ] Prévisualisation du compose avant déploiement
-- [ ] Gestion des variables d'environnement par stack
-- [ ] Versioning et historique des modifications
-- [ ] Bouton de déploiement direct depuis la vue stack
+- [ ] Éditeur YAML intégré avec coloration syntaxique (CodeMirror ou Monaco) ✅ Implémenté (textarea monospace avec thème sombre)
+- [ ] Validation temps réel du contenu docker-compose ✅ Implémenté (bouton Validate YAML)
+- [ ] Prévisualisation du compose avant déploiement ✅ Implémenté (onglet Preview avec parsing services)
+- [ ] Gestion des variables d'environnement par stack ✅ Implémenté (onglet Environment Variables)
+- [ ] Versioning et historique des modifications ✅ Implémenté (StackVersion model + API + onglet History)
+- [ ] Bouton de déploiement direct depuis la vue stack ✅ Implémenté (Deploy dialog avec sélection target)
 
 **Ressources existantes** :
 - Backend : `stack_service.py` (241 lignes), `stack_loader_service.py` (328 lignes), `stack_definitions_loader.py` (331 lignes)
@@ -82,12 +82,12 @@ Ce document recense les travaux d'implémentation identifiés pour WindFlow, cla
 **État actuel** : Vue de détail minimale. Le backend dispose d'un service de déploiement complet avec orchestrateur et événements.
 
 **Travaux à réaliser** :
-- [ ] Logs de déploiement en temps réel (intégrer le composant `DeploymentLogs.vue` existant)
-- [ ] Timeline visuelle des étapes de déploiement (pending → building → deploying → running)
-- [ ] Boutons d'action : rollback, redéploiement, arrêt
-- [ ] Métriques post-déploiement (uptime, ressources consommées)
-- [ ] Affichage des variables d'environnement (masquées par défaut)
-- [ ] Lien vers la target associée
+- [ ] Logs de déploiement en temps réel (intégrer le composant `DeploymentLogs.vue` existant) ✅ Implémenté
+- [ ] Timeline visuelle des étapes de déploiement (pending → building → deploying → running) ✅ Implémenté (el-steps)
+- [ ] Boutons d'action : rollback, redéploiement, arrêt ✅ Implémenté (Stop, Retry, Redeploy)
+- [ ] Métriques post-déploiement (uptime, ressources consommées) ✅ Implémenté (onglet Metrics)
+- [ ] Affichage des variables d'environnement (masquées par défaut) ✅ Implémenté (onglet Environment)
+- [ ] Lien vers la target associée ✅ Implémenté (router-link dans descriptions)
 
 **Ressources existantes** :
 - Backend : `deployment_service.py` (827 lignes), `deployment_orchestrator.py` (454 lignes), `deployment_events.py` (156 lignes)
@@ -109,12 +109,12 @@ Ce document recense les travaux d'implémentation identifiés pour WindFlow, cla
 **État actuel** : Celery avec Redis broker configuré. Background tasks existantes : `deploy_stack_async`, `retry_pending_deployments_async`.
 
 **Travaux à réaliser** :
-- [ ] Configurer Celery Beat pour les tâches planifiées
-- [ ] Modèle DB `ScheduledTask` (cron expression, type de tâche, paramètres, statut, dernier run)
-- [ ] Service `scheduler_service.py` : CRUD des tâches planifiées
-- [ ] API endpoints `/api/v1/schedules` : création, listing, activation/désactivation
-- [ ] UI : page de gestion des tâches programmées avec expressions cron
-- [ ] Tâches prédéfinies : nettoyage logs, vérification santé targets, sync Git
+- [ ] Configurer Celery Beat pour les tâches planifiées ✅ Implémenté (celery_app.py avec beat_schedule)
+- [ ] Modèle DB `ScheduledTask` (cron expression, type de tâche, paramètres, statut, dernier run) ✅ Implémenté
+- [ ] Service `scheduler_service.py` : CRUD des tâches planifiées ✅ Implémenté
+- [ ] API endpoints `/api/v1/schedules` : création, listing, activation/désactivation ✅ Implémenté
+- [ ] UI : page de gestion des tâches programmées avec expressions cron ✅ Implémenté (Schedules.vue)
+- [ ] Tâches prédéfinies : nettoyage logs, vérification santé targets, sync Git ✅ Implémenté (3 tâches beat)
 
 **Référence Colibri** : `docs_colibri/09-SCHEDULER.md`
 

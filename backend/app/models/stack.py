@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from .organization import Organization
     from .deployment import Deployment
     from .stack_review import StackReview
+    from .stack_version import StackVersion
 
 
 class Stack(Base):
@@ -119,6 +120,13 @@ class Stack(Base):
         "StackReview",
         back_populates="stack",
         cascade="all, delete-orphan"
+    )
+
+    versions: Mapped[List["StackVersion"]] = relationship(
+        "StackVersion",
+        back_populates="stack",
+        cascade="all, delete-orphan",
+        order_by="StackVersion.version_number.desc()",
     )
 
     def __repr__(self) -> str:

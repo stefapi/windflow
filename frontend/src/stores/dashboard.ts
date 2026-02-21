@@ -17,7 +17,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const targetHealth = computed(() => stats.value?.target_health ?? {})
   const targetsDetail = computed(() => stats.value?.targets_detail ?? [])
   const deploymentMetrics = computed(() => stats.value?.deployment_metrics ?? null)
+  const resourceMetrics = computed(() => stats.value?.resource_metrics ?? null)
   const recentActivity = computed(() => stats.value?.recent_activity ?? [])
+  const alerts = computed(() => stats.value?.alerts ?? [])
   const totalTargets = computed(() => stats.value?.total_targets ?? 0)
   const onlineTargets = computed(() => stats.value?.online_targets ?? 0)
   const totalStacks = computed(() => stats.value?.total_stacks ?? 0)
@@ -46,12 +48,14 @@ export const useDashboardStore = defineStore('dashboard', () => {
     targetHealth,
     targetsDetail,
     deploymentMetrics,
+    resourceMetrics,
     recentActivity,
     totalTargets,
     onlineTargets,
     totalStacks,
     activeDeployments,
     totalWorkflows,
+    alerts,
     fetchDashboardStats,
   }
 })

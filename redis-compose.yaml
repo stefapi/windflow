@@ -1,0 +1,54 @@
+services:
+  valkey:
+    image: valkey/valkey:9-alpine
+    container_name: valkey
+    restart: unless-stopped
+    command: ["valkey-server", "--appendonly", "yes", "--requirepass", "${VALKEY_PASSWORD}"]
+    volumes:
+      - valkey_data:/data
+    # Décommente si tu dois accéder depuis l'hôte
+    # ports:
+    #   - "6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$${VALKEY_PASSWORD}\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  redis_commander:
+    image: ghcr.io/joeferner/redis-commander:latest
+    container_name: redis-commander
+    restart: unless-stopped
+    depends_on:
+      valkey:
+        condition: service_healthy
+    environment:
+      # Pour une instance protégée par mot de passe, privilégie REDIS_HOST/REDIS_PASSWORD
+      - REDIS_HOST=valkey
+      - REDIS_PORT=6379
+      #- REDIS_PASSWORD=${VALKEY_PASSWORD}
+
+      # Auth HTTP de l’UI
+      - HTTP_USER=${RC_HTTP_USER}
+      - HTTP_PASSWORD=${RC_HTTP_PASSWORD}
+    ports:
+      - "127.0.0.1:8082:8081"
+    user: redis
+
+  redis_exporter:
+    image: oliver006/redis_exporter:alpine
+    container_name: redis-exporter
+    restart: unless-stopped
+    depends_on:
+      valkey:
+        condition: service_healthy
+    command:
+      [
+        "--redis.addr=redis://valkey:6379",
+        "--redis.password=${VALKEY_PASSWORD}"
+      ]
+    ports:
+      - "127.0.0.1:9121:9121"
+
+volumes:
+  valkey_data:
+

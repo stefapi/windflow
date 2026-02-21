@@ -6,10 +6,13 @@ from typing import List
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 
 from ...database import get_db
 from ...schemas.stack import StackResponse, StackCreate, StackUpdate, StackListResponse
+from ...schemas.stack_version import StackVersionResponse, StackVersionCreate
 from ...services.stack_service import StackService
+from ...models.stack_version import StackVersion
 from ...auth.dependencies import get_current_active_user
 from ...models.user import User
 from ...helper.template_renderer import TemplateRenderer
@@ -1015,6 +1018,24 @@ async def update_stack(
                 detail=f"Stack avec le nom '{stack_data.name}' existe déjà"
             )
 
+    # Créer une version automatique si le compose_content change
+    if stack_data.compose_content and stack_data.compose_content != existing_stack.compose_content:
+        max_version_stmt = select(func.coalesce(func.max(StackVersion.version_number), 0)).where(
+            StackVersion.stack_id == stack_id
+        )
+        max_version = (await session.execute(max_version_stmt)).scalar() or 0
+
+        # Sauvegarder l'état actuel avant modification
+        version = StackVersion(
+            stack_id=stack_id,
+            version_number=max_version + 1,
+            compose_content=existing_stack.compose_content,
+            variables=existing_stack.variables or {},
+            change_summary=f"Auto-saved before update",
+            created_by=str(current_user.id),
+        )
+        session.add(version)
+
     stack = await StackService.update(session, stack_id, stack_data)
     return stack
 
@@ -1390,3 +1411,150 @@ async def regenerate_variable(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la régénération de la macro: {str(e)}"
         )
+
+
+# ─── Stack Versioning ────────────────────────────────────────────────
+
+
+@router.get(
+    "/{stack_id}/versions",
+    response_model=List[StackVersionResponse],
+    summary="List stack versions",
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(30, 60))],
+)
+async def list_stack_versions(
+    stack_id: str,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+) -> List[StackVersionResponse]:
+    """Liste l'historique des versions d'un stack."""
+    stack = await StackService.get_by_id(session, stack_id)
+    if not stack:
+        raise HTTPException(status_code=404, detail=f"Stack {stack_id} non trouvé")
+    if stack.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Accès refusé")
+
+    stmt = (
+        select(StackVersion)
+        .where(StackVersion.stack_id == stack_id)
+        .order_by(StackVersion.version_number.desc())
+    )
+    result = await session.execute(stmt)
+    versions = result.scalars().all()
+
+    return [
+        StackVersionResponse(
+            id=v.id,
+            stack_id=v.stack_id,
+            version_number=v.version_number,
+            compose_content=v.compose_content,
+            variables=v.variables or {},
+            change_summary=v.change_summary,
+            created_by=v.created_by,
+            author_name=v.author.username if v.author else None,
+            created_at=v.created_at,
+        )
+        for v in versions
+    ]
+
+
+@router.post(
+    "/{stack_id}/versions",
+    response_model=StackVersionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a manual version snapshot",
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
+)
+async def create_stack_version(
+    stack_id: str,
+    version_data: StackVersionCreate,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+) -> StackVersionResponse:
+    """Crée un snapshot manuel de la version actuelle du stack."""
+    stack = await StackService.get_by_id(session, stack_id)
+    if not stack:
+        raise HTTPException(status_code=404, detail=f"Stack {stack_id} non trouvé")
+    if stack.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Accès refusé")
+
+    max_stmt = select(func.coalesce(func.max(StackVersion.version_number), 0)).where(
+        StackVersion.stack_id == stack_id
+    )
+    max_version = (await session.execute(max_stmt)).scalar() or 0
+
+    version = StackVersion(
+        stack_id=stack_id,
+        version_number=max_version + 1,
+        compose_content=stack.compose_content if hasattr(stack, 'compose_content') else str(stack.template),
+        variables=stack.variables or {},
+        change_summary=version_data.change_summary or "Manual snapshot",
+        created_by=str(current_user.id),
+    )
+    session.add(version)
+    await session.commit()
+    await session.refresh(version)
+
+    return StackVersionResponse(
+        id=version.id,
+        stack_id=version.stack_id,
+        version_number=version.version_number,
+        compose_content=version.compose_content,
+        variables=version.variables or {},
+        change_summary=version.change_summary,
+        created_by=version.created_by,
+        author_name=current_user.username if hasattr(current_user, 'username') else None,
+        created_at=version.created_at,
+    )
+
+
+@router.post(
+    "/{stack_id}/versions/{version_id}/restore",
+    response_model=StackResponse,
+    summary="Restore a stack to a previous version",
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
+)
+async def restore_stack_version(
+    stack_id: str,
+    version_id: str,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Restaure un stack à une version précédente."""
+    stack = await StackService.get_by_id(session, stack_id)
+    if not stack:
+        raise HTTPException(status_code=404, detail=f"Stack {stack_id} non trouvé")
+    if stack.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Accès refusé")
+
+    version_stmt = select(StackVersion).where(
+        StackVersion.id == version_id,
+        StackVersion.stack_id == stack_id,
+    )
+    version = (await session.execute(version_stmt)).scalar_one_or_none()
+    if not version:
+        raise HTTPException(status_code=404, detail=f"Version {version_id} non trouvée")
+
+    # Sauvegarder l'état actuel avant restauration
+    max_stmt = select(func.coalesce(func.max(StackVersion.version_number), 0)).where(
+        StackVersion.stack_id == stack_id
+    )
+    max_version = (await session.execute(max_stmt)).scalar() or 0
+
+    current_snapshot = StackVersion(
+        stack_id=stack_id,
+        version_number=max_version + 1,
+        compose_content=stack.compose_content if hasattr(stack, 'compose_content') else str(stack.template),
+        variables=stack.variables or {},
+        change_summary=f"Auto-saved before restore to v{version.version_number}",
+        created_by=str(current_user.id),
+    )
+    session.add(current_snapshot)
+
+    # Restaurer
+    update_data = StackUpdate(compose_content=version.compose_content)
+    updated_stack = await StackService.update(session, stack_id, update_data)
+    return updated_stack

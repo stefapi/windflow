@@ -61,6 +61,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/WorkflowEditor.vue'),
       },
       {
+        path: 'schedules',
+        name: 'Schedules',
+        component: () => import('@/views/Schedules.vue'),
+      },
+      {
         path: 'marketplace',
         name: 'Marketplace',
         component: () => import('@/views/Marketplace.vue'),

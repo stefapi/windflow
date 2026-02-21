@@ -151,6 +151,7 @@ export interface StackUpdate {
 export type DeploymentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 export interface Deployment extends BaseModel {
+  name: string | null
   stack_id: string
   target_id: string
   status: DeploymentStatus
@@ -253,12 +254,59 @@ export interface PaginatedResponse<T> {
   pages: number
 }
 
+// Scheduled Task types
+export type TaskType = 'cleanup_logs' | 'health_check' | 'git_sync' | 'retry_deployments' | 'custom'
+
+export interface ScheduledTask extends BaseModel {
+  name: string
+  description: string | null
+  task_type: TaskType
+  cron_expression: string
+  parameters: Record<string, unknown>
+  enabled: boolean
+  last_run: string | null
+  last_status: string | null
+  last_error: string | null
+  run_count: number
+  organization_id: string
+}
+
+export interface ScheduledTaskCreate {
+  name: string
+  description?: string
+  task_type: TaskType
+  cron_expression: string
+  parameters?: Record<string, unknown>
+  enabled?: boolean
+  organization_id: string
+}
+
+export interface ScheduledTaskUpdate {
+  name?: string
+  description?: string
+  cron_expression?: string
+  parameters?: Record<string, unknown>
+  enabled?: boolean
+}
+
 export interface ApiError {
   detail: string
   status_code: number
 }
 
 // Dashboard types
+export type AlertSeverity = 'critical' | 'warning' | 'info'
+
+export interface AlertItem {
+  id: string
+  severity: AlertSeverity
+  title: string
+  message: string
+  source: string
+  timestamp: string
+  acknowledged: boolean
+}
+
 export interface TargetHealthItem {
   id: string
   name: string
@@ -284,6 +332,20 @@ export interface DeploymentMetrics {
   success_rate: number
 }
 
+export interface ResourceMetricPoint {
+  timestamp: string
+  cpu: number
+  memory: number
+}
+
+export interface ResourceMetrics {
+  current_cpu: number
+  current_memory: number
+  total_memory_mb: number
+  used_memory_mb: number
+  history: ResourceMetricPoint[]
+}
+
 export interface DashboardStats {
   total_targets: number
   online_targets: number
@@ -293,5 +355,19 @@ export interface DashboardStats {
   target_health: Record<string, number>
   targets_detail: TargetHealthItem[]
   deployment_metrics: DeploymentMetrics
+  resource_metrics: ResourceMetrics
   recent_activity: ActivityFeedItem[]
+  alerts: AlertItem[]
+}
+
+export interface StackVersion {
+  id: string
+  stack_id: string
+  version_number: number
+  compose_content: string
+  variables: Record<string, unknown>
+  change_summary: string | null
+  created_by: string | null
+  author_name: string | null
+  created_at: string
 }

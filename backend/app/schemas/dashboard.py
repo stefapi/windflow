@@ -5,7 +5,7 @@ Fournit les structures de données pour l'endpoint consolidé du dashboard.
 """
 
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Literal
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -19,6 +19,18 @@ class TargetHealthItem(BaseModel):
     last_check: Optional[datetime] = Field(None, description="Dernière vérification")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AlertItem(BaseModel):
+    """Alerte ou notification du dashboard."""
+
+    id: str = Field(..., description="ID de l'alerte")
+    severity: Literal["critical", "warning", "info"] = Field(..., description="Sévérité")
+    title: str = Field(..., description="Titre de l'alerte")
+    message: str = Field(..., description="Message détaillé")
+    source: str = Field(..., description="Source de l'alerte (target, deployment, system)")
+    timestamp: datetime = Field(..., description="Date de l'alerte")
+    acknowledged: bool = Field(False, description="Alerte acquittée")
 
 
 class ActivityFeedItem(BaseModel):
@@ -40,6 +52,27 @@ class DeploymentMetrics(BaseModel):
     failed: int = Field(0, description="Déploiements échoués")
     running: int = Field(0, description="Déploiements en cours")
     success_rate: float = Field(0.0, description="Taux de succès en pourcentage")
+
+
+class ResourceMetricPoint(BaseModel):
+    """Point de données pour les métriques de ressources."""
+
+    timestamp: str = Field(..., description="Horodatage ISO")
+    cpu: float = Field(0.0, description="Utilisation CPU en pourcentage")
+    memory: float = Field(0.0, description="Utilisation mémoire en pourcentage")
+
+
+class ResourceMetrics(BaseModel):
+    """Métriques de ressources système (CPU/RAM)."""
+
+    current_cpu: float = Field(0.0, description="CPU actuel en pourcentage")
+    current_memory: float = Field(0.0, description="Mémoire actuelle en pourcentage")
+    total_memory_mb: float = Field(0.0, description="Mémoire totale en Mo")
+    used_memory_mb: float = Field(0.0, description="Mémoire utilisée en Mo")
+    history: List[ResourceMetricPoint] = Field(
+        default_factory=list,
+        description="Historique des métriques (dernières 60 minutes)"
+    )
 
 
 class DashboardStats(BaseModel):
@@ -68,8 +101,20 @@ class DashboardStats(BaseModel):
         description="Métriques de performance des déploiements"
     )
 
+    # Métriques ressources système
+    resource_metrics: ResourceMetrics = Field(
+        default_factory=ResourceMetrics,
+        description="Métriques CPU/RAM du système"
+    )
+
     # Activité récente
     recent_activity: List[ActivityFeedItem] = Field(
         default_factory=list,
         description="Flux d'activité récente"
+    )
+
+    # Alertes et notifications
+    alerts: List[AlertItem] = Field(
+        default_factory=list,
+        description="Alertes et notifications actives"
     )

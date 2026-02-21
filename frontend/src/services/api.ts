@@ -20,6 +20,7 @@ import type {
   Stack,
   StackCreate,
   StackUpdate,
+  StackVersion,
   Deployment,
   DeploymentCreate,
   DeploymentLogsResponse,
@@ -28,6 +29,9 @@ import type {
   Template,
   PaginatedResponse,
   DashboardStats,
+  ScheduledTask,
+  ScheduledTaskCreate,
+  ScheduledTaskUpdate,
 } from '@/types/api'
 
 // Auth API
@@ -142,6 +146,15 @@ export const stacksApi = {
     http.post<{ variable_name: string; new_value: unknown; macro_template: string }>(
       `/stacks/${stackId}/regenerate-variable/${variableName}`
     ),
+
+  listVersions: (stackId: string) =>
+    http.get<StackVersion[]>(`/stacks/${stackId}/versions`),
+
+  createVersion: (stackId: string, data: { change_summary?: string }) =>
+    http.post<StackVersion>(`/stacks/${stackId}/versions`, data),
+
+  restoreVersion: (stackId: string, versionId: string) =>
+    http.post<Stack>(`/stacks/${stackId}/versions/${versionId}/restore`),
 }
 
 // Deployments API
@@ -217,6 +230,18 @@ export const templatesApi = {
 }
 
 // Dashboard API
+export const schedulesApi = {
+  list: (organizationId?: string) => {
+    const params = organizationId ? { organization_id: organizationId } : {}
+    return http.get<ScheduledTask[]>('/schedules', { params })
+  },
+  get: (id: string) => http.get<ScheduledTask>(`/schedules/${id}`),
+  create: (data: ScheduledTaskCreate) => http.post<ScheduledTask>('/schedules', data),
+  update: (id: string, data: ScheduledTaskUpdate) => http.put<ScheduledTask>(`/schedules/${id}`, data),
+  delete: (id: string) => http.delete(`/schedules/${id}`),
+  toggle: (id: string) => http.post<ScheduledTask>(`/schedules/${id}/toggle`),
+}
+
 export const dashboardApi = {
   getStats: (organizationId?: string) => {
     const params = organizationId ? { organization_id: organizationId } : {}
@@ -234,4 +259,5 @@ export default {
   workflows: workflowsApi,
   templates: templatesApi,
   dashboard: dashboardApi,
+  schedules: schedulesApi,
 }
