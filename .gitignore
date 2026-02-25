@@ -5,7 +5,6 @@
 *$py.class
 
 # frontend/.env.development
-docs_colibri/site/
 *temp/*
 .secret
 frontend/dist/
@@ -194,3 +193,6 @@ messages.mo
 /frontend/stats.html
 /.continue/
 .env
+
+# Projet exemple à ignorer
+/colibri/

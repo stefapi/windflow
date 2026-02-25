@@ -1,0 +1,9 @@
+# Bun configuration for Dockhand
+
+[install]
+# Use exact versions for reproducible builds
+exact = true
+
+[run]
+# Enable source maps for better error messages
+sourcemap = "external"
