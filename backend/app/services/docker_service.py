@@ -3,14 +3,16 @@ Service pour gestion des déploiements Docker containers simples.
 
 Gère les containers Docker uniques (pas docker-compose) avec substitution
 de variables, génération de mots de passe, et gestion complète du cycle de vie.
+
+ utilise DockerExecutor pour l'exécution (CLI avec fallback socket).
 """
 
 import re
-import subprocess
 import logging
 from typing import Dict, Any, Optional, Tuple, List
 
 from backend.app.helper.template_renderer import TemplateRenderer
+from backend.app.services.docker_executor import DockerExecutor, get_docker_executor
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +20,26 @@ logger = logging.getLogger(__name__)
 class DockerService:
     """Service de gestion des containers Docker simples."""
 
-    def __init__(self):
-        """Initialise le service avec le renderer de templates."""
+    def __init__(self, executor: Optional[DockerExecutor] = None):
+        """Initialise le service avec le renderer de templates et l'exécuteur Docker.
+
+        Args:
+            executor: Instance de DockerExecutor (optionnel, sera créé si non fourni)
+        """
         self.renderer = TemplateRenderer()
+        self._executor = executor
+
+    @property
+    def executor(self) -> DockerExecutor:
+        """Récupère l'exécuteur Docker (lazy initialization)."""
+        if self._executor is None:
+            self._executor = DockerExecutor()
+        return self._executor
+
+    @executor.setter
+    def executor(self, value: DockerExecutor) -> None:
+        """Définit l'exécuteur Docker."""
+        self._executor = value
 
     def substitute_variables(
         self,
@@ -203,6 +222,8 @@ class DockerService:
         """
         Déploie un container Docker.
 
+        Utilise DockerExecutor qui essaie CLI en premier, puis socket en fallback.
+
         Args:
             config: Configuration du container
             container_name: Nom du container (override)
@@ -211,32 +232,7 @@ class DockerService:
             Tuple[bool, str]: (Succès, Container ID ou Message d'erreur)
         """
         try:
-            # Construire la commande
-            cmd = self.build_docker_run_command(config, container_name)
-
-            # Exécuter la commande
-            logger.info(f"Exécution: {' '.join(cmd)}")
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minutes max
-            )
-
-            if result.returncode == 0:
-                container_id = result.stdout.strip()
-                logger.info(f"Container déployé avec succès: {container_id}")
-                return True, container_id
-            else:
-                error_msg = result.stderr.strip()
-                logger.error(f"Échec du déploiement: {error_msg}")
-                return False, error_msg
-
-        except subprocess.TimeoutExpired:
-            error_msg = "Timeout lors du déploiement (> 5 minutes)"
-            logger.error(error_msg)
-            return False, error_msg
-
+            return await self.executor.deploy_container(config, container_name)
         except Exception as e:
             error_msg = f"Erreur lors du déploiement: {str(e)}"
             logger.error(error_msg)
@@ -256,36 +252,7 @@ class DockerService:
             Tuple[bool, Dict]: (Succès, Informations du container)
         """
         try:
-            # Utiliser docker inspect pour récupérer les infos
-            cmd = ['docker', 'inspect', container_name]
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-
-            if result.returncode == 0:
-                import json
-                container_info = json.loads(result.stdout)[0]
-
-                # Extraire les informations pertinentes
-                status_info = {
-                    "id": container_info['Id'],
-                    "name": container_info['Name'].lstrip('/'),
-                    "image": container_info['Config']['Image'],
-                    "state": container_info['State']['Status'],
-                    "running": container_info['State']['Running'],
-                    "started_at": container_info['State']['StartedAt'],
-                    "health": container_info['State'].get('Health', {}).get('Status', 'none'),
-                    "restart_count": container_info['RestartCount']
-                }
-
-                return True, status_info
-            else:
-                return False, {'error': result.stderr.strip()}
-
+            return await self.executor.get_container_status(container_name)
         except Exception as e:
             logger.error(f"Erreur récupération statut: {e}")
             return False, {'error': str(e)}
@@ -306,23 +273,7 @@ class DockerService:
             Tuple[bool, str]: (Succès, Message)
         """
         try:
-            cmd = ['docker', 'stop', '-t', str(timeout), container_name]
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout + 5
-            )
-
-            if result.returncode == 0:
-                logger.info(f"Container arrêté: {container_name}")
-                return True, f"Container {container_name} arrêté"
-            else:
-                error_msg = result.stderr.strip()
-                logger.error(f"Échec arrêt: {error_msg}")
-                return False, error_msg
-
+            return await self.executor.stop_container(container_name, timeout)
         except Exception as e:
             error_msg = f"Erreur lors de l'arrêt: {str(e)}"
             logger.error(error_msg)
@@ -346,28 +297,7 @@ class DockerService:
             Tuple[bool, str]: (Succès, Message)
         """
         try:
-            cmd = ['docker', 'rm']
-            if force:
-                cmd.append('-f')
-            if remove_volumes:
-                cmd.append('-v')  # Supprime les volumes anonymes associés
-            cmd.append(container_name)
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-
-            if result.returncode == 0:
-                logger.info(f"Container supprimé: {container_name}")
-                return True, f"Container {container_name} supprimé"
-            else:
-                error_msg = result.stderr.strip()
-                logger.error(f"Échec suppression: {error_msg}")
-                return False, error_msg
-
+            return await self.executor.remove_container(container_name, force, remove_volumes)
         except Exception as e:
             error_msg = f"Erreur lors de la suppression: {str(e)}"
             logger.error(error_msg)
@@ -391,27 +321,7 @@ class DockerService:
             Tuple[bool, str]: (Succès, Logs)
         """
         try:
-            cmd = ['docker', 'logs', '--tail', str(tail)]
-
-            if since:
-                cmd.extend(['--since', since])
-
-            cmd.append(container_name)
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-
-            if result.returncode == 0:
-                # docker logs peut mettre les logs sur stderr aussi
-                logs = result.stdout + result.stderr
-                return True, logs
-            else:
-                return False, result.stderr.strip()
-
+            return await self.executor.get_container_logs(container_name, tail, since)
         except Exception as e:
             logger.error(f"Erreur récupération logs: {e}")
             return False, str(e)
@@ -432,23 +342,7 @@ class DockerService:
             Tuple[bool, str]: (Succès, Message)
         """
         try:
-            cmd = ['docker', 'restart', '-t', str(timeout), container_name]
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout + 5
-            )
-
-            if result.returncode == 0:
-                logger.info(f"Container redémarré: {container_name}")
-                return True, f"Container {container_name} redémarré"
-            else:
-                error_msg = result.stderr.strip()
-                logger.error(f"Échec redémarrage: {error_msg}")
-                return False, error_msg
-
+            return await self.executor.restart_container(container_name, timeout)
         except Exception as e:
             error_msg = f"Erreur lors du redémarrage: {str(e)}"
             logger.error(error_msg)
@@ -470,30 +364,7 @@ class DockerService:
             Tuple[bool, str]: (Succès, Message)
         """
         try:
-            cmd = ['docker', 'volume', 'rm']
-            if force:
-                cmd.append('-f')
-            cmd.append(volume_name)
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-
-            if result.returncode == 0:
-                logger.info(f"Volume supprimé: {volume_name}")
-                return True, f"Volume {volume_name} supprimé"
-            else:
-                error_msg = result.stderr.strip()
-                # Si le volume n'existe pas, considérer comme succès
-                if "no such volume" in error_msg.lower() or "not found" in error_msg.lower():
-                    logger.warning(f"Volume {volume_name} n'existe pas, considéré comme supprimé")
-                    return True, f"Volume {volume_name} n'existe pas (déjà supprimé)"
-                logger.error(f"Échec suppression volume: {error_msg}")
-                return False, error_msg
-
+            return await self.executor.remove_volume(volume_name, force)
         except Exception as e:
             error_msg = f"Erreur lors de la suppression du volume: {str(e)}"
             logger.error(error_msg)

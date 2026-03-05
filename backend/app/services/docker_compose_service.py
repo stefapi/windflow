@@ -2,16 +2,17 @@
 Service pour gestion des templates Docker Compose.
 
 Substitution de variables, génération de fichiers compose et déploiement.
+Utilise ComposeExecutor pour l'exécution (async).
 """
 
 import re
 import yaml
 from typing import Dict, Any, Optional
 from pathlib import Path
-import subprocess
 import logging
 
 from backend.app.helper.template_renderer import TemplateRenderer
+from backend.app.services.docker_executor import ComposeExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +20,26 @@ logger = logging.getLogger(__name__)
 class DockerComposeService:
     """Service de gestion Docker Compose."""
 
-    def __init__(self):
-        """Initialise le service avec le renderer de templates."""
+    def __init__(self, executor: Optional[ComposeExecutor] = None):
+        """Initialise le service avec le renderer de templates et l'exécuteur.
+
+        Args:
+            executor: Instance de ComposeExecutor (optionnel, sera créé si non fourni)
+        """
         self.renderer = TemplateRenderer()
+        self._executor = executor
+
+    @property
+    def executor(self) -> ComposeExecutor:
+        """Récupère l'exécuteur Compose (lazy initialization)."""
+        if self._executor is None:
+            self._executor = ComposeExecutor()
+        return self._executor
+
+    @executor.setter
+    def executor(self, value: ComposeExecutor) -> None:
+        """Définit l'exécuteur Compose."""
+        self._executor = value
 
     def substitute_variables(
         self,
@@ -117,6 +135,8 @@ class DockerComposeService:
         """
         Déploie un fichier docker-compose.
 
+        Utilise ComposeExecutor pour l'exécution async.
+
         Args:
             compose_file: Chemin vers le fichier docker-compose.yml
             project_name: Nom du projet Docker Compose
@@ -126,42 +146,7 @@ class DockerComposeService:
             Tuple[bool, str]: (Succès, Output/Error)
         """
         try:
-            # Construire la commande (Docker Compose V2)
-            cmd = [
-                'docker', 'compose',
-                '-f', str(compose_file),
-                '-p', project_name,
-                'up', '-d'
-            ]
-
-            # Préparer l'environnement
-            import os
-            env = os.environ.copy()
-            if env_vars:
-                env.update(env_vars)
-
-            # Exécuter la commande
-            logger.info(f"Exécution: {' '.join(cmd)}")
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                env=env,
-                timeout=300  # 5 minutes max
-            )
-
-            if result.returncode == 0:
-                logger.info(f"Déploiement réussi: {project_name}")
-                return True, result.stdout
-            else:
-                logger.error(f"Échec du déploiement: {result.stderr}")
-                return False, result.stderr
-
-        except subprocess.TimeoutExpired:
-            error_msg = "Timeout lors du déploiement (> 5 minutes)"
-            logger.error(error_msg)
-            return False, error_msg
-
+            return await self.executor.deploy_compose(compose_file, project_name, env_vars)
         except Exception as e:
             error_msg = f"Erreur lors du déploiement: {str(e)}"
             logger.error(error_msg)
@@ -181,27 +166,7 @@ class DockerComposeService:
             Tuple[bool, Dict]: (Succès, Statut des services)
         """
         try:
-            cmd = ['docker', 'compose', '-p', project_name, 'ps', '--format', 'json']
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-
-            if result.returncode == 0:
-                # Parser le JSON output
-                import json
-                services = []
-                for line in result.stdout.strip().split('\n'):
-                    if line:
-                        services.append(json.loads(line))
-
-                return True, {'services': services}
-            else:
-                return False, {'error': result.stderr}
-
+            return await self.executor.get_compose_status(project_name)
         except Exception as e:
             logger.error(f"Erreur récupération statut: {e}")
             return False, {'error': str(e)}
@@ -220,22 +185,7 @@ class DockerComposeService:
             Tuple[bool, str]: (Succès, Output/Error)
         """
         try:
-            cmd = ['docker', 'compose', '-p', project_name, 'down']
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-
-            if result.returncode == 0:
-                logger.info(f"Projet arrêté: {project_name}")
-                return True, result.stdout
-            else:
-                logger.error(f"Échec arrêt: {result.stderr}")
-                return False, result.stderr
-
+            return await self.executor.stop_compose(project_name)
         except Exception as e:
             error_msg = f"Erreur lors de l'arrêt: {str(e)}"
             logger.error(error_msg)
@@ -257,27 +207,7 @@ class DockerComposeService:
             Tuple[bool, str]: (Succès, Output/Error)
         """
         try:
-            cmd = ['docker', 'compose', '-p', project_name, 'down']
-
-            if remove_volumes:
-                cmd.append('-v')  # Supprime aussi les volumes
-
-            cmd.append('--remove-orphans')  # Supprime les conteneurs orphelins
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=120
-            )
-
-            if result.returncode == 0:
-                logger.info(f"Projet supprimé complètement: {project_name}")
-                return True, result.stdout
-            else:
-                logger.error(f"Échec suppression: {result.stderr}")
-                return False, result.stderr
-
+            return await self.executor.remove_compose(project_name, remove_volumes)
         except Exception as e:
             error_msg = f"Erreur lors de la suppression: {str(e)}"
             logger.error(error_msg)
@@ -301,23 +231,7 @@ class DockerComposeService:
             Tuple[bool, str]: (Succès, Logs)
         """
         try:
-            cmd = ['docker', 'compose', '-p', project_name, 'logs', '--tail', str(tail)]
-
-            if service:
-                cmd.append(service)
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-
-            if result.returncode == 0:
-                return True, result.stdout
-            else:
-                return False, result.stderr
-
+            return await self.executor.get_compose_logs(project_name, service, tail)
         except Exception as e:
             logger.error(f"Erreur récupération logs: {e}")
             return False, str(e)

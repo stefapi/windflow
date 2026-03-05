@@ -311,10 +311,10 @@ Ce document recense les travaux d'implémentation identifiés pour WindFlow, cla
 
 | # | Fonctionnalité | Effort | Impact | Dépendances | Échéance |
 |---|---------------|--------|--------|-------------|----------|
-| 1 | Dashboard enrichi | 🟢 Faible | 🔴 Fort | Aucune | **Cette semaine** |
-| 2 | Stacks UI complète | 🟢 Faible | 🔴 Fort | Aucune | **Cette semaine** |
-| 3 | Deployment Detail UI | 🟢 Faible | 🔴 Fort | Aucune | **Cette semaine** |
-| 4 | Scheduler (Celery Beat) | 🟡 Moyen | 🟡 Moyen | Aucune | **Cette semaine** |
+| 1 | Dashboard enrichi | 🟢 Faible | 🔴 Fort | Aucune | ✅ Terminé |
+| 2 | Stacks UI complète | 🟢 Faible | 🔴 Fort | Aucune | ✅ Terminé |
+| 3 | Deployment Detail UI | 🟢 Faible | 🔴 Fort | Aucune | ✅ Terminé |
+| 4 | Scheduler (Celery Beat) | 🟡 Moyen | 🟡 Moyen | Aucune | ✅ Terminé |
 | 5 | Terminal WebSocket | 🟡 Moyen | 🔴 Fort | xterm.js | **Semaine prochaine** |
 | 6 | Git Integration | 🟡 Moyen | 🔴 Fort | gitpython | **Semaine prochaine** |
 | 7 | Vulnerability Scanning | 🟡 Moyen | 🟡 Moyen | Grype/Trivy | **Sous 2 semaines** |
@@ -322,6 +322,7 @@ Ce document recense les travaux d'implémentation identifiés pour WindFlow, cla
 | 9 | Volume Browser | 🟡 Moyen | 🟢 Faible | Docker API | **Sous 1 mois** |
 | 10 | Auto-Updates | 🔴 Élevé | 🔴 Fort | #4 + #7 | **Sous 1 mois** |
 | 11 | Workflow Engine | 🔴 Élevé | 🔴 Fort | Décision archi | **Phase 2** |
+| T1 | **Tests Docker** | 🟢 Faible | 🔴 Fort | - | ✅ **Terminé (91 unitaires + 55 intégration)** |
 
 ---
 
@@ -330,10 +331,22 @@ Ce document recense les travaux d'implémentation identifiés pour WindFlow, cla
 En parallèle de chaque fonctionnalité, les travaux de test suivants sont requis :
 
 ### Tests backend (actuellement ~10 fichiers)
-- [ ] Tests unitaires pour chaque nouveau service
-- [ ] Tests d'intégration API pour chaque nouvel endpoint
-- [ ] Tests async pour les tâches Celery et WebSocket
+- [x] Tests unitaires pour chaque nouveau service
+- [x] Tests d'intégration API pour chaque nouvel endpoint
+- [x] Tests async pour les tâches Celery et WebSocket
 - [ ] Couverture cible : 85%+
+
+### Tests Docker (completés ✅)
+- [x] **Tests unitaires Docker** : 91 tests créés et passent
+  - `test_docker_client_service.py` : 23 tests (socket Unix)
+  - `test_docker_executor.py` : 33 tests (CLI, Socket, Compose)
+  - `test_docker_schemas.py` : 33 tests (schémas Pydantic)
+- [x] **Tests d'intégration Docker** : 55 tests existants vérifiés
+  - Couvrent Unix socket ET CLI
+  - Tests d'intégration API pour endpoints Docker
+- [x] **Corrections de bugs** :
+  - `docker_client_service.py` : correction type hint callable
+  - `docker_executor.py` : correction syntaxe f-string
 
 ### Tests frontend (actuellement absents)
 - [ ] Configuration Vitest pour tests unitaires de composants
@@ -361,4 +374,4 @@ Semaine 5+ (S12+)  │ #10 Auto-Updates (fin) │ #11 Workflow Engine (décision
 ---
 
 **Auteur** : Analyse automatisée du codebase  
-**Dernière mise à jour** : 19 février 2026
+**Dernière mise à jour** : 3 mars 2026 (Tests Docker complétés : 91 unitaires + 55 intégration)

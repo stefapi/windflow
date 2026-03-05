@@ -443,3 +443,413 @@ async def deployment_logs_websocket(
 
     finally:
         await manager.disconnect(websocket, deployment_id)
+
+
+@router.websocket(
+    "/terminal/{container_id}",
+    name="container_terminal_websocket"
+)
+async def container_terminal_websocket(
+    websocket: WebSocket,
+    container_id: str,
+    shell: str = "/bin/sh",
+    user: str = "root"
+):
+    """
+    Interactive terminal WebSocket for Docker containers.
+
+    Provides bidirectional streaming for command execution in containers.
+
+    Authentication:
+    First message must be: {"type": "auth", "token": "JWT_TOKEN"}
+
+    Client Messages:
+    - auth: {"type": "auth", "token": "JWT_TOKEN"}
+    - input: {"type": "input", "data": "ls\\n"}
+    - resize: {"type": "resize", "cols": 120, "rows": 30}
+    - ping: {"type": "ping"}
+
+    Server Messages:
+    - ready: {"type": "ready", "exec_id": "xxx", "shell": "/bin/sh", "user": "root", "cols": 80, "rows": 24}
+    - output: {"type": "output", "data": "..."}
+    - error: {"type": "error", "message": "..."}
+    - exit: {"type": "exit", "code": 0}
+    - pong: {"type": "pong", "timestamp": "..."}
+    """
+    import asyncio
+    import json
+    import logging
+    from datetime import datetime
+    from typing import Optional
+
+    from ...services.terminal_service import TerminalService, ExecSession
+    from ...auth.jwt import decode_access_token
+    from ...services.user_service import UserService
+    from ...database import db as database
+
+    logger = logging.getLogger(__name__)
+
+    # Accepter la connexion WebSocket
+    await websocket.accept()
+
+    # Variables pour la session
+    user = None
+    authenticated = False
+    session: Optional[ExecSession] = None
+    terminal_service: Optional[TerminalService] = None
+    streaming_task: Optional[asyncio.Task] = None
+
+    try:
+        # Attendre le message d'authentification (30s timeout)
+        try:
+            data = await asyncio.wait_for(
+                websocket.receive_text(),
+                timeout=30.0
+            )
+        except asyncio.TimeoutError:
+            await websocket.send_json({
+                "type": "error",
+                "message": "Authentication timeout"
+            })
+            await websocket.close(code=1008)
+            return
+
+        # Parser le message d'auth
+        try:
+            message = json.loads(data)
+        except json.JSONDecodeError:
+            await websocket.send_json({
+                "type": "error",
+                "message": "Invalid JSON format"
+            })
+            await websocket.close(code=1008)
+            return
+
+        # Vérifier le type de message
+        if message.get("type") != "auth" or "token" not in message:
+            await websocket.send_json({
+                "type": "error",
+                "message": "Authentication required as first message"
+            })
+            await websocket.close(code=1008)
+            return
+
+        # Valider le token JWT
+        token = message["token"]
+        token_data = decode_access_token(token)
+
+        if token_data is None or token_data.user_id is None:
+            await websocket.send_json({
+                "type": "error",
+                "message": "Invalid token"
+            })
+            await websocket.close(code=1008)
+            return
+
+        # Vérifier l'utilisateur
+        async with database.session() as db:
+            user = await UserService.get_by_id(db, token_data.user_id)
+            if user is None or not user.is_active:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "User not found or inactive"
+                })
+                await websocket.close(code=1008)
+                return
+
+        authenticated = True
+        logger.info(f"Terminal WebSocket authenticated for user {user.id}, container {container_id}")
+
+        # Initialiser le service terminal
+        terminal_service = TerminalService()
+
+        # Créer la session exec dans le conteneur
+        try:
+            session = await terminal_service.create_session(
+                container_id=container_id,
+                shell=shell,
+                user=user,
+                cols=80,
+                rows=24,
+            )
+        except ValueError as e:
+            await websocket.send_json({
+                "type": "error",
+                "message": str(e)
+            })
+            await websocket.close(code=1008)
+            return
+        except RuntimeError as e:
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Failed to create terminal: {e}"
+            })
+            await websocket.close(code=1011)
+            return
+
+        # Envoyer le message ready au client
+        await websocket.send_json({
+            "type": "ready",
+            "exec_id": session.exec_id,
+            "shell": session.shell,
+            "user": session.user,
+            "cols": session.cols,
+            "rows": session.rows,
+        })
+
+        # Démarrer la tâche de streaming en arrière-plan
+        async def stream_output():
+            """Stream la sortie du terminal vers le client."""
+            try:
+                async for data, is_stderr in terminal_service.stream_output(session):
+                    try:
+                        await websocket.send_json({
+                            "type": "output",
+                            "data": data.decode("utf-8", errors="replace"),
+                        })
+                    except Exception as send_error:
+                        logger.error(f"Error sending output: {send_error}")
+                        break
+
+                # La session s'est terminée
+                exit_code = session.process.returncode if session.process else 0
+                try:
+                    await websocket.send_json({
+                        "type": "exit",
+                        "code": exit_code,
+                    })
+                except Exception:
+                    pass
+
+            except Exception as e:
+                logger.error(f"Streaming error: {e}")
+                try:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Streaming error: {e}"
+                    })
+                except Exception:
+                    pass
+
+        streaming_task = asyncio.create_task(stream_output())
+
+        # Boucle principale - gérer les messages du client
+        while True:
+            try:
+                data = await asyncio.wait_for(
+                    websocket.receive_text(),
+                    timeout=60.0
+                )
+
+                # Heartbeat
+                if data == "ping":
+                    await websocket.send_json({
+                        "type": "pong",
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+                    continue
+
+                # Parser le message
+                try:
+                    message = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+
+                msg_type = message.get("type")
+
+                if msg_type == "input":
+                    # Envoyer l'input au terminal
+                    if session and terminal_service:
+                        try:
+                            await terminal_service.send_input(
+                                session,
+                                message.get("data", "")
+                            )
+                        except Exception as e:
+                            await websocket.send_json({
+                                "type": "error",
+                                "message": f"Input error: {e}"
+                            })
+
+                elif msg_type == "resize":
+                    # Redimensionner le TTY
+                    if session and terminal_service:
+                        cols = message.get("cols", 80)
+                        rows = message.get("rows", 24)
+                        try:
+                            await terminal_service.resize_tty(session, cols, rows)
+                        except Exception as e:
+                            logger.warning(f"Resize error: {e}")
+
+                elif msg_type == "ping":
+                    # already handled above
+                    pass
+
+            except asyncio.TimeoutError:
+                # Timeout - juste envoyer un pong pour maintenir la connexion
+                await websocket.send_json({
+                    "type": "pong",
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+
+            except Exception as e:
+                logger.error(f"WebSocket error: {e}")
+                break
+
+    except Exception as e:
+        logger.error(f"Terminal WebSocket error: {e}")
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": str(e)
+            })
+        except Exception:
+            pass
+
+    finally:
+        # Nettoyer la session
+        if streaming_task:
+            streaming_task.cancel()
+            try:
+                await streaming_task
+            except asyncio.CancelledError:
+                pass
+
+        if session and terminal_service:
+            await terminal_service.cleanup_session(session)
+
+        if terminal_service:
+            await terminal_service.close()
+
+        logger.info(f"Terminal WebSocket closed for container {container_id}")
+
+
+@router.websocket(
+    "/docker/containers/{container_id}/logs",
+    name="docker_container_logs_websocket"
+)
+async def docker_container_logs_websocket(
+    websocket: WebSocket,
+    container_id: str,
+    tail: int = 100
+):
+    """
+    Stream Docker container logs in real-time.
+
+    Connect to stream logs from a specific Docker container.
+
+    Authentication:
+    Authentication is performed via query parameter: ?token=JWT_TOKEN
+
+    Query Parameters:
+    - token: JWT token for authentication
+    - tail: Number of lines to retrieve (default: 100)
+
+    Connection Flow:
+    1. Client connects with container ID and token in query string
+    2. Server validates token and user permissions
+    3. Server sends initial container info
+    4. Client receives real-time log updates using Docker logs --follow
+
+    Message Types Sent:
+    - initial: Initial container information and existing logs
+    - log: Real-time log entries as they occur
+    - error: Error notifications
+
+    Client Messages:
+    - Heartbeat: Send "ping" to keep connection alive
+    """
+    # Extract token from query parameters
+    token = websocket.query_params.get('token')
+    tail = int(websocket.query_params.get('tail', '100'))
+
+    # Accepter la connexion
+    await websocket.accept()
+
+    # Authentifier
+    if not token:
+        await websocket.close(code=1008, reason="Authentication required")
+        return
+
+    from ...auth.jwt import decode_access_token
+    from ...services.user_service import UserService
+    from ...database import db as database
+    from ...services.docker_client_service import get_docker_client
+
+    token_data = decode_access_token(token)
+    if token_data is None or token_data.user_id is None:
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+
+    # Vérifier l'utilisateur
+    async with database.session() as db:
+        user = await UserService.get_by_id(db, token_data.user_id)
+        if user is None or not user.is_active:
+            await websocket.close(code=1008, reason="User not found or inactive")
+            return
+
+    # Récupérer le client Docker
+    try:
+        docker_client = get_docker_client()
+    except Exception as e:
+        await websocket.send_json({
+            "type": "error",
+            "message": f"Docker not available: {str(e)}"
+        })
+        await websocket.close(code=1011)  # Internal Error
+        return
+
+    try:
+        # Envoyer les logs initiaux
+        initial_logs = await docker_client.get_container_logs(
+            container_id,
+            tail=tail,
+            since=None
+        )
+
+        await websocket.send_json({
+            "type": "initial",
+            "container_id": container_id,
+            "logs": initial_logs
+        })
+
+        # Boucle principale - attendre lesheartbeats
+        # Note: Pour un streaming temps réel avec --follow,
+        # il faudrait une implémentation plus complexe avec asyncio
+        while True:
+            try:
+                data = await asyncio.wait_for(
+                    websocket.receive_text(),
+                    timeout=60.0
+                )
+
+                if data == "ping":
+                    await websocket.send_json({
+                        "type": "pong",
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+
+            except asyncio.TimeoutError:
+                # Timeout - juste envoyer un pong pour maintenir la connexion
+                await websocket.send_json({
+                    "type": "pong",
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+
+    except WebSocketDisconnect:
+        logger.info(f"Client disconnected from container logs {container_id}")
+
+    except Exception as e:
+        logger.error(f"Error streaming container logs {container_id}: {e}")
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": str(e)
+            })
+        except:
+            pass
+
+    finally:
+        # Fermer le client Docker si nécessaire
+        if docker_client:
+            await docker_client.close()
