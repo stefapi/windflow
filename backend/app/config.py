@@ -5,8 +5,9 @@ Utilise Pydantic Settings pour la gestion des variables d'environnement
 avec support SQLite par défaut et PostgreSQL optionnel.
 """
 
-from typing import Optional, List
-from pydantic import Field
+import json
+from typing import Optional, List, Union
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -57,31 +58,89 @@ class Settings(BaseSettings):
 
     # === CORS Configuration ===
     cors_enabled: bool = Field(default=True, description="Enable CORS middleware")
-    cors_origins: List[str] = Field(
-        default=["http://localhost:5173", "http://localhost:3000", "http://localhost:8010"],
-        description="Allowed CORS origins"
+    cors_origins: str = Field(
+        default="http://localhost:5173,http://localhost:3000,http://localhost:8010",
+        description="Allowed CORS origins (comma-separated or JSON array)"
     )
     cors_credentials: bool = Field(default=True, description="Allow credentials in CORS")
-    cors_methods: List[str] = Field(default=["*"], description="Allowed HTTP methods")
-    cors_headers: List[str] = Field(default=["*"], description="Allowed headers")
+    cors_methods: str = Field(default="*", description="Allowed HTTP methods (comma-separated or JSON array)")
+    cors_headers: str = Field(default="*", description="Allowed headers (comma-separated or JSON array)")
 
     # === Security Headers (CSP) ===
     csp_enabled: bool = Field(default=True, description="Enable Content Security Policy")
-    csp_default_src: List[str] = Field(default=["'self'"], description="CSP default-src")
-    csp_script_src: List[str] = Field(
-        default=["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-        description="CSP script-src (unsafe-inline and unsafe-eval needed for API docs)"
+    csp_default_src: str = Field(default="'self'", description="CSP default-src (comma-separated or JSON array)")
+    csp_script_src: str = Field(
+        default="'self','unsafe-inline','unsafe-eval'",
+        description="CSP script-src (comma-separated or JSON array)"
     )
-    csp_style_src: List[str] = Field(
-        default=["'self'", "'unsafe-inline'"],
-        description="CSP style-src"
+    csp_style_src: str = Field(
+        default="'self','unsafe-inline'",
+        description="CSP style-src (comma-separated or JSON array)"
     )
-    csp_img_src: List[str] = Field(
-        default=["'self'", "data:", "https:"],
-        description="CSP img-src"
+    csp_img_src: str = Field(
+        default="'self',data:,https:",
+        description="CSP img-src (comma-separated or JSON array)"
     )
-    csp_connect_src: List[str] = Field(default=["'self'"], description="CSP connect-src")
+    csp_connect_src: str = Field(default="'self'", description="CSP connect-src (comma-separated or JSON array)")
     csp_report_uri: Optional[str] = Field(default=None, description="CSP report-uri for violations")
+
+    # === Propriétés calculées pour les listes ===
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Parse cors_origins into a list."""
+        return self._parse_list(self.cors_origins)
+
+    @property
+    def cors_methods_list(self) -> List[str]:
+        """Parse cors_methods into a list."""
+        return self._parse_list(self.cors_methods)
+
+    @property
+    def cors_headers_list(self) -> List[str]:
+        """Parse cors_headers into a list."""
+        return self._parse_list(self.cors_headers)
+
+    @property
+    def csp_default_src_list(self) -> List[str]:
+        """Parse csp_default_src into a list."""
+        return self._parse_list(self.csp_default_src)
+
+    @property
+    def csp_script_src_list(self) -> List[str]:
+        """Parse csp_script_src into a list."""
+        return self._parse_list(self.csp_script_src)
+
+    @property
+    def csp_style_src_list(self) -> List[str]:
+        """Parse csp_style_src into a list."""
+        return self._parse_list(self.csp_style_src)
+
+    @property
+    def csp_img_src_list(self) -> List[str]:
+        """Parse csp_img_src into a list."""
+        return self._parse_list(self.csp_img_src)
+
+    @property
+    def csp_connect_src_list(self) -> List[str]:
+        """Parse csp_connect_src into a list."""
+        return self._parse_list(self.csp_connect_src)
+
+    @staticmethod
+    def _parse_list(value: Union[str, List[str]]) -> List[str]:
+        """Parse a string value into a list (supports JSON arrays or comma-separated values)."""
+        if isinstance(value, list):
+            return value
+        if not value:
+            return []
+        # Try JSON first
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+        # Fall back to comma-separated
+        return [item.strip() for item in value.split(",")]
 
     # === HSTS Configuration ===
     hsts_enabled: bool = Field(default=False, description="Enable HSTS (production only)")
@@ -149,11 +208,11 @@ class Settings(BaseSettings):
     def build_csp_header(self) -> str:
         """Build Content Security Policy header from configuration."""
         policies = [
-            f"default-src {' '.join(self.csp_default_src)}",
-            f"script-src {' '.join(self.csp_script_src)}",
-            f"style-src {' '.join(self.csp_style_src)}",
-            f"img-src {' '.join(self.csp_img_src)}",
-            f"connect-src {' '.join(self.csp_connect_src)}",
+            f"default-src {' '.join(self.csp_default_src_list)}",
+            f"script-src {' '.join(self.csp_script_src_list)}",
+            f"style-src {' '.join(self.csp_style_src_list)}",
+            f"img-src {' '.join(self.csp_img_src_list)}",
+            f"connect-src {' '.join(self.csp_connect_src_list)}",
             "frame-ancestors 'none'",
             "base-uri 'self'",
             "form-action 'self'"

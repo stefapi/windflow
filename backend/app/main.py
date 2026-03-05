@@ -227,13 +227,13 @@ WindFlow uses JWT-based authentication:
 if settings.cors_enabled:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=settings.cors_origins_list,
         allow_credentials=settings.cors_credentials,
         allow_methods=settings.cors_methods,
         allow_headers=settings.cors_headers,
         expose_headers=["X-Correlation-ID", "X-Process-Time"],
     )
-    logger.info(f"✓ CORS enabled for origins: {settings.cors_origins}")
+    logger.info(f"✓ CORS enabled for origins: {settings.cors_origins_list}")
 
 # 2. Security Headers
 if settings.csp_enabled:

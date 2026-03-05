@@ -180,7 +180,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: process.env.VITE_FRONTEND_PORT ? parseInt(process.env.VITE_FRONTEND_PORT) : 5173,
     // @ts-expect-error - Plugin callable issue
     https: false,
     watch: {
@@ -188,11 +188,11 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: process.env.VITE_API_URL || 'http://localhost:8010',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8000',
+        target: process.env.VITE_WS_URL || 'ws://localhost:8010',
         ws: true,
       },
     },
