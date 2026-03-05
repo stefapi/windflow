@@ -70,6 +70,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Marketplace',
         component: () => import('@/views/Marketplace.vue'),
       },
+      {
+        path: 'terminal/:containerId',
+        name: 'Terminal',
+        component: () => import('@/views/Terminal.vue'),
+        props: true,
+      },
     ],
   },
 ]

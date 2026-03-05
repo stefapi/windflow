@@ -155,9 +155,14 @@ export interface Deployment extends BaseModel {
   stack_id: string
   target_id: string
   status: DeploymentStatus
+  config: Record<string, unknown>
+  container_id: string | null
+  variables: Record<string, unknown>
   logs: string | null
+  error_message: string | null
   metadata: Record<string, unknown>
   organization_id: string
+  deployed_at: string | null
   stack?: Stack
   target?: Target
 }

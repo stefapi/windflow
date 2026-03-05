@@ -386,6 +386,60 @@ async def remove_container(
 
 
 @router.get(
+    "/containers/{container_id}/shells",
+    response_model=List[dict],
+    summary="List available shells",
+    description="Detect available shells in a container for terminal access.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(50, 60))],
+)
+async def get_container_shells(
+    request: Request,
+    container_id: str,
+):
+    """
+    Détecte les shells disponibles dans un conteneur.
+
+    Retourne une liste de shells avec leur chemin et disponibilité.
+    """
+    from ...services.terminal_service import TerminalService
+
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(f"Detecting shells in container {container_id}", extra={"correlation_id": correlation_id})
+
+    try:
+        terminal_service = TerminalService()
+        shells = await terminal_service.detect_shells(container_id)
+        await terminal_service.close()
+
+        return [
+            {
+                "path": shell.path,
+                "label": shell.label,
+                "available": shell.available
+            }
+            for shell in shells
+        ]
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Container {container_id} non trouvé",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error detecting shells: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la détection des shells: {str(e)}",
+        )
+
+
+@router.get(
     "/containers/{container_id}/logs",
     summary="Get container logs",
     description="Get logs from a container.",

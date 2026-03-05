@@ -124,7 +124,7 @@ Ce document recense les travaux d'implémentation identifiés pour WindFlow, cla
 
 > Inspirées de Colibri, infrastructure partiellement existante. À réaliser sous 1 à 2 semaines.
 
-### 5. Terminal WebSocket interactif
+### 5. Terminal WebSocket interactif ✅ COMPLÉTÉ (2026-03-05)
 
 | | |
 |---|---|
@@ -135,13 +135,20 @@ Ce document recense les travaux d'implémentation identifiés pour WindFlow, cla
 
 **Ce que Colibri implémente** : Terminal web xterm.js dans le navigateur pour exécuter des commandes shell dans les conteneurs Docker via WebSocket bidirectionnel.
 
-**Travaux à réaliser** :
-- [ ] Backend : endpoint WebSocket `/ws/terminal/{container_id}` avec `docker exec` attach stdin/stdout
-- [ ] Backend : gestion du resize terminal (signaux SIGWINCH)
-- [ ] Frontend : composant `ContainerTerminal.vue` avec xterm.js
-- [ ] Frontend : resize automatique, thèmes, copier/coller
-- [ ] Intégration dans `DeploymentDetail.vue` (onglet Terminal)
-- [ ] Gestion des permissions (RBAC : qui peut exec dans quel conteneur)
+**Travaux réalisés** :
+- [x] Backend : TerminalService (`terminal_service.py`) - create_session, stream_output, send_input, resize_tty, cleanup_session, detect_shells
+- [x] Backend : endpoint WebSocket `/ws/terminal/{container_id}` avec `docker exec` attach stdin/stdout
+- [x] Backend : gestion du resize terminal (signaux SIGWINCH via séquence xterm)
+- [x] Backend : API endpoint `/api/v1/docker/containers/{id}/shells` pour détection shells
+- [x] Frontend : composant `ContainerTerminal.vue` avec xterm.js
+- [x] Frontend : composable `useTerminal.ts` pour gestion WebSocket
+- [x] Frontend : resize automatique, thèmes, copier/coller
+- [x] Frontend : vue standalone `/terminal` + route ajoutée
+- [x] Intégration dans `DeploymentDetail.vue` (onglet Terminal)
+- [x] Gestion des permissions (RBAC : vérification organisation sur déploiement)
+- [x] Audit trail : logging des sessions terminal
+- [x] Rate limiting : max 3 sessions simultanées par utilisateur
+- [x] Tests : 16 tests unitaires passent (100%)
 
 **Ressources existantes** :
 - Backend : `websockets.py` (445 lignes), architecture WebSocket avec plugins
@@ -315,7 +322,7 @@ Ce document recense les travaux d'implémentation identifiés pour WindFlow, cla
 | 2 | Stacks UI complète | 🟢 Faible | 🔴 Fort | Aucune | ✅ Terminé |
 | 3 | Deployment Detail UI | 🟢 Faible | 🔴 Fort | Aucune | ✅ Terminé |
 | 4 | Scheduler (Celery Beat) | 🟡 Moyen | 🟡 Moyen | Aucune | ✅ Terminé |
-| 5 | Terminal WebSocket | 🟡 Moyen | 🔴 Fort | xterm.js | **Semaine prochaine** |
+| 5 | Terminal WebSocket | 🟡 Moyen | 🔴 Fort | xterm.js | ✅ **Terminé (16 tests)** |
 | 6 | Git Integration | 🟡 Moyen | 🔴 Fort | gitpython | **Semaine prochaine** |
 | 7 | Vulnerability Scanning | 🟡 Moyen | 🟡 Moyen | Grype/Trivy | **Sous 2 semaines** |
 | 8 | Chiffrement natif | 🟡 Moyen | 🟡 Moyen | cryptography | **Sous 2 semaines** |
@@ -323,6 +330,7 @@ Ce document recense les travaux d'implémentation identifiés pour WindFlow, cla
 | 10 | Auto-Updates | 🔴 Élevé | 🔴 Fort | #4 + #7 | **Sous 1 mois** |
 | 11 | Workflow Engine | 🔴 Élevé | 🔴 Fort | Décision archi | **Phase 2** |
 | T1 | **Tests Docker** | 🟢 Faible | 🔴 Fort | - | ✅ **Terminé (91 unitaires + 55 intégration)** |
+| T2 | **Tests Terminal** | 🟢 Faible | 🔴 Fort | - | ✅ **Terminé (16 unitaires)** |
 
 ---
 

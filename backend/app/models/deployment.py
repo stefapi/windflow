@@ -79,6 +79,14 @@ class Deployment(Base):
     # Configuration utilisée au déploiement (snapshot)
     config: Mapped[dict] = mapped_column(JSON, nullable=False)
 
+    # Container ID (pour les déploiements Docker)
+    container_id: Mapped[str] = mapped_column(
+        String(128),
+        nullable=True,
+        index=True,
+        comment="ID du conteneur Docker créé par ce déploiement"
+    )
+
     # Variables appliquées
     variables: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 

@@ -148,6 +148,27 @@
             </el-descriptions>
             <el-empty v-else description="No metrics available yet" :image-size="60" />
           </el-tab-pane>
+
+          <!-- Terminal interactif -->
+          <el-tab-pane label="Terminal" name="terminal" :disabled="deployment.status !== 'running' || !deployment.container_id">
+            <div v-if="deployment.status === 'running' && deployment.container_id" class="terminal-pane">
+              <ContainerTerminal
+                :container-id="deployment.container_id"
+                :shell="selectedShell"
+                :user="'root'"
+                :theme="'dark'"
+                :font-size="14"
+              />
+            </div>
+            <el-empty v-else description="Terminal is only available for running containers" :image-size="60">
+              <template v-if="deployment.status !== 'running'">
+                <p class="empty-hint">Start the deployment to access the terminal</p>
+              </template>
+              <template v-else-if="!deployment.container_id">
+                <p class="empty-hint">No container associated with this deployment</p>
+              </template>
+            </el-empty>
+          </el-tab-pane>
         </el-tabs>
       </el-card>
     </template>
@@ -162,6 +183,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDeploymentsStore } from '@/stores'
 import { ElMessage } from 'element-plus'
 import DeploymentLogs from '@/components/DeploymentLogs.vue'
+import ContainerTerminal from '@/components/ContainerTerminal.vue'
 import type { Deployment } from '@/types/api'
 
 const route = useRoute()
@@ -171,6 +193,9 @@ const deploymentsStore = useDeploymentsStore()
 const deploymentId = route.params['id'] as string
 const activeTab = ref('logs')
 const actionLoading = ref(false)
+
+// Shell par défaut pour le terminal
+const selectedShell = ref('/bin/sh')
 
 const deployment = computed<Deployment | null>(() => deploymentsStore.currentDeployment)
 
@@ -355,5 +380,16 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.terminal-pane {
+  height: 500px;
+  min-height: 400px;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-top: 8px;
 }
 </style>

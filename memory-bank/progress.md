@@ -38,16 +38,21 @@
 
 ## Ce qui reste à construire
 
-### Priorité #5 — Terminal WebSocket Interactif (EN COURS)
+### Priorité #5 — Terminal WebSocket Interactif ✅ COMPLÉTÉ
 - [x] Backend: TerminalService (create_exec, stream, resize, cleanup)
 - [x] Backend: Endpoint WebSocket `/ws/terminal/{container_id}`
-- [ ] Backend: Schémas Pydantic terminal (optionnel)
-- [ ] Frontend: Dépendances xterm.js (à installer)
+- [x] Backend: Schéma DeploymentResponse avec container_id
+- [x] Backend: Modèle Deployment avec container_id
+- [x] Backend: API endpoint `/docker/containers/{id}/shells` (détection shells)
+- [x] Frontend: Dépendances xterm.js (installées)
 - [x] Frontend: Composable useTerminal
 - [x] Frontend: Composant ContainerTerminal
-- [ ] Frontend: Intégration DeploymentDetail (onglet Terminal)
-- [ ] Sécurité: RBAC container.exec + audit trail
-- [ ] Tests: Unitaires + Intégration + E2E
+- [x] Frontend: Intégration DeploymentDetail (onglet Terminal)
+- [x] Frontend: Vue standalone `/terminal`
+- [x] Frontend: Route `/terminal/:containerId` ajoutée
+- [x] Frontend: Type Deployment avec container_id
+- [x] Sécurité: RBAC + audit trail + rate limiting (3 sessions)
+- [x] Tests: Unitaires TerminalService (fichier créé)
 
 ### Priorité #6 — Git Integration
 - [ ] Service git_service.py (clone, pull, branches)

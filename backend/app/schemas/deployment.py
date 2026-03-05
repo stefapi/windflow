@@ -228,6 +228,11 @@ class DeploymentResponse(BaseModel):
         description="Configuration utilisée",
         json_schema_extra={"example": {"ports": [80, 443]}}
     )
+    container_id: Optional[str] = Field(
+        None,
+        description="ID du conteneur Docker créé par ce déploiement",
+        json_schema_extra={"example": "abc123def456"}
+    )
     variables: Dict[str, Any] = Field(
         default_factory=dict,
         description="Variables appliquées",
