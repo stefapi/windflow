@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.api.v1.targets import _infer_target_type
 from app.schemas.target import TargetType
 from app.schemas.target_scan import (
     DockerCapabilities,
@@ -62,7 +61,7 @@ class TestBuildCapabilitiesPayload:
         service = TargetScannerService()
         scan_result = ScanResult(
             host="test-host",
-            scan_date=datetime.utcnow(),
+            scan_date=datetime.now(timezone.utc),
             success=True,
             docker=DockerCapabilities(
                 installed=True,
@@ -107,7 +106,7 @@ class TestBuildCapabilitiesPayload:
         service = TargetScannerService()
         scan_result = ScanResult(
             host="test-host",
-            scan_date=datetime.utcnow(),
+            scan_date=datetime.now(timezone.utc),
             success=True,
             docker=None,  # Docker not installed
             virtualization={},
@@ -129,7 +128,7 @@ class TestBuildCapabilitiesPayload:
 
         scan_result = ScanResult(
             host="test-host",
-            scan_date=datetime.utcnow(),
+            scan_date=datetime.now(timezone.utc),
             success=True,
             docker=DockerCapabilities(
                 installed=True,
@@ -160,7 +159,7 @@ class TestBuildCapabilitiesPayload:
         service = TargetScannerService()
         scan_result = ScanResult(
             host="test-host",
-            scan_date=datetime.utcnow(),
+            scan_date=datetime.now(timezone.utc),
             success=True,
             docker=None,
             virtualization={},
@@ -172,73 +171,3 @@ class TestBuildCapabilitiesPayload:
         assert len(capabilities) == 0
 
 
-class TestInferTargetType:
-    """Unit tests for _infer_target_type utility."""
-
-    def test_infer_target_type_docker_swarm(self) -> None:
-        """Docker Swarm should win over other capabilities."""
-        scan_result = ScanResult(
-            host="127.0.0.1",
-            scan_date=datetime.now(timezone.utc),
-            success=True,
-            docker=DockerCapabilities(
-                installed=True,
-                version="24.0.0",
-                running=True,
-                socket_accessible=True,
-                compose=None,
-                swarm=DockerSwarmInfo(
-                    available=True,
-                    active=True,
-                    node_role="manager",
-                    details=None,
-                ),
-            ),
-            virtualization={},
-            kubernetes={},
-            errors=[],
-        )
-        assert _infer_target_type(scan_result) == TargetType.DOCKER_SWARM
-
-    def test_infer_target_type_kubernetes(self) -> None:
-        """Kubernetes capability should produce a KUBERNETES target."""
-        scan_result = ScanResult(
-            host="192.168.1.10",
-            scan_date=datetime.now(timezone.utc),
-            success=True,
-            docker=None,
-            virtualization={},
-            kubernetes={
-                "kubectl": ToolInfo(available=True, version="1.28", details=None)
-            },
-            errors=[],
-        )
-        assert _infer_target_type(scan_result) == TargetType.KUBERNETES
-
-    def test_infer_target_type_virtualization(self) -> None:
-        """Virtualization tools fallback to VM type."""
-        scan_result = ScanResult(
-            host="host",
-            scan_date=datetime.utcnow(),
-            success=True,
-            docker=None,
-            virtualization={
-                "virtualbox": ToolInfo(available=True, version="7.0", details=None)
-            },
-            kubernetes={},
-            errors=[],
-        )
-        assert _infer_target_type(scan_result) == TargetType.VM
-
-    def test_infer_target_type_default(self) -> None:
-        """Default fallback should be PHYSICAL."""
-        scan_result = ScanResult(
-            host="host",
-            scan_date=datetime.now(timezone.utc),
-            success=True,
-            docker=None,
-            virtualization={},
-            kubernetes={},
-            errors=[],
-        )
-        assert _infer_target_type(scan_result) == TargetType.PHYSICAL

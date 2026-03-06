@@ -5,10 +5,10 @@ Ces schémas sont utilisés pour la validation et la sérialisation
 des réponses de l'API Docker.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # =============================================================================
@@ -21,8 +21,7 @@ class PortBinding(BaseModel):
     host_ip: Optional[str] = Field(None, alias="HostIp")
     host_port: Optional[str] = Field(None, alias="HostPort")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class MountPoint(BaseModel):
@@ -34,8 +33,7 @@ class MountPoint(BaseModel):
     mode: str = "rw"
     propagation: str = ""
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ContainerResponse(BaseModel):
@@ -54,8 +52,7 @@ class ContainerResponse(BaseModel):
     mounts: list[dict[str, Any]] = Field(default_factory=list, description="Points de montage")
     restart_count: int = Field(0, description="Nombre de redémarrages")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ContainerDetailResponse(BaseModel):
@@ -99,7 +96,7 @@ class ContainerLogsResponse(BaseModel):
     """Réponse de logs d'un container."""
     logs: str
     container_id: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # =============================================================================
@@ -117,8 +114,7 @@ class ImageResponse(BaseModel):
     virtual_size: int = Field(0, alias="virtualSize", description="Taille virtuelle")
     labels: dict[str, str] = Field(default_factory=dict, description="Labels")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ImagePullRequest(BaseModel):
@@ -148,8 +144,7 @@ class VolumeResponse(BaseModel):
     labels: dict[str, str] = Field(default_factory=dict, description="Labels")
     scope: str = Field("local", description="Scope")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class VolumeCreateRequest(BaseModel):
@@ -202,8 +197,7 @@ class SystemInfoResponse(BaseModel):
     cpus: int = Field(0, alias="NCPU", description="Nombre de CPUs")
     memory: int = Field(0, alias="MemTotal", description="Mémoire totale")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class SystemVersionResponse(BaseModel):
@@ -218,8 +212,7 @@ class SystemVersionResponse(BaseModel):
     kernel_version: str = Field("", alias="KernelVersion", description="Version kernel")
     build_time: str = Field("", alias="BuildTime", description="Date de build")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class PingResponse(BaseModel):
@@ -264,5 +257,5 @@ class ContainerStatsResponse(BaseModel):
             memory_stats=data.get("memory_stats", {}),
             networks=data.get("networks", {}),
             blkio_stats=data.get("blkio_stats", {}),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )

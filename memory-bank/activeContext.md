@@ -2,6 +2,34 @@
 
 ## Travail actuel
 
+### Type de target déprécié au profit de `target_capabilities` ✅ COMPLÉTÉ (2026-03-05)
+
+**Décision clé (2026-03-05) :** le champ `targets.type` ne doit plus être utilisé comme source de vérité fonctionnelle pour décrire les capacités d’une machine découverte. Le typage fonctionnel doit désormais être déduit exclusivement des entrées persistées dans `target_capabilities`.
+
+**Contexte du bug :**
+- La target `localhost` créée au bootstrap apparaissait avec `type=DOCKER`.
+- Pourtant le scan persistait bien plusieurs capacités (`docker`, `docker_compose`, `libvirt`, `virtualbox`, `vagrant`, etc.) dans `target_capabilities`.
+- La logique de déduction exclusive du type (`docker` prioritaire sur `vm`) masquait donc les capacités VM visibles via l’API/UI quand certaines vues ou raisonnements s’appuyaient sur `targets.type`.
+
+**Changements réalisés :**
+1. **Seed DB** (`backend/app/database_seed.py`)
+   - Suppression de la déduction exclusive `_infer_target_type_from_scan()`
+   - Remplacement par `_default_seed_target_type()` qui force un type technique neutre (`physical`)
+   - Les capacités réelles restent persistées par `TargetService.apply_scan_result()`
+
+2. **Découverte API** (`backend/app/api/v1/targets.py`)
+   - L’endpoint `POST /targets/discover` n’infère plus automatiquement un type depuis le scan
+   - Si `preferred_type` n’est pas fourni, la target est créée avec `TargetType.PHYSICAL`
+   - Le `preferred_type` reste supporté pour les cas explicites côté client
+
+3. **Tests**
+   - Suppression des tests unitaires qui validaient l’ancienne logique `_infer_target_type`
+   - Conservation des tests sur `build_capabilities_payload()`, qui reste la vraie source des capacités disponibles
+
+**Conséquence architecturale :**
+- `targets.type` devient un champ technique/legacy compatible API, mais ne doit plus piloter la logique métier de découverte de capacités
+- Toute décision de support Docker / Docker Compose / VM / Kubernetes doit se baser sur `target_capabilities`
+
 ### Terminal WebSocket Interactif ✅ COMPLÉTÉ (2026-03-05)
 
 **Décision clé (2026-03-05) :** Implémentation du terminal web interactif via WebSocket pour exécuter des commandes shell dans les conteneurs Docker.
@@ -86,3 +114,4 @@
 | httpx + UDS | Async natif, pas de dépendance dockerode |
 | FastAPI WebSocket (vs Poetry) | Simplicité, réutilisation infrastructure existante |
 | xterm.js frontend | Solution standard, bien maintenue |
+| `target_capabilities` = source de vérité | Une machine peut exposer plusieurs capacités simultanées |

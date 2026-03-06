@@ -98,12 +98,13 @@ class TestTerminalService:
     @pytest.mark.asyncio
     async def test_send_input(self, terminal_service):
         """Test l'envoi d'entrée au terminal."""
-        mock_stdin = MagicMock()
-        mock_stdin.write = AsyncMock()
+        mock_stdin = AsyncMock()
+        mock_stdin.write = MagicMock()
         mock_stdin.flush = AsyncMock()
 
         mock_process = MagicMock()
         mock_process.stdin = mock_stdin
+        mock_process.returncode = None
 
         session = ExecSession(
             exec_id="test123",
@@ -118,17 +119,18 @@ class TestTerminalService:
         await terminal_service.send_input(session, "ls -la\n")
 
         mock_stdin.write.assert_called_once()
-        mock_stdin.flush.assert_called_once()
+        mock_stdin.flush.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_resize_tty(self, terminal_service):
         """Test le redimensionnement du TTY."""
-        mock_stdin = MagicMock()
-        mock_stdin.write = AsyncMock()
+        mock_stdin = AsyncMock()
+        mock_stdin.write = MagicMock()
         mock_stdin.flush = AsyncMock()
 
         mock_process = MagicMock()
         mock_process.stdin = mock_stdin
+        mock_process.returncode = None
 
         session = ExecSession(
             exec_id="test123",
@@ -145,7 +147,7 @@ class TestTerminalService:
         assert session.cols == 120
         assert session.rows == 40
         mock_stdin.write.assert_called_once()
-        mock_stdin.flush.assert_called_once()
+        mock_stdin.flush.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_cleanup_session(self, terminal_service):
@@ -155,8 +157,9 @@ class TestTerminalService:
         mock_process.stdin = MagicMock()
         mock_process.stdout = MagicMock()
         mock_process.stderr = MagicMock()
-        mock_process.terminate = AsyncMock()
+        mock_process.terminate = MagicMock()
         mock_process.wait = AsyncMock()
+        mock_process.kill = AsyncMock()
 
         session = ExecSession(
             exec_id="test123",

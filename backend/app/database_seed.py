@@ -118,8 +118,8 @@ async def _create_localhost_target(
         scanner = TargetScannerService()
         scan_result = await scanner.scan_localhost()
 
-        target_type = _infer_target_type_from_scan(scan_result)
-        details.append(f"type détecté: {target_type.value}")
+        target_type = _default_seed_target_type()
+        details.append(f"type seed par défaut: {target_type.value}")
 
         if scan_result.docker and scan_result.docker.installed:
             docker_version = scan_result.docker.version or "présent"
@@ -178,20 +178,14 @@ async def _create_localhost_target(
         return False, details
 
 
-def _infer_target_type_from_scan(scan_result: "ScanResult") -> "TargetType":
-    """Déduit le type de cible optimal depuis un ScanResult."""
-    from .schemas.target import TargetType
-    from .schemas.target_scan import ScanResult
+def _default_seed_target_type() -> "TargetType":
+    """Retourne le type technique par défaut utilisé au bootstrap.
 
-    docker_caps = scan_result.docker
-    if docker_caps and docker_caps.swarm and docker_caps.swarm.available:
-        return TargetType.DOCKER_SWARM
-    if docker_caps and docker_caps.installed:
-        return TargetType.DOCKER
-    if any(tool.available for tool in scan_result.kubernetes.values()):
-        return TargetType.KUBERNETES
-    if any(tool.available for tool in scan_result.virtualization.values()):
-        return TargetType.VM
+    Le typage fonctionnel d'une cible doit être déduit des entrées
+    persistées dans `target_capabilities`, pas d'un champ exclusif.
+    """
+    from .schemas.target import TargetType
+
     return TargetType.PHYSICAL
 
 

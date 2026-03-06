@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="test" uuid="38aaeb71-935a-424b-8aa6-5ccfa717d660">
-      <driver-ref>5a6a79a3-dce4-4964-8465-386436c56c01</driver-ref>
+    <data-source source="LOCAL" name="windflow.db" uuid="d6e0d296-19cb-4445-8b2b-56adb8c76f53">
+      <driver-ref>sqlite.xerial</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
-      <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/test.db</jdbc-url>
+      <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/dev/data/windflow.db</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
   </component>

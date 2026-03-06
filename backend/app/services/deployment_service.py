@@ -5,7 +5,7 @@ Implémente le pattern Repository avec SQLAlchemy 2.0 async.
 """
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from jinja2 import Template, TemplateSyntaxError
@@ -27,7 +27,7 @@ class DeploymentService:
     @staticmethod
     def _generate_deployment_name(stack: Stack) -> str:
         """Génère un nom de déploiement unique basé sur le stack et un timestamp."""
-        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         return f"{stack.name}-{timestamp}"
 
     @staticmethod
@@ -507,7 +507,7 @@ class DeploymentService:
             logger.warning(f"Impossible de supprimer les ressources pour {deployment_id}, mise en statut FAILED")
             deployment.status = DeploymentStatus.FAILED
             deployment.error_message = deletion_error
-            deployment.stopped_at = datetime.utcnow()
+            deployment.stopped_at = datetime.now(timezone.utc)
 
             # Ajouter aux logs
             error_log = f"\n[ERROR] Échec de la suppression des ressources: {deletion_error}"
@@ -586,10 +586,10 @@ class DeploymentService:
 
         # Mise à jour des timestamps selon le statut
         if status == DeploymentStatus.RUNNING:
-            deployment.deployed_at = datetime.utcnow()
+            deployment.deployed_at = datetime.now(timezone.utc)
             logger.info(f"Déploiement {deployment_id} démarré avec succès")
         elif status in [DeploymentStatus.STOPPED, DeploymentStatus.FAILED]:
-            deployment.stopped_at = datetime.utcnow()
+            deployment.stopped_at = datetime.now(timezone.utc)
 
             # Calculer la durée si possible
             if deployment.deployed_at:
@@ -685,7 +685,7 @@ class DeploymentService:
         """
         from datetime import timedelta
 
-        cutoff_time = datetime.utcnow() - timedelta(minutes=max_age_minutes)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
 
         result = await db.execute(
             select(Deployment)
@@ -715,7 +715,7 @@ class DeploymentService:
         """
         from datetime import timedelta
 
-        cutoff_time = datetime.utcnow() - timedelta(minutes=max_age_minutes)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
 
         # Récupérer les déploiements à marquer
         result = await db.execute(
@@ -736,7 +736,7 @@ class DeploymentService:
                 f"Déploiement marqué comme échoué automatiquement après "
                 f"{max_age_minutes} minutes en statut PENDING (timeout)"
             )
-            deployment.stopped_at = datetime.utcnow()
+            deployment.stopped_at = datetime.now(timezone.utc)
 
             if deployment.logs:
                 deployment.logs += "\n[SYSTEM] Timeout - Déploiement abandonné"
@@ -745,7 +745,7 @@ class DeploymentService:
 
             logger.warning(
                 f"Déploiement {deployment.id} marqué comme FAILED après timeout "
-                f"(créé à {deployment.created_at}, age: {datetime.utcnow() - deployment.created_at})"
+                f"(créé à {deployment.created_at}, age: {datetime.now(timezone.utc) - deployment.created_at})"
             )
             count += 1
 

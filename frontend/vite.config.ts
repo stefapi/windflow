@@ -190,6 +190,10 @@ export default defineConfig({
       '/api': {
         target: process.env.VITE_API_URL || 'http://localhost:8010',
         changeOrigin: true,
+        // Handle FastAPI redirects (e.g., /api/v1/targets -> /api/v1/targets/)
+        followRedirects: true,
+        // Preserve the full path including query params during redirect
+        rewrite: (path) => path,
       },
       '/ws': {
         target: process.env.VITE_WS_URL || 'ws://localhost:8010',

@@ -5,7 +5,7 @@ These tests validate the Pydantic schemas used in the Docker API.
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import ValidationError
 
 from app.schemas.docker import (
@@ -123,7 +123,7 @@ class TestContainerLogsResponse:
 
     def test_response(self):
         """Test logs response."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         resp = ContainerLogsResponse(
             logs="Line 1\nLine 2",
             container_id="abc123",
@@ -206,7 +206,7 @@ class TestVolumeResponse:
 
     def test_response(self):
         """Test volume response."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         resp = VolumeResponse(
             name="my-volume",
             driver="local",
@@ -224,7 +224,7 @@ class TestNetworkResponse:
 
     def test_response(self):
         """Test network response."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         resp = NetworkResponse(
             id="net123",
             name="bridge",
@@ -327,7 +327,7 @@ class TestContainerStatsResponse:
 
     def test_response(self):
         """Test stats response."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         resp = ContainerStatsResponse(
             container_id="abc123",
             cpu_stats={"cpu_usage": 100},
@@ -390,7 +390,7 @@ class TestContainerResponse:
 
     def test_response(self):
         """Test container response."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         resp = ContainerResponse(
             id="abc123def456",
             name="my-container",
@@ -415,7 +415,7 @@ class TestContainerDetailResponse:
 
     def test_response(self):
         """Test container detail response."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         resp = ContainerDetailResponse(
             id="abc123",
             name="my-container",
@@ -438,7 +438,7 @@ class TestImageResponse:
 
     def test_response(self):
         """Test image response."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         resp = ImageResponse(
             id="abc123",
             repoTags=["nginx:latest"],
