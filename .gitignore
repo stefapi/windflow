@@ -36,7 +36,6 @@ frontend/test/__snapshots__/
 *.njsproj
 *.sln
 *.sw?
-.vscode
 
 
 # C extensions

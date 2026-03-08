@@ -1,0 +1,12 @@
+{
+    "snyk.advanced.autoSelectOrganization": true,
+    "sqltools.useNodeRuntime": true,
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "driver": "SQLite",
+            "database": "${workspaceFolder:windflow}/dev/data/windflow.db",
+            "name": "windflow"
+        }
+    ]
+}
