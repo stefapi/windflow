@@ -63,9 +63,9 @@ Cette epic a deux axes :
 
 ### Nettoyage Marketplace
 - [x] STORY-401 : Audit & suppression Marketplace frontend (vue + composants + routes + stores + services liés)
-- [ ] STORY-402 : Suppression API backend marketplace (endpoints + schemas + services liés)
-- [ ] STORY-403 : Migration Alembic pour supprimer tables `stack_review` et `user_favorite`
-- [ ] STORY-404 : Nettoyage des imports, routes, références orphelines (front + back)
+- [x] STORY-402 : Suppression API backend marketplace (endpoints + schemas + services liés)
+- [x] STORY-403 : Migration Alembic pour supprimer tables `stack_review` et `user_favorite`
+- [x] STORY-404 : Nettoyage des imports, routes, références orphelines (front + back)
 
 ### Navigation & Layout
 - [ ] STORY-411 : Restructuration Sidebar selon specs (Infrastructure / Stockage & Réseau / Marketplace / Plugins / Administration + section dynamique plugins)

@@ -2,7 +2,7 @@
 
 ## Vue d'Ensemble
 
-L'API d'administration fournit des endpoints pour gérer les stacks marketplace de WindFlow. Ces endpoints **remplacent** les anciens scripts `seed_stacks.py` et `check_stacks.py` en offrant une interface REST complète et sécurisée.
+L'API d'administration fournit des endpoints pour gérer les stacks de WindFlow. Ces endpoints **remplacent** les anciens scripts `seed_stacks.py` et `check_stacks.py` en offrant une interface REST complète et sécurisée.
 
 ### 🔒 Sécurité
 

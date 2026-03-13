@@ -102,7 +102,7 @@ class StackDefinitionMetadata(BaseModel):
     documentation_url: Optional[str] = Field(None, description="URL de la documentation")
     screenshots: List[str] = Field(default_factory=list, description="URLs des screenshots")
     tags: List[str] = Field(default_factory=list, description="Tags de recherche")
-    is_public: bool = Field(True, description="Stack public dans le marketplace ?")
+    is_public: bool = Field(True, description="Stack public (partagé entre organisations)")
 
     # Type de déploiement supporté (obligatoire)
     target_type: str = Field(..., description="Type de déploiement (docker, docker_compose, etc.)")

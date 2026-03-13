@@ -167,7 +167,7 @@ class StackCreate(StackBase):
     )
     is_public: bool = Field(
         default=False,
-        description="Stack public dans marketplace",
+        description="Stack public (partagé)",
         json_schema_extra={"example": False}
     )
     screenshots: Optional[List[str]] = Field(
@@ -374,11 +374,11 @@ class StackResponse(StackBase):
     )
 
 
-class MarketplaceStackResponse(BaseModel):
+class StackSummaryResponse(BaseModel):
     """
-    Schema pour réponse Stack marketplace (sans template complet).
+    Schema pour réponse Stack résumée (sans template complet).
 
-    Version allégée de StackResponse pour les listings du marketplace,
+    Version allégée de StackResponse pour les listings,
     ne contient pas le template complet pour des raisons de performance.
     """
 
@@ -477,40 +477,7 @@ class MarketplaceStackResponse(BaseModel):
 
 
 class DeploymentConfigRequest(BaseModel):
-    """Schema pour configuration de déploiement (pour déploiement depuis marketplace - maintenant supprimé)."""
-    model_config = ConfigDict(json_schema_extra={
-        "example": {
-            "stack_id": "uuid-baserow",
-            "target_id": "target-docker-local",
-            "configuration": {
-                "baserow_version": "1.26.1",
-                "db_password": "secure_password_123",
-                "domain": "baserow.localhost",
-                "workers": 2
-            }
-        }
-    })
-
-    stack_id: str = Field(
-        ...,
-        description="ID du stack à déployer",
-        json_schema_extra={"example": "uuid-baserow"}
-    )
-    target_id: str = Field(
-        ...,
-        description="ID de la cible de déploiement",
-        json_schema_extra={"example": "target-docker-local"}
-    )
-    configuration: Dict[str, Any] = Field(
-        ...,
-        description="Configuration des variables",
-        json_schema_extra={"example": {"baserow_version": "1.26.1", "db_password": "secure_password_123"}}
-    )
-    name: Optional[str] = Field(
-        None,
-        description="Nom du déploiement (optionnel)",
-        json_schema_extra={"example": "baserow-production"}
-    )
+    """Schema pour configuration de déploiement."""
 
     model_config = ConfigDict(json_schema_extra={
         "example": {
@@ -545,3 +512,7 @@ class DeploymentConfigRequest(BaseModel):
         description="Nom du déploiement (optionnel)",
         json_schema_extra={"example": "baserow-production"}
     )
+
+
+# Alias pour rétro-compatibilité (sera supprimé dans une version future)
+MarketplaceStackResponse = StackSummaryResponse

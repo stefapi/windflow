@@ -69,12 +69,12 @@ class Stack(Base):
         comment="Paramètres spécifiques à la target (ex: volumes à supprimer)"
     )
 
-    # Marketplace (si le stack est public)
+    # Statut public et statistiques
     is_public: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)
     downloads: Mapped[int] = mapped_column(default=0, nullable=False)
     rating: Mapped[float] = mapped_column(default=0.0, nullable=False)
 
-    # Métadonnées marketplace
+    # Métadonnées additionnelles
     icon_url: Mapped[str] = mapped_column(String(500), nullable=True)
     screenshots: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     documentation_url: Mapped[str] = mapped_column(String(500), nullable=True)

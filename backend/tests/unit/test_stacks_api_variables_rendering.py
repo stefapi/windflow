@@ -8,15 +8,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.api.v1.stacks import _render_stack_variables
-from app.schemas.stack import StackResponse, MarketplaceStackResponse
+from app.schemas.stack import StackResponse, StackSummaryResponse
 
 
 class TestStacksAPIVariablesRendering:
     """Tests pour le rendu des macros dans les variables des stacks."""
 
-    def test_marketplace_stack_response_fields(self):
-        """Vérifie que MarketplaceStackResponse contient uniquement les champs attendus."""
-        fields = MarketplaceStackResponse.model_fields.keys()
+    def test_stack_summary_response_fields(self):
+        """Vérifie que StackSummaryResponse contient uniquement les champs attendus."""
+        fields = StackSummaryResponse.model_fields.keys()
         expected_fields = {
             "id", "name", "description", "version", "category", "tags",
             "icon_url", "screenshots", "author", "license",

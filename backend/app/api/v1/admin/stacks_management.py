@@ -1,7 +1,7 @@
 """
 API de gestion des stacks - Administration.
 
-Endpoints pour l'administration et la gestion des stacks marketplace.
+Endpoints pour l'administration et la gestion des stacks WindFlow.
 Remplace les scripts seed_stacks.py et check_stacks.py.
 """
 

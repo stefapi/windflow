@@ -2,7 +2,7 @@
 Service de chargement de stacks depuis des fichiers YAML.
 
 Permet de charger et parser des définitions de stacks depuis des fichiers
-YAML pour les importer dans le marketplace WindFlow.
+YAML pour les importer dans la bibliothèque de stacks WindFlow.
 """
 
 import yaml
