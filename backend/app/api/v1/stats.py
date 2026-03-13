@@ -12,7 +12,6 @@ from ...database import get_db
 from ...models.stack import Stack
 from ...models.deployment import Deployment
 from ...models.target import Target
-from ...models.stack_review import StackReview
 from ...schemas.dashboard import (
     DashboardStats,
     TargetHealthItem,
@@ -281,10 +280,6 @@ async def get_stack_stats(stack_id: str, db: AsyncSession = Depends(get_db)):
     )
     deployments_by_status = (await db.execute(deployments_by_status_stmt)).all()
 
-    # Reviews stats
-    reviews_count_stmt = select(func.count()).select_from(StackReview).where(StackReview.stack_id == stack_id)
-    reviews_count = (await db.execute(reviews_count_stmt)).scalar()
-
     # Déploiements sur les 30 derniers jours
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
     recent_deployments_stmt = (
@@ -297,6 +292,5 @@ async def get_stack_stats(stack_id: str, db: AsyncSession = Depends(get_db)):
 
     return {
         "deployments_by_status": {status: count for status, count in deployments_by_status},
-        "total_reviews": reviews_count,
         "deployments_last_30_days": recent_deployments
     }

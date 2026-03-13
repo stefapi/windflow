@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from ...database import get_db
-from ...schemas.stack import StackResponse, StackCreate, StackUpdate, StackListResponse
+from ...schemas.stack import StackResponse, StackCreate, StackUpdate, MarketplaceStackResponse
 from ...schemas.stack_version import StackVersionResponse, StackVersionCreate
 from ...services.stack_service import StackService
 from ...models.stack_version import StackVersion
@@ -101,7 +101,7 @@ def _render_stack_variables(stack) -> StackResponse:
 
 @router.get(
     "/",
-    response_model=List[StackListResponse],
+    response_model=List[MarketplaceStackResponse],
     status_code=status.HTTP_200_OK,
     summary="List all stacks in organization",
     description="""

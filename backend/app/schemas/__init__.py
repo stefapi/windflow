@@ -73,5 +73,5 @@ __all__ = [
     "DeploymentBase",
     "DeploymentCreate",
     "DeploymentUpdate",
-    "DeploymentResponse",
+    "DeploymentResponse"
 ]

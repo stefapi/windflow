@@ -8,18 +8,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.api.v1.stacks import _render_stack_variables
-from app.schemas.stack import StackResponse, StackListResponse
+from app.schemas.stack import StackResponse, MarketplaceStackResponse
 
 
 class TestStacksAPIVariablesRendering:
     """Tests pour le rendu des macros dans les variables des stacks."""
 
-    def test_stack_list_response_fields(self):
-        """Vérifie que StackListResponse contient uniquement les champs demandés."""
-        fields = StackListResponse.model_fields.keys()
+    def test_marketplace_stack_response_fields(self):
+        """Vérifie que MarketplaceStackResponse contient uniquement les champs attendus."""
+        fields = MarketplaceStackResponse.model_fields.keys()
         expected_fields = {
-            "id", "version", "category", "name", "description",
-            "icon_url", "author", "license", "rating", "tags", "downloads"
+            "id", "name", "description", "version", "category", "tags",
+            "icon_url", "screenshots", "author", "license",
+            "downloads", "rating", "created_at", "updated_at"
         }
         assert set(fields) == expected_fields
 

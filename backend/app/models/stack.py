@@ -14,7 +14,6 @@ from ..schemas.target import TargetType
 if TYPE_CHECKING:
     from .organization import Organization
     from .deployment import Deployment
-    from .stack_review import StackReview
     from .stack_version import StackVersion
 
 
@@ -112,12 +111,6 @@ class Stack(Base):
 
     deployments: Mapped[List["Deployment"]] = relationship(
         "Deployment",
-        back_populates="stack",
-        cascade="all, delete-orphan"
-    )
-
-    reviews: Mapped[List["StackReview"]] = relationship(
-        "StackReview",
         back_populates="stack",
         cascade="all, delete-orphan"
     )

@@ -4,7 +4,6 @@
 
 ### EPIC-004 : Refonte UI, Navigation & Nettoyage Marketplace (Phase 2 — sprint front prioritaire)
 #### Nettoyage Marketplace
-- [ ] STORY-402 : Suppression API backend marketplace
 - [ ] STORY-403 : Migration Alembic — suppression tables stack_review et user_favorite
 - [ ] STORY-404 : Nettoyage imports, routes et références orphelines
 
@@ -42,6 +41,11 @@
 ### EPIC-002 : Gestion des Machines Virtuelles — KVM & Proxmox (Phase 2 — Q2 2026)
 ### EPIC-003 : Sécurité, GitOps & Multi-Machines (Phase 3-4 — Q3–Q4 2026)
 
+## 🚧 REVIEW (En attente de validation)
+
+*(Aucune story en attente de validation)*
+
 ## ✅ DONE (Terminé)
 - [x] STORY-401 : Audit & suppression Marketplace frontend
+- [x] STORY-402 : Suppression API backend marketplace
 - [x] Phase 1 : Core Platform (v1.0 — Q1 2026) — API REST, Auth JWT, Docker, Stacks, UI Vue.js, CLI/TUI

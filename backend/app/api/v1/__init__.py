@@ -12,10 +12,7 @@ from .targets import router as targets_router
 from .stacks import router as stacks_router
 from .deployments import router as deployments_router
 from .workflows import router as workflows_router
-from .marketplace import router as marketplace_router
 from .websockets import router as websockets_router
-from .reviews import router as reviews_router
-from .favorites import router as favorites_router
 from .stats import router as stats_router
 from .import_export import router as import_export_router
 from .schedules import router as schedules_router
@@ -33,10 +30,7 @@ api_router.include_router(targets_router, prefix="/targets", tags=["targets"])
 api_router.include_router(stacks_router, prefix="/stacks", tags=["stacks"])
 api_router.include_router(deployments_router, prefix="/deployments", tags=["deployments"])
 api_router.include_router(workflows_router, prefix="/workflows", tags=["workflows"])
-api_router.include_router(marketplace_router)  # Le préfixe est déjà dans le router
 api_router.include_router(websockets_router, prefix="/ws", tags=["websockets"])
-api_router.include_router(reviews_router, tags=["reviews"])
-api_router.include_router(favorites_router, tags=["favorites"])
 api_router.include_router(stats_router, tags=["statistics"])
 api_router.include_router(import_export_router, tags=["import-export"])
 api_router.include_router(schedules_router, tags=["schedules"])

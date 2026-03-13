@@ -476,47 +476,41 @@ class MarketplaceStackResponse(BaseModel):
     )
 
 
-class StackListResponse(BaseModel):
-    """
-    Schema pour réponse Liste de Stacks.
-
-    Retourne uniquement les informations essentielles demandées pour le listing.
-    """
-
-    model_config = ConfigDict(
-        from_attributes=True,
-        json_schema_extra={
-            "example": {
-                "id": "stack-550e8400",
-                "version": "1.0.0",
-                "category": "web",
-                "name": "Nginx Reverse Proxy",
-                "description": "Nginx reverse proxy with SSL termination",
-                "icon_url": "https://cdn.windflow.io/icons/nginx.svg",
-                "author": "WindFlow Team",
-                "license": "MIT",
-                "rating": 4.5,
-                "tags": ["web", "proxy", "nginx"],
-                "downloads": 1250
+class DeploymentConfigRequest(BaseModel):
+    """Schema pour configuration de déploiement (pour déploiement depuis marketplace - maintenant supprimé)."""
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "stack_id": "uuid-baserow",
+            "target_id": "target-docker-local",
+            "configuration": {
+                "baserow_version": "1.26.1",
+                "db_password": "secure_password_123",
+                "domain": "baserow.localhost",
+                "workers": 2
             }
         }
+    })
+
+    stack_id: str = Field(
+        ...,
+        description="ID du stack à déployer",
+        json_schema_extra={"example": "uuid-baserow"}
     )
-
-    id: str = Field(..., description="ID unique du stack")
-    version: str = Field(..., description="Version du stack")
-    category: Optional[str] = Field(None, description="Catégorie du stack")
-    name: str = Field(..., description="Nom du stack")
-    description: Optional[str] = Field(None, description="Description du stack")
-    icon_url: Optional[str] = Field(None, description="URL de l'icône")
-    author: Optional[str] = Field(None, description="Auteur du stack")
-    license: Optional[str] = Field(None, description="Licence du stack")
-    rating: float = Field(0.0, description="Note moyenne")
-    tags: List[str] = Field(default_factory=list, description="Tags du stack")
-    downloads: int = Field(0, description="Nombre de téléchargements")
-
-
-class DeploymentConfigRequest(BaseModel):
-    """Schema pour configuration de déploiement."""
+    target_id: str = Field(
+        ...,
+        description="ID de la cible de déploiement",
+        json_schema_extra={"example": "target-docker-local"}
+    )
+    configuration: Dict[str, Any] = Field(
+        ...,
+        description="Configuration des variables",
+        json_schema_extra={"example": {"baserow_version": "1.26.1", "db_password": "secure_password_123"}}
+    )
+    name: Optional[str] = Field(
+        None,
+        description="Nom du déploiement (optionnel)",
+        json_schema_extra={"example": "baserow-production"}
+    )
 
     model_config = ConfigDict(json_schema_extra={
         "example": {
