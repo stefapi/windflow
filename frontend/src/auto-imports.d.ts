@@ -411,7 +411,6 @@ declare module 'vue' {
     readonly mapStores: UnwrapRef<typeof import('pinia')['mapStores']>
     readonly mapWritableState: UnwrapRef<typeof import('pinia')['mapWritableState']>
     readonly markRaw: UnwrapRef<typeof import('vue')['markRaw']>
-    readonly marketplaceService: UnwrapRef<typeof import('./services/marketplaceService')['default']>
     readonly nextTick: UnwrapRef<typeof import('vue')['nextTick']>
     readonly notificationEvents: UnwrapRef<typeof import('./services/websocket')['notificationEvents']>
     readonly onActivated: UnwrapRef<typeof import('vue')['onActivated']>
@@ -466,7 +465,6 @@ declare module 'vue' {
     readonly syncRefs: UnwrapRef<typeof import('@vueuse/core')['syncRefs']>
     readonly targetsApi: UnwrapRef<typeof import('./services/api')['targetsApi']>
     readonly templateRef: UnwrapRef<typeof import('@vueuse/core')['templateRef']>
-    readonly templatesApi: UnwrapRef<typeof import('./services/api')['templatesApi']>
     readonly throttledRef: UnwrapRef<typeof import('@vueuse/core')['throttledRef']>
     readonly throttledWatch: UnwrapRef<typeof import('@vueuse/core')['throttledWatch']>
     readonly toRaw: UnwrapRef<typeof import('vue')['toRaw']>

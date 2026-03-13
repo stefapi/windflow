@@ -29,10 +29,6 @@
           <el-icon><Connection /></el-icon>
           <span>Workflows</span>
         </el-menu-item>
-        <el-menu-item index="/marketplace">
-          <el-icon><Shop /></el-icon>
-          <span>Marketplace</span>
-        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -71,7 +67,6 @@ import {
   Box,
   Upload,
   Connection,
-  Shop,
   User
 } from '@element-plus/icons-vue'
 

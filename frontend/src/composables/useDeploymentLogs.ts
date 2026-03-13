@@ -30,9 +30,7 @@ export function useDeploymentLogs(
 ) {
   const {
     autoConnect = true,
-    onConnect,
-    onDisconnect,
-    onError
+    onConnect
   } = options
 
   // État

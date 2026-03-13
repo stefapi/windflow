@@ -1,6 +1,6 @@
 # EPIC-004 : Refonte UI, Navigation & Nettoyage Marketplace
 
-**Statut :** TODO
+**Statut :** IN_PROGRESS
 **Priorité :** Haute
 **Phase Roadmap :** 2 — Q2 2026 (Avril–Juin, sprint dédié front en début de phase)
 **Version cible :** 1.1
@@ -62,7 +62,7 @@ Cette epic a deux axes :
 ## Liste des Stories liées
 
 ### Nettoyage Marketplace
-- [ ] STORY-401 : Audit & suppression Marketplace frontend (vue + composants + routes + stores + services liés)
+- [x] STORY-401 : Audit & suppression Marketplace frontend (vue + composants + routes + stores + services liés)
 - [ ] STORY-402 : Suppression API backend marketplace (endpoints + schemas + services liés)
 - [ ] STORY-403 : Migration Alembic pour supprimer tables `stack_review` et `user_favorite`
 - [ ] STORY-404 : Nettoyage des imports, routes, références orphelines (front + back)

@@ -141,7 +141,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useDeploymentWebSocket } from '@/composables/useDeploymentWebSocket'
 

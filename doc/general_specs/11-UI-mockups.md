@@ -1,710 +1,892 @@
 # Propositions de Maquettes d'Écran - WindFlow
 
-## Analyse des Interfaces Existantes
+## Analyse Approfondie de l'Existant
 
-Avant de concevoir l'UI de WindFlow, il est utile d'identifier ce qui fonctionne et ce qui ne fonctionne pas dans les outils concurrents.
+### Panorama des Interfaces Étudiées
 
-### Ce qu'on emprunte
+L'analyse couvre 15+ outils répartis en 3 familles :
 
-| Outil | Ce qui marche | On prend pour WindFlow |
-|-------|---------------|----------------------|
-| **Portainer** | Dashboard avec tuiles compteurs (containers, images, volumes). Liste de containers avec actions en ligne (start/stop/restart). Stack editor intégré. | Tuiles synthétiques sur le dashboard. Actions en ligne sur chaque ressource. Éditeur de stacks. |
-| **CasaOS** | App Store type smartphone (grille d'icônes, installation one-click). Interface épurée orientée grand public. Frosted glass effect. | Marketplace en grille avec icônes. Wizard d'installation simplifié. Esthétique moderne et accessible. |
-| **Proxmox** | Arbre de navigation latéral (Datacenter → Node → VM/CT). Onglets détails par ressource (Summary, Console, Hardware, Snapshots). Recherche globale. | Arbre de navigation par target. Onglets détaillés par ressource. Console VNC intégrée. |
-| **Coolify** | Navigation par projet avec déploiements. Vue serveur avec métriques. One-click services. | Concept de stack comme unité de déploiement. Métriques inline sur les targets. |
-| **Cloudron** | App store épuré avec catégories. Gestion domaines + TLS intégrée. Mise à jour apps en un clic. | Marketplace catégorisée. Mises à jour plugins simplifiées. |
+**Homeserver / App Stores** : Umbrel, Runtipi, CasaOS, Cosmos Server, YunoHost, FreedomBox
+**PaaS / Déploiement** : Coolify, Cloudron, CapRover
+**Infra / VMs** : Proxmox VE, vSphere, Scaleway Console
 
-### Ce qu'on évite
+### Leçons Tirées par Outil
 
-| Outil | Problème UX | On évite |
-|-------|-------------|----------|
-| **Portainer** | Trop de niveaux de navigation (Home → Environment → Container list → Container detail). Multi-environment ajoute de la complexité. | Navigation max 2 clics pour atteindre n'importe quelle ressource. |
-| **Proxmox** | Interface datée (ExtJS), dense, intimidante pour les non-sysadmins. Pas de marketplace. | Design moderne. Marketplace comme citoyen de première classe. |
-| **Coolify** | Dashboard qui n'affiche presque rien d'utile. Il faut 3 pages pour arriver à la config d'un service. | Dashboard actionnable. Actions directes depuis les listes. |
-| **CasaOS** | Trop simpliste pour de la gestion d'infra. Pas de gestion de VMs, pas de multi-machine. | Garder la simplicité visuelle mais avec la profondeur technique nécessaire. |
+#### Umbrel — La Référence UX
 
----
+L'interface la plus soignée du marché self-hosted. Design inspiré d'iOS : grille d'apps sur fond de wallpaper personnalisable, dock fixe en bas (Home, App Store, Settings, Activity, Widgets), effets de verre dépoli.
 
-## Principes UX WindFlow
+**Ce qu'on prend :**
+- Le concept de "homepage personnalisable" avec widgets repositionnables
+- L'App Store avec fiches détaillées et bouton "Install" unique
+- Le système de widgets (jusqu'à 3) sur le dashboard pour un résumé rapide
+- L'onboarding ultra-simplifié (wizard première installation)
 
-### Règle des 2 Clics
+**Ce qu'on adapte :**
+- Umbrel cache toute la complexité Docker — WindFlow doit la montrer (c'est un outil d'infra, pas un OS grand public)
+- Pas de gestion de VMs ni de multi-machine chez Umbrel — WindFlow doit intégrer ça dans la même fluidité
 
-Toute ressource (container, VM, stack, plugin) est accessible en **2 clics maximum** depuis le dashboard. Le premier clic choisit la catégorie (sidebar), le second sélectionne la ressource.
+#### Runtipi — L'App Store Pragmatique
 
-### Dashboard Actionnable
+Interface propre et moderne avec un dashboard minimaliste (CPU, RAM, disque), une liste d'apps installées avec statut, et un app store avec ~300 apps.
 
-Le dashboard n'est pas juste un résumé — c'est un point de départ pour agir. Chaque élément affiché est cliquable et mène directement à l'action pertinente.
+**Ce qu'on prend :**
+- La page "My Apps" avec statut inline (running/stopped), boutons d'action (start, stop, settings, open, uninstall), et badge de mise à jour disponible
+- Le concept d'app stores multiples (officiel + communautaire)
+- Le backup/restore par app avant mise à jour
+- La modification du docker-compose par app (advanced settings)
 
-### Sidebar Stable + Contenu Dynamique
+**Ce qu'on adapte :**
+- Runtipi ne gère que des apps Docker — WindFlow ajoute les VMs et les plugins fonctionnels (extensions API/UI)
 
-La sidebar reste visible et stable sur toutes les pages. Elle montre les sections core + les sections ajoutées par les plugins. Le contenu central change selon la sélection.
+#### Cosmos Server — La Sécurité Intégrée
 
-### Plugins Visibles, Pas Envahissants
+Unique par son approche "security-first" : reverse proxy intégré, SmartShield (anti-bot/DDoS), SSO natif, monitoring built-in.
 
-Les plugins qui ajoutent des pages apparaissent dans la sidebar sous une section "Plugins". Les plugins qui ajoutent des widgets apparaissent dans le dashboard. Mais un utilisateur sans plugin voit une interface propre et non vide.
+**Ce qu'on prend :**
+- Le concept de "Server Apps" : tout container Docker exposé devient une "app" avec sa propre URL, son certificat TLS, et ses règles de sécurité — le tout configurable depuis l'UI
+- Le monitoring et les alertes intégrés sans plugin séparé (mais dans WindFlow ce sera un plugin léger)
+- Le menu hamburger qui bascule entre mode simple et mode admin (évite de surcharger l'UI pour les non-admins)
+- Le storage manager intégré (gestion des disques, mounts, parity)
 
-### Thème Sombre par Défaut
+**Ce qu'on adapte :**
+- Cosmos est monolithique (reverse proxy + auth + container manager en un bloc) — WindFlow sépare ça en core + plugins
+- Le marketplace de Cosmos est moins riche — WindFlow vise un registre ouvert avec contribution communautaire
 
-Le self-hosting est souvent fait le soir sur un bureau perso. Thème sombre par défaut, thème clair disponible.
+#### CasaOS — L'Expérience Grand Public
 
----
+Interface la plus simple du lot : homepage type bureau de smartphone, cards frosted glass, app store catégorisé, file manager intégré.
 
-## Navigation Globale
+**Ce qu'on prend :**
+- Le file manager intégré avec preview de fichiers (essentiel pour le volume browser)
+- Les cards d'apps avec port affiché et bouton "Open" direct
+- L'import de containers Docker existants (pas seulement ceux installés via le store)
+- Le gestionnaire de stockage avec visualisation de l'espace disque
 
-### Structure de la Sidebar
+**Ce qu'on évite :**
+- Trop simpliste pour un outil d'infra — pas de terminal, pas de compose editor, pas de VMs
+- Pas de multi-machine
 
-```
-┌──────────────────────┐
-│  🌀 WindFlow          │
-│                      │
-│  📊 Dashboard        │  ← Vue d'ensemble + widgets plugins
-│                      │
-│  INFRASTRUCTURE      │
-│  📦 Containers       │  ← Liste containers Docker
-│  🖥️ VMs              │  ← Liste machines virtuelles
-│  📚 Stacks           │  ← Stacks Docker Compose
-│  🎯 Targets          │  ← Machines cibles
-│                      │
-│  STOCKAGE & RÉSEAU   │
-│  💾 Volumes          │  ← Volumes Docker + file browser
-│  🌐 Networks         │  ← Networks Docker
-│  🖼️ Images           │  ← Images Docker
-│                      │
-│  MARKETPLACE         │
-│  🏪 Marketplace      │  ← Catalogue plugins + stacks
-│  🔌 Plugins          │  ← Plugins installés
-│                      │
-│  ── Plugins ──       │  ← Section dynamique (ajoutée par plugins)
-│  🌍 Domaines         │  ← (Plugin Traefik)
-│  📈 Monitoring       │  ← (Plugin Uptime Kuma)
-│  💾 Backups          │  ← (Plugin Restic)
-│  🤖 Assistant IA     │  ← (Plugin Ollama/LiteLLM)
-│                      │
-│  ADMINISTRATION      │
-│  ⚙️ Settings         │  ← Orgs, envs, users, RBAC
-│  📋 Audit            │  ← Journal d'audit
-│                      │
-│  ─────────────────── │
-│  🟢 local (arm64)    │  ← Target actif + sélecteur
-│  admin               │  ← Utilisateur connecté
-└──────────────────────┘
-```
+#### Coolify — Le PaaS Self-Hosted
 
-La sidebar est rétractable en mode icônes sur les petits écrans. La section "Plugins" n'apparaît que si au moins un plugin avec pages UI est installé.
+Orienté déploiement depuis Git (comme Heroku). Dashboard par projet, gestion de serveurs multiples, déploiement auto.
 
----
+**Ce qu'on prend :**
+- La vue multi-serveurs avec métriques par serveur (CPU, RAM, disque, nombre de containers)
+- Le déploiement depuis Git avec preview des logs en temps réel
+- La notion de "Resources" qui unifie apps, databases, et services sous un même serveur
 
-## Écran 1 : Dashboard
+**Problèmes UX qu'on évite :**
+- Le dashboard est quasiment vide et ne sert à rien (juste un compteur de projets)
+- Il faut 3 clics pour arriver à la config d'un service (Project → Environment → Resource)
+- Pas d'actions rapides depuis les listes
 
-Le dashboard est la page d'accueil. Il montre l'état de l'infrastructure en un coup d'œil et permet d'agir directement.
+#### Cloudron — L'App Store Mature
 
-```
-┌─ 🌀 WindFlow ──────────────────────────────────────────────────────────────────┐
-│ Sidebar │                                                                      │
-│         │  Dashboard                                        🎯 local (arm64)   │
-│ (voir   │                                                                      │
-│  ci-    │  ┌─ Système ─────────────────────────────────────────────────────┐   │
-│  dessus)│  │  CPU ████░░░░░░ 38%    RAM ██████░░░░ 1.2/4 GB              │   │
-│         │  │  Disque █████████░ 28/64 GB    Uptime: 15j 3h               │   │
-│         │  └───────────────────────────────────────────────────────────────┘   │
-│         │                                                                      │
-│         │  ┌─ Containers ──────┐ ┌─ VMs ───────────────┐ ┌─ Stacks ────────┐ │
-│         │  │  🟢 4 running     │ │  🟢 1 running       │ │  ✅ 3 deployed  │ │
-│         │  │  🔴 1 stopped     │ │  ⚪ 1 stopped       │ │  ⚪ 1 stopped   │ │
-│         │  │  5 total          │ │  2 total             │ │  4 total        │ │
-│         │  │  [Voir tout →]    │ │  [Voir tout →]       │ │  [Voir tout →]  │ │
-│         │  └──────────────────┘ └──────────────────────┘ └────────────────┘ │
-│         │                                                                      │
-│         │  ┌─ Derniers Déploiements ───────────────────────────────────────┐   │
-│         │  │  ✅ web-app        deployed   il y a 2h    par admin         │   │
-│         │  │  ❌ monitoring     failed     il y a 5h    par admin         │   │
-│         │  │  ✅ nextcloud      deployed   il y a 1j    par alice         │   │
-│         │  └───────────────────────────────────────────────────────────────┘   │
-│         │                                                                      │
-│         │  ┌─ Widgets Plugins ─────────────────────────────────────────────┐   │
-│         │  │ ┌─ Uptime Kuma ──────┐  ┌─ Traefik ────────────────────┐    │   │
-│         │  │ │  ✅ 5/5 UP         │  │  🌍 3 domaines actifs        │    │   │
-│         │  │ │  nextcloud  ✅     │  │  🔒 3 certificats valides    │    │   │
-│         │  │ │  gitea      ✅     │  │  [Gérer les domaines →]      │    │   │
-│         │  │ │  jellyfin   ✅     │  └──────────────────────────────┘    │   │
-│         │  │ │  api        ✅     │                                      │   │
-│         │  │ │  blog       ✅     │  ┌─ Backups (Restic) ───────────┐    │   │
-│         │  │ │  [Détails →]       │  │  ✅ Dernier: il y a 6h       │    │   │
-│         │  │ └────────────────────┘  │  📦 3 volumes sauvegardés    │    │   │
-│         │  │                         │  [Voir les backups →]         │    │   │
-│         │  │                         └──────────────────────────────┘    │   │
-│         │  └───────────────────────────────────────────────────────────────┘   │
-│         │                                                                      │
-└─────────┴──────────────────────────────────────────────────────────────────────┘
-```
+Le plus abouti en termes de gestion d'apps : installation one-click, gestion domaines, TLS automatique, mises à jour automatiques, backup intégré par app.
 
-**Points clés :**
-- Barre système en haut : CPU, RAM, disque du target actif, uptime
-- 3 tuiles compteurs : Containers, VMs, Stacks — cliquables pour accéder aux listes
-- Derniers déploiements avec statut et lien direct
-- Zone widgets plugins : chaque plugin peut injecter un widget. Sans plugin, cette zone n'apparaît pas
-- Le sélecteur de target (🎯) en haut à droite permet de basculer entre machines
+**Ce qu'on prend :**
+- Le tableau de bord "Apps" avec icône, nom, domaine attribué, statut, et actions (configure, backup, restart, logs, terminal)
+- La gestion des domaines directement liée aux apps (chaque app a son sous-domaine)
+- Le système de backup par app (pas juste un backup global)
+- La page "Activity" (journal d'audit) avec filtres
+
+**Ce qu'on adapte :**
+- Cloudron est payant au-delà de 2 apps gratuites — WindFlow est entièrement open source
+- Pas de VMs ni de gestion d'infra au-delà de Docker
+
+#### Proxmox VE — La Gestion de VMs
+
+Interface technique avec arbre de navigation latéral (Datacenter → Node → VM/CT), onglets par ressource (Summary, Console, Hardware, Snapshots, Backup, Firewall).
+
+**Ce qu'on prend :**
+- L'arbre de navigation pour la hiérarchie targets → ressources
+- La console VNC/SPICE intégrée dans un onglet de l'interface web
+- Les onglets de détail par VM (Summary, Hardware, Snapshots, Backup, Network)
+- Le summary du node avec graphiques CPU/RAM/réseau en temps réel
+
+**Ce qu'on adapte :**
+- L'UI Proxmox est datée (ExtJS 2010) — WindFlow utilise un design moderne
+- Proxmox ne gère pas Docker ni les app stores
+
+#### vSphere / Scaleway — L'Infra Cloud
+
+vSphere : interface enterprise avec vue inventaire, performance charts, vMotion. Scaleway Console : design cloud moderne, sidebar fixe, création d'instances via wizard étape par étape.
+
+**Ce qu'on prend :**
+- Le wizard de création de VM/instance par étapes (Scaleway : choisir l'image → configurer → réseau → créer)
+- Les métriques de performance avec graphiques temporels (vSphere)
+- La vue inventaire avec filtres et recherche rapide
+
+#### CapRover — Le PaaS Simple
+
+Interface minimaliste : liste d'apps, one-click apps, déploiement via Git ou image Docker, gestion de domaines.
+
+**Ce qu'on prend :**
+- La simplicité de la page "One-Click Apps" : recherche + grille d'apps + install
+- Le concept de "App Configs" modifiable post-installation (env vars, ports, volumes)
 
 ---
 
-## Écran 2 : Liste Containers
+## Principes UX Révisés
 
-```
-┌─ Containers ───────────────────────────────────────────────────────────────────┐
-│                                                                                │
-│  Containers (5)          🎯 local          [🔍 Rechercher...]  [+ Créer]      │
-│                                                                                │
-│  Filtres: [Tous ▾] [Running ▾] [Target ▾]                                     │
-│                                                                                │
-│  ┌──────────────────────────────────────────────────────────────────────────┐  │
-│  │ ☐  NOM            IMAGE              STATUT     PORTS         ACTIONS   │  │
-│  ├──────────────────────────────────────────────────────────────────────────┤  │
-│  │ ☐  nextcloud      nextcloud:28       🟢 run     8080→80      ⏸ 📋 🗑   │  │
-│  │ ☐  postgres-1     postgres:15        🟢 run     5432→5432    ⏸ 📋 🗑   │  │
-│  │ ☐  redis          redis:7-alpine     🟢 run     6379→6379    ⏸ 📋 🗑   │  │
-│  │ ☐  gitea          gitea/gitea:1.21   🟢 run     3000→3000    ⏸ 📋 🗑   │  │
-│  │ ☐  old-app        myapp:1.0          🔴 stop    —            ▶ 📋 🗑   │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-│  Sélection: [▶ Start] [⏸ Stop] [🔄 Restart] [🗑 Supprimer]                   │
-│                                                                                │
-│  Actions rapides: ⏸ = Stop  📋 = Logs  🗑 = Supprimer  ▶ = Start             │
-│                                                                                │
-│  💡 Tip: Le plugin PostgreSQL détecte vos containers postgres.                 │
-│     [Installer PostgreSQL Manager →]                                           │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
-```
+### 1. Deux Modes d'Interface
 
-**Points clés :**
-- Actions inline par container (stop, logs, supprimer) — pas besoin d'ouvrir le détail pour agir
-- Sélection multiple avec actions groupées (comme Portainer)
-- Suggestion contextuelle de plugins pertinents (si un container postgres est détecté et que le plugin n'est pas installé)
-- Cliquer sur le nom ouvre le détail du container
+Inspiré de Cosmos Server (mode simple vs admin) et Proxmox (vue simple vs vue complète) :
+
+**Mode Standard** : Dashboard, Apps installées, Marketplace, Volumes, Settings. Suffisant pour 80% des utilisateurs.
+
+**Mode Avancé** : Ajoute Containers (individuels), VMs, Networks, Images, Targets, Audit. Pour les admins et les power users.
+
+Le toggle est dans la sidebar (un bouton discret en bas). Le mode est mémorisé par utilisateur. Les Viewers voient toujours le mode Standard.
+
+### 2. "Server Apps" comme Concept Central
+
+Inspiré de Cosmos et Cloudron : tout ce qui est déployé (stack, container, VM) devient une **"App"** dans l'interface, avec son icône, son domaine (si plugin Traefik installé), son statut, et ses actions. C'est la vue par défaut.
+
+La vue "Containers" et "VMs" techniques existe en mode avancé pour les power users.
+
+### 3. Dashboard Type "Homepage"
+
+Inspiré d'Umbrel (wallpaper + widgets) mais avec la densité d'information de Runtipi (métriques système + apps running). Le dashboard est le point d'entrée unique, personnalisable avec des widgets ajoutés par les plugins.
+
+### 4. Wizard Everywhere
+
+Inspiré de Scaleway et Cloudron : chaque action complexe (installer un plugin, déployer une stack, ajouter un target, créer une VM) passe par un **wizard par étapes** au lieu d'un formulaire monolithique.
+
+### 5. Actions sans Navigation
+
+Inspiré de Portainer et Runtipi : les actions courantes (start, stop, restart, logs, terminal, backup) sont accessibles **directement depuis les listes**, sans ouvrir le détail. Le détail existe pour la configuration et le troubleshooting.
 
 ---
 
-## Écran 3 : Détail Container
+## Navigation Révisée
+
+### Sidebar — Mode Standard
 
 ```
-┌─ Container: nextcloud ─────────────────────────────────────────────────────────┐
-│                                                                                │
-│  nextcloud                              🟢 Running depuis 3 jours             │
-│  Image: nextcloud:28                    Target: local                          │
-│                                                                                │
-│  [⏸ Stop] [🔄 Restart] [📋 Logs] [>_ Terminal] [🔍 Inspect]                 │
-│                                                                                │
-│  ┌─ Infos ──────────┬─ Logs ──────────┬─ Terminal ──┬─ Stats ──┬─ Plugin ──┐  │
-│  │                  │                 │             │          │           │  │
-│  │  ──── Onglet Infos (actif) ────                                        │  │
-│  │                                                                        │  │
-│  │  ID: 3a7f2b1c9d...                                                    │  │
-│  │  Créé: 2026-03-28 10:15                                               │  │
-│  │  Stack: nextcloud-stack                                                │  │
-│  │                                                                        │  │
-│  │  Ports:                                                                │  │
-│  │    8080 → 80/tcp                                                       │  │
-│  │                                                                        │  │
-│  │  Volumes:                                                              │  │
-│  │    nextcloud_data → /var/www/html    [📂 Parcourir]                    │  │
-│  │    nextcloud_config → /var/www/html/config  [📂 Parcourir]             │  │
-│  │                                                                        │  │
-│  │  Réseau: windflow-homelab-prod                                         │  │
-│  │                                                                        │  │
-│  │  Variables d'environnement:                                            │  │
-│  │    POSTGRES_HOST = postgres-1                                          │  │
-│  │    POSTGRES_DB = nextcloud                                             │  │
-│  │    POSTGRES_PASSWORD = ●●●●●●●● [👁]                                  │  │
-│  │                                                                        │  │
-│  │  ──── Actions Plugin (PostgreSQL Manager) ────                         │  │
-│  │  Ce container utilise PostgreSQL. Actions disponibles :                 │  │
-│  │  [Créer une DB] [Créer un User] [Backup SQL] [Stats DB]               │  │
-│  │                                                                        │  │
-│  └────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────┐
+│  🌀 WindFlow              │
+│                          │
+│  🏠  Dashboard           │  ← Homepage personnalisable
+│  📱  Apps                │  ← Tout ce qui est déployé (stacks, containers nommés)
+│  🏪  Marketplace         │  ← Plugins + Stacks one-click
+│  🔌  Plugins             │  ← Plugins installés + config
+│                          │
+│  ── Plugins ──           │  ← Ajouté dynamiquement par les plugins
+│  🌍  Domaines            │  ← (Plugin Traefik)
+│  📈  Monitoring          │  ← (Plugin Uptime Kuma)
+│  💾  Backups             │  ← (Plugin Restic)
+│  🤖  Assistant IA        │  ← (Plugin Ollama/LiteLLM)
+│                          │
+│  ⚙️  Settings            │
+│                          │
+│  ─────────────────────── │
+│  [🔧 Mode Avancé]       │  ← Toggle
+│  🟢 local (arm64)        │
+│  👤 admin                │
+└──────────────────────────┘
 ```
 
-**Points clés :**
-- Onglets horizontaux : Infos, Logs, Terminal, Stats, et un onglet par plugin actif sur ce container
-- Accès direct au volume browser depuis le détail
-- Actions plugin contextuelles en bas (ex: PostgreSQL Manager détecte que ce container utilise postgres)
-- Mot de passe masqué avec bouton révéler
+### Sidebar — Mode Avancé (toggle activé)
+
+```
+┌──────────────────────────┐
+│  🌀 WindFlow              │
+│                          │
+│  🏠  Dashboard           │
+│  📱  Apps                │
+│  🏪  Marketplace         │
+│  🔌  Plugins             │
+│                          │
+│  INFRASTRUCTURE          │  ← Visible en mode avancé uniquement
+│  📦  Containers          │  ← Tous les containers Docker (incluant ceux des plugins)
+│  🖥️  VMs                 │  ← Machines virtuelles
+│  📚  Stacks (compose)    │  ← Vue technique des stacks compose
+│  🎯  Targets             │  ← Machines cibles
+│  💾  Volumes             │  ← Volumes Docker + file browser
+│  🌐  Networks            │  ← Networks Docker
+│  🖼️  Images              │  ← Images Docker
+│                          │
+│  ── Plugins ──           │
+│  🌍  Domaines            │
+│  📈  Monitoring          │
+│  💾  Backups             │
+│  🤖  Assistant IA        │
+│                          │
+│  ADMINISTRATION          │
+│  ⚙️  Settings            │
+│  📋  Audit               │
+│                          │
+│  ─────────────────────── │
+│  [📱 Mode Standard]     │  ← Toggle retour
+│  🟢 local (arm64)        │
+│  👤 admin                │
+└──────────────────────────┘
+```
+
+**Rationale** : Un self-hoster débutant qui veut juste installer Nextcloud et Jellyfin ne devrait jamais voir "Containers", "Networks", ou "Images". Un admin qui veut debug un container qui crashe a besoin de tout.
 
 ---
 
-## Écran 4 : Liste VMs
+## Écran 1 : Dashboard (Homepage)
+
+Inspiré d'Umbrel (widgets personnalisables) + Runtipi (métriques système) + Cosmos (monitoring intégré).
 
 ```
-┌─ Machines Virtuelles ──────────────────────────────────────────────────────────┐
-│                                                                                │
-│  VMs (2)                 🎯 local          [🔍 Rechercher...]  [+ Créer]      │
-│                                                                                │
-│  ┌──────────────────────────────────────────────────────────────────────────┐  │
-│  │  NOM            HYPERVISEUR  STATUT     vCPU  RAM      ACTIONS          │  │
-│  ├──────────────────────────────────────────────────────────────────────────┤  │
-│  │  ubuntu-dev     KVM          🟢 run     2     2 GB     🖥 ⏸ 📸 🗑      │  │
-│  │  windows-10     KVM          🔴 stop    4     8 GB     🖥 ▶ 📸 🗑      │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-│  🖥 = Console    ⏸ = Stop    ▶ = Start    📸 = Snapshot    🗑 = Supprimer     │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Sidebar │                                                                   │
+│         │  Bonjour admin 👋             🎯 local (arm64)  🔔 2 notifications│
+│         │                                                                   │
+│         │  ┌─ Système ──────────────────────────────────────────────────┐   │
+│         │  │ CPU ████░░░░░░ 38%   RAM ██████░░░░ 1.2/4 GB             │   │
+│         │  │ Disque █████████░ 28/64 GB   Uptime: 15j 3h              │   │
+│         │  │ 🟢 5 apps running  🖥️ 1 VM running  🔌 3 plugins actifs  │   │
+│         │  └────────────────────────────────────────────────────────────┘   │
+│         │                                                                   │
+│         │  ┌─ Apps ─────────────────────────────────────────────────────┐   │
+│         │  │                                                            │   │
+│         │  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐  │   │
+│         │  │  │  ☁️     │ │  🐙    │ │  🎬    │ │  🐘    │ │  🔴    │  │   │
+│         │  │  │Nextcloud│ │ Gitea  │ │Jellyfin│ │Postgres│ │ Redis  │  │   │
+│         │  │  │  🟢 UP  │ │ 🟢 UP  │ │ 🟢 UP  │ │ 🟢 UP  │ │ 🟢 UP  │  │   │
+│         │  │  │ :8080   │ │ :3000  │ │ :8096  │ │ :5432  │ │ :6379  │  │   │
+│         │  │  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘  │   │
+│         │  │                                                            │   │
+│         │  │  cloud.example.com  git.example.com  media.example.com     │   │
+│         │  │  (Traefik ✓)        (Traefik ✓)      (Traefik ✓)          │   │
+│         │  └────────────────────────────────────────────────────────────┘   │
+│         │                                                                   │
+│         │  ┌─ Widgets ──────────────────────────────────────────────────┐   │
+│         │  │                                                            │   │
+│         │  │  ┌─ Uptime Kuma ─────┐  ┌─ Traefik ─────────────────┐    │   │
+│         │  │  │  ✅ 5/5 services  │  │  🌍 3 domaines actifs     │    │   │
+│         │  │  │  UP depuis 15j    │  │  🔒 3 certificats valides │    │   │
+│         │  │  │                   │  │  📊 1.2K req/h            │    │   │
+│         │  │  │  nextcloud ✅ 99% │  └───────────────────────────┘    │   │
+│         │  │  │  gitea     ✅ 99% │                                   │   │
+│         │  │  │  jellyfin  ✅ 99% │  ┌─ Restic ──────────────────┐    │   │
+│         │  │  └───────────────────┘  │  ✅ Dernier backup: 6h    │    │   │
+│         │  │                         │  📦 3 volumes, 2.1 GB     │    │   │
+│         │  │  ┌─ Dernière activité ┐ │  Prochain: dans 18h       │    │   │
+│         │  │  │ ✅ Nextcloud mis   │ └───────────────────────────┘    │   │
+│         │  │  │   à jour (2h)      │                                  │   │
+│         │  │  │ ✅ Backup terminé  │                                  │   │
+│         │  │  │   (6h)             │                                  │   │
+│         │  │  │ 🔔 Certificat     │                                  │   │
+│         │  │  │   expire dans 30j  │                                  │   │
+│         │  │  └────────────────────┘                                  │   │
+│         │  └────────────────────────────────────────────────────────────┘   │
+│         │                                                                   │
+└─────────┴───────────────────────────────────────────────────────────────────┘
 ```
 
-**Points clés :**
-- Bouton Console (🖥) ouvre directement la console VNC/SPICE dans un nouvel onglet ou un panneau
-- Snapshot en un clic depuis la liste
+**Améliorations vs v1 :**
+- **Section "Apps"** avec grille d'icônes type Umbrel — chaque app est cliquable et ouvre son UI native dans un nouvel onglet. Le domaine Traefik est affiché sous chaque app (si plugin installé).
+- **Section "Widgets"** repositionnable — chaque plugin peut injecter un widget. Le widget "Dernière activité" est natif (core) et montre les actions récentes type Cloudron Activity.
+- **Salutation personnalisée** en haut à gauche (Umbrel-like) au lieu d'un titre froid
+- **Compteur de notifications** (🔔) pour les alertes et événements importants
 
 ---
 
-## Écran 5 : Console VM (noVNC intégré)
+## Écran 2 : Apps (vue unifiée)
+
+Inspiré de Cloudron (apps avec domaine) + Runtipi (statut + actions inline) + Cosmos (server apps).
+
+C'est la vue principale. Tout ce qui est "déployé" apparaît ici, qu'il ait été installé depuis la marketplace ou créé manuellement.
 
 ```
-┌─ Console: ubuntu-dev ──────────────────────────────────────────────────────────┐
-│                                                                                │
-│  ubuntu-dev (KVM)        🟢 Running        [Ctrl+Alt+Del] [Plein Écran]       │
-│                                                                                │
-│  ┌──────────────────────────────────────────────────────────────────────────┐  │
-│  │                                                                          │  │
-│  │                                                                          │  │
-│  │                    ┌──────────────────────────┐                           │  │
-│  │                    │  ubuntu@ubuntu-dev:~$ _  │                           │  │
-│  │                    │                          │                           │  │
-│  │                    │                          │                           │  │
-│  │                    │   Console VNC / SPICE    │                           │  │
-│  │                    │   (noVNC embedded)       │                           │  │
-│  │                    │                          │                           │  │
-│  │                    │                          │                           │  │
-│  │                    └──────────────────────────┘                           │  │
-│  │                                                                          │  │
-│  │                                                                          │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-│  Résolution: 1024x768  |  Qualité: Auto  |  Clipboard: Sync                   │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
+┌─ Apps ──────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│  Mes Apps (5)                    [🔍 Rechercher]  [+ Nouvelle App]         │
+│                                                                             │
+│  ┌── Nextcloud ──────────────────────────────────────────────── 🟢 ─────┐  │
+│  │  ☁️  Nextcloud 28.0.4                                                │  │
+│  │  cloud.example.com (🔒 TLS)    Stack: nextcloud    Target: local     │  │
+│  │  3 services: nginx, php-fpm, cron    RAM: 342 MB                     │  │
+│  │                                                                       │  │
+│  │  [🔗 Ouvrir]  [📋 Logs]  [>_ Terminal]  [⏸ Stop]  [🔄 Update ⬆]  [⋯] │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌── Gitea ──────────────────────────────────────────────────── 🟢 ─────┐  │
+│  │  🐙  Gitea 1.21.8                                                   │  │
+│  │  git.example.com (🔒 TLS)      Stack: gitea       Target: local     │  │
+│  │  2 services: gitea, gitea-db    RAM: 189 MB                          │  │
+│  │                                                                       │  │
+│  │  [🔗 Ouvrir]  [📋 Logs]  [>_ Terminal]  [⏸ Stop]  [🔄]            [⋯] │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌── Jellyfin ───────────────────────────────────────────────── 🟢 ─────┐  │
+│  │  🎬  Jellyfin 10.9.6                                                │  │
+│  │  media.example.com (🔒 TLS)    Container: jellyfin  Target: local   │  │
+│  │  1 service    RAM: 456 MB    GPU: ✓                                  │  │
+│  │                                                                       │  │
+│  │  [🔗 Ouvrir]  [📋 Logs]  [>_ Terminal]  [⏸ Stop]                   [⋯] │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌── ubuntu-dev (VM) ────────────────────────────────────────── 🟢 ─────┐  │
+│  │  🖥️  Ubuntu 22.04 (KVM)                                             │  │
+│  │  2 vCPU, 2 GB RAM, 20 GB disk    Target: local                      │  │
+│  │                                                                       │  │
+│  │  [🖥 Console]  [📸 Snapshot]  [⏸ Stop]                              [⋯] │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌── old-test-app ───────────────────────────────────────────── 🔴 ─────┐  │
+│  │  📦  myapp:1.0                                                       │  │
+│  │  Container arrêté depuis 3 jours    Target: local                    │  │
+│  │                                                                       │  │
+│  │  [▶ Start]  [📋 Logs]  [🗑 Supprimer]                               [⋯] │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Inspiration :** Proxmox fait ça très bien — console intégrée dans un onglet de l'interface web, avec boutons Ctrl+Alt+Del et plein écran.
+**Améliorations clés :**
+- **Vue unifiée** : Stacks, containers individuels ET VMs dans la même liste, différenciés par icône
+- **Domaine affiché** si plugin Traefik actif — clic direct vers l'app dans le navigateur
+- **Bouton [🔗 Ouvrir]** en premier (c'est l'action la plus courante — inspiré Runtipi)
+- **Actions inline** complètes sans ouvrir le détail — inspiré Cloudron et Portainer
+- **Bouton [⋯]** pour les actions secondaires (backup, clone, modifier, supprimer, voir compose)
+- **Badge [⬆]** pour les mises à jour disponibles — inspiré Runtipi et Cloudron
+- **RAM consommée** visible directement — important sur RPi
 
 ---
 
-## Écran 6 : Stacks
+## Écran 3 : Détail App / Container
+
+Inspiré de Proxmox (onglets) + Cosmos (URL/routing intégré) + Cloudron (backup + domain).
 
 ```
-┌─ Stacks ───────────────────────────────────────────────────────────────────────┐
-│                                                                                │
-│  Stacks (4)              🎯 local    [🔍 Rechercher]  [+ Créer] [📦 Marketplace]│
-│                                                                                │
-│  ┌──────────────────────────────────────────────────────────────────────────┐  │
-│  │  NOM            SERVICES        STATUT        VERSION   ACTIONS          │  │
-│  ├──────────────────────────────────────────────────────────────────────────┤  │
-│  │  nextcloud      3 services      ✅ deployed   v3        🔄 ⏸ ↩ 📝     │  │
-│  │  web-app        2 services      ✅ deployed   v5        🔄 ⏸ ↩ 📝     │  │
-│  │  gitea          2 services      ✅ deployed   v1        🔄 ⏸ ↩ 📝     │  │
-│  │  monitoring     4 services      ⏸ stopped     v2        ▶  🗑 ↩ 📝     │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-│  🔄 = Re-deploy    ⏸ = Stop    ▶ = Start    ↩ = Rollback    📝 = Éditer       │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
+┌─ Nextcloud ────────────────────────────────────────────────────────────────┐
+│                                                                            │
+│  ☁️ Nextcloud 28.0.4           🟢 Running (15 jours)      [🔗 Ouvrir]    │
+│  cloud.example.com (🔒 TLS expire dans 89j)                              │
+│  Stack: nextcloud  │  Target: local  │  RAM: 342 MB  │  CPU: 5%          │
+│                                                                            │
+│  [⏸ Stop] [🔄 Restart] [📋 Logs] [>_ Terminal] [📸 Backup] [⚙ Config]   │
+│                                                                            │
+│  ┌ Aperçu ─┬ Services ─┬ Logs ─┬ Terminal ─┬ Volumes ─┬ Domaine ─┬ ⚙ ─┐  │
+│  │                                                                      │  │
+│  │  ──── Onglet Aperçu (actif) ────                                    │  │
+│  │                                                                      │  │
+│  │  ┌─ Services (3) ──────────────────────────────────────────────┐    │  │
+│  │  │  nginx       nginx:alpine     🟢 running   80→80           │    │  │
+│  │  │  php-fpm     nextcloud:28     🟢 running   9000            │    │  │
+│  │  │  cron        nextcloud:28     🟢 running   —               │    │  │
+│  │  └──────────────────────────────────────────────────────────────┘    │  │
+│  │                                                                      │  │
+│  │  ┌─ Ressources ────────────────────────────────────────────────┐    │  │
+│  │  │  CPU  ██░░░░░░░░ 5%     RAM  ████░░░░░░ 342/512 MB        │    │  │
+│  │  │  NET ↑ 12 MB/s  ↓ 340 KB/s    I/O ↑ 2 MB/s  ↓ 500 KB/s  │    │  │
+│  │  └──────────────────────────────────────────────────────────────┘    │  │
+│  │                                                                      │  │
+│  │  ┌─ Volumes ──────────────────────────────────────────────────┐     │  │
+│  │  │  nextcloud_data    → /var/www/html        2.1 GB  [📂]    │     │  │
+│  │  │  nextcloud_config  → /var/www/html/config  12 MB  [📂]    │     │  │
+│  │  │  nextcloud_db      → /var/lib/mysql        890 MB [📂]    │     │  │
+│  │  └──────────────────────────────────────────────────────────────┘    │  │
+│  │                                                                      │  │
+│  │  ┌─ Actions Plugin ───────────────────────────────────────────┐     │  │
+│  │  │  🐘 PostgreSQL Manager : 2 databases, 3 users              │     │  │
+│  │  │  [Créer une DB] [Créer un User] [Backup SQL] [Stats]      │     │  │
+│  │  └──────────────────────────────────────────────────────────────┘    │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Le détail d'une stack montre l'éditeur YAML + l'historique des versions + le log du dernier déploiement.
+**Améliorations :**
+- **Onglet "Domaine"** (ajouté par plugin Traefik) : permet de modifier le domaine, voir le certificat, configurer le routing
+- **Onglet "Services"** : liste tous les containers de la stack avec statut individuel
+- **Métriques inline** avec mini-graphiques (inspiré Proxmox Summary)
+- **Bouton [📸 Backup]** directement sur l'app (inspiré Cloudron et Runtipi) — nécessite plugin Restic
+- **Actions plugin contextuelles** en bas : le plugin PostgreSQL détecte les containers DB et propose ses actions
 
 ---
 
-## Écran 7 : Marketplace
+## Écran 4 : Marketplace
 
-La marketplace est l'écran clé de WindFlow — c'est ce qui le différencie de Portainer. Inspiration directe de CasaOS et des stores d'apps mobiles.
+Inspiré de Umbrel App Store (fiches détaillées, design soigné) + Runtipi (catégories, 300 apps) + Cloudron (apps vérifiées avec domaine).
 
 ```
-┌─ Marketplace ──────────────────────────────────────────────────────────────────┐
-│                                                                                │
-│  [🔍 Rechercher plugins et stacks...]                                         │
-│                                                                                │
-│  [Tout] [Plugins] [Stacks]    Catégories: [Accès] [Monitoring] [DB] [Backup]  │
-│                                            [Sécurité] [Git] [Mail] [IA] [...]  │
-│                                                                                │
-│  ── Plugins Populaires ────────────────────────────────────────────────────── │
-│                                                                                │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐         │
-│  │  🔀          │ │  📊          │ │  🐘          │ │  💾          │         │
-│  │  Traefik     │ │  Uptime Kuma │ │  PostgreSQL  │ │  Restic      │         │
-│  │              │ │              │ │  Manager     │ │              │         │
-│  │  Reverse     │ │  Monitoring  │ │  Gestion DB  │ │  Backup      │         │
-│  │  proxy + TLS │ │  uptime      │ │  intégrée    │ │  automatique │         │
-│  │              │ │              │ │              │ │              │         │
-│  │  128 Mo RAM  │ │  128 Mo RAM  │ │  32 Mo RAM   │ │  64 Mo RAM   │         │
-│  │  arm64 ✓     │ │  arm64 ✓     │ │  arm64 ✓     │ │  arm64 ✓     │         │
-│  │              │ │              │ │              │ │              │         │
-│  │ [Installer]  │ │ [Installer]  │ │ [Installé ✓] │ │ [Installer]  │         │
-│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘         │
-│                                                                                │
-│  ── Stacks One-Click ──────────────────────────────────────────────────────── │
-│                                                                                │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐         │
-│  │  ☁️           │ │  🐙          │ │  🎬          │ │  🏠          │         │
-│  │  Nextcloud   │ │  Gitea       │ │  Jellyfin    │ │  Home        │         │
-│  │              │ │              │ │              │ │  Assistant   │         │
-│  │  Cloud perso │ │  Git self-   │ │  Streaming   │ │  Domotique   │         │
-│  │              │ │  hosted      │ │  média       │ │              │         │
-│  │              │ │              │ │              │ │              │         │
-│  │ [Déployer]   │ │ [Déployer]   │ │ [Déployer]   │ │ [Déployer]   │         │
-│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘         │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
+┌─ Marketplace ──────────────────────────────────────────────────────────────┐
+│                                                                            │
+│  [🔍 Rechercher apps et plugins...]                                       │
+│                                                                            │
+│  ┌ Plugins ─┬ Stacks ─┐                                                   │
+│                                                                            │
+│  Catégories:                                                               │
+│  [Tous] [🔀 Accès] [📊 Monitoring] [🐘 Bases de données] [💾 Backup]     │
+│  [🔒 Sécurité] [🐙 Git] [✉️ Mail] [🤖 IA] [📡 Messagerie] [📦 Stockage] │
+│                                                                            │
+│  ── Recommandés pour vous ────────────────────────────────────────────── │
+│  (basé sur votre config : pas de reverse proxy détecté)                   │
+│                                                                            │
+│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐          │
+│  │                  │ │                  │ │                  │          │
+│  │  🔀  Traefik     │ │  📊 Uptime Kuma  │ │  💾 Restic       │          │
+│  │                  │ │                  │ │                  │          │
+│  │  Reverse proxy   │ │  Monitoring de   │ │  Backup auto     │          │
+│  │  avec HTTPS      │ │  disponibilité   │ │  de vos volumes  │          │
+│  │  automatique     │ │                  │ │                  │          │
+│  │                  │ │  128 Mo • arm64 ✓│ │  64 Mo • arm64 ✓ │          │
+│  │  128 Mo • arm64 ✓│ │                  │ │                  │          │
+│  │  ⭐ Recommandé   │ │  ★★★★★ (12)     │ │  ★★★★☆ (8)      │          │
+│  │                  │ │                  │ │                  │          │
+│  │  [Installer]     │ │  [Installer]     │ │  [Installer]     │          │
+│  └──────────────────┘ └──────────────────┘ └──────────────────┘          │
+│                                                                            │
+│  ── Toutes les Apps ──────────────────────────────────────────────────── │
+│                                                                            │
+│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐          │
+│  │  🐘 PostgreSQL   │ │  🔴 Redis        │ │  🍃 MongoDB      │          │
+│  │  Manager         │ │  Manager         │ │  Manager         │          │
+│  │  Extension       │ │  Extension       │ │  Extension       │          │
+│  │  32 Mo • arm64 ✓ │ │  32 Mo • arm64 ✓ │ │  32 Mo • arm64 ✓ │          │
+│  │  [Installé ✅]   │ │  [Installer]     │ │  [Installer]     │          │
+│  └──────────────────┘ └──────────────────┘ └──────────────────┘          │
+│                                                                            │
+│  ┌ Stacks ─┐  (onglet Stacks)                                             │
+│                                                                            │
+│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐          │
+│  │  ☁️ Nextcloud     │ │  🐙 Gitea        │ │  🎬 Jellyfin     │          │
+│  │  Cloud personnel │ │  Git self-hosted │ │  Streaming       │          │
+│  │                  │ │                  │ │  média           │          │
+│  │  512 Mo • arm64 ✓│ │  256 Mo • arm64 ✓│ │  512 Mo • arm64 ✓│          │
+│  │  [Déployé ✅]    │ │  [Déployer]      │ │  [Déployer]      │          │
+│  └──────────────────┘ └──────────────────┘ └──────────────────┘          │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Points clés :**
-- Séparation visuelle entre Plugins (étendent WindFlow) et Stacks (applications complètes)
-- Chaque carte montre : icône, nom, description courte, RAM requise, compatibilité ARM
-- Bouton vert "Installé ✓" pour les plugins déjà présents
-- Onglets de catégorie en haut pour filtrer rapidement
+**Améliorations vs v1 :**
+- **"Recommandés pour vous"** basé sur l'état de l'infrastructure (pas de reverse proxy → recommander Traefik, pas de backup → recommander Restic). Inspiré des stores intelligents.
+- **Ratings** par la communauté (étoiles) — inspiré Runtipi et CasaOS
+- **Onglets Plugins / Stacks** pour séparer clairement les deux types
+- **Badge "Extension"** visible sur les plugins qui n'ajoutent pas de container (pour rassurer sur la consommation mémoire)
+- **Compatibilité ARM** et RAM toujours visibles — critique pour les utilisateurs RPi
 
 ---
 
-## Écran 8 : Fiche Plugin (Marketplace)
+## Écran 5 : Wizard Installation (étapes)
+
+Inspiré de Scaleway (wizard par étapes) + Cloudron (configuration simplifiée).
 
 ```
-┌─ Plugin: Traefik ──────────────────────────────────────────────────────────────┐
-│                                                                                │
-│  ← Retour à la Marketplace                                                    │
-│                                                                                │
-│  🔀 Traefik — Reverse Proxy                            [Installer]            │
-│                                                                                │
-│  Reverse proxy moderne avec TLS automatique via                                │
-│  Let's Encrypt. Permet d'associer des noms de domaine                          │
-│  à vos services depuis l'interface WindFlow.                                   │
-│                                                                                │
-│  ┌─ Détails ──────────────────────────────────────────────────────────────┐   │
-│  │  Type:           Hybrid (service + extension)                          │   │
-│  │  Catégorie:      Accès & Routage                                       │   │
-│  │  Version:        1.2.0                                                 │   │
-│  │  Auteur:         WindFlow Team (officiel)                               │   │
-│  │  Licence:        MIT                                                   │   │
-│  │  Architectures:  amd64 ✓  arm64 ✓                                     │   │
-│  │  RAM minimum:    128 Mo                                                │   │
-│  │  Fournit:        reverse_proxy, tls_certificates                       │   │
-│  │  Dépendances:    Docker                                                │   │
-│  │  Conflits:       Nginx Proxy Manager, Caddy                            │   │
-│  └────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                │
-│  ┌─ Ce que ce plugin ajoute ──────────────────────────────────────────────┐   │
-│  │  ✓ Page "Domaines & Routage" dans le menu WindFlow                     │   │
-│  │  ✓ Association domaine ↔ service en un clic                            │   │
-│  │  ✓ Certificats TLS automatiques (Let's Encrypt)                        │   │
-│  │  ✓ Auto-configuration lors du déploiement de stacks                    │   │
-│  │  ✓ Widget dashboard avec routes actives                                │   │
-│  └────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                │
-│  ┌─ Compatibilité ───────────────────────────────────────────────────────┐   │
-│  │  ✅ Architecture compatible (arm64)                                    │   │
-│  │  ✅ RAM suffisante (1.2 Go libre, 128 Mo requis)                       │   │
-│  │  ✅ Docker disponible sur le target actif                              │   │
-│  │  ⚠️ Ports 80 et 443 seront utilisés par Traefik                       │   │
-│  └────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                │
-│  [Installer Traefik]                                                          │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
+┌─ Installer Traefik ────────────────────────────────────────────────────────┐
+│                                                                            │
+│  ○───────●───────○                                                        │
+│  Vérifier  Configurer  Installer                                          │
+│                                                                            │
+│  Étape 2 sur 3 — Configuration                                           │
+│                                                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │                                                                     │  │
+│  │  Email Let's Encrypt *                                              │  │
+│  │  ┌─────────────────────────────────────────────────────┐            │  │
+│  │  │ admin@example.com                                   │            │  │
+│  │  └─────────────────────────────────────────────────────┘            │  │
+│  │  📎 Requis pour recevoir les alertes d'expiration de certificats   │  │
+│  │                                                                     │  │
+│  │  ─────────────────────────────────────────────────────              │  │
+│  │                                                                     │  │
+│  │  Dashboard Traefik                                                  │  │
+│  │  [✓ Activé]                                                         │  │
+│  │  📎 Accessible à traefik.votre-domaine.com                         │  │
+│  │                                                                     │  │
+│  │  ─────────────────────────────────────────────────────              │  │
+│  │                                                                     │  │
+│  │  ▸ Options avancées                                                 │  │
+│  │                                                                     │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+│  ┌─ Ce plugin va : ────────────────────────────────────────────────────┐  │
+│  │  ✓ Déployer Traefik (1 container, ~128 Mo RAM)                     │  │
+│  │  ✓ Ajouter la page "Domaines" dans le menu                        │  │
+│  │  ✓ Utiliser les ports 80 et 443                                    │  │
+│  │  ✓ Configurer automatiquement le routage des futures apps          │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+│                                           [← Retour]  [Installer →]      │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Points clés :**
-- Vérification de compatibilité automatique avant installation (arch, RAM, dépendances)
-- Description claire de ce que le plugin ajoute à l'interface
-- Avertissements (ports utilisés, conflits)
+**Améliorations :**
+- **Stepper visuel** en haut (●───○───○) — clair et non-intimidant
+- **Options avancées cachées** par défaut (accordion) — les débutants ne voient que l'essentiel
+- **Encadré "Ce plugin va"** en bas qui résume l'impact (containers, RAM, ports) — inspiré de la transparence de Cosmos et des dialogues d'installation mobile
 
 ---
 
-## Écran 9 : Wizard d'Installation Plugin
+## Écran 6 : Targets (machines)
+
+Inspiré de Coolify (vue multi-serveurs) + Proxmox (arbre de nodes) + Scaleway (instances cards).
 
 ```
-┌─ Installation: Traefik ────────────────────────────────────────────────────────┐
-│                                                                                │
-│  Étape 2/3 — Configuration                                                    │
-│  ● Vérification  ● Configuration  ○ Installation                              │
-│                                                                                │
-│  ┌─ Configuration Traefik ────────────────────────────────────────────────┐   │
-│  │                                                                        │   │
-│  │  Email Let's Encrypt *                                                 │   │
-│  │  ┌──────────────────────────────────────────────────┐                  │   │
-│  │  │ admin@example.com                                │                  │   │
-│  │  └──────────────────────────────────────────────────┘                  │   │
-│  │  Utilisé pour les notifications d'expiration de certificats            │   │
-│  │                                                                        │   │
-│  │  Activer le dashboard Traefik                                          │   │
-│  │  [✓ Oui]                                                               │   │
-│  │                                                                        │   │
-│  │  Niveau de logs                                                        │   │
-│  │  ┌──────────────────────────────────────────────────┐                  │   │
-│  │  │ INFO                                         [▾] │                  │   │
-│  │  └──────────────────────────────────────────────────┘                  │   │
-│  │                                                                        │   │
-│  └────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                │
-│                                            [← Retour]  [Installer →]          │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
+┌─ Targets ──────────────────────────────────────────────────────────────────┐
+│                                                                            │
+│  Machines (3)                         [+ Ajouter une machine]             │
+│                                                                            │
+│  ┌── local ────────────────────────────────────────────────── 🟢 ──────┐  │
+│  │                                                                      │  │
+│  │  🏠 Machine locale │ arm64 │ Raspberry Pi OS 12                     │  │
+│  │                                                                      │  │
+│  │  CPU ████░░░░░░ 38%    RAM ██████░░░░ 1.2 / 4.0 GB                 │  │
+│  │  Disk █████████░ 28 / 64 GB     Temp: 52°C                          │  │
+│  │                                                                      │  │
+│  │  Docker 24.0.7 ✅    KVM 9.0.0 ✅    5 apps, 1 VM                   │  │
+│  │                                                                      │  │
+│  │  [📊 Métriques]  [⚙ Configurer]                                     │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+│  ┌── nas-server ───────────────────────────────────────────── 🟢 ──────┐  │
+│  │                                                                      │  │
+│  │  🔗 SSH deploy@192.168.1.50 │ amd64 │ Debian 12                    │  │
+│  │                                                                      │  │
+│  │  CPU ██░░░░░░░░ 12%    RAM ████░░░░░░ 6.2 / 32 GB                  │  │
+│  │  Disk ███░░░░░░░ 2.1 / 8.0 TB                                       │  │
+│  │                                                                      │  │
+│  │  Docker 25.0.3 ✅    12 apps                                         │  │
+│  │                                                                      │  │
+│  │  [📊 Métriques]  [⚙ Configurer]  [>_ SSH]                           │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+│  ┌── proxmox-1 ───────────────────────────────────────────── 🔴 ──────┐  │
+│  │                                                                      │  │
+│  │  🖥️ Proxmox VE (192.168.1.100) │ amd64 │ PVE 8.1                   │  │
+│  │                                                                      │  │
+│  │  ⚠️ Hors ligne depuis 2h (dernière vue: 12:30)                      │  │
+│  │                                                                      │  │
+│  │  [🔄 Réessayer]  [⚙ Configurer]                                     │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Points clés :**
-- Wizard par étapes : Vérification → Configuration → Installation
-- Formulaire généré dynamiquement depuis le manifest du plugin
-- Descriptions inline pour chaque champ
-- On ne montre que les champs nécessaires (pas de config avancée par défaut)
+**Améliorations :**
+- **Température CPU** affichée (pertinent sur RPi) — inspiré des dashboards hardware
+- **Bouton [>_ SSH]** pour ouvrir un terminal SSH directement dans le navigateur vers la machine distante
+- **Compteur d'apps** par machine pour voir rapidement la répartition de charge
+- **Taille de stockage** en TB pour les NAS
 
 ---
 
-## Écran 10 : Volume Browser
+## Écran 7 : Volume Browser
+
+Inspiré de CasaOS File Manager + Nextcloud Files + Cosmos Storage Manager.
 
 ```
-┌─ Volume: nextcloud_data ───────────────────────────────────────────────────────┐
-│                                                                                │
-│  📂 nextcloud_data (2.1 GB)           [⬆ Upload] [📄 Nouveau fichier]         │
-│                                                                                │
-│  Chemin: / data / nextcloud / config /                                         │
-│                                                                                │
-│  ┌──────────────────────────────────────────────────────────────────────────┐  │
-│  │  NOM                TYPE      TAILLE    MODIFIÉ           ACTIONS        │  │
-│  ├──────────────────────────────────────────────────────────────────────────┤  │
-│  │  📁 ..              dossier   —         —                 —              │  │
-│  │  📄 config.php      fichier   12 KB     2026-04-01 14:30  📝 ⬇ 🗑       │  │
-│  │  📄 .htaccess       fichier   0.4 KB    2026-03-28 10:15  📝 ⬇ 🗑       │  │
-│  │  📄 CAN_INSTALL     fichier   0.0 KB    2026-03-28 10:15  📝 ⬇ 🗑       │  │
-│  │  📁 themes          dossier   —         2026-03-28 10:15  —              │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-│  📝 = Éditer    ⬇ = Télécharger    🗑 = Supprimer                             │
-│                                                                                │
-│  ┌─ Prévisualisation: config.php ─────────────────────────────────────────┐   │
-│  │  <?php                                                                 │   │
-│  │  $CONFIG = array (                                                     │   │
-│  │    'instanceid' => 'oc3a7f2b1c',                                       │   │
-│  │    'passwordsalt' => '●●●●●●●●●●',                                    │   │
-│  │    'trusted_domains' =>                                                │   │
-│  │      array (                                                           │   │
-│  │        0 => 'cloud.example.com',                                       │   │
-│  │    ...                                                                 │   │
-│  │                                                    [Éditer] [Fermer]   │   │
-│  └────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
+┌─ Volume Browser : nextcloud_data ──────────────────────────────────────────┐
+│                                                                            │
+│  📂 nextcloud_data (2.1 GB)     Utilisé par: nextcloud                    │
+│                                                                            │
+│  Chemin: / ▸ data ▸ admin ▸ files                                         │
+│                                                                            │
+│  [⬆ Upload]  [📁 Nouveau dossier]  [📄 Nouveau fichier]                  │
+│                                                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │  NOM                 TYPE      TAILLE    MODIFIÉ        ACTIONS     │  │
+│  ├─────────────────────────────────────────────────────────────────────┤  │
+│  │  📁 Documents        dossier   340 MB    01/04 14:30    →          │  │
+│  │  📁 Photos           dossier   1.2 GB    01/04 10:15    →          │  │
+│  │  📄 notes.md         fichier   2.4 KB    01/04 14:30    📝 ⬇ 🗑   │  │
+│  │  🖼️ wallpaper.jpg    image     1.8 MB    28/03 10:15    👁 ⬇ 🗑   │  │
+│  │  📄 config.php       fichier   12 KB     28/03 10:15    📝 ⬇ 🗑   │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+│  ┌─ Preview : wallpaper.jpg ───────────────────────────────────────────┐  │
+│  │                                                                     │  │
+│  │  ┌─────────────────────────────────────────────┐                    │  │
+│  │  │                                             │                    │  │
+│  │  │           [ Image Preview ]                 │                    │  │
+│  │  │                                             │                    │  │
+│  │  └─────────────────────────────────────────────┘                    │  │
+│  │                                                                     │  │
+│  │  1920×1080 • JPEG • 1.8 MB          [⬇ Télécharger]  [Fermer]     │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Inspiration :** Gestionnaire de fichiers web classique (type FileBrowser, Nextcloud Files) mais intégré à WindFlow. Pas besoin de SSH pour éditer un fichier de config.
+**Améliorations :**
+- **Preview inline** pour images, texte, markdown, logs — inspiré CasaOS et Nextcloud
+- **Breadcrumbs cliquables** pour la navigation (/ ▸ data ▸ admin ▸ files)
+- **Bouton [👁]** pour preview rapide sans ouvrir l'éditeur
+- **Drag & drop** pour l'upload (indication zone de drop)
 
 ---
 
-## Écran 11 : Targets
+## Écran 8 : Console VM (intégrée)
+
+Inspiré de Proxmox (noVNC dans un onglet).
 
 ```
-┌─ Targets ──────────────────────────────────────────────────────────────────────┐
-│                                                                                │
-│  Targets (3)                        [🔍 Rechercher]  [+ Ajouter un target]    │
-│                                                                                │
-│  ┌─ local ───────────────────────────────────────────────────────── 🟢 ────┐  │
-│  │  Type: Local  │  Arch: arm64  │  OS: Raspberry Pi OS 12                 │  │
-│  │  CPU: ████░░░░░░ 38% (4 cores)                                          │  │
-│  │  RAM: ██████░░░░ 1.2/4.0 GB                                             │  │
-│  │  Disk: █████████░ 28/64 GB                                               │  │
-│  │  Docker: ✅ 24.0.7   KVM: ✅ 9.0.0   Proxmox: —                        │  │
-│  │  Containers: 5 (4 running)  │  VMs: 2 (1 running)  │  Stacks: 4        │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-│  ┌─ remote-srv ──────────────────────────────────────────────────── 🟢 ────┐  │
-│  │  Type: SSH (deploy@192.168.1.50)  │  Arch: amd64  │  OS: Debian 12     │  │
-│  │  CPU: ██░░░░░░░░ 12% (8 cores)                                          │  │
-│  │  RAM: ████░░░░░░ 6.2/32 GB                                              │  │
-│  │  Disk: ███░░░░░░░ 89/500 GB                                              │  │
-│  │  Docker: ✅ 25.0.3   KVM: —   Proxmox: —                               │  │
-│  │  Containers: 12 (10 running)  │  VMs: 0  │  Stacks: 6                  │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-│  ┌─ proxmox-1 ──────────────────────────────────────────────────── 🔴 ────┐  │
-│  │  Type: Proxmox (192.168.1.100)  │  Arch: amd64  │  Proxmox VE 8.1     │  │
-│  │  ⚠️ Connexion perdue il y a 2h — Dernière vue: 2026-04-01 12:30        │  │
-│  │  [🔄 Réessayer la connexion]                                            │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Points clés :**
-- Chaque target est une carte avec ses métriques inline (pas besoin d'ouvrir un détail pour voir la RAM)
-- Barres de progression visuelles pour CPU/RAM/disque
-- Capabilities détectées (Docker, KVM, Proxmox) avec versions
-- Compteurs de ressources gérées (containers, VMs, stacks)
-- État de connexion visible immédiatement (🟢/🔴)
-
----
-
-## Écran 12 : Plugins Installés
-
-```
-┌─ Plugins Installés ───────────────────────────────────────────────────────────┐
-│                                                                                │
-│  Plugins (3)                         [🏪 Marketplace]  [🔄 Tout mettre à jour]│
-│                                                                                │
-│  ┌─ Traefik ─────────────────────────────────────────────────── 🟢 ────────┐  │
-│  │  v1.2.0 │ Hybrid │ Accès & Routage       RAM: 142 MB                   │  │
-│  │  3 domaines configurés, 3 certificats valides                           │  │
-│  │  [⚙ Config] [⏸ Stop] [🔄 Mettre à jour] [🗑 Désinstaller]             │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-│  ┌─ PostgreSQL Manager ──────────────────────────────────────── 🟢 ────────┐  │
-│  │  v1.0.0 │ Extension │ Bases de données    RAM: 28 MB                    │  │
-│  │  2 containers postgres détectés, 5 databases gérées                     │  │
-│  │  [⚙ Config] [🔄 Mettre à jour] [🗑 Désinstaller]                       │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-│  ┌─ Uptime Kuma ─────────────────────────────────────────────── 🟢 ────────┐  │
-│  │  v1.0.0 │ Service │ Monitoring            RAM: 98 MB       ⬆ v1.1.0    │  │
-│  │  5 monitors actifs, tous UP                                             │  │
-│  │  [⚙ Config] [⏸ Stop] [🔄 Mettre à jour] [🗑 Désinstaller]             │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-│  RAM totale plugins: 268 MB / 4096 MB disponibles                             │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Points clés :**
-- Chaque plugin montre son type, sa catégorie, sa RAM consommée
-- Résumé de l'activité du plugin (domaines, databases gérées, monitors actifs)
-- Badge de mise à jour disponible
-- Compteur total de RAM plugins en bas
-
----
-
-## Écran 13 : Page Plugin (Traefik — Domaines)
-
-Exemple d'écran injecté par un plugin dans la sidebar.
-
-```
-┌─ Domaines & Routage (Traefik) ─────────────────────────────────────────────────┐
-│                                                                                │
-│  Domaines (3)                                            [+ Ajouter un domaine]│
-│                                                                                │
-│  ┌──────────────────────────────────────────────────────────────────────────┐  │
-│  │  DOMAINE              SERVICE          TLS       STATUT     ACTIONS      │  │
-│  ├──────────────────────────────────────────────────────────────────────────┤  │
-│  │  cloud.example.com    nextcloud:80     🔒 Valide ✅ OK      📝 🗑       │  │
-│  │                                        expire: 89j                      │  │
-│  │  git.example.com      gitea:3000       🔒 Valide ✅ OK      📝 🗑       │  │
-│  │                                        expire: 89j                      │  │
-│  │  app.example.com      web-app:8080     🔒 Valide ✅ OK      📝 🗑       │  │
-│  │                                        expire: 45j                      │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-│  ┌─ Ajouter un domaine ──────────────────────────────────────────────────┐    │
-│  │                                                                        │    │
-│  │  Domaine:     ┌────────────────────────────────────────┐               │    │
-│  │               │ photos.example.com                     │               │    │
-│  │               └────────────────────────────────────────┘               │    │
-│  │                                                                        │    │
-│  │  Service:     ┌────────────────────────────────────────┐               │    │
-│  │               │ immich (port 2283)                 [▾] │               │    │
-│  │               └────────────────────────────────────────┘               │    │
-│  │               Liste auto-complétée depuis les containers running       │    │
-│  │                                                                        │    │
-│  │  TLS:         [✓] Certificat Let's Encrypt automatique                 │    │
-│  │                                                                        │    │
-│  │                                            [Annuler] [Ajouter →]       │    │
-│  └────────────────────────────────────────────────────────────────────────┘    │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Points clés :**
-- Le dropdown "Service" est auto-complété depuis les containers running
-- TLS automatique par défaut (Let's Encrypt)
-- Expiration du certificat visible directement dans la liste
-
----
-
-## Écran 14 : Settings
-
-```
-┌─ Paramètres ───────────────────────────────────────────────────────────────────┐
-│                                                                                │
-│  [Organisations] [Environnements] [Utilisateurs] [Registres] [Système]        │
-│                                                                                │
-│  ── Utilisateurs ──────────────────────────────────────────────────────────── │
-│                                                                                │
-│  Organisation: homelab                                  [+ Ajouter un membre]  │
-│                                                                                │
-│  ┌──────────────────────────────────────────────────────────────────────────┐  │
-│  │  UTILISATEUR    EMAIL                  RÔLE        CONNECTÉ    ACTIONS   │  │
-│  ├──────────────────────────────────────────────────────────────────────────┤  │
-│  │  admin          admin@example.com      🔑 Super    il y a 5m   ⚙        │  │
-│  │  alice          alice@example.com      👤 Operator il y a 2h   ⚙ 🗑     │  │
-│  │  bob            bob@example.com        👁 Viewer   il y a 3j   ⚙ 🗑     │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
+┌─ Console : ubuntu-dev ─────────────────────────────────────────────────────┐
+│                                                                            │
+│  🖥️ ubuntu-dev (KVM) 🟢     [Ctrl+Alt+Del]  [Plein Écran]  [Coller]     │
+│                                                                            │
+│  ┌──────────────────────────────────────────────────────────────────────┐ │
+│  │                                                                      │ │
+│  │                                                                      │ │
+│  │          ubuntu@ubuntu-dev:~$ sudo apt update                        │ │
+│  │          Hit:1 http://archive.ubuntu.com/ubuntu jammy InRelease      │ │
+│  │          Get:2 http://archive.ubuntu.com/ubuntu jammy-updates        │ │
+│  │          ...                                                         │ │
+│  │          ubuntu@ubuntu-dev:~$ _                                      │ │
+│  │                                                                      │ │
+│  │                    [ Console VNC via noVNC ]                          │ │
+│  │                                                                      │ │
+│  │                                                                      │ │
+│  └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+│  Résolution: 1024×768  │  Qualité: Auto  │  Clipboard: Bidirectionnel     │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Responsive & Mobile
+## Écran 9 : Plugins Installés
 
-WindFlow n'est pas une app mobile, mais le dashboard doit être lisible sur tablette et smartphone pour vérifier rapidement l'état de l'infrastructure.
+Inspiré de Runtipi (app management) + Cosmos (server apps).
 
-**Tablette (≥768px) :** Sidebar rétractée en icônes, contenu pleine largeur. Les cartes target passent en une colonne.
-
-**Mobile (≤480px) :** Sidebar remplacée par un hamburger menu. Dashboard en cards empilées. Actions containers/VMs accessibles via menu contextuel au lieu de boutons inline. Console VNC et terminal non disponibles (trop petit).
+```
+┌─ Plugins ──────────────────────────────────────────────────────────────────┐
+│                                                                            │
+│  Plugins installés (3)            RAM: 268 MB     [🏪 Marketplace]        │
+│                                                                            │
+│  ┌── 🔀 Traefik ──────────────────────────── v1.2.0 ──── 🟢 ──────────┐ │
+│  │  Hybrid │ Accès & Routage │ 142 MB RAM                              │ │
+│  │                                                                      │ │
+│  │  📊 3 domaines actifs • 3 certificats valides • 1.2K req/h          │ │
+│  │                                                                      │ │
+│  │  [⚙ Config]  [📋 Logs]  [⏸ Stop]  [🔄 Update]  [🗑 Désinstaller]  │ │
+│  └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+│  ┌── 🐘 PostgreSQL Manager ───────────────── v1.0.0 ──── 🟢 ──────────┐ │
+│  │  Extension │ Bases de données │ 28 MB RAM                            │ │
+│  │                                                                      │ │
+│  │  📊 2 containers détectés • 5 databases • 3 users                   │ │
+│  │                                                                      │ │
+│  │  [⚙ Config]  [🔄 Update]  [🗑 Désinstaller]                        │ │
+│  └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+│  ┌── 📊 Uptime Kuma ─────────── v1.0.0 ⬆ v1.1.0 ──── 🟢 ──────────┐   │
+│  │  Service │ Monitoring │ 98 MB RAM                                    │ │
+│  │                                                                      │ │
+│  │  📊 5 monitors • 100% uptime (30j)                                  │ │
+│  │                                                                      │ │
+│  │  [🔗 Ouvrir]  [⚙ Config]  [📋 Logs]  [⏸ Stop]  [🔄 Update ⬆]     │ │
+│  └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Palette de Couleurs et Typographie
+## Écran 10 : Notifications / Activity
 
-### Direction Esthétique
+Inspiré de Cloudron (Activity log) + Umbrel (Activity tab).
 
-**Industriel-épuré** — L'esthétique de WindFlow doit être celle d'un outil d'ingénieur moderne : sobre, lisible, sans fioriture, mais avec des touches de couleur fonctionnelles (vert = ok, rouge = erreur, bleu = action).
+```
+┌─ Activité ─────────────────────────────────────────────────────────────────┐
+│                                                                            │
+│  [Tout]  [Déploiements]  [Plugins]  [Sécurité]  [Système]                │
+│                                                                            │
+│  Aujourd'hui                                                              │
+│                                                                            │
+│  🔔 14:30  Certificat cloud.example.com expire dans 30 jours             │
+│            [Renouveler maintenant]                                        │
+│                                                                            │
+│  ✅ 12:15  Nextcloud mis à jour 28.0.3 → 28.0.4          par admin      │
+│            Durée: 45s • Backup créé avant mise à jour                    │
+│                                                                            │
+│  ✅ 06:00  Backup automatique terminé                      par système   │
+│            3 volumes • 2.1 GB • Destination: /backup/restic              │
+│                                                                            │
+│  Hier                                                                     │
+│                                                                            │
+│  ❌ 18:30  Déploiement monitoring échoué                   par admin      │
+│            Erreur: port 9090 déjà utilisé                                │
+│            [Voir les logs] [Réessayer]                                    │
+│                                                                            │
+│  ✅ 15:00  Plugin Restic installé (v1.0.0)                par admin      │
+│                                                                            │
+│  ✅ 14:45  Target nas-server ajouté                        par admin      │
+│            SSH deploy@192.168.1.50 • Docker détecté                      │
+│                                                                            │
+│  🔒 10:22  Connexion refusée (brute force)                 IP: 45.33.x.x │
+│            5 tentatives échouées → IP bloquée 5 min                      │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
 
-**Typographie :**
-- Titres et UI : **Inter** ou **IBM Plex Sans** (lisible, technique, multi-plateforme)
-- Code et logs : **JetBrains Mono** ou **Fira Code** (monospace avec ligatures)
-- Pas de serif, pas de fantaisie — c'est un outil, pas un portfolio
-
-**Couleurs (thème sombre) :**
-- Fond principal : `#0f1117` (presque noir, comme un terminal)
-- Fond cartes : `#1a1d27` (léger contraste)
-- Bordures : `#2a2d37` (subtil)
-- Texte principal : `#e1e4eb` (blanc cassé, pas blanc pur)
-- Texte secondaire : `#8b8fa3`
-- Accent principal : `#3b82f6` (bleu)
-- Succès : `#22c55e` (vert)
-- Erreur : `#ef4444` (rouge)
-- Warning : `#f59e0b` (orange)
+**Inspiré de Cloudron Activity :** Journal chronologique filtrable avec actions directes ("Renouveler", "Voir les logs", "Réessayer"). Chaque entrée montre qui, quand, quoi, et le résultat. Les événements de sécurité sont visibles directement ici.
 
 ---
 
-## Résumé des Écrans
+## Responsive et Mobile
 
-| # | Écran | Inspiration principale | Fonction clé |
-|---|-------|----------------------|--------------|
-| 1 | Dashboard | Portainer (tuiles) + CasaOS (widgets) | Vue d'ensemble + widgets plugins |
-| 2 | Liste Containers | Portainer (table + actions) | Actions inline, pas de navigation |
-| 3 | Détail Container | Portainer (onglets) + Proxmox (tabs) | Onglets + actions plugin contextuelles |
-| 4 | Liste VMs | Proxmox (table) | Console en un clic |
-| 5 | Console VM | Proxmox (noVNC) | VNC intégré au navigateur |
-| 6 | Stacks | Portainer (stacks) | Versions + rollback |
-| 7 | Marketplace | CasaOS (app store) + Cloudron | Grille plugins + stacks one-click |
-| 8 | Fiche Plugin | App Store mobile | Compatibilité + description |
-| 9 | Wizard Installation | Cloudron | Formulaire généré depuis manifest |
-| 10 | Volume Browser | FileBrowser / Nextcloud Files | Navigation + édition + preview |
-| 11 | Targets | Custom | Cartes avec métriques inline |
-| 12 | Plugins Installés | Custom | État + RAM + actions |
-| 13 | Page Plugin (Traefik) | Custom | Domaines + auto-complétion services |
-| 14 | Settings | Standard | Orgs, users, RBAC |
+### Tablette (768px-1024px)
+
+- Sidebar rétractée en icônes (hover pour voir les labels)
+- Dashboard : widgets en 2 colonnes au lieu de 3
+- Apps : une card par ligne (plus de place pour les actions)
+
+### Mobile (< 768px)
+
+Inspiré de l'approche Umbrel (dock en bas) :
+
+```
+┌─────────────────────────┐
+│ 🌀 WindFlow    🔔  👤   │
+├─────────────────────────┤
+│                         │
+│  CPU 38%  RAM 1.2/4 GB  │
+│  5 apps running         │
+│                         │
+│ ┌─────────────────────┐ │
+│ │ ☁️ Nextcloud  🟢    │ │
+│ │ cloud.example.com   │ │
+│ │ [Ouvrir] [⋯]       │ │
+│ └─────────────────────┘ │
+│ ┌─────────────────────┐ │
+│ │ 🐙 Gitea     🟢    │ │
+│ │ git.example.com     │ │
+│ │ [Ouvrir] [⋯]       │ │
+│ └─────────────────────┘ │
+│ ...                     │
+│                         │
+├─────────────────────────┤
+│ 🏠  📱  🏪  🔌  ⚙️    │
+│ Home Apps Market Plug Set│
+└─────────────────────────┘
+```
+
+- **Dock fixe en bas** (inspiré Umbrel) avec les 5 sections principales
+- **Cards simplifiées** avec bouton "Ouvrir" (action principale) et menu [⋯] pour les actions secondaires
+- Console VNC et Terminal non accessibles sur mobile (écran trop petit)
+- Volume Browser en mode lecture seule sur mobile
+
+---
+
+## Onboarding (Premier Lancement)
+
+Inspiré de Umbrel (wizard simple) + Cosmos (setup wizard).
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│                        🌀 Bienvenue sur WindFlow                        │
+│                                                                         │
+│                  Votre infrastructure, sous votre contrôle.             │
+│                                                                         │
+│                                                                         │
+│         ○─────────●─────────○─────────○                                │
+│        Compte    Machine   Première   Terminé                          │
+│                             app                                        │
+│                                                                         │
+│         Étape 2 — Votre machine                                        │
+│                                                                         │
+│         WindFlow a détecté :                                           │
+│                                                                         │
+│         🖥️  Raspberry Pi 4 (arm64)                                     │
+│         💾  4 GB RAM • 64 GB stockage                                  │
+│         🐳  Docker 24.0.7 ✅                                           │
+│         🖥️  KVM/libvirt ✅                                             │
+│                                                                         │
+│         Profil recommandé : Standard                                   │
+│         (PostgreSQL + Redis, ~1.5 GB RAM)                              │
+│                                                                         │
+│         💡 Votre machine a assez de ressources pour                    │
+│            installer 5-10 apps et plugins.                             │
+│                                                                         │
+│                                                                         │
+│                              [Continuer →]                             │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+L'étape 3 propose d'installer un premier plugin (Traefik recommandé) et une première app (Nextcloud, Gitea, ou Jellyfin au choix).
+
+---
+
+## Direction Esthétique Révisée
+
+### Inspiration Visuelle
+
+Le design de WindFlow se positionne entre **Umbrel** (élégance, polish) et **Proxmox/Cosmos** (densité d'information, fonctionnalité). Plus précisément :
+
+- **Élégance d'Umbrel** : Coins arrondis, espacement généreux, animations subtiles, wallpaper optionnel
+- **Densité de Cosmos** : Métriques inline, actions accessibles, pas de perte d'espace
+- **Transparence de Proxmox** : Montrer ce qui se passe (containers, réseaux, volumes), pas le cacher
+
+### Typographie
+
+- **UI / Corps** : Inter (lisible, technique, open source, large support de langues)
+- **Code / Logs / Terminal** : JetBrains Mono (ligatures, lisible en petite taille)
+- **Titres d'apps** : Inter Semi-Bold (pas besoin d'une display font pour un outil technique)
+
+### Palette Thème Sombre (par défaut)
+
+```
+Fond principal     #0c0e14    (noir profond, comme un terminal moderne)
+Fond carte/card    #151821    (léger relief)
+Fond hover         #1c1f2b    (feedback subtil)
+Bordures           #252838    (séparation douce)
+Texte principal    #e2e5f0    (blanc cassé, confortable pour les yeux)
+Texte secondaire   #7c8098    (gris moyen pour les métadonnées)
+Accent bleu        #4f8ff7    (actions, liens, sélections)
+Succès             #34d399    (vert menthe, moins agressif que le vert vif)
+Erreur             #f87171    (rouge doux)
+Warning            #fbbf24    (ambre)
+Info               #60a5fa    (bleu clair)
+```
+
+### Palette Thème Clair
+
+```
+Fond principal     #f8f9fc
+Fond carte/card    #ffffff
+Bordures           #e5e7eb
+Texte principal    #1f2937
+Texte secondaire   #6b7280
+Accent bleu        #3b82f6
+```
+
+### Composants Clés
+
+- **Cards** : `border-radius: 12px`, `padding: 20px`, bordure subtile, pas d'ombre lourde (ombre douce 1px uniquement)
+- **Boutons d'action** : Icône + texte pour les actions principales, icône seule pour les actions inline
+- **Status dots** : 🟢 running (vert pulsant subtil), 🔴 stopped (rouge statique), 🟡 deploying (jaune clignotant)
+- **Barres de progression** : Coins arrondis, dégradé subtil, pas de couleur vive uniforme — gradient du bleu accent vers le bleu clair
+- **Toast notifications** : En haut à droite, auto-dismiss 5s, empilables
+
+---
+
+## Récapitulatif des Écrans
+
+| # | Écran | Inspiré de | Innovation WindFlow |
+|---|-------|------------|---------------------|
+| 1 | Dashboard | Umbrel + Runtipi | Apps en grille + widgets plugins + métriques système |
+| 2 | Apps (vue unifiée) | Cloudron + Runtipi + Cosmos | Containers + Stacks + VMs dans la même liste, domaines visibles |
+| 3 | Détail App | Proxmox + Cosmos + Cloudron | Onglets dynamiques (plugins), backup inline, métriques live |
+| 4 | Marketplace | Umbrel + Runtipi | Recommandations contextuelles, ratings, séparation plugins/stacks |
+| 5 | Wizard Installation | Scaleway + Cloudron | Résumé d'impact, options avancées cachées |
+| 6 | Targets | Coolify + Proxmox | Cards métriques, température, bouton SSH |
+| 7 | Volume Browser | CasaOS + Nextcloud | Preview inline, breadcrumbs, drag & drop |
+| 8 | Console VM | Proxmox | noVNC intégré, clipboard bidirectionnel |
+| 9 | Plugins | Runtipi + Cosmos | Résumé d'activité par plugin, RAM totale |
+| 10 | Activité | Cloudron + Umbrel | Journal chronologique avec actions directes |
+| 11 | Onboarding | Umbrel + Cosmos | Détection auto du hardware, recommandation de profil |
+| — | Mobile | Umbrel (dock) | Dock fixe en bas, cards simplifiées |
 
 ---
 
 **Références :**
 - [Fonctionnalités Principales](general_specs/10-core-features.md) — Features core derrière chaque écran
-- [Architecture Modulaire](ARCHITECTURE-MODULAIRE.md) — Comment les plugins injectent des pages et widgets
+- [Architecture Modulaire](ARCHITECTURE-MODULAIRE.md) — Comment les plugins injectent pages et widgets
 - [API Design](general_specs/07-api-design.md) — Endpoints consommés par chaque écran
 - [Catalogue des Plugins](general_specs/09-plugins.md) — Plugins disponibles dans la marketplace

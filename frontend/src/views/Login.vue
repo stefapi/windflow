@@ -45,7 +45,7 @@ const handleLogin = async () => {
     await nextTick()
 
     // Navigate to the redirect path or dashboard
-    const redirect = (route.query.redirect as string) || '/'
+    const redirect = (route.query['redirect'] as string) || '/'
     await router.replace(redirect)
   } catch {
     ElMessage.error('Login failed')

@@ -24,7 +24,8 @@ export const useDeploymentsStore = defineStore('deployments', () => {
     try {
       const response = await deploymentsApi.list({ organization_id: organizationId })
       // Backend returns List[DeploymentResponse] directly, not wrapped in {items:[]}
-      deployments.value = response.data
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      deployments.value = (response.data as any).items || response.data
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch deployments'
       throw err
@@ -126,11 +127,14 @@ export const useDeploymentsStore = defineStore('deployments', () => {
   }
 
   function subscribeToDeploymentLogs(deploymentId: string, callback: (log: string) => void): () => void {
-    return deploymentEvents.subscribeToLogs(deploymentId, callback)
+    return deploymentEvents.subscribeToLogs(deploymentId, (data: unknown) => {
+      callback(String(data))
+    })
   }
 
   function subscribeToDeploymentStatus(deploymentId: string, callback: (status: string) => void): () => void {
-    return deploymentEvents.subscribeToStatus(deploymentId, (status) => {
+    return deploymentEvents.subscribeToStatus(deploymentId, (data: unknown) => {
+      const status = String(data)
       // Update deployment status in store
       const deployment = deployments.value.find(d => d.id === deploymentId)
       if (deployment) {

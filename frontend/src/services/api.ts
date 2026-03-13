@@ -26,7 +26,6 @@ import type {
   DeploymentLogsResponse,
   Workflow,
   WorkflowCreate,
-  Template,
   PaginatedResponse,
   DashboardStats,
   ScheduledTask,
@@ -202,33 +201,6 @@ export const workflowsApi = {
     http.post<{ execution_id: string }>(`/workflows/${id}/execute`, params),
 }
 
-// Templates/Marketplace API
-export const templatesApi = {
-  list: (params?: {
-    skip?: number
-    limit?: number
-    category?: string
-    tags?: string[]
-    search?: string
-  }) =>
-    http.get<PaginatedResponse<Template>>('/templates', { params }),
-
-  get: (id: string) =>
-    http.get<Template>(`/templates/${id}`),
-
-  download: (id: string) =>
-    http.post<{ stack_id: string }>(`/templates/${id}/download`),
-
-  rate: (id: string, rating: number) =>
-    http.post(`/templates/${id}/rate`, { rating }),
-
-  categories: () =>
-    http.get<string[]>('/templates/categories'),
-
-  popular: (limit?: number) =>
-    http.get<Template[]>('/templates/popular', { params: { limit } }),
-}
-
 // Dashboard API
 export const schedulesApi = {
   list: (organizationId?: string) => {
@@ -257,7 +229,6 @@ export default {
   stacks: stacksApi,
   deployments: deploymentsApi,
   workflows: workflowsApi,
-  templates: templatesApi,
   dashboard: dashboardApi,
   schedules: schedulesApi,
 }

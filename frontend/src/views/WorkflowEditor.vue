@@ -78,27 +78,36 @@ const onConnect = (params: any) => {
   })
 }
 
+// Type guards to distinguish nodes from edges
+function isWorkflowNode(el: WorkflowNode | WorkflowEdge): el is WorkflowNode {
+  return 'position' in el
+}
+
+function isWorkflowEdge(el: WorkflowNode | WorkflowEdge): el is WorkflowEdge {
+  return 'source' in el
+}
+
 const saveWorkflow = async () => {
   const nodes: WorkflowNode[] = elements.value
-    .filter(el => !el.source)
+    .filter(isWorkflowNode)
     .map(el => ({
-      id: el.id,
-      type: el.data?.type || 'default',
+      id: el['id'],
+      type: (el.data?.['type'] as string) || 'default',
       position: el.position,
       data: el.data || {},
     }))
 
   const edges: WorkflowEdge[] = elements.value
-    .filter(el => el.source)
+    .filter(isWorkflowEdge)
     .map(el => ({
-      id: el.id,
+      id: el['id'],
       source: el.source,
       target: el.target,
-      type: el.type,
+      type: el['type'],
     }))
 
   try {
-    const workflowId = route.params.id as string
+    const workflowId = route.params['id'] as string
     if (workflowId && workflowId !== 'new') {
       await workflowsStore.updateWorkflow(workflowId, {
         name: workflowName.value,
@@ -123,7 +132,7 @@ const saveWorkflow = async () => {
 }
 
 onMounted(async () => {
-  const workflowId = route.params.id as string
+  const workflowId = route.params['id'] as string
   if (workflowId && workflowId !== 'new') {
     await workflowsStore.fetchWorkflow(workflowId)
     if (workflowsStore.currentWorkflow) {

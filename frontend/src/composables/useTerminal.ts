@@ -136,37 +136,36 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
       case 'ready':
         // Authentification réussie
         connected.value = true
-        execId.value = message.exec_id as string
+        execId.value = message['exec_id'] as string
         connecting.value = false
         onConnected?.()
 
         // Envoyer les dimensions initiales
         if (terminal.value) {
-          const dims = terminal.value.buffer.active
-          sendResize(dims.length, dims.width)
+          sendResize(terminal.value.cols, terminal.value.rows)
         }
         break
 
       case 'output':
         // Afficher la sortie dans le terminal
-        if (terminal.value && message.data) {
-          terminal.value.write(message.data as string)
+        if (terminal.value && message['data']) {
+          terminal.value.write(message['data'] as string)
         }
         break
 
       case 'error':
         // Erreur du serveur
-        error.value = message.message as string
-        onError?.(message.message as string)
+        error.value = message['message'] as string
+        onError?.(message['message'] as string)
 
         if (terminal.value) {
-          terminal.value.writeln(`\x1b[31mError: ${message.message}\x1b[0m`)
+          terminal.value.writeln(`\x1b[31mError: ${message['message']}\x1b[0m`)
         }
         break
 
-      case 'exit':
+      case 'exit': {
         // Session terminée
-        const code = message.code as number
+        const code = message['code'] as number
         if (terminal.value) {
           terminal.value.writeln(`\r\n\x1b[90mSession ended with code ${code}\x1b[0m`)
         }
@@ -174,6 +173,7 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
         execId.value = null
         onDisconnected?.(`Session ended with code ${code}`)
         break
+      }
 
       case 'pong':
         // Heartbeat response
@@ -318,10 +318,11 @@ export function proposeDimensions(
   }
 
   // Calculer en utilisant les dimensions du.CharWidth et CharHeight
-  const core = (terminal as unknown as { _core: { _renderService: { _renderer: { _cellSize: { width: number; height: number } } } } })
-  if (core._renderService?._renderer?._cellSize) {
-    const cellWidth = core._renderService._renderer._cellSize.width
-    const cellHeight = core._renderService._renderer._cellSize.height
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const terminalAny = terminal as any
+  if (terminalAny._core?._renderService?._renderer?._cellSize) {
+    const cellWidth = terminalAny._core._renderService._renderer._cellSize.width
+    const cellHeight = terminalAny._core._renderService._renderer._cellSize.height
 
     if (cellWidth > 0 && cellHeight > 0) {
       const availableWidth = parent.clientWidth

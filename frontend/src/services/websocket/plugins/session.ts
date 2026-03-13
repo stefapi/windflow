@@ -86,7 +86,7 @@ export const SessionPlugin: WebSocketPlugin = {
         })
 
         // Rafraîchir la page pour charger les nouvelles données d'organisation
-        if (sessionEvent.data?.requiresReload) {
+        if (sessionEvent.data?.['requiresReload']) {
           setTimeout(() => {
             window.location.reload()
           }, 2000)

@@ -66,11 +66,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Schedules.vue'),
       },
       {
-        path: 'marketplace',
-        name: 'Marketplace',
-        component: () => import('@/views/Marketplace.vue'),
-      },
-      {
         path: 'terminal/:containerId',
         name: 'Terminal',
         component: () => import('@/views/Terminal.vue'),
@@ -98,7 +93,7 @@ router.beforeEach((to, from, next) => {
     next({ name: 'Login', query: { redirect: to.fullPath } })
   } else if (to.name === 'Login' && authStore.isAuthenticated) {
     // Redirect away from login if already authenticated
-    const redirectPath = (to.query.redirect as string) || '/'
+    const redirectPath = (to.query['redirect'] as string) || '/'
     next(redirectPath)
   } else {
     next()

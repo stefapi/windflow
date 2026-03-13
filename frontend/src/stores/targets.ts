@@ -15,7 +15,8 @@ export const useTargetsStore = defineStore('targets', () => {
     try {
       const response = await targetsApi.list({ organization_id: organizationId })
       // Backend returns List[TargetResponse] directly, not wrapped in {items:[]}
-      targets.value = response.data
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      targets.value = (response.data as any).items || response.data
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch targets'
       throw err

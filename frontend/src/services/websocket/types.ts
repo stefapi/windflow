@@ -133,19 +133,100 @@ export interface SessionEvent {
 }
 
 /**
+ * Données pour les événements de déploiement
+ */
+export interface DeploymentStatusEvent {
+  deploymentId: string
+  deploymentName: string
+  oldStatus: string
+  newStatus: string
+  timestamp: string
+}
+
+export interface DeploymentLogsEvent {
+  deploymentId: string
+  logs: string[]
+  timestamp: string
+}
+
+export interface DeploymentProgressEvent {
+  deploymentId: string
+  progress: number
+  step: string
+  timestamp: string
+}
+
+/**
+ * Données pour les événements d'authentification
+ */
+export interface AuthEvent {
+  userId?: string
+  message?: string
+  timestamp?: string
+}
+
+/**
+ * Données pour les événements système
+ */
+export interface SystemEvent {
+  message: string
+  scheduledAt?: string
+  duration?: number
+  timestamp?: string
+}
+
+/**
+ * Données pour les événements de souscription
+ */
+export interface SubscriptionEvent {
+  channel?: string
+  topic?: string
+  message?: string
+}
+
+/**
  * Mapping des types d'événements vers leurs données
  */
 export interface EventDataMap {
+  // Authentification
+  [WebSocketEventType.AUTH_LOGIN_SUCCESS]: AuthEvent
+  [WebSocketEventType.AUTH_LOGOUT]: AuthEvent
+  [WebSocketEventType.AUTH_TOKEN_REFRESH]: AuthEvent
+
+  // Notifications
   [WebSocketEventType.NOTIFICATION_SYSTEM]: NotificationEvent
   [WebSocketEventType.NOTIFICATION_USER]: NotificationEvent
-  [WebSocketEventType.UI_NAVIGATION_REQUEST]: UINavigationRequest
-  [WebSocketEventType.UI_MODAL_DISPLAY]: UIModalDisplay
-  [WebSocketEventType.UI_TOAST_DISPLAY]: UIToastDisplay
-  [WebSocketEventType.UI_WORKFLOW_STEP]: UIWorkflowStep
+  [WebSocketEventType.NOTIFICATION_DEPLOYMENT]: NotificationEvent
+
+  // Session
   [WebSocketEventType.SESSION_AUTH_REQUIRED]: SessionEvent
   [WebSocketEventType.SESSION_PERMISSION_CHANGED]: SessionEvent
   [WebSocketEventType.SESSION_ORGANIZATION_CHANGED]: SessionEvent
   [WebSocketEventType.SESSION_EXPIRED]: SessionEvent
+
+  // UI Navigation
+  [WebSocketEventType.UI_NAVIGATION_REQUEST]: UINavigationRequest
+  [WebSocketEventType.UI_MODAL_DISPLAY]: UIModalDisplay
+  [WebSocketEventType.UI_TOAST_DISPLAY]: UIToastDisplay
+  [WebSocketEventType.UI_WORKFLOW_STEP]: UIWorkflowStep
+
+  // Déploiements
+  [WebSocketEventType.DEPLOYMENT_STATUS_CHANGED]: DeploymentStatusEvent
+  [WebSocketEventType.DEPLOYMENT_LOGS_UPDATE]: DeploymentLogsEvent
+  [WebSocketEventType.DEPLOYMENT_PROGRESS]: DeploymentProgressEvent
+
+  // Système
+  [WebSocketEventType.SYSTEM_MAINTENANCE]: SystemEvent
+  [WebSocketEventType.SYSTEM_BROADCAST]: SystemEvent
+
+  // Types système internes
+  [WebSocketEventType.PONG]: SubscriptionEvent
+  [WebSocketEventType.ERROR]: { message: string; code?: string }
+  [WebSocketEventType.SUBSCRIBED]: SubscriptionEvent
+  [WebSocketEventType.UNSUBSCRIBED]: SubscriptionEvent
+  [WebSocketEventType.LOGS_SUBSCRIBED]: SubscriptionEvent
+  [WebSocketEventType.MESSAGE_RECEIVED]: SubscriptionEvent
+  [WebSocketEventType.TEXT_RECEIVED]: SubscriptionEvent
 }
 
 /**

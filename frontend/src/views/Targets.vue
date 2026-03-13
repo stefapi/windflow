@@ -147,7 +147,7 @@ const loadCapabilities = async (targetId: string) => {
 
     // Mettre à jour le target dans le store avec les capabilities
     const targetIndex = targetsStore.targets.findIndex(t => t.id === targetId)
-    if (targetIndex !== -1) {
+    if (targetIndex !== -1 && targetsStore.targets[targetIndex]) {
       targetsStore.targets[targetIndex].capabilities = response.data.capabilities
     }
   } catch (error) {

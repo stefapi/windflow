@@ -74,7 +74,6 @@
         <el-card header="Quick Actions">
           <el-button type="primary" @click="$router.push('/stacks')">Create Stack</el-button>
           <el-button type="success" @click="$router.push('/deployments')">Deploy</el-button>
-          <el-button type="info" @click="$router.push('/marketplace')">Browse Templates</el-button>
           <el-button @click="refreshDashboard" :loading="dashboardStore.loading">
             Refresh
           </el-button>

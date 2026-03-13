@@ -76,17 +76,20 @@ function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleString('fr-FR')
 }
 
-function getStatusType(status: string): string {
-  const types: Record<string, string> = {
-    success: 'success',
-    failed: 'danger',
-    running: 'primary',
-    pending: 'info'
-  }
-  return types[status] || 'info'
+const STATUS_TYPES = {
+  success: 'success' as const,
+  failed: 'danger' as const,
+  running: 'primary' as const,
+  pending: 'info' as const
 }
 
-function getStatusTagType(status: string): string {
+type ElTagType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
+
+function getStatusType(status: string): ElTagType {
+  return STATUS_TYPES[status as keyof typeof STATUS_TYPES] || 'info'
+}
+
+function getStatusTagType(status: string): ElTagType {
   return getStatusType(status)
 }
 

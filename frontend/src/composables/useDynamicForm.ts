@@ -266,7 +266,7 @@ export function useDynamicForm(variables: Record<string, VariableDefinition>) {
           label: variable.label,
           description: variable.description,
           required: variable.required || false,
-          visible: variable.visible !== false,
+          visible: variable.visible ?? true,
           enum: variable.enum,
           enum_labels: variable.enum_labels,
           min: variable.min,

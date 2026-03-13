@@ -245,9 +245,11 @@ const onStackChange = async () => {
       dynamicFormInstance.value = useDynamicForm((data as any).variables)
 
       // Fusionner les valeurs par défaut dans le formulaire principal
-      Object.entries(dynamicFormInstance.value.formData).forEach(([key, value]) => {
-        form[key] = value
-      })
+      if (dynamicFormInstance.value) {
+        Object.entries(dynamicFormInstance.value.formData).forEach(([key, value]) => {
+          form[key] = value
+        })
+      }
     } else {
       // Aucun champ de configuration requis
       dynamicFormInstance.value = null
@@ -338,6 +340,7 @@ const handleCreate = async () => {
     const staticKeys = ['stack_id', 'target_id', 'name']
 
     // Construire la payload
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const payload: any = {
       stack_id: form.stack_id,
       target_id: form.target_id

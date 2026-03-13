@@ -15,7 +15,8 @@ export const useWorkflowsStore = defineStore('workflows', () => {
     try {
       const response = await workflowsApi.list({ organization_id: organizationId })
       // Backend returns List[WorkflowResponse] directly, not wrapped in {items:[]}
-      workflows.value = response.data
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      workflows.value = (response.data as any).items || response.data
     } catch (err: unknown) {
       // Handle 404 gracefully - workflows endpoint may not be implemented yet
       if ((err as any)?.response?.status === 404) {

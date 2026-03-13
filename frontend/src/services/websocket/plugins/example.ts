@@ -45,10 +45,10 @@ export class DeploymentMonitorPlugin implements WebSocketPlugin {
     this.context = context
 
     // Log de démarrage
-    this.context.helpers.logger.log('[DeploymentMonitorPlugin] Plugin initialized')
+    this.context.logger.info('[DeploymentMonitorPlugin] Plugin initialized')
 
     // Afficher une notification de bienvenue (optionnel)
-    this.context.helpers.showNotification({
+    this.context.showNotification({
       type: 'info',
       title: 'Monitoring actif',
       message: 'Le suivi des déploiements en temps réel est activé',
@@ -81,7 +81,7 @@ export class DeploymentMonitorPlugin implements WebSocketPlugin {
       }
     } catch (error) {
       // Toujours gérer les erreurs pour éviter de casser le système
-      this.context?.helpers.logger.error('[DeploymentMonitorPlugin] Error handling event:', error)
+      this.context?.logger.error('[DeploymentMonitorPlugin] Error handling event:', error)
     }
   }
 
@@ -110,7 +110,7 @@ export class DeploymentMonitorPlugin implements WebSocketPlugin {
     }
 
     // Log du changement
-    this.context?.helpers.logger.log(
+    this.context?.logger.info(
       `[DeploymentMonitorPlugin] Deployment ${deploymentName}: ${oldStatus} → ${newStatus}`
     )
 
@@ -151,7 +151,7 @@ export class DeploymentMonitorPlugin implements WebSocketPlugin {
         // (uniquement si l'utilisateur n'est pas déjà sur une autre page)
         if (this.context?.router.currentRoute.value.path === '/deployments') {
           setTimeout(() => {
-            this.context?.helpers.navigate(`/deployments/${deploymentId}`)
+            this.context?.navigate(`/deployments/${deploymentId}`)
           }, 2000)
         }
         break
@@ -182,7 +182,7 @@ export class DeploymentMonitorPlugin implements WebSocketPlugin {
 
     // Log uniquement si on est en mode verbose
     if (import.meta.env.DEV) {
-      this.context?.helpers.logger.log(
+      this.context?.logger.debug(
         `[DeploymentMonitorPlugin] New logs for deployment ${deploymentId}:`,
         logs
       )
@@ -197,7 +197,7 @@ export class DeploymentMonitorPlugin implements WebSocketPlugin {
     if (hasError) {
       const deployment = this.activeDeployments.get(deploymentId)
       if (deployment) {
-        this.context?.helpers.showNotification({
+        this.context?.showNotification({
           type: 'warning',
           title: 'Erreur détectée',
           message: `Des erreurs ont été détectées dans ${deployment.name}`,
@@ -225,7 +225,7 @@ export class DeploymentMonitorPlugin implements WebSocketPlugin {
 
       // Notification aux étapes clés (25%, 50%, 75%)
       if ([25, 50, 75].includes(progress)) {
-        this.context?.helpers.logger.log(
+        this.context?.logger.info(
           `[DeploymentMonitorPlugin] ${deployment.name}: ${progress}% - ${step}`
         )
       }
@@ -252,7 +252,7 @@ export class DeploymentMonitorPlugin implements WebSocketPlugin {
     }
 
     // Afficher la nouvelle notification
-    this.context?.helpers.showNotification(notification)
+    this.context?.showNotification(notification)
 
     // Définir un nouveau timeout pour nettoyer
     const timeout = setTimeout(() => {
@@ -275,7 +275,7 @@ export class DeploymentMonitorPlugin implements WebSocketPlugin {
     this.activeDeployments.clear()
 
     // Log de nettoyage
-    this.context?.helpers.logger.log('[DeploymentMonitorPlugin] Plugin cleaned up')
+    this.context?.logger.info('[DeploymentMonitorPlugin] Plugin cleaned up')
   }
 
   /**

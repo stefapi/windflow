@@ -12,7 +12,7 @@ const router = useRouter()
 const deploymentsStore = useDeploymentsStore()
 
 // Props from router
-const containerIdFromRoute = computed(() => route.params.containerId as string)
+const containerIdFromRoute = computed(() => route.params['containerId'] as string)
 
 // État local
 const selectedContainerId = ref<string>('')
@@ -50,7 +50,7 @@ const availableContainers = computed(() => {
 
   for (const deployment of deploymentsStore.deployments) {
     // Support both backend and frontend status values
-    if ((deployment.status === 'running' || deployment.status === 'RUNNING') && deployment.container_id) {
+    if ((deployment.status === 'running' || deployment.status === 'completed') && deployment.container_id) {
       containers.push({
         id: deployment.container_id,
         name: deployment.name || deployment.id.slice(0, 12),

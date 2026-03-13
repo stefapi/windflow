@@ -74,11 +74,13 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function logout(): Promise<void> {
+  async function logout(skipApiCall = false): Promise<void> {
     loading.value = true
 
     try {
-      await authApi.logout()
+      if (!skipApiCall) {
+        await authApi.logout()
+      }
     } catch (err) {
       console.error('Logout error:', err)
       // Continue avec le nettoyage même si l'appel API échoue

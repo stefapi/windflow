@@ -61,8 +61,8 @@ export function generateSecurePassword(options: PasswordOptions = {}): string {
 
   let password = ''
   for (let i = 0; i < length; i++) {
-    const randomIndex = randomValues[i] % charset.length
-    password += charset[randomIndex]
+    const randomIndex = randomValues[i]! % charset.length
+    password += charset[randomIndex]!
   }
 
   // Vérifier qu'au moins un caractère de chaque type requis est présent
@@ -91,7 +91,8 @@ export function generateSecurePassword(options: PasswordOptions = {}): string {
  */
 function ensureCharType(password: string, charset: string): string {
   const randomIndex = Math.floor(Math.random() * password.length)
-  const randomChar = charset[Math.floor(Math.random() * charset.length)]
+  const randomCharIndex = Math.floor(Math.random() * charset.length)
+  const randomChar = charset[randomCharIndex] ?? charset[0]
 
   return password.substring(0, randomIndex) + randomChar + password.substring(randomIndex + 1)
 }
@@ -171,7 +172,7 @@ export function getPasswordStrengthLabel(score: number): {
   label: string
   color: string
 } {
-  const labels = [
+  const labels: Array<{ label: string; color: string }> = [
     { label: 'Très faible', color: 'error' },
     { label: 'Faible', color: 'warning' },
     { label: 'Moyen', color: 'warning' },
@@ -179,7 +180,8 @@ export function getPasswordStrengthLabel(score: number): {
     { label: 'Très fort', color: 'success' }
   ]
 
-  return labels[score] || labels[0]
+  const validScore = Math.min(Math.max(0, score), labels.length - 1)
+  return labels[validScore]!
 }
 
 /**
