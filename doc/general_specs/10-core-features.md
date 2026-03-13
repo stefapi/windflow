@@ -2,801 +2,728 @@
 
 ## Vue d'Ensemble
 
-WindFlow offre un ensemble de fonctionnalités principales qui le différencient des solutions existantes, avec un focus sur l'intelligence artificielle, l'orchestration multi-cible et l'automatisation avancée.
+Ce document décrit les fonctionnalités qui font partie du **core** de WindFlow — c'est-à-dire ce qui est disponible dès l'installation, sans aucun plugin. Tout ce qui n'est pas documenté ici (reverse proxy, DNS, certificats TLS, monitoring, backup, IA, workflows, mail, SSO…) est une fonctionnalité apportée par les plugins.
 
-### Innovations Clés
+### Fonctionnalités Core
 
-**Différenciateurs WindFlow :**
-- **Intelligence Artificielle Intégrée** : Optimisation automatique des déploiements
-- **Orchestration Multi-Cible Unifiée** : Support uniforme containers/VMs/physical
-- **DNS & Certificats Automatiques** : Gestion complète des domaines et SSL/TLS
-- **Réseaux Overlay Chiffrés** : Connectivité sécurisée multi-cluster
-- **Stacks Intelligents** : Templates auto-optimisés par IA
-- **Workflows Visuels** : Éditeur de workflows type n8n intégré
+| # | Fonctionnalité | Description |
+|---|----------------|-------------|
+| 1 | Gestion des Containers | Docker : containers, compose, images, logs, terminal |
+| 2 | Gestion des VMs | KVM/libvirt, Proxmox VE, VirtualBox |
+| 3 | Système de Plugins | Installation, configuration, lifecycle, registre |
+| 4 | Marketplace | Catalogue de stacks et plugins, installation one-click |
+| 5 | Stacks & Templates | Groupes de services, versioning, templates Jinja2 |
+| 6 | Gestion des Targets | Machines locales et distantes (SSH), auto-discovery |
+| 7 | Volumes & Stockage | Volumes Docker, disques VM, volume browser |
+| 8 | Réseaux | Networks Docker, isolation par environnement |
+| 9 | Authentification & RBAC | JWT, organisations, environnements, rôles |
+| 10 | Interface Web | Dashboard, gestion visuelle, formulaires dynamiques |
+| 11 | CLI / TUI | Ligne de commande et interface terminal interactive |
 
-## 1. Architecture DNS & Certificats
+---
 
-### Gestion DNS Sophistiquée
+## 1. Gestion des Containers Docker
 
-WindFlow intègre une gestion DNS complète avec support DNSSEC et génération automatique de certificats SSL/TLS.
+La gestion Docker est le cœur de WindFlow. Elle couvre l'ensemble du cycle de vie des containers et des stacks Compose.
 
-**Composants DNS :**
-- **DNSManager** : Gestionnaire centralisé des domaines avec support multi-providers
-- **DNSSEC Engine** : Support DNSSEC complet avec rotation automatique des clés
-- **Certificate Authority** : Intégration Let's Encrypt avec support wildcard et multi-SAN
-- **DNS Resolver** : Résolveur DNS intégré pour la découverte de services
-- **Health Checks DNS** : Monitoring continu de la résolution DNS
+### Containers
+
+**Opérations :**
+- Lister, créer, démarrer, arrêter, redémarrer, supprimer des containers
+- Inspecter un container (configuration, ports, volumes, réseau, variables d'environnement)
+- Renommer un container
+- Voir les statistiques temps réel (CPU, mémoire, réseau, I/O)
+
+**Logs :**
+- Consultation des logs avec filtres (tail, since, timestamps)
+- Streaming temps réel via WebSocket
+- Téléchargement des logs
+
+**Terminal interactif :**
+- Shell dans un container via WebSocket (xterm.js dans le navigateur)
+- Support des commandes interactives (bash, sh, etc.)
+- Copier/coller, redimensionnement automatique
 
 ```python
-class DNSManager:
-    """Gestionnaire DNS avancé avec support multi-providers."""
-    
-    def __init__(self, providers: List[DNSProvider]):
-        self.providers = providers
-        self.resolver = CustomDNSResolver()
-        self.cert_manager = CertificateManager()
-        
-    async def create_domain(self, domain_config: DomainConfig) -> Domain:
-        """Crée un domaine avec configuration DNS automatique."""
-        
-        # Validation du domaine
-        if not self._validate_domain_name(domain_config.fqdn):
-            raise InvalidDomainError(f"Invalid domain: {domain_config.fqdn}")
-            
-        # Sélection du provider optimal
-        provider = self._select_optimal_provider(domain_config)
-        
-        # Création de la zone DNS
-        zone = await provider.create_zone(domain_config.fqdn)
-        
-        # Configuration DNSSEC si demandé
-        if domain_config.dnssec_enabled:
-            dnssec_keys = await self._setup_dnssec(zone, provider)
-            
-        # Génération automatique de certificats SSL
-        if domain_config.auto_ssl:
-            certificates = await self.cert_manager.request_certificate(
-                domain=domain_config.fqdn,
-                wildcard=domain_config.wildcard_support,
-                provider=provider
-            )
-            
-        # Configuration des enregistrements de base
-        base_records = self._generate_base_records(domain_config)
-        for record in base_records:
-            await provider.create_record(zone.id, record)
-            
-        return Domain(
-            fqdn=domain_config.fqdn,
-            zone_id=zone.id,
-            provider=provider.name,
-            dnssec_enabled=domain_config.dnssec_enabled,
-            certificates=certificates if domain_config.auto_ssl else None
-        )
-    
-    async def auto_configure_service_dns(self, service: Service, domain: Domain) -> List[DNSRecord]:
-        """Configuration automatique du DNS pour un service."""
-        
-        records = []
-        
-        # Enregistrement A/AAAA principal
-        if service.ip_addresses:
-            for ip in service.ip_addresses:
-                record_type = "A" if "." in ip else "AAAA"
-                records.append(DNSRecord(
-                    name=f"{service.name}.{domain.fqdn}",
-                    type=record_type,
-                    value=ip,
-                    ttl=300
-                ))
-                
-        # Enregistrement SRV pour la découverte de services
-        if service.port and service.protocol:
-            srv_record = DNSRecord(
-                name=f"_{service.name}._{service.protocol}.{domain.fqdn}",
-                type="SRV",
-                value=f"10 5 {service.port} {service.name}.{domain.fqdn}",
-                ttl=300
-            )
-            records.append(srv_record)
-            
-        # Enregistrement TXT pour métadonnées
-        txt_metadata = {
-            "version": service.version,
-            "stack": service.stack_id,
-            "environment": service.environment
-        }
-        txt_record = DNSRecord(
-            name=f"_windflow.{service.name}.{domain.fqdn}",
-            type="TXT",
-            value=json.dumps(txt_metadata),
-            ttl=300
-        )
-        records.append(txt_record)
-        
-        # Application des enregistrements
-        provider = self._get_provider(domain.provider)
-        for record in records:
-            await provider.create_record(domain.zone_id, record)
-            
-        return records
+# Exemple : API terminal WebSocket
+@router.websocket("/ws/terminal/{container_id}")
+async def container_terminal(websocket: WebSocket, container_id: str):
+    await websocket.accept()
+    container = docker_service.get_container(container_id)
+    exec_instance = container.exec_run(
+        "/bin/sh", stdin=True, tty=True, stream=True, socket=True
+    )
+    # Bidirectional streaming entre le WebSocket et le container
+    await stream_bidirectional(websocket, exec_instance)
 ```
 
-### Certificats SSL/TLS Automatiques
+### Docker Compose (Stacks)
 
-**Gestion Automatique des Certificats :**
-- Attribution automatique de sous-domaines pour chaque déploiement
-- Certificats SSL/TLS automatiques avec renouvellement transparent
-- Support des certificats wildcard pour les environnements dynamiques
-- Intégration avec Let's Encrypt, ZeroSSL, et CAs enterprise
+**Opérations :**
+- Déployer une stack depuis un fichier docker-compose.yml
+- Arrêter, redémarrer, supprimer une stack complète
+- Mettre à jour une stack (pull + recreate)
+- Voir l'état de tous les services d'une stack
+- Logs agrégés de tous les services d'une stack
 
-```python
-class CertificateManager:
-    """Gestionnaire automatique de certificats SSL/TLS."""
-    
-    def __init__(self, acme_client: ACMEClient):
-        self.acme_client = acme_client
-        self.cert_store = CertificateStore()
-        
-    async def request_certificate(self, domain: str, wildcard: bool = False, 
-                                  san_domains: List[str] = None) -> Certificate:
-        """Demande et configure un certificat SSL/TLS."""
-        
-        # Construction de la liste des domaines
-        domains = [domain]
-        if wildcard:
-            domains.append(f"*.{domain}")
-        if san_domains:
-            domains.extend(san_domains)
-            
-        # Vérification des certificats existants
-        existing_cert = await self.cert_store.get_certificate(domain)
-        if existing_cert and not existing_cert.needs_renewal():
-            return existing_cert
-            
-        # Challenge DNS-01 pour validation
-        challenges = []
-        for domain_name in domains:
-            challenge = await self.acme_client.request_challenge(
-                domain_name, challenge_type="dns-01"
-            )
-            challenges.append(challenge)
-            
-        # Configuration des enregistrements TXT pour validation
-        dns_manager = self.get_dns_manager()
-        for challenge in challenges:
-            await dns_manager.create_challenge_record(
-                domain=challenge.domain,
-                token=challenge.token
-            )
-            
-        # Validation et obtention du certificat
-        certificate = await self.acme_client.finalize_order(challenges)
-        
-        # Stockage sécurisé du certificat
-        await self.cert_store.store_certificate(certificate)
-        
-        # Programmation du renouvellement automatique
-        renewal_date = certificate.expires_at - timedelta(days=30)
-        await self.schedule_renewal(certificate, renewal_date)
-        
-        return certificate
-```
-
-## 2. Orchestration Multi-Cible Unifiée
-
-### Architecture Unifiée de Déploiement
-
-WindFlow offre une API unifiée pour déployer sur containers Docker, VMs, et serveurs physiques avec migration automatique selon les contraintes.
-
-**Composants d'Orchestration :**
-- **TargetManager** : Gestionnaire unifié pour tous les types de cibles
-- **DeploymentOrchestrator** : Orchestrateur intelligent selon la cible
-- **ResourceAllocator** : Allocation optimale des ressources par IA
-- **MigrationEngine** : Migration automatique entre cibles selon les contraintes
-- **HealthMonitor** : Monitoring unifié quelque soit la cible
+**Pipeline de déploiement :**
+- Validation du fichier compose avant déploiement
+- Pull des images avec barre de progression
+- Déploiement séquentiel avec retry configurable
+- Rollback automatique en cas d'échec (restaure l'état précédent)
+- Événements de déploiement en temps réel via WebSocket
 
 ```python
-class UnifiedDeploymentOrchestrator:
-    """Orchestrateur unifié pour tous les types de cibles."""
-    
-    def __init__(self):
-        self.target_managers = {
-            'docker': DockerTargetManager(),
-            'kubernetes': KubernetesTargetManager(), 
-            'vm': VMTargetManager(),
-            'physical': PhysicalTargetManager()
-        }
-        self.resource_allocator = AIResourceAllocator()
-        self.migration_engine = MigrationEngine()
-        
-    async def deploy_application(self, app_config: ApplicationConfig) -> DeploymentResult:
-        """Déploie une application sur la cible optimale."""
-        
-        # Analyse des contraintes et ressources requises
-        requirements = await self._analyze_requirements(app_config)
-        
-        # Sélection de la cible optimale par IA
-        optimal_target = await self.resource_allocator.select_optimal_target(
-            requirements=requirements,
-            available_targets=self.target_managers.keys(),
-            constraints=app_config.deployment_constraints
-        )
-        
-        # Récupération du gestionnaire de cible
-        target_manager = self.target_managers[optimal_target]
-        
-        # Transformation de la configuration pour la cible
-        target_config = await target_manager.transform_config(app_config)
-        
+class DeploymentPipeline:
+    """Pipeline de déploiement avec retry et rollback."""
+
+    async def deploy_stack(self, stack: Stack, target: Target) -> Deployment:
+        deployment = await self._create_deployment(stack)
+        previous_state = await self._snapshot_current_state(stack, target)
+
         try:
-            # Déploiement sur la cible sélectionnée
-            deployment = await target_manager.deploy(target_config)
-            
-            # Configuration du monitoring unifié
-            await self._setup_monitoring(deployment, optimal_target)
-            
-            # Configuration du réseau et DNS
-            await self._setup_networking(deployment, app_config)
-            
-            return DeploymentResult(
-                deployment_id=deployment.id,
-                target_type=optimal_target,
-                status="deployed",
-                endpoints=deployment.endpoints,
-                monitoring_config=deployment.monitoring
-            )
-            
+            await self._emit_event(deployment, "validating")
+            await self._validate_compose(stack.compose_content)
+
+            await self._emit_event(deployment, "pulling_images")
+            await self._pull_images(stack, target)
+
+            await self._emit_event(deployment, "deploying")
+            await self._docker_compose_up(stack, target)
+
+            await self._emit_event(deployment, "health_checking")
+            await self._wait_for_healthy(stack, target, timeout=60)
+
+            deployment.status = "success"
         except DeploymentError as e:
-            # Tentative de migration vers une cible alternative
-            return await self._attempt_migration(app_config, failed_target=optimal_target)
-    
-    async def _attempt_migration(self, app_config: ApplicationConfig, 
-                                 failed_target: str) -> DeploymentResult:
-        """Tentative de migration vers une cible alternative."""
-        
-        # Exclusion de la cible qui a échoué
-        available_targets = [t for t in self.target_managers.keys() if t != failed_target]
-        
-        # Nouvelle sélection de cible
-        alternative_target = await self.resource_allocator.select_optimal_target(
-            requirements=await self._analyze_requirements(app_config),
-            available_targets=available_targets,
-            constraints=app_config.deployment_constraints
-        )
-        
-        # Migration automatique
-        return await self.migration_engine.migrate_application(
-            app_config=app_config,
-            source_target=failed_target,
-            target_target=alternative_target
-        )
+            await self._emit_event(deployment, "rolling_back", error=str(e))
+            await self._rollback(previous_state, target)
+            deployment.status = "failed"
+
+        return deployment
 ```
 
-### Support Multi-Plateforme
+### Images
 
-**Types de Cibles Supportés :**
+- Lister les images locales
+- Pull une image depuis un registry (Docker Hub, registries privés)
+- Supprimer des images
+- Prune des images non utilisées (libérer de l'espace — important sur RPi)
+- Inspecter une image (layers, taille, tags)
+
+### Docker sur Machine Distante
+
+Les mêmes opérations fonctionnent sur des Docker Engines distants via SSH. Pas besoin d'exposer l'API Docker sur le réseau.
 
 ```python
-class TargetType(str, enum.Enum):
-    DOCKER = "docker"              # Containers Docker simples
-    DOCKER_SWARM = "docker_swarm"  # Orchestration Docker Swarm
-    KUBERNETES = "kubernetes"      # Clusters Kubernetes natifs
-    VM_KVM = "vm_kvm"             # Machines virtuelles KVM/QEMU
-    VM_VMWARE = "vm_vmware"       # Machines virtuelles VMware
-    VM_HYPERV = "vm_hyperv"       # Machines virtuelles Hyper-V
-    PHYSICAL = "physical"          # Serveurs physiques bare metal
-```
-
-**Configuration Multi-Cible :**
-
-```yaml
-# Exemple de configuration multi-cible
-targets:
-  docker_local:
-    type: docker
-    endpoint: "unix:///var/run/docker.sock"
-    resources:
-      cpu_cores: 8
-      memory_gb: 32
-      
-  kubernetes_prod:
-    type: kubernetes
-    kubeconfig: "/path/to/kubeconfig"
-    namespace: "windflow"
-    resources:
-      cpu_cores: 100
-      memory_gb: 500
-      
-  vm_staging:
-    type: vm_kvm
-    libvirt_uri: "qemu+ssh://user@host/system"
-    default_image: "ubuntu-22.04"
-    resources:
-      cpu_cores: 50
-      memory_gb: 200
-      
-  physical_edge:
-    type: physical
-    hosts:
-      - hostname: "edge-01.local"
-        ip: "192.168.1.100"
-        ssh_key: "/path/to/key"
-```
-
-## 3. Système de Stacks Intelligents
-
-### Stacks Auto-Optimisés par IA
-
-WindFlow utilise l'IA pour générer et optimiser automatiquement les configurations de stacks selon les besoins exprimés et les contraintes de l'infrastructure.
-
-**Architecture des Stacks :**
-- **StackTemplate Engine** : Moteur de templates avec génération IA
-- **DependencyResolver** : Résolution automatique des dépendances inter-services
-- **ResourceOptimizer** : Optimisation des ressources par stack
-- **StackWorkflow** : Workflows automatisés pour chaque stack
-- **VersionController** : Gestion des versions et rollbacks de stacks
-
-```python
-class IntelligentStackManager:
-    """Gestionnaire de stacks avec optimisation IA."""
-    
-    def __init__(self, llm_service: LLMService):
-        self.llm_service = llm_service
-        self.template_engine = StackTemplateEngine()
-        self.dependency_resolver = DependencyResolver()
-        
-    async def generate_stack_from_description(self, description: str, 
-                                              constraints: Dict) -> Stack:
-        """Génère un stack à partir d'une description en langage naturel."""
-        
-        # Analyse de la description par LLM
-        analysis = await self.llm_service.analyze_requirements(
-            description=description,
-            context={
-                "available_services": self._get_available_services(),
-                "infrastructure_constraints": constraints,
-                "best_practices": self._get_best_practices()
-            }
-        )
-        
-        # Génération de la configuration optimisée
-        stack_config = await self.llm_service.generate_stack_config(
-            requirements=analysis,
-            target_platform=constraints.get('target_platform', 'docker'),
-            optimization_goals=constraints.get('optimization_goals', ['performance', 'security'])
-        )
-        
-        # Validation et résolution des dépendances
-        validated_config = await self.dependency_resolver.resolve_dependencies(stack_config)
-        
-        # Optimisation finale des ressources
-        optimized_config = await self._optimize_resources(validated_config, constraints)
-        
-        # Création du stack
-        stack = Stack(
-            name=analysis.suggested_name,
-            description=description,
-            configuration=optimized_config,
-            llm_optimized=True,
-            llm_optimization_version=self.llm_service.model_version
-        )
-        
-        return stack
-    
-    async def optimize_existing_stack(self, stack: Stack, 
-                                      optimization_goals: List[str]) -> Stack:
-        """Optimise un stack existant selon les objectifs spécifiés."""
-        
-        # Analyse de la configuration actuelle
-        current_analysis = await self.llm_service.analyze_stack_configuration(
-            config=stack.configuration,
-            deployment_metrics=await self._get_deployment_metrics(stack),
-            optimization_goals=optimization_goals
-        )
-        
-        # Génération des améliorations
-        improvements = await self.llm_service.suggest_improvements(
-            current_config=stack.configuration,
-            analysis=current_analysis,
-            optimization_goals=optimization_goals
-        )
-        
-        # Application des améliorations
-        optimized_config = await self._apply_improvements(
-            base_config=stack.configuration,
-            improvements=improvements
-        )
-        
-        # Validation des modifications
-        validation_result = await self._validate_optimization(
-            original_config=stack.configuration,
-            optimized_config=optimized_config
-        )
-        
-        if validation_result.is_valid:
-            stack.configuration = optimized_config
-            stack.llm_optimized = True
-            stack.llm_optimization_version = self.llm_service.model_version
-            
-        return stack
-```
-
-### Types de Stacks Prédéfinis
-
-```python
-class StackType(str, enum.Enum):
-    WEB_APPLICATION = "web_app"      # LAMP, MEAN, Django + PostgreSQL
-    MICROSERVICES = "microservices"  # Architecture microservices avec service mesh
-    DATA_PIPELINE = "data_pipeline"  # Apache Kafka, Elasticsearch, Logstash
-    DEV_ENVIRONMENT = "dev_env"      # Environnements de développement complets
-    MONITORING = "monitoring"        # Prometheus, Grafana, AlertManager
-    DATABASE_CLUSTER = "db_cluster"  # Clusters de bases de données HA
-    CI_CD_PIPELINE = "cicd"         # Jenkins, GitLab CI, ArgoCD
-    EDGE_COMPUTING = "edge"         # Déploiements IoT et edge computing
-```
-
-**Template de Stack Intelligent :**
-
-```yaml
-# Template PostgreSQL + Redis + Nginx optimisé par IA
-apiVersion: windflow.io/v1
-kind: StackTemplate
-metadata:
-  name: "web-app-postgresql"
-  version: "2.1.0"
-  description: "Application web complète avec PostgreSQL et Redis"
-  tags: ["database", "web", "cache", "production-ready"]
-  
-spec:
-  target_compatibility: ["container", "vm", "physical"]
-  resource_requirements:
-    min_cpu: "2 cores"
-    min_memory: "4GB"
-    min_storage: "20GB"
-    
-  # Services optimisés automatiquement
-  services:
-    - name: "postgresql"
-      type: "database"
-      image: "postgres:15"
-      ai_optimized: true  # Configuration auto-générée par IA
-      config:
-        # Configuration générée automatiquement selon les ressources disponibles
-        shared_buffers: "{{ .Resources.Memory | multiply 0.25 }}"
-        max_connections: "{{ .Resources.CPU | multiply 50 }}"
-        effective_cache_size: "{{ .Resources.Memory | multiply 0.75 }}"
-      
-    - name: "redis"
-      type: "cache"
-      image: "redis:7"
-      ai_optimized: true
-      config:
-        maxmemory: "{{ .Resources.Memory | multiply 0.1 }}"
-        maxmemory_policy: "allkeys-lru"
-      
-    - name: "nginx"
-      type: "web_server"
-      image: "nginx:alpine"
-      ai_optimized: true
-      config:
-        worker_processes: "{{ .Resources.CPU }}"
-        worker_connections: "1024"
-        
-  # Réseaux auto-configurés
-  networks:
-    - name: "app_network"
-      type: "overlay"
-      encryption: true
-      subnet: "{{ .AutoSubnet }}"  # Génération automatique
-      
-  # Volumes optimisés
-  volumes:
-    - name: "postgres_data"
-      type: "persistent"
-      size: "{{ .DatabaseSize | default '10GB' }}"
-      backup_enabled: true
-      
-  # Workflows intégrés
-  workflows:
-    deploy: "workflows/deploy-web-app.yaml"
-    backup: "workflows/backup-database.yaml"
-    scale: "workflows/auto-scale.yaml"
-    
-  # Sécurité automatique
-  security:
-    scan_vulnerabilities: true
-    enforce_policies: ["no-root-containers", "encrypted-volumes"]
-    auto_ssl: true
-    
-  # Suggestions IA
-  ai_suggestions:
-    optimization_hints: true
-    security_recommendations: true
-    scaling_suggestions: true
-    performance_monitoring: true
-```
-
-## 4. Système de Réseaux Overlay Chiffrés
-
-### Architecture Réseau Avancée
-
-WindFlow crée automatiquement des réseaux overlay chiffrés entre clusters et environnements avec microsegmentation et zero-trust networking.
-
-**Composants Réseau :**
-- **NetworkFabric** : Fabric réseau chiffré multi-cluster et multi-cloud
-- **ServiceMesh** : Service mesh automatique avec Istio/Linkerd
-- **NetworkPolicies** : Politiques réseau granulaires avec microsegmentation
-- **LoadBalancing** : Load balancing intelligent avec health checks
-- **NetworkAnalytics** : Analytics réseau avec détection d'anomalies
-
-```python
-class OverlayNetworkManager:
-    """Gestionnaire de réseaux overlay chiffrés multi-cluster."""
-    
-    def __init__(self):
-        self.encryption_engine = NetworkEncryptionEngine()
-        self.policy_engine = NetworkPolicyEngine()
-        self.mesh_controller = ServiceMeshController()
-        
-    async def create_encrypted_overlay(self, network_config: NetworkConfig) -> OverlayNetwork:
-        """Crée un réseau overlay chiffré entre clusters."""
-        
-        # Génération des clés de chiffrement
-        encryption_keys = await self.encryption_engine.generate_keys(
-            algorithm="ChaCha20-Poly1305",
-            key_rotation_interval=timedelta(hours=24)
-        )
-        
-        # Configuration du tunnel VPN
-        tunnel_config = VPNTunnelConfig(
-            protocol="WireGuard",
-            encryption_keys=encryption_keys,
-            endpoints=network_config.cluster_endpoints
-        )
-        
-        # Création des tunnels entre tous les clusters
-        tunnels = []
-        for i, endpoint1 in enumerate(network_config.cluster_endpoints):
-            for endpoint2 in network_config.cluster_endpoints[i+1:]:
-                tunnel = await self._create_vpn_tunnel(endpoint1, endpoint2, tunnel_config)
-                tunnels.append(tunnel)
-                
-        # Configuration du routage overlay
-        routing_table = await self._generate_routing_table(
-            networks=network_config.subnets,
-            tunnels=tunnels
-        )
-        
-        # Déploiement des agents réseau sur chaque nœud
-        agents = []
-        for cluster in network_config.clusters:
-            agent = await self._deploy_network_agent(cluster, {
-                'encryption_keys': encryption_keys,
-                'routing_table': routing_table,
-                'policies': network_config.policies
-            })
-            agents.append(agent)
-            
-        # Configuration du service mesh
-        if network_config.service_mesh_enabled:
-            mesh = await self.mesh_controller.setup_cross_cluster_mesh(
-                clusters=network_config.clusters,
-                encryption_keys=encryption_keys
-            )
-        
-        return OverlayNetwork(
-            id=generate_uuid(),
-            name=network_config.name,
-            tunnels=tunnels,
-            agents=agents,
-            service_mesh=mesh if network_config.service_mesh_enabled else None,
-            encryption=encryption_keys
-        )
-    
-    async def apply_network_policies(self, network: OverlayNetwork, 
-                                     policies: List[NetworkPolicy]) -> None:
-        """Applique des politiques réseau granulaires."""
-        
-        for policy in policies:
-            # Compilation de la politique en règles iptables/eBPF
-            compiled_rules = await self.policy_engine.compile_policy(policy)
-            
-            # Application sur tous les agents réseau
-            for agent in network.agents:
-                await agent.apply_rules(compiled_rules)
-                
-            # Configuration des proxy du service mesh
-            if network.service_mesh:
-                await network.service_mesh.update_policies(compiled_rules)
-```
-
-### Microsegmentation Automatique
-
-```python
-class MicrosegmentationEngine:
-    """Moteur de microsegmentation automatique basé sur l'IA."""
-    
-    async def auto_segment_network(self, applications: List[Application], 
-                                   security_profile: str) -> List[NetworkSegment]:
-        """Crée automatiquement des segments réseau selon le profil de sécurité."""
-        
-        # Analyse des communications inter-applications
-        communication_matrix = await self._analyze_app_communications(applications)
-        
-        # Classification des applications par niveau de sécurité
-        security_classifications = await self._classify_security_levels(
-            applications, security_profile
-        )
-        
-        # Génération des segments optimaux
-        segments = await self._generate_optimal_segments(
-            communication_matrix, security_classifications
-        )
-        
-        # Création des politiques réseau pour chaque segment
-        policies = []
-        for segment in segments:
-            policy = await self._create_segment_policy(
-                segment=segment,
-                allowed_communications=communication_matrix,
-                security_level=security_classifications[segment.id]
-            )
-            policies.append(policy)
-            
-        return segments, policies
-```
-
-## 5. Gestion des Volumes et Stockage Intelligent
-
-### Architecture Stockage Unifiée
-
-WindFlow offre une gestion intelligente du stockage avec allocation automatique selon les besoins de performance et sauvegarde/restauration granulaire.
-
-**Composants Stockage :**
-- **StorageController** : Contrôleur unifié pour tous types de stockage
-- **VolumeScheduler** : Planificateur intelligent de volumes
-- **BackupEngine** : Moteur de backup avec déduplication et compression
-- **StorageAnalytics** : Analytics de performance et optimisation
-- **DataLifecycle** : Gestion automatique du cycle de vie des données
-
-```python
-class IntelligentStorageManager:
-    """Gestionnaire intelligent de stockage multi-backend."""
-    
-    def __init__(self):
-        self.storage_backends = {
-            'local_ssd': LocalSSDBackend(),
-            'local_hdd': LocalHDDBackend(),
-            'nfs': NFSBackend(),
-            'ceph': CephBackend(),
-            's3': S3Backend(),
-            'azure_blob': AzureBlobBackend()
-        }
-        self.volume_scheduler = AIVolumeScheduler()
-        self.backup_engine = BackupEngine()
-        
-    async def allocate_volume(self, volume_request: VolumeRequest) -> Volume:
-        """Allocation intelligente de volume selon les besoins."""
-        
-        # Analyse des besoins de performance
-        performance_requirements = await self._analyze_performance_needs(
-            application_type=volume_request.application_type,
-            workload_pattern=volume_request.workload_pattern,
-            size=volume_request.size_gb
-        )
-        
-        # Sélection du backend optimal
-        optimal_backend = await self.volume_scheduler.select_optimal_backend(
-            requirements=performance_requirements,
-            available_backends=self.storage_backends,
-            constraints=volume_request.constraints
-        )
-        
-        # Allocation sur le backend sélectionné
-        backend = self.storage_backends[optimal_backend]
-        volume = await backend.create_volume(volume_request)
-        
-        # Configuration automatique des sauvegardes
-        if volume_request.backup_enabled:
-            backup_schedule = await self._generate_backup_schedule(
-                volume=volume,
-                importance=volume_request.data_importance,
-                recovery_requirements=volume_request.recovery_requirements
-            )
-            await self.backup_engine.configure_backup(volume, backup_schedule)
-            
-        # Configuration du monitoring
-        await self._setup_volume_monitoring(volume, performance_requirements)
-        
-        return volume
-    
-    async def optimize_storage_layout(self, volumes: List[Volume]) -> OptimizationResult:
-        """Optimise la disposition du stockage pour les performances."""
-        
-        # Analyse des patterns d'accès
-        access_patterns = await self._analyze_access_patterns(volumes)
-        
-        # Détection des volumes mal placés
-        misplaced_volumes = await self._detect_misplaced_volumes(
-            volumes, access_patterns
-        )
-        
-        # Génération du plan d'optimisation
-        optimization_plan = await self._generate_optimization_plan(
-            misplaced_volumes, access_patterns
-        )
-        
-        # Exécution de la migration si approuvée
-        if optimization_plan.estimated_improvement > 20:  # 20% d'amélioration minimum
-            migration_results = await self._execute_migration_plan(optimization_plan)
-            return OptimizationResult(
-                improvements=migration_results,
-                performance_gain=optimization_plan.estimated_improvement
-            )
-            
-        return OptimizationResult(improvements=[], performance_gain=0)
-```
-
-### Types de Stockage Supportés
-
-```python
-class VolumeType(str, enum.Enum):
-    LOCAL_SSD = "local_ssd"          # Stockage local haute performance
-    LOCAL_HDD = "local_hdd"          # Stockage local standard
-    NFS_SHARED = "nfs"               # Stockage réseau partagé NFS
-    CEPH_RBD = "ceph"                # Stockage distribué Ceph
-    S3_COMPATIBLE = "s3"             # Stockage objet S3-compatible
-    AZURE_BLOB = "azure_blob"        # Azure Blob Storage
-    GCS_BUCKET = "gcs"               # Google Cloud Storage
-    GLUSTERFS = "glusterfs"          # Stockage distribué GlusterFS
-```
-
-## 6. Gateways Layer-4/7 Intelligentes
-
-### Load Balancing Intelligent
-
-WindFlow déploie automatiquement des gateways avec load balancing intelligent, SSL automatique et optimisations basées sur l'IA.
-
-```python
-class IntelligentGatewayManager:
-    """Gestionnaire de gateways avec optimisation IA."""
-    
-    async def deploy_smart_gateway(self, gateway_config: GatewayConfig) -> Gateway:
-        """Déploie une gateway avec configuration optimisée par IA."""
-        
-        # Analyse du trafic prévu
-        traffic_analysis = await self._analyze_expected_traffic(gateway_config)
-        
-        # Sélection de l'algorithme de load balancing optimal
-        optimal_algorithm = await self._select_load_balancing_algorithm(
-            traffic_patterns=traffic_analysis,
-            backend_characteristics=gateway_config.backends
-        )
-        
-        # Configuration SSL automatique
-        if gateway_config.auto_ssl:
-            ssl_config = await self._configure_automatic_ssl(gateway_config)
-        
-        # Déploiement de la gateway
-        gateway = await self._deploy_gateway_instance(
-            config=gateway_config,
-            load_balancing=optimal_algorithm,
-            ssl_config=ssl_config if gateway_config.auto_ssl else None
-        )
-        
-        # Configuration du monitoring et alerting
-        await self._setup_gateway_monitoring(gateway, traffic_analysis)
-        
-        return gateway
+# Le target définit le mode de connexion
+# Local : unix:///var/run/docker.sock
+# Distant : ssh://user@192.168.1.50
+docker_client = docker.DockerClient(base_url=target.docker_url)
 ```
 
 ---
 
+## 2. Gestion des Machines Virtuelles
+
+WindFlow gère les VMs via les hyperviseurs disponibles sur la machine cible. Le support est détecté automatiquement.
+
+### KVM / QEMU (via libvirt)
+
+**Opérations VM :**
+- Créer une VM (CPU, mémoire, disque, réseau, ISO/cloud-init)
+- Démarrer, arrêter, redémarrer, forcer l'arrêt
+- Suspendre et reprendre
+- Supprimer une VM et ses disques
+
+**Snapshots :**
+- Créer un snapshot (état complet : mémoire + disque)
+- Lister les snapshots d'une VM
+- Restaurer un snapshot
+- Supprimer un snapshot
+
+**Clones :**
+- Cloner une VM existante (full clone ou linked clone)
+
+**Console :**
+- Console VNC/SPICE intégrée au navigateur (noVNC)
+- Pas de client lourd nécessaire
+
+```python
+# Exemple : création d'une VM KVM
+@router.post("/api/v1/vms")
+async def create_vm(config: VMCreateRequest, target: Target = Depends(get_target)):
+    vm_service = get_vm_service(target)  # LibvirtService ou ProxmoxService
+    vm_id = await vm_service.create_vm(
+        name=config.name,
+        vcpus=config.vcpus,
+        memory_mb=config.memory_mb,
+        disk_size_gb=config.disk_size_gb,
+        iso_path=config.iso_path,
+        cloud_init=config.cloud_init,
+    )
+    return {"id": vm_id, "status": "created"}
+```
+
+**Disques :**
+- Créer, redimensionner, supprimer des disques virtuels
+- Formats supportés : qcow2, raw
+- Conversion entre formats
+- Snapshots de disques indépendants
+
+**Images et ISOs :**
+- Gestion d'une bibliothèque d'ISOs et d'images cloud
+- Upload d'ISOs depuis l'UI
+- Support cloud-init pour le provisionnement automatique
+
+### Proxmox VE
+
+Pour les machines qui tournent Proxmox, WindFlow s'intègre via l'API REST Proxmox :
+
+- CRUD de VMs et de containers LXC
+- Snapshots et restauration
+- Backup et restore Proxmox
+- Vue des nodes et de leurs ressources
+- Console VNC via l'API Proxmox
+
+### VirtualBox (optionnel)
+
+Support basique via VBoxWebSVC pour les environnements de développement :
+
+- CRUD de VMs
+- Snapshots
+- Démarrage/arrêt
+
+### Hyperviseur sur Machine Distante
+
+Comme pour Docker, les VMs distantes sont gérées via les connexions natives de chaque hyperviseur :
+
+- libvirt : `qemu+ssh://user@host/system`
+- Proxmox : API REST via HTTPS
+- VirtualBox : VBoxWebSVC sur le réseau local
+
+---
+
+## 3. Système de Plugins
+
+Le système de plugins est le mécanisme fondamental d'extensibilité de WindFlow. Il permet d'ajouter des fonctionnalités sans modifier le core.
+
+### Trois Types de Plugins
+
+**Service Plugin** — Déploie une stack Docker préconfigurée avec un wizard de configuration. L'utilisateur n'a pas besoin d'écrire de docker-compose.yml. Exemple : installer Uptime Kuma en un clic.
+
+**Extension Plugin** — Ajoute des capacités au core (endpoints API, pages UI, réactions aux événements) sans déployer de nouveau container. Exemple : le plugin PostgreSQL détecte les containers `postgres` et ajoute des actions (créer une DB, un user, backup) dans l'interface.
+
+**Hybrid Plugin** — Combine les deux : déploie un service ET étend le core. Exemple : le plugin Traefik déploie le container Traefik et s'intègre à l'UI pour permettre l'association domaine ↔ service.
+
+### Installation et Gestion
+
+**Depuis l'UI :**
+- Page "Plugins" avec la liste des plugins installés
+- Statut, version, consommation de ressources
+- Actions : configurer, activer, désactiver, mettre à jour, désinstaller
+
+**Depuis la CLI :**
+```bash
+windflow plugin install traefik
+windflow plugin list
+windflow plugin update traefik
+windflow plugin remove traefik
+windflow plugin config traefik --set acme_email=user@example.com
+```
+
+### Vérifications Automatiques
+
+Avant d'installer un plugin, le Plugin Manager vérifie :
+
+- **Architecture** : le plugin supporte-t-il l'architecture de la machine (arm64/amd64) ?
+- **Ressources** : la machine a-t-elle assez de RAM et CPU disponibles ?
+- **Dépendances** : les plugins requis sont-ils installés ? Y a-t-il des conflits ?
+- **Intégrité** : le checksum du package correspond-il au registre ?
+
+Si une vérification échoue, l'installation est refusée avec un message explicatif.
+
+### Configuration Dynamique
+
+Chaque plugin déclare ses paramètres de configuration dans son manifest. WindFlow génère automatiquement un formulaire dans l'UI à partir de cette déclaration :
+
+```yaml
+# Extrait du manifest d'un plugin
+config:
+  - key: acme_email
+    label: "Email pour Let's Encrypt"
+    type: string
+    required: true
+  - key: dashboard_enabled
+    label: "Activer le dashboard"
+    type: boolean
+    default: true
+  - key: log_level
+    label: "Niveau de logs"
+    type: select
+    options: ["debug", "info", "warn", "error"]
+    default: "info"
+```
+
+L'utilisateur remplit le formulaire, et les valeurs sont injectées dans le plugin via variables d'environnement ou fichier de configuration.
+
+### Hooks et Événements
+
+Les extension/hybrid plugins peuvent réagir aux événements du core :
+
+```python
+# Exemple : hook du plugin Traefik qui auto-configure le routage
+class TraefikHooks:
+    async def on_stack_deployed(self, event: StackDeployedEvent):
+        """Appelé quand une stack est déployée."""
+        for service in event.stack.services:
+            if service.labels.get("windflow.domain"):
+                domain = service.labels["windflow.domain"]
+                await self.traefik_api.add_route(
+                    domain=domain,
+                    service_url=f"http://{service.container_name}:{service.port}",
+                    auto_tls=True,
+                )
+
+    async def on_stack_removed(self, event: StackRemovedEvent):
+        """Appelé quand une stack est supprimée."""
+        await self.traefik_api.remove_routes_for_stack(event.stack.id)
+```
+
+### Exemples de Plugins Concrets
+
+**Plugin PostgreSQL (extension)** — Détecte tout container basé sur l'image `postgres`. Ajoute dans l'UI de WindFlow :
+- Bouton "Créer une base de données" avec formulaire (nom, encoding, owner)
+- Bouton "Créer un utilisateur" avec gestion des permissions
+- Vue des bases existantes, tailles, connexions actives
+- Export/import SQL
+
+**Plugin Traefik (hybrid)** — Déploie Traefik + s'intègre au core :
+- Page "Domaines & Routage" dans le menu WindFlow
+- Association domaine ↔ service en un clic
+- Certificats Let's Encrypt automatiques (HTTP ou DNS challenge)
+- Dashboard Traefik accessible depuis WindFlow
+
+**Plugin Restic (extension)** — Ajoute des fonctions de backup :
+- Page "Backups" avec planification (cron)
+- Sélection des volumes à sauvegarder
+- Destinations : disque local, SFTP, S3 (via plugin MinIO)
+- Historique et restauration
+
+---
+
+## 4. Marketplace
+
+La marketplace est le catalogue intégré à WindFlow pour découvrir et installer des stacks et des plugins.
+
+### Catalogue
+
+- Navigation par catégories (reverse proxy, bases de données, monitoring, média, collaboration…)
+- Recherche par nom, description, tags
+- Filtres : compatible avec mon architecture, ressources suffisantes, plugins officiels / communautaires
+
+### Fiche Plugin/Stack
+
+Chaque entrée du catalogue affiche :
+- Nom, description, icône, captures d'écran
+- Version, auteur, licence
+- Architectures supportées (arm64, amd64)
+- Ressources requises (RAM, CPU)
+- Dépendances (autres plugins nécessaires)
+- Notes d'installation et changelog
+
+### Installation One-Click
+
+1. L'utilisateur clique "Installer"
+2. Le Plugin Manager vérifie la compatibilité
+3. Si le plugin a des paramètres de configuration, un wizard s'affiche
+4. L'installation se lance (téléchargement, déploiement, configuration)
+5. Le plugin apparaît dans la liste "Plugins installés"
+
+### Stacks Préconfigurées
+
+La marketplace propose aussi des stacks d'applications complètes (pas des plugins, juste des docker-compose.yml avec wizard) :
+
+- **Cloud personnel** : Nextcloud, Immich, Photoprism
+- **Git** : Gitea, Forgejo
+- **Média** : Jellyfin, Plex
+- **Communication** : Mattermost, Matrix/Element
+- **Domotique** : Home Assistant
+- **CMS** : WordPress, Ghost
+- **Data** : Baserow, NocoDB, Metabase
+- **Analytics** : Plausible, Matomo
+
+Chaque stack template inclut :
+- Un docker-compose.yml paramétré avec Jinja2
+- Un schéma de configuration (génère le wizard)
+- Des valeurs par défaut adaptées au profil de la machine
+- Des labels pour l'intégration avec les plugins installés (ex: labels Traefik si le plugin Traefik est présent)
+
+---
+
+## 5. Stacks & Templates
+
+### Gestion des Stacks
+
+Une stack dans WindFlow est un groupe de services Docker déployés ensemble (équivalent d'un projet Docker Compose).
+
+**Opérations :**
+- Créer une stack depuis un docker-compose.yml écrit manuellement
+- Créer depuis un template de la marketplace
+- Créer depuis un dépôt Git (avec plugin Git)
+- Éditer le compose dans l'éditeur YAML intégré à l'UI
+- Versioning : chaque modification crée une nouvelle version
+- Rollback vers une version précédente
+- Variables d'environnement par stack, avec chiffrement des valeurs sensibles
+
+### Templates Jinja2
+
+Les templates de stacks utilisent Jinja2 pour la paramétrisation :
+
+```yaml
+# Template paramétré
+version: "3.8"
+services:
+  app:
+    image: {{ app_image }}:{{ app_version | default('latest') }}
+    ports:
+      - "{{ app_port | default('8080') }}:8080"
+    environment:
+      DATABASE_URL: postgresql://{{ db_user }}:{{ db_password }}@db:5432/{{ db_name }}
+    {% if traefik_enabled %}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.{{ stack_name }}.rule=Host(`{{ domain }}`)"
+    {% endif %}
+
+  db:
+    image: postgres:15
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: {{ db_name }}
+      POSTGRES_USER: {{ db_user }}
+      POSTGRES_PASSWORD: {{ db_password }}
+
+volumes:
+  db_data:
+```
+
+Les variables sont renseignées via le wizard de configuration ou la CLI :
+
+```bash
+windflow stack create my-app \
+  --template web-app-postgresql \
+  --set app_image=myapp --set app_port=3000 \
+  --set db_name=mydb --set db_user=admin --set db_password=secret
+```
+
+### Formulaires Dynamiques
+
+Chaque template peut déclarer un schéma de configuration (Pydantic/JSON Schema) qui génère automatiquement un formulaire dans l'UI :
+
+```yaml
+# Schéma de configuration du template
+config_schema:
+  - key: app_image
+    label: "Image de l'application"
+    type: string
+    required: true
+  - key: app_port
+    label: "Port exposé"
+    type: integer
+    default: 8080
+  - key: db_password
+    label: "Mot de passe PostgreSQL"
+    type: password
+    required: true
+    generate: true  # Propose de générer un mot de passe aléatoire
+  - key: domain
+    label: "Nom de domaine (optionnel)"
+    type: string
+    required: false
+    visible_if: traefik_installed  # Affiché seulement si le plugin Traefik est installé
+```
+
+---
+
+## 6. Gestion des Targets (Machines Cibles)
+
+### Types de Targets
+
+**Local** — La machine sur laquelle WindFlow est installé. Docker et/ou libvirt sont détectés automatiquement.
+
+**SSH** — Une machine distante accessible via SSH. WindFlow détecte automatiquement ce qui est disponible (Docker, libvirt, Proxmox) sur la machine distante.
+
+**Proxmox** — Un nœud ou cluster Proxmox, connecté via l'API REST.
+
+### Discovery Automatique
+
+Quand un target est ajouté, WindFlow détecte ses capacités :
+
+```python
+class TargetDiscovery:
+    async def discover(self, target: Target) -> dict:
+        """Détecte les capacités d'une machine cible."""
+        capabilities = {}
+
+        # Docker disponible ?
+        if await self._check_docker(target):
+            capabilities["docker"] = {
+                "version": await self._get_docker_version(target),
+                "containers": await self._count_containers(target),
+            }
+
+        # libvirt disponible ?
+        if await self._check_libvirt(target):
+            capabilities["libvirt"] = {
+                "hypervisor": await self._get_hypervisor_type(target),
+                "vms": await self._count_vms(target),
+            }
+
+        # Proxmox API disponible ?
+        if await self._check_proxmox(target):
+            capabilities["proxmox"] = {
+                "version": await self._get_proxmox_version(target),
+                "nodes": await self._list_nodes(target),
+            }
+
+        # Ressources système
+        capabilities["system"] = {
+            "arch": await self._get_arch(target),       # amd64, arm64
+            "cpu_cores": await self._get_cpu_count(target),
+            "memory_mb": await self._get_memory(target),
+            "disk_gb": await self._get_disk_space(target),
+            "os": await self._get_os_info(target),
+        }
+
+        return capabilities
+```
+
+### Vue Consolidée
+
+Le dashboard affiche une vue globale de tous les targets avec :
+- État de la connexion (en ligne / hors ligne)
+- Ressources utilisées vs disponibles (CPU, RAM, disque)
+- Nombre de containers et VMs par machine
+- Alertes (machine pleine, connexion perdue)
+
+### Monitoring Basique
+
+Le core fournit un monitoring basique des targets :
+- CPU, mémoire, disque, réseau (collecté via SSH ou agent)
+- Historique court (dernières 24h en base)
+- Alertes simples (seuils configurables)
+
+Pour un monitoring avancé (dashboards, historique long, alerting multi-canal), les plugins Netdata, Uptime Kuma ou Prometheus + Grafana sont recommandés.
+
+---
+
+## 7. Volumes & Stockage
+
+### Volumes Docker
+
+**Opérations :**
+- Lister les volumes avec taille et containers associés
+- Créer et supprimer des volumes
+- Identifier et nettoyer les volumes orphelins (important sur RPi pour libérer de l'espace)
+
+### Volume Browser
+
+Un file browser intégré à l'UI permet de naviguer dans le contenu des volumes sans accès SSH :
+
+- **Arborescence** : navigation dans les dossiers
+- **Preview** : affichage de fichiers texte, logs, images
+- **Édition** : modification de fichiers de configuration directement depuis le navigateur
+- **Upload/Download** : envoyer ou récupérer des fichiers
+- **Permissions** : affichage des permissions fichiers
+
+Le volume browser fonctionne en montant temporairement le volume dans un container utilitaire léger.
+
+### Disques VM
+
+Pour les machines virtuelles gérées par WindFlow :
+
+- Créer, redimensionner, supprimer des disques virtuels
+- Formats : qcow2, raw (KVM), vdi (VirtualBox), vmdk (VMware)
+- Conversion entre formats (`qemu-img convert`)
+- Snapshots de disques
+
+---
+
+## 8. Réseaux Docker
+
+### Gestion des Networks
+
+- Lister les networks avec containers connectés
+- Créer des networks (bridge, overlay, macvlan)
+- Supprimer des networks
+- Connecter/déconnecter un container d'un network
+- Inspecter un network (subnet, gateway, IPAM)
+
+### Isolation par Environnement
+
+Chaque environnement (dev, staging, prod) peut avoir son propre network Docker isolé. Les containers d'un environnement ne voient pas ceux des autres par défaut.
+
+```python
+class NetworkIsolation:
+    async def create_environment_network(self, environment: Environment) -> str:
+        """Crée un network Docker isolé pour un environnement."""
+        network_name = f"windflow-{environment.organization.name}-{environment.name}"
+        network = self.docker.networks.create(
+            name=network_name,
+            driver="bridge",
+            labels={
+                "windflow.environment": environment.id,
+                "windflow.organization": environment.organization.id,
+            },
+        )
+        return network.id
+```
+
+Les stacks déployées dans un environnement sont automatiquement connectées au network de cet environnement.
+
+---
+
+## 9. Authentification & RBAC
+
+### Authentification
+
+- **JWT** avec access token (courte durée) + refresh token (longue durée)
+- Hashage des mots de passe (bcrypt)
+- Protection brute-force (rate limiting sur `/auth/login`)
+- Pas de dépendance externe — fonctionne out of the box
+- SSO disponible via le plugin Keycloak (LDAP/AD, OIDC, SAML)
+
+### Organisations et Environnements
+
+- Un utilisateur appartient à une ou plusieurs **organisations**
+- Chaque organisation contient des **environnements** (dev, staging, prod, ou noms libres)
+- Les targets, stacks et ressources sont scopés par environnement
+
+### RBAC (Role-Based Access Control)
+
+Rôles par défaut :
+
+| Rôle | Containers | VMs | Stacks | Plugins | Targets | Users |
+|------|-----------|-----|--------|---------|---------|-------|
+| **Viewer** | Lire | Lire | Lire | Lire | Lire | — |
+| **Operator** | Lire, Déployer | Lire, Démarrer/Arrêter | Lire, Déployer | Lire | Lire | — |
+| **Admin** | Tout | Tout | Tout | Installer/Supprimer | Ajouter/Supprimer | Gérer |
+| **Super Admin** | Tout | Tout | Tout | Tout | Tout | Tout (toutes orgs) |
+
+Les permissions sont attribuées par organisation. Un utilisateur peut être Admin dans une organisation et Viewer dans une autre.
+
+---
+
+## 10. Interface Web
+
+### Dashboard
+
+Page d'accueil avec une vue d'ensemble de l'infrastructure :
+
+- Nombre de containers (running / stopped / total)
+- Nombre de VMs (running / stopped / total)
+- Ressources système (CPU, RAM, disque) par target
+- Derniers déploiements (statut, date, durée)
+- Alertes actives
+- Widgets des plugins installés (ex : statut Uptime Kuma, routes Traefik)
+
+### Pages Principales
+
+- **Containers** : liste, actions, logs, terminal, stats
+- **VMs** : liste, actions, console VNC, snapshots
+- **Stacks** : liste, déploiement, éditeur YAML, historique versions
+- **Targets** : machines connectées, ressources, capabilities
+- **Marketplace** : catalogue, recherche, installation
+- **Plugins** : plugins installés, configuration, statut
+- **Settings** : organisations, environnements, utilisateurs, RBAC
+
+### Fonctionnalités UI Transversales
+
+- **Notifications temps réel** : événements de déploiement, alertes, installations de plugins
+- **Éditeur YAML** avec coloration syntaxique et validation
+- **Formulaires dynamiques** générés depuis les schémas Pydantic des stacks et plugins
+- **Responsive** : utilisable sur tablette et mobile (lecture et actions simples)
+- **Thème sombre / clair**
+
+---
+
+## 11. CLI / TUI
+
+### CLI (Rich + Typer)
+
+Interface en ligne de commande pour l'automatisation et les scripts :
+
+```bash
+# Containers
+windflow containers list
+windflow containers logs my-app --tail 50 --follow
+windflow containers exec my-app -- /bin/sh
+
+# VMs
+windflow vms list
+windflow vms create my-vm --cpus 2 --memory 2048 --disk 20
+windflow vms snapshot my-vm --name before-update
+
+# Stacks
+windflow stacks deploy my-stack
+windflow stacks deploy my-stack --target remote-server
+windflow stacks rollback my-stack --version 3
+
+# Plugins
+windflow plugin install traefik
+windflow plugin list
+windflow plugin config traefik --set acme_email=me@example.com
+
+# Marketplace
+windflow marketplace search nextcloud
+windflow marketplace install nextcloud
+
+# Targets
+windflow targets add my-server --type ssh --host 192.168.1.50 --user deploy
+windflow targets discover my-server
+
+# Backup core
+windflow backup create --output /backup/windflow.tar.gz
+windflow backup restore --input /backup/windflow.tar.gz
+```
+
+### TUI (Textual)
+
+Interface terminal interactive pour la gestion quotidienne :
+
+- Vue tabulaire des containers et VMs avec actions clavier
+- Navigation entre targets
+- Logs en streaming
+- Raccourcis clavier pour les actions courantes (deploy, restart, stop)
+- Fonctionne via SSH sur des machines sans interface graphique
+
+---
+
+## Ce que les Plugins Ajoutent (exemples)
+
+Pour clarifier la frontière core/plugins, voici ce que les plugins les plus courants ajoutent à WindFlow :
+
+| Plugin | Ce qu'il ajoute |
+|--------|-----------------|
+| **Traefik** | Page "Domaines", association domaine ↔ service, TLS automatique |
+| **PostgreSQL** | Boutons "Créer DB/User" sur les containers postgres, vue des bases |
+| **Uptime Kuma** | Widget dashboard avec statut des services, page monitoring |
+| **Restic** | Page "Backups", planification, sélection de volumes, restauration |
+| **Pi-hole** | Page "DNS", gestion des enregistrements, stats adblock |
+| **Authelia** | 2FA devant les services exposés, page de configuration |
+| **Ollama + LiteLLM** | Chat assistant dans l'UI, génération de docker-compose, diagnostic |
+| **n8n** | Page "Workflows", triggers sur événements WindFlow |
+| **Keycloak** | SSO, intégration LDAP/AD, remplacement de l'auth JWT native |
+
+Chaque plugin est documenté individuellement. Voir la [documentation plugins](plugin-development.md) pour créer vos propres plugins.
+
+---
+
 **Références :**
-- [Vue d'Ensemble](01-overview.md) - Contexte du projet
-- [Architecture](02-architecture.md) - Principes architecturaux
+- [Vue d'Ensemble](01-overview.md) - Vision et contexte
+- [Architecture](02-architecture.md) - Architecture et système de plugins
 - [Stack Technologique](03-technology-stack.md) - Technologies utilisées
-- [LLM Integration](17-llm-integration.md) - Intelligence artificielle intégrée
-- [Workflows](16-workflows.md) - Système de workflows
-- [Fonctionnalités Avancées](11-advanced-features.md) - Fonctionnalités additionnelles
+- [LLM Integration](17-llm-integration.md) - Plugin IA (Ollama, LiteLLM)
+- [Roadmap](18-roadmap.md) - Plan de développement

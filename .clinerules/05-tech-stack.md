@@ -1,7 +1,7 @@
 # Stack & contraintes techniques (WindFlow)
 
 Backend :
-- Python 3.11+
+- Python 3.12+
 - FastAPI async (OpenAPI auto)
 - SQLAlchemy 2.0 async + Alembic
 - PostgreSQL

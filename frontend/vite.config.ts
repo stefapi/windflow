@@ -27,6 +27,7 @@ import VueDevTools from 'vite-plugin-vue-devtools'
 import webfontDownload from 'vite-plugin-webfont-dl'
 
 // https://vitejs.dev/config/
+// @ts-ignore
 export default defineConfig({
   plugins: [
     // https://github.com/vue-macros/vue-macros
@@ -55,11 +56,11 @@ export default defineConfig({
       outputDir: '.vite-inspect',
     }),
 
-    // @ts-expect-error - Plugin callable issue
+
     Inspector({
       launchEditor: 'pycharm',
     }),
-    // @ts-expect-error - Plugin callable issue
+
     mkcert(),
 
     // https://github.com/antfu/vite-plugin-pwa
@@ -146,7 +147,7 @@ export default defineConfig({
     Markdown({
       headEnabled: true,
       markdownItSetup(md) {
-        // @ts-expect-error - Shiki plugin type compatibility issue
+
         md.use(Shiki)
       },
     }),
@@ -161,10 +162,10 @@ export default defineConfig({
     // 🐞 Vue Devtools in development (local)
     VueDevTools(),
     // Performance optimizations
-    // @ts-expect-error - Plugin callable issue
+
     compression(),
     // Webfont download
-    // @ts-expect-error - Plugin callable issue
+
     webfontDownload(),
 
     // Bundle analysis (only in build mode)

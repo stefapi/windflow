@@ -2,560 +2,546 @@
 
 ## Vue d'Ensemble
 
-WindFlow intègre un système d'authentification sophistiqué inspiré de VesselHarbor CLI, offrant une sécurité robuste et une expérience utilisateur fluide pour tous les types d'interfaces (Web, CLI, TUI).
+WindFlow intègre un système d'authentification **JWT** autonome qui fonctionne sans dépendance externe. C'est une fonctionnalité du core — elle est disponible dès l'installation, sans plugin.
 
-### Architecture d'Authentification Avancée
+L'authentification gère les trois interfaces de WindFlow (Web UI, CLI, API) avec le même mécanisme : un access token de courte durée et un refresh token de longue durée.
 
-**Composants Principaux :**
-- **TokenManager** : Gestionnaire centralisé des tokens avec refresh automatique
-- **AuthenticationService** : Service unifié pour tous les types d'authentification
-- **CookieManager** : Gestion sécurisée des cookies HTTP pour les tokens
-- **SessionManager** : Gestion des sessions utilisateur avec persistance
-- **PermissionResolver** : Résolution granulaire des permissions utilisateur
+Pour les besoins avancés (SSO, LDAP/AD, OIDC, 2FA), le **plugin Keycloak** est disponible dans la marketplace.
 
-## Types d'Authentification Supportés
+### Ce qui est Core vs Plugin
 
-### 1. Authentification par Mot de Passe
+| Core (toujours disponible) | Plugin (optionnel) |
+|---|---|
+| Auth par mot de passe (JWT) | SSO Keycloak (LDAP, AD, OIDC, SAML) |
+| Refresh tokens | 2FA (TOTP, WebAuthn) via Keycloak |
+| API keys pour la CLI et l'automatisation | Providers externes (Google, GitHub, etc.) |
+| Hashage bcrypt | |
+| Protection brute-force (rate limiting) | |
 
-**Flow Standard avec JWT**
-```python
-# Service d'authentification par mot de passe
-class PasswordAuthenticationService:
-    def __init__(self, db: Database, vault: VaultService):
-        self.db = db
-        self.vault = vault
-        self.password_hasher = BCryptPasswordHasher()
-        
-    async def authenticate(self, username: str, password: str) -> AuthResult:
-        """Authentification par nom d'utilisateur et mot de passe."""
-        
-        # Récupération utilisateur depuis la base
-        user = await self.db.get_user_by_username(username)
-        if not user or not user.is_active:
-            raise AuthenticationError("Invalid credentials")
-            
-        # Vérification du mot de passe
-        if not self.password_hasher.verify(password, user.hashed_password):
-            await self._log_failed_attempt(user.id, "invalid_password")
-            raise AuthenticationError("Invalid credentials")
-            
-        # Vérification 2FA si activé
-        if user.two_factor_enabled:
-            return AuthResult(
-                success=False,
-                requires_2fa=True,
-                user_id=user.id,
-                temp_token=self._generate_temp_token(user.id)
-            )
-            
-        # Génération des tokens
-        access_token = self._generate_access_token(user)
-        refresh_token = self._generate_refresh_token(user)
-        
-        # Stockage du refresh token
-        await self.vault.store_refresh_token(user.id, refresh_token)
-        
-        return AuthResult(
-            success=True,
-            access_token=access_token,
-            refresh_token=refresh_token,
-            user_info=self._build_user_info(user)
-        )
-```
+---
 
-### 2. Authentification par API Key
+## Authentification par Mot de Passe
 
-**API Keys avec Scopes et Expiration**
-```python
-class APIKeyAuthenticationService:
-    def __init__(self, db: Database, vault: VaultService):
-        self.db = db
-        self.vault = vault
-        
-    async def authenticate(self, api_key: str) -> AuthResult:
-        """Authentification par clé API."""
-        
-        # Validation format de la clé
-        if not self._validate_api_key_format(api_key):
-            raise AuthenticationError("Invalid API key format")
-            
-        # Récupération de la clé depuis Vault
-        key_data = await self.vault.get_api_key(api_key)
-        if not key_data or key_data.get('revoked'):
-            raise AuthenticationError("Invalid or revoked API key")
-            
-        # Vérification expiration
-        if key_data.get('expires_at') and datetime.now() > key_data['expires_at']:
-            raise AuthenticationError("API key expired")
-            
-        # Récupération utilisateur
-        user = await self.db.get_user_by_id(key_data['user_id'])
-        if not user or not user.is_active:
-            raise AuthenticationError("User account disabled")
-            
-        # Génération tokens de session
-        access_token = self._generate_access_token(user, scopes=key_data.get('scopes', []))
-        
-        return AuthResult(
-            success=True,
-            access_token=access_token,
-            user_info=self._build_user_info(user),
-            scopes=key_data.get('scopes', [])
-        )
-```
-
-### 3. SSO via Keycloak
-
-**Intégration OIDC/SAML Complète**
-```python
-class KeycloakSSOService:
-    def __init__(self, config: KeycloakConfig):
-        self.config = config
-        self.client = KeycloakOpenID(
-            server_url=config.server_url,
-            client_id=config.client_id,
-            realm_name=config.realm,
-            client_secret_key=config.client_secret
-        )
-        
-    async def authenticate(self, authorization_code: str) -> AuthResult:
-        """Authentification SSO via code d'autorisation Keycloak."""
-        
-        try:
-            # Échange du code contre des tokens
-            token_response = self.client.token(
-                grant_type='authorization_code',
-                code=authorization_code,
-                redirect_uri=self.config.redirect_uri
-            )
-            
-            # Validation et décodage du token ID
-            user_info = self.client.decode_token(
-                token_response['id_token'],
-                validate=True
-            )
-            
-            # Récupération ou création utilisateur
-            user = await self._get_or_create_user(user_info)
-            
-            # Mapping des rôles Keycloak vers WindFlow
-            roles = self._map_keycloak_roles(user_info.get('realm_access', {}).get('roles', []))
-            
-            # Génération tokens WindFlow
-            access_token = self._generate_access_token(user, roles=roles)
-            refresh_token = self._generate_refresh_token(user)
-            
-            return AuthResult(
-                success=True,
-                access_token=access_token,
-                refresh_token=refresh_token,
-                user_info=self._build_user_info(user),
-                sso_provider="keycloak"
-            )
-            
-        except KeycloakError as e:
-            raise AuthenticationError(f"SSO authentication failed: {e}")
-```
-
-### 4. Authentification 2FA (TOTP/SMS)
-
-**Double Authentification Sécurisée**
-```python
-class TwoFactorAuthService:
-    def __init__(self, vault: VaultService, sms_service: SMSService):
-        self.vault = vault
-        self.sms_service = sms_service
-        
-    async def setup_totp(self, user_id: str) -> TotpSetupResult:
-        """Configuration initiale TOTP pour un utilisateur."""
-        
-        # Génération secret TOTP
-        secret = pyotp.random_base32()
-        
-        # Stockage temporaire du secret
-        await self.vault.store_temp_totp_secret(user_id, secret)
-        
-        # Génération QR code
-        totp = pyotp.TOTP(secret)
-        provisioning_uri = totp.provisioning_uri(
-            name=f"user_{user_id}@windflow",
-            issuer_name="WindFlow"
-        )
-        
-        qr_code = qrcode.make(provisioning_uri)
-        
-        return TotpSetupResult(
-            secret=secret,
-            qr_code=qr_code,
-            backup_codes=self._generate_backup_codes(user_id)
-        )
-        
-    async def verify_totp(self, user_id: str, token: str, temp_token: str) -> AuthResult:
-        """Vérification du token TOTP."""
-        
-        # Validation du token temporaire
-        if not self._validate_temp_token(user_id, temp_token):
-            raise AuthenticationError("Invalid temporary token")
-            
-        # Récupération secret TOTP
-        secret = await self.vault.get_totp_secret(user_id)
-        if not secret:
-            raise AuthenticationError("TOTP not configured")
-            
-        # Vérification du token
-        totp = pyotp.TOTP(secret)
-        if not totp.verify(token, valid_window=1):
-            # Vérifier si c'est un code de backup
-            if not await self._verify_backup_code(user_id, token):
-                raise AuthenticationError("Invalid TOTP token")
-                
-        # Finalisation de l'authentification
-        user = await self.db.get_user_by_id(user_id)
-        access_token = self._generate_access_token(user)
-        refresh_token = self._generate_refresh_token(user)
-        
-        return AuthResult(
-            success=True,
-            access_token=access_token,
-            refresh_token=refresh_token,
-            user_info=self._build_user_info(user)
-        )
-```
-
-## Flux d'Authentification Détaillé
-
-### Séquence d'Authentification Complète
+### Flow
 
 ```mermaid
 sequenceDiagram
-    participant Client as Client (Vue.js/CLI)
+    participant Client as Client (Web / CLI)
     participant API as API (FastAPI)
-    participant TokenMgr as TokenManager
     participant DB as Database
-    participant Cache as Redis Cache
-    participant Keycloak as Keycloak SSO
-    participant Vault as HashiCorp Vault
+    participant Cache as Cache (Redis ou mémoire)
 
-    Note over Client,Vault: Authentification par mot de passe
-    Client->>API: 1. POST /auth/login (credentials)
-    API->>TokenMgr: 2. Authenticate user
-    TokenMgr->>DB: 3. Validate credentials
-    DB->>TokenMgr: 4. User data + hashed password
-    TokenMgr->>TokenMgr: 5. Generate JWT + Refresh Token
-    TokenMgr->>Vault: 6. Store refresh token with TTL
-    TokenMgr->>API: 7. Return tokens + user info
-    API->>Client: 8. Set-Cookie: access_token, refresh_token
-
-    Note over Client,Vault: Authentification par API Key
-    Client->>API: 9. POST /auth/login (Authorization: Bearer api-key)
-    API->>TokenMgr: 10. Authenticate with API key
-    TokenMgr->>Vault: 11. Validate API key
-    TokenMgr->>TokenMgr: 12. Generate session tokens
-    TokenMgr->>API: 13. Return tokens
-    API->>Client: 14. Set secure cookies
-
-    Note over Client,Vault: Requêtes API protégées
-    Client->>API: 15. API Request + JWT in cookies/headers
-    API->>TokenMgr: 16. Validate JWT token
-    TokenMgr->>TokenMgr: 17. Check token expiry
-    alt Token valide
-        TokenMgr->>DB: 18. Get user permissions
-        TokenMgr->>API: 19. User context + permissions
-        API->>Client: 20. Protected resource data
-    else Token expiré
-        TokenMgr->>Vault: 21. Validate refresh token
-        Vault->>TokenMgr: 22. Refresh token valid
-        TokenMgr->>TokenMgr: 23. Generate new JWT
-        TokenMgr->>API: 24. New JWT + response
-        API->>Client: 25. Set-Cookie: new access_token + data
+    Client->>API: POST /api/v1/auth/login {username, password}
+    API->>DB: Rechercher l'utilisateur
+    DB->>API: User + hashed_password
+    API->>API: Vérifier bcrypt(password, hash)
+    alt Mot de passe correct
+        API->>API: Générer access_token (JWT, 30 min)
+        API->>API: Générer refresh_token (opaque, 7 jours)
+        API->>DB: Stocker refresh_token (hash)
+        API->>Cache: Stocker session
+        API->>Client: 200 {access_token, refresh_token, user_info}
+    else Mot de passe incorrect
+        API->>Cache: Incrémenter compteur échecs (rate limit)
+        API->>Client: 401 Unauthorized
     end
-
-    Note over Client,Vault: SSO avec Keycloak
-    Client->>Keycloak: 26. OIDC/SAML login
-    Keycloak->>Client: 27. Authorization code
-    Client->>API: 28. POST /auth/sso (code)
-    API->>Keycloak: 29. Validate code + get user info
-    Keycloak->>API: 30. User info + roles
-    API->>TokenMgr: 31. Create session for SSO user
-    TokenMgr->>API: 32. Return WindFlow tokens
-    API->>Client: 33. Set-Cookie: session tokens
 ```
 
-## Architecture du TokenManager
-
-### Gestionnaire Avancé des Tokens
+### Implémentation
 
 ```python
-class TokenManager:
-    """Gestionnaire avancé des tokens d'authentification."""
-    
-    def __init__(self, config: TokenConfig, vault: VaultService):
-        self.config = config
-        self.vault = vault
-        self.access_token = None
-        self.refresh_token = None
-        self.user_info = None
-        self.permissions_cache = TTLCache(maxsize=1000, ttl=300)
-        
-    async def login_with_password(self, username: str, password: str) -> AuthResult:
-        """Authentification par mot de passe avec gestion complète des cookies."""
-        auth_data = {
-            "username": username,
-            "password": password,
-            "grant_type": "password"
-        }
-        
-        response = await self._make_auth_request("/auth/login", data=auth_data)
-        return await self._process_auth_response(response)
-    
-    async def login_with_api_key(self, api_key: str) -> AuthResult:
-        """Authentification par API key avec génération de tokens de session."""
-        headers = {"Authorization": f"Bearer {api_key}"}
-        response = await self._make_auth_request("/auth/login-key", headers=headers)
-        return await self._process_auth_response(response)
-    
-    async def refresh_authentication(self) -> bool:
-        """Refresh automatique des tokens avec fallback."""
-        if not self.refresh_token:
-            return False
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.refresh_token}"}
-            response = await self._make_auth_request("/auth/refresh", headers=headers)
-            
-            if response.status_code == 200:
-                result = await self._process_auth_response(response)
-                return result.success
-            else:
-                # Fallback: tenter re-login avec credentials stockés
-                return await self._fallback_authentication()
-                
-        except AuthenticationError:
-            # Token refresh échoué, reset de l'état
-            self._reset_auth_state()
-            return False
-    
-    async def _process_auth_response(self, response) -> AuthResult:
-        """Traitement unifié des réponses d'authentification."""
-        if response.json().get('status') != 'success':
-            raise AuthenticationError("Authentication failed")
-            
-        # Extraction des tokens depuis les cookies HTTP
-        cookies = self._parse_set_cookie_header(response.headers.get('set-cookie'))
-        
-        self.access_token = cookies.get('access_token')
-        self.refresh_token = cookies.get('refresh_token')
-        
-        # Validation des tokens reçus
-        if not self.access_token or not self.refresh_token:
-            raise AuthenticationError("Missing required tokens in response")
-            
-        # Extraction des informations utilisateur
-        self.user_info = self._decode_jwt_payload(self.access_token)
-        
-        return AuthResult(
-            success=True,
-            access_token=self.access_token,
-            refresh_token=self.refresh_token,
-            user_info=self.user_info
+from datetime import datetime, timedelta
+from jose import jwt
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+class AuthService:
+    """Service d'authentification core."""
+
+    def __init__(self, db, cache, secret_key: str):
+        self.db = db
+        self.cache = cache  # Redis ou MemoryCache
+        self.secret_key = secret_key
+        self.access_token_ttl = timedelta(minutes=30)
+        self.refresh_token_ttl = timedelta(days=7)
+
+    async def login(self, username: str, password: str) -> dict:
+        """Authentification par mot de passe."""
+
+        # Protection brute-force
+        if await self._is_rate_limited(username):
+            raise AuthError("Too many failed attempts. Try again later.")
+
+        # Vérification utilisateur
+        user = await self.db.get_user_by_username(username)
+        if not user or not pwd_context.verify(password, user.hashed_password):
+            await self._record_failed_attempt(username)
+            raise AuthError("Invalid credentials")
+
+        # Génération des tokens
+        access_token = self._create_access_token(user)
+        refresh_token = self._create_refresh_token(user)
+
+        # Stocker le refresh token (hashé) en base
+        await self.db.store_refresh_token(
+            user_id=user.id,
+            token_hash=pwd_context.hash(refresh_token),
+            expires_at=datetime.utcnow() + self.refresh_token_ttl,
         )
-    
-    def get_auth_headers(self) -> Dict[str, str]:
-        """Génération des headers d'authentification pour les requêtes API."""
-        if not self.access_token:
-            raise AuthenticationError("No valid access token available")
-            
+
+        # Reset compteur d'échecs
+        await self._reset_failed_attempts(username)
+
         return {
-            "Authorization": f"Bearer {self.access_token}",
-            "X-User-Context": json.dumps({
-                "user_id": self.user_info.get("user_id"),
-                "org_id": self.user_info.get("current_org_id"),
-                "roles": self.user_info.get("roles", [])
-            })
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": int(self.access_token_ttl.total_seconds()),
+            "user": {
+                "id": str(user.id),
+                "username": user.username,
+                "email": user.email,
+                "is_superadmin": user.is_superadmin,
+            },
         }
-    
-    @cached_property
-    def is_superadmin(self) -> bool:
-        """Vérification du statut super-administrateur."""
-        return self.user_info.get("is_superadmin", False) if self.user_info else False
-    
-    def can_access_organization(self, org_id: str) -> bool:
-        """Vérification de l'accès à une organisation."""
-        if self.is_superadmin:
-            return True
-        
-        user_orgs = self.user_info.get("organizations", []) if self.user_info else []
-        return org_id in [org.get("id") for org in user_orgs]
-    
-    async def get_user_permissions(self, resource: str = None) -> List[str]:
-        """Récupération des permissions utilisateur avec cache intelligent."""
-        cache_key = f"permissions:{self.user_info.get('user_id')}:{resource or 'global'}"
-        
-        if cache_key in self.permissions_cache:
-            return self.permissions_cache[cache_key]
-        
-        # Récupération depuis l'API
-        headers = self.get_auth_headers()
-        params = {"resource": resource} if resource else {}
-        
-        response = await self._make_request("/auth/permissions", headers=headers, params=params)
-        permissions = response.json().get("data", [])
-        
-        # Mise en cache
-        self.permissions_cache[cache_key] = permissions
-        return permissions
+
+    def _create_access_token(self, user) -> str:
+        """Crée un JWT access token."""
+        payload = {
+            "sub": str(user.id),
+            "username": user.username,
+            "is_superadmin": user.is_superadmin,
+            "exp": datetime.utcnow() + self.access_token_ttl,
+            "iat": datetime.utcnow(),
+            "type": "access",
+        }
+        return jwt.encode(payload, self.secret_key, algorithm="HS256")
+
+    def _create_refresh_token(self, user) -> str:
+        """Crée un refresh token opaque."""
+        import secrets
+        return secrets.token_urlsafe(64)
 ```
 
-## Gestion Sécurisée des Cookies
+### Access Token (JWT)
 
-### Configuration des Cookies de Sécurité
+Le access token est un JWT signé avec le `SECRET_KEY` de l'instance. Il contient les informations minimales nécessaires pour identifier l'utilisateur et vérifier ses droits sans requête en base.
 
 ```python
-# Configuration des cookies sécurisés pour les tokens
-SECURE_COOKIE_CONFIG = {
-    "access_token": {
-        "httponly": True,      # Protection contre XSS
-        "secure": True,        # HTTPS uniquement
-        "samesite": "Strict",  # Protection CSRF
-        "max_age": 900,        # 15 minutes
-        "path": "/api"         # Limitation du scope
-    },
-    "refresh_token": {
-        "httponly": True,
-        "secure": True,
-        "samesite": "Strict", 
-        "max_age": 604800,     # 7 jours
-        "path": "/auth"        # Limité aux endpoints auth
-    }
+# Payload du JWT
+{
+    "sub": "550e8400-e29b-41d4-a716-446655440000",  # user_id
+    "username": "admin",
+    "is_superadmin": true,
+    "exp": 1711234567,  # Expiration (30 min)
+    "iat": 1711232767,  # Émission
+    "type": "access"
 }
-
-class CookieManager:
-    """Gestionnaire sécurisé des cookies d'authentification."""
-    
-    def __init__(self, config: CookieConfig):
-        self.config = config
-        
-    def set_auth_cookies(self, response: Response, tokens: AuthTokens):
-        """Définit les cookies d'authentification sécurisés."""
-        
-        # Cookie access token
-        response.set_cookie(
-            key="access_token",
-            value=tokens.access_token,
-            **self.config.access_token
-        )
-        
-        # Cookie refresh token
-        response.set_cookie(
-            key="refresh_token", 
-            value=tokens.refresh_token,
-            **self.config.refresh_token
-        )
-        
-    def clear_auth_cookies(self, response: Response):
-        """Supprime les cookies d'authentification."""
-        response.delete_cookie("access_token", path="/api")
-        response.delete_cookie("refresh_token", path="/auth")
 ```
 
-## Authentification CLI Sécurisée
+Durée : **30 minutes** par défaut (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`).
 
-### Architecture CLI Authentication
+### Refresh Token
+
+Le refresh token est une chaîne opaque (pas un JWT). Son hash est stocké en base de données. Il sert uniquement à obtenir un nouveau access token quand celui-ci expire.
+
+Durée : **7 jours** par défaut (configurable via `REFRESH_TOKEN_EXPIRE_DAYS`).
+
+### Refresh Flow
 
 ```python
-class CLIAuthenticator:
-    """Authentification spécialisée pour l'interface CLI."""
-    
-    def __init__(self):
-        self.config_dir = Path.home() / ".windflow"
-        self.token_file = self.config_dir / "auth_tokens"
-        self.config_file = self.config_dir / "config.yaml"
-        
-    async def cli_login(self, method: str = "interactive") -> bool:
-        """Login CLI avec plusieurs méthodes supportées."""
-        if method == "interactive":
-            return await self._interactive_login()
-        elif method == "api_key":
-            return await self._api_key_login()
-        elif method == "sso":
-            return await self._sso_login()
-        else:
-            raise ValueError(f"Méthode d'authentification non supportée: {method}")
-    
-    async def _interactive_login(self) -> bool:
-        """Login interactif avec saisie sécurisée."""
-        import getpass
-        
-        username = input("Username: ")
-        password = getpass.getpass("Password: ")
-        
-        token_mgr = TokenManager()
-        result = await token_mgr.login_with_password(username, password)
-        
-        if result.success:
-            await self._store_tokens_securely(result)
+async def refresh(self, refresh_token: str) -> dict:
+    """Renouvelle l'access token via le refresh token."""
+
+    # Chercher le refresh token en base (comparaison par hash)
+    stored_token = await self.db.find_valid_refresh_token(refresh_token)
+    if not stored_token:
+        raise AuthError("Invalid or expired refresh token")
+
+    # Récupérer l'utilisateur
+    user = await self.db.get_user_by_id(stored_token.user_id)
+    if not user:
+        raise AuthError("User not found")
+
+    # Générer un nouveau access token
+    new_access_token = self._create_access_token(user)
+
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer",
+        "expires_in": int(self.access_token_ttl.total_seconds()),
+    }
+```
+
+---
+
+## Authentification par API Key
+
+Les API keys permettent une authentification non-interactive pour la CLI, les scripts, et les intégrations tierces.
+
+### Création d'une API Key
+
+```bash
+# Via CLI (nécessite une session active)
+windflow auth api-key create --name "CI/CD Pipeline" --expires 90d
+# → API Key: wf_ak_a1b2c3d4e5f6... (affichée une seule fois)
+
+# Via API
+POST /api/v1/auth/api-keys
+{
+    "name": "CI/CD Pipeline",
+    "expires_in_days": 90
+}
+```
+
+### Utilisation
+
+```bash
+# Dans un header HTTP
+curl -H "Authorization: Bearer wf_ak_a1b2c3d4e5f6..." \
+     http://windflow:8080/api/v1/containers
+
+# Dans la CLI
+windflow --api-key wf_ak_a1b2c3d4e5f6... containers list
+
+# Via variable d'environnement
+export WINDFLOW_API_KEY=wf_ak_a1b2c3d4e5f6...
+windflow containers list
+```
+
+### Implémentation
+
+```python
+class APIKeyService:
+    """Gestion des API keys."""
+
+    API_KEY_PREFIX = "wf_ak_"
+
+    async def create_api_key(self, user: User, name: str, expires_in_days: int = None) -> str:
+        """Crée une nouvelle API key pour un utilisateur."""
+        import secrets
+
+        # Générer la clé
+        raw_key = self.API_KEY_PREFIX + secrets.token_urlsafe(48)
+
+        # Stocker le hash en base (la clé brute n'est jamais stockée)
+        await self.db.create_api_key(
+            user_id=user.id,
+            name=name,
+            key_hash=pwd_context.hash(raw_key),
+            expires_at=datetime.utcnow() + timedelta(days=expires_in_days) if expires_in_days else None,
+        )
+
+        return raw_key  # Retournée une seule fois
+
+    async def authenticate(self, api_key: str) -> User:
+        """Authentifie une requête via API key."""
+        if not api_key.startswith(self.API_KEY_PREFIX):
+            raise AuthError("Invalid API key format")
+
+        # Chercher toutes les clés actives et comparer les hashes
+        active_keys = await self.db.get_active_api_keys()
+        for stored_key in active_keys:
+            if pwd_context.verify(api_key, stored_key.key_hash):
+                # Vérifier expiration
+                if stored_key.expires_at and datetime.utcnow() > stored_key.expires_at:
+                    raise AuthError("API key expired")
+                # Mettre à jour last_used
+                await self.db.update_api_key_last_used(stored_key.id)
+                return await self.db.get_user_by_id(stored_key.user_id)
+
+        raise AuthError("Invalid API key")
+```
+
+### Gestion des API Keys
+
+```bash
+# Lister les API keys de l'utilisateur
+windflow auth api-key list
+# NAME              CREATED      EXPIRES      LAST USED
+# CI/CD Pipeline    2026-03-15   2026-06-13   2026-04-02
+# Monitoring Bot    2026-03-20   Never        2026-04-03
+
+# Révoquer une API key
+windflow auth api-key revoke --name "CI/CD Pipeline"
+```
+
+---
+
+## Authentification CLI
+
+### Login Interactif
+
+```bash
+# Login standard (demande username et password)
+windflow auth login
+# Username: admin
+# Password: ********
+# ✓ Connected as admin (Super Admin)
+
+# Login vers une instance spécifique
+windflow auth login --url http://192.168.1.50:8080
+```
+
+### Stockage des Tokens CLI
+
+Les tokens sont stockés localement dans `~/.windflow/credentials`, chiffrés avec une clé dérivée du mot de passe système de l'utilisateur.
+
+```
+~/.windflow/
+├── credentials          # Tokens chiffrés (permissions 600)
+└── config.yml           # URL de l'instance, préférences
+```
+
+```python
+class CLIAuth:
+    """Gestion de l'authentification pour la CLI."""
+
+    CREDENTIALS_PATH = Path.home() / ".windflow" / "credentials"
+
+    async def login(self, url: str, username: str, password: str):
+        """Login CLI et stockage sécurisé des tokens."""
+        # Appel API
+        response = await httpx.AsyncClient().post(
+            f"{url}/api/v1/auth/login",
+            json={"username": username, "password": password},
+        )
+        response.raise_for_status()
+        tokens = response.json()
+
+        # Stocker les tokens localement
+        self._store_credentials({
+            "url": url,
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens["refresh_token"],
+            "user": tokens["user"],
+        })
+
+    def _store_credentials(self, data: dict):
+        """Stocke les credentials chiffrés sur disque."""
+        self.CREDENTIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        encrypted = self._encrypt(json.dumps(data))
+        self.CREDENTIALS_PATH.write_bytes(encrypted)
+        self.CREDENTIALS_PATH.chmod(0o600)
+
+    async def get_authenticated_client(self) -> httpx.AsyncClient:
+        """Retourne un client HTTP authentifié avec auto-refresh."""
+        creds = self._load_credentials()
+        client = httpx.AsyncClient(
+            base_url=creds["url"],
+            headers={"Authorization": f"Bearer {creds['access_token']}"},
+        )
+        # TODO: intercepteur pour auto-refresh si 401
+        return client
+```
+
+### Session Status
+
+```bash
+windflow auth status
+# Instance: http://192.168.1.50:8080
+# User: admin (Super Admin)
+# Token expires: in 24 minutes
+# Organizations: homelab (Admin), work (Viewer)
+
+windflow auth logout
+# ✓ Logged out. Credentials removed.
+```
+
+---
+
+## Protection Brute-Force
+
+Le core implémente un rate limiting sur l'endpoint de login pour se protéger contre les attaques par force brute.
+
+```python
+class BruteForceProtection:
+    """Protection contre les attaques brute-force."""
+
+    MAX_ATTEMPTS = 5           # Tentatives avant blocage
+    LOCKOUT_DURATION = 300     # Blocage de 5 minutes
+    WINDOW_DURATION = 600      # Fenêtre de 10 minutes
+
+    def __init__(self, cache):
+        self.cache = cache  # Redis ou MemoryCache
+
+    async def is_rate_limited(self, identifier: str) -> bool:
+        """Vérifie si un identifiant (username ou IP) est bloqué."""
+        key = f"auth:attempts:{identifier}"
+        attempts = await self.cache.get(key)
+        if attempts and int(attempts) >= self.MAX_ATTEMPTS:
             return True
         return False
-    
-    async def _store_tokens_securely(self, auth_result: AuthResult):
-        """Stockage sécurisé des tokens pour CLI."""
-        # Chiffrement des tokens avant stockage
-        encrypted_data = self._encrypt_tokens({
-            "access_token": auth_result.access_token,
-            "refresh_token": auth_result.refresh_token,
-            "user_info": auth_result.user_info,
-            "timestamp": time.time()
-        })
-        
-        # Stockage avec permissions restrictives (600)
-        self.config_dir.mkdir(exist_ok=True)
-        self.token_file.write_bytes(encrypted_data)
-        self.token_file.chmod(0o600)
+
+    async def record_failed_attempt(self, identifier: str):
+        """Enregistre une tentative échouée."""
+        key = f"auth:attempts:{identifier}"
+        current = await self.cache.get(key)
+        count = int(current) + 1 if current else 1
+        await self.cache.set(key, str(count), ttl=self.WINDOW_DURATION)
+
+    async def reset_attempts(self, identifier: str):
+        """Réinitialise le compteur après un login réussi."""
+        key = f"auth:attempts:{identifier}"
+        await self.cache.delete(key)
 ```
 
-## Configuration Keycloak SSO
+Le rate limiting fonctionne en mode standard (Redis) comme en mode léger (cache mémoire).
 
-### Configuration SSO Complète
+---
+
+## Validation des Tokens dans l'API
+
+### Dépendance FastAPI
+
+```python
+from fastapi import Depends, HTTPException, Header
+from jose import jwt, JWTError
+
+async def get_current_user(
+    authorization: str = Header(None),
+    api_key: str = Header(None, alias="X-API-Key"),
+) -> User:
+    """Extrait et valide l'utilisateur depuis le token JWT ou l'API key."""
+
+    # Tentative par API key
+    if api_key:
+        return await api_key_service.authenticate(api_key)
+
+    # Tentative par JWT (header Authorization: Bearer <token>)
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing authentication")
+
+    token = authorization.removeprefix("Bearer ")
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user = await db.get_user_by_id(payload["sub"])
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    return user
+```
+
+### Utilisation sur les Endpoints
+
+```python
+@router.get("/api/v1/containers")
+async def list_containers(user: User = Depends(get_current_user)):
+    """Liste les containers — nécessite authentification."""
+    ...
+
+@router.post("/api/v1/plugins/install")
+async def install_plugin(
+    request: PluginInstallRequest,
+    user: User = Depends(get_current_user),
+):
+    """Installe un plugin — nécessite authentification + rôle Admin (vérifié par RBAC)."""
+    ...
+```
+
+---
+
+## SSO via Plugin Keycloak
+
+Le SSO n'est pas dans le core — il est fourni par le **plugin Keycloak**. Quand le plugin est installé, il ajoute un flow d'authentification OIDC/SAML en complément de l'auth JWT native.
+
+### Ce que le Plugin Ajoute
+
+- Bouton "Se connecter avec SSO" sur la page de login
+- Support OIDC (OpenID Connect) et SAML 2.0
+- Intégration LDAP / Active Directory
+- 2FA (TOTP, WebAuthn) géré par Keycloak
+- Mapping automatique des rôles Keycloak → rôles WindFlow
+- Providers externes (Google, GitHub, GitLab) configurables dans Keycloak
+
+### Flow SSO
+
+```mermaid
+sequenceDiagram
+    participant User as Utilisateur
+    participant WF as WindFlow UI
+    participant KC as Keycloak (plugin)
+    participant API as WindFlow API
+
+    User->>WF: Clic "Se connecter avec SSO"
+    WF->>KC: Redirect vers Keycloak login
+    KC->>User: Page de login Keycloak (ou LDAP/AD)
+    User->>KC: Saisie des credentials
+    KC->>WF: Redirect avec authorization_code
+    WF->>API: POST /api/v1/plugins/keycloak/auth/callback {code}
+    API->>KC: Échange code → tokens Keycloak
+    KC->>API: ID token + user info + rôles
+    API->>API: Créer/mettre à jour l'utilisateur WindFlow
+    API->>API: Mapper les rôles Keycloak → rôles WindFlow
+    API->>API: Générer JWT WindFlow
+    API->>WF: access_token + refresh_token
+    WF->>User: Connecté ✓
+```
+
+L'utilisateur se retrouve avec un JWT WindFlow standard — le reste de l'application ne sait pas (et n'a pas besoin de savoir) si l'authentification a été faite par mot de passe ou par SSO.
+
+### Configuration du Mapping de Rôles
 
 ```yaml
-# Configuration Keycloak pour WindFlow
-keycloak:
-  server_url: "https://auth.windflow.local"
-  realm: "windflow"
-  client_id: "windflow-app"
-  client_secret: "${KEYCLOAK_CLIENT_SECRET}"
-  
-  # Configuration OIDC
-  oidc:
-    scopes: ["openid", "profile", "email", "windflow-roles"]
-    response_type: "code"
-    redirect_uri: "https://app.windflow.local/auth/callback"
-    
-  # Mapping des rôles
-  role_mapping:
-    keycloak_admin: "windflow_superadmin"
-    org_admin: "windflow_org_admin"
-    developer: "windflow_developer"
-    viewer: "windflow_viewer"
-    
-  # Configuration des providers externes
-  identity_providers:
-    - name: "ldap_corporate"
-      type: "ldap"
-      enabled: true
-    - name: "google_sso"
-      type: "oidc"
-      enabled: true
-    - name: "github_oauth"
-      type: "oauth2"
-      enabled: false
+# Configuration du plugin Keycloak (via l'UI ou CLI)
+role_mapping:
+  windflow-admin: admin       # Groupe Keycloak "windflow-admin" → rôle WindFlow "admin"
+  windflow-operator: operator
+  windflow-viewer: viewer
+default_role: viewer           # Rôle par défaut si aucun mapping ne correspond
+auto_create_users: true        # Créer automatiquement les utilisateurs au premier login SSO
+default_organization: "main"   # Organisation par défaut pour les nouveaux utilisateurs SSO
+```
+
+---
+
+## Configuration
+
+### Variables d'Environnement (core)
+
+```bash
+# Clé de signature des JWT (générée automatiquement par install.sh)
+SECRET_KEY=a1b2c3d4...
+
+# Durée des tokens
+ACCESS_TOKEN_EXPIRE_MINUTES=30     # Défaut: 30
+REFRESH_TOKEN_EXPIRE_DAYS=7        # Défaut: 7
+
+# Protection brute-force
+AUTH_MAX_ATTEMPTS=5                 # Défaut: 5
+AUTH_LOCKOUT_SECONDS=300            # Défaut: 300 (5 min)
+```
+
+Tout le reste de la configuration auth (SSO, LDAP, 2FA, providers externes) est géré par le plugin Keycloak via son interface de configuration dans WindFlow.
+
+---
+
+## Résumé des Endpoints Auth
+
+```
+POST   /api/v1/auth/login              # Login par mot de passe
+POST   /api/v1/auth/refresh            # Renouveler l'access token
+POST   /api/v1/auth/logout             # Déconnexion (invalide le refresh token)
+GET    /api/v1/auth/me                 # Infos utilisateur courant
+POST   /api/v1/auth/api-keys           # Créer une API key
+GET    /api/v1/auth/api-keys           # Lister ses API keys
+DELETE /api/v1/auth/api-keys/{id}      # Révoquer une API key
+PUT    /api/v1/auth/password           # Changer son mot de passe
+
+# Ajoutés par le plugin Keycloak :
+GET    /api/v1/plugins/keycloak/auth/login     # Redirect vers Keycloak
+POST   /api/v1/plugins/keycloak/auth/callback  # Retour SSO
 ```
 
 ---
 
 **Références :**
-- [Vue d'Ensemble](01-overview.md) - Contexte du projet
-- [Architecture](02-architecture.md) - Principes architecturaux
-- [Sécurité](13-security.md) - Stratégies de sécurité détaillées
-- [Interface CLI](08-cli-interface.md) - Utilisation CLI
-- [API Design](07-api-design.md) - Endpoints d'authentification
+- [RBAC et Permissions](06-rbac-permissions.md) - Rôles et contrôle d'accès
+- [Sécurité](13-security.md) - Stratégies de sécurité
+- [API Design](07-api-design.md) - Endpoints API
+- [CLI Interface](08-cli-interface.md) - Authentification CLI

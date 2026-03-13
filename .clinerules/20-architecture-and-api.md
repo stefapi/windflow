@@ -7,9 +7,7 @@ Toute fonctionnalité doit être exposée via API REST avant d’être consommé
 - Pagination obligatoire pour listes > 20 éléments.
 
 ## Style d’architecture
-- Modular monolith d’abord (modules cohérents, frontières claires).
-- Évoluer vers hexagonale si la complexité augmente.
-- Microservices seulement si besoin concret (déploiement/scaling/ownership), sinon éviter la dispersion.
+- Modular monolith (modules cohérents, frontières claires).
 
 ## Event-driven
 - Communication asynchrone via Redis Streams quand approprié.

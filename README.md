@@ -5,136 +5,169 @@
   <img src="https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D" alt="Vue.js">
   <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
-  <img src="https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes">
-  <img src="https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL">
+  <img src="https://img.shields.io/badge/KVM-0047AB?style=for-the-badge&logo=linux&logoColor=white" alt="KVM">
+  <img src="https://img.shields.io/badge/Proxmox-FF6C37?style=for-the-badge&logo=proxmox&logoColor=white" alt="Proxmox">
+  <img src="https://img.shields.io/badge/Raspberry%20Pi-C51A4A?style=for-the-badge&logo=raspberrypi&logoColor=white" alt="Raspberry Pi">
   <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
 </div>
 
 <p align="center">
-  <em>Intelligent web tool for deploying Docker containers — multi-target orchestration, built-in AI, outstanding user experience</em>
+  <em>Lightweight self-hosted infrastructure manager — Containers & VMs on Raspberry Pi or x86 servers, extensible with plugins</em>
 </p>
 
 ---
 
-**WindFlow** is an intelligent web tool for deploying Docker containers to target machines. It combines a modern user interface, a flexible data exchange system, and artificial intelligence to automate and optimize deployments.
+**WindFlow** is a lightweight, self-hosted infrastructure manager for containers and virtual machines. It runs on anything from a Raspberry Pi to a dedicated x86 server. A minimal core handles compute (Docker containers, VMs), while a **plugin marketplace** extends capabilities on demand — reverse proxy, databases, DNS, monitoring, backups, mail, and more.
 
-## 🎯 Vision & Goals
+Install only what you need. Nothing more.
 
-### Ease of Use
+## 🎯 Philosophy
 
-* **Intuitive web interface** with visual workflows
-* **AI-generated configuration** (LiteLLM)
-* **One-click deployment** of preconfigured stacks
-* **Powerful CLI/TUI** for automation (Rich + Typer + Textual)
+### Minimal Core
 
-### Maximum Flexibility
+WindFlow's core does three things: **manage containers**, **manage VMs**, and **provide a plugin marketplace**. Everything else — reverse proxy, DNS, databases, monitoring, backups, workflows, AI — is a plugin you install if and when you need it.
 
-* **Multi-target support:** containers, VMs, physical servers
-* **Adaptive orchestration:** Docker, Swarm, Kubernetes
-* **Customizable templates** and a community marketplace
-* **Configurable deployment workflows**
+### Everything is a Plugin
 
-### Built-in Intelligence
+A Raspberry Pi with 2 GB of RAM doesn't need Elasticsearch. A homelab doesn't need a workflow engine. WindFlow never forces complexity on you. Each plugin is installable and removable from the UI, declares its resource requirements, and checks architecture compatibility before installation.
 
-* **Automatic resource optimization** via AI
-* **Smart resolution** of conflicts and dependencies
-* **Security suggestions** and best practices
-* **Automatic error diagnostics**
+### Runs Everywhere
 
-## ✨ Key Features
+WindFlow is built multi-arch from the ground up. All core images support **ARM64** (Raspberry Pi 4/5, Orange Pi, etc.) and **x86_64**. Plugins declare their supported architectures, and the UI warns you if your machine doesn't have enough resources.
 
-### 🧠 Artificial Intelligence
+### Self-Hosted First
 
-* **LiteLLM Integration:** Multi-provider support (OpenAI, Claude, Ollama, etc.)
-* **Smart configuration:** Auto-generated based on constraints
-* **Resource optimization:** AI-driven optimal allocation
-* **Conflict resolution:** Automatic detection and correction
+No cloud dependency, no vendor lock-in, no mandatory external services. WindFlow runs on your hardware, on your network, under your control.
 
-### 🔧 Multi-Target Orchestration
+## ✨ What's in the Core
 
-* **Docker Engine:** Native containers and Docker Compose
-* **Docker Swarm:** Cluster orchestration
-* **Kubernetes + Helm:** Enterprise deployments
-* **VM Management:** Vagrant + Libvirt for virtual machines
-* **Physical Servers:** SSH + Ansible for bare metal
+### Container Management (Docker)
 
-### 🌐 Modern User Interface
+* Containers and Docker Compose stacks
+* Image management (pull, build, prune)
+* Volume management with built-in file browser
+* Network management with environment isolation
+* Real-time logs and interactive WebSocket terminal
+* Deployment pipeline with retry and rollback
+* Stack templates with Jinja2 and versioning
 
-* **Web UI:** Vue.js 3 + TypeScript + Element Plus + UnoCSS
-* **Visual Workflows:** Drag-and-drop editor inspired by n8n
-* **Full CLI:** Rich + Typer for automation
-* **Interactive TUI:** Textual for a modern terminal UI
+### Virtual Machine Management
 
-### 🔐 Enterprise Security
+* **KVM/QEMU** via libvirt — create, snapshot, clone, migrate VMs
+* **Proxmox VE** — full API integration for VMs and LXC containers
+* **VirtualBox** — cross-platform VM management (optional)
+* Integrated VNC/SPICE console in the web UI
+* Disk management (qcow2, raw, vdi, vmdk)
+* ISO and cloud-init image management
 
-* **SSO Integration:** Keycloak with LDAP/AD
-* **HashiCorp Vault:** Centralized secrets management
-* **Granular RBAC:** Role-based access control
-* **Audit Trail:** Full action traceability
+### Plugin Marketplace
 
-### 📊 Monitoring & Observability
+* Browse, search, and install plugins from the UI or CLI
+* One-click installation with guided configuration wizard
+* Dependency management between plugins
+* Architecture and resource compatibility checks
+* Plugin updates with changelog
+* Support for custom/self-hosted plugin registries
 
-* **Prometheus + Grafana:** Metrics and dashboards
-* **ELK Stack:** Centralized logging
-* **Intelligent Alerting:** Multi-channel notifications
-* **Health Checks:** Continuous service monitoring
+### Modern Interface
 
-## 🧩 Modular Architecture
+* **Web UI:** Vue.js 3 + TypeScript + Element Plus
+* **Dashboard** with widgets and metrics
+* **CLI:** Rich + Typer for scripting and automation
+* **TUI:** Textual for a modern interactive terminal UI
 
-WindFlow adopts an **extensible modular architecture** that lets you start with a minimal system and progressively enable advanced features as needed.
+### Multi-Target
 
-### Minimal Start (< 5 minutes)
+* Manage the local machine or remote servers via SSH
+* Consolidated view of all machines and services
+* Basic per-machine monitoring (CPU, RAM, disk, network)
+* Deploy containers and manage VMs across multiple hosts
 
-The **Minimal Core** includes only the essential services:
+### Auth & Organizations
 
-* ✅ Backend API (FastAPI)
-* ✅ Database (PostgreSQL)
-* ✅ Cache & Message Broker (Redis)
-* ✅ Web Interface (Vue.js 3)
-* ✅ Reverse Proxy (Nginx)
-* ✅ Asynchronous worker (Celery)
+* JWT authentication with refresh tokens
+* Organizations and environments
+* Granular RBAC (role-based access control)
 
-**Resources:** 1.5 GB RAM, 2 CPU cores
+## 🔌 Plugin Ecosystem
 
-```bash
-# Ultra-fast minimal installation
-./scripts/install.sh
-# or
-docker compose -f docker-compose.minimal.yml up -d
+Plugins extend WindFlow's capabilities. A plugin can be a **deployable service** (installs a Docker stack), a **functional extension** (adds features to the core UI/API), or **both**.
+
+### Plugin Categories
+
+| Category | Available Plugins |
+|----------|-------------------|
+| **Reverse Proxy & Access** | Traefik, Caddy, Nginx Proxy Manager, Cloudflare Tunnel |
+| **DNS** | Pi-hole, CoreDNS, Cloudflare DNS |
+| **TLS Certificates** | Let's Encrypt (ACME) |
+| **Databases** | PostgreSQL, MySQL/MariaDB, MongoDB, Redis |
+| **Messaging** | MQTT (Mosquitto), RabbitMQ, NATS |
+| **Mail** | Mailu, Stalwart |
+| **Monitoring** | Uptime Kuma, Netdata, Prometheus + Grafana |
+| **Backup** | Restic, Borg |
+| **Storage** | MinIO (S3), Samba, NFS |
+| **Security** | Authelia (2FA), Vaultwarden, Trivy (vulnerability scanning), Vault (secrets) |
+| **Git & CI** | Gitea, webhook auto-deploy |
+| **Workflows** | n8n, Node-RED |
+| **AI** | Ollama (local LLM), LiteLLM (multi-provider) |
+| **SSO** | Keycloak (LDAP/AD, OIDC, SAML) |
+
+### How Plugins Work
+
+**Service plugins** deploy a preconfigured Docker stack. For example, installing the Traefik plugin deploys Traefik and integrates it with WindFlow so you can assign domains to your services from the UI.
+
+**Extension plugins** detect running services and add management capabilities. For example, the PostgreSQL plugin detects any running `postgres` container and lets you create databases, users, and grants directly from the WindFlow UI.
+
+**Hybrid plugins** do both — they deploy a service AND extend the core.
+
+### Plugin Manifest (example)
+
+```yaml
+name: traefik
+version: 1.0.0
+type: hybrid
+display_name: "Traefik - Reverse Proxy"
+description: "Reverse proxy with automatic TLS via Let's Encrypt"
+category: access
+
+architectures:
+  - linux/amd64
+  - linux/arm64
+
+resources:
+  ram_min_mb: 128
+  cpu_min_cores: 0.5
+
+provides:
+  - reverse_proxy
+  - tls_certificates
+
+config:
+  - key: acme_email
+    label: "Email for Let's Encrypt"
+    type: string
+    required: true
 ```
 
-### Optional Extensions
+## 🧩 Resource Profiles
 
-Enable advanced features only when you need them:
+WindFlow adapts to your hardware. The core is designed to run light, and plugins add resource consumption only when installed.
 
-| Extension      | Description                                 | Command                                    |
-| -------------- | ------------------------------------------- | ------------------------------------------ |
-| **Monitoring** | Prometheus + Grafana                        | `./scripts/enable-extension.sh monitoring` |
-| **Logging**    | ELK Stack (Elasticsearch, Logstash, Kibana) | `./scripts/enable-extension.sh logging`    |
-| **Secrets**    | HashiCorp Vault                             | `./scripts/enable-extension.sh vault`      |
-| **SSO**        | Keycloak (LDAP/AD)                          | `./scripts/enable-extension.sh sso`        |
-| **AI**         | LiteLLM + Ollama                            | `./scripts/enable-extension.sh ai`         |
-| **Kubernetes** | K8s orchestration                           | `./scripts/enable-extension.sh kubernetes` |
-
-### Benefits of the Modular Approach
-
-* 🚀 **Ultra-fast start:** Working setup in minutes
-* 💰 **Resource savings:** Only enabled services consume RAM/CPU
-* 🎯 **Simplicity:** Start simple, evolve as you go
-* 🔧 **Flexibility:** Enable/disable extensions on demand
-* 📈 **Scalability:** Production-ready architecture from day one
-
-📚 **Full documentation:** [Modular Architecture](doc/ARCHITECTURE-MODULAIRE.md)
+| Profile | RAM | CPU | Storage | Example Hardware |
+|---------|-----|-----|---------|------------------|
+| **Light** (core only, SQLite) | 512 MB | 1 ARM core | 2 GB | Raspberry Pi 4 (2 GB) |
+| **Standard** (core + PostgreSQL + Redis) | 1.5 GB | 2 cores | 5 GB | Raspberry Pi 4 (4 GB), mini PC |
+| **Full** (core + 5-10 plugins) | 4 GB | 4 cores | 20 GB | NUC, dedicated server |
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 * **Docker** ≥ 20.10 and docker-compose v2
-* **Python** ≥ 3.11 and Poetry ≥ 1.8 (for backend development)
-* **Node.js** ≥ 20 and pnpm ≥ 9 (for frontend development)
+* **Linux** (Debian/Ubuntu, Raspberry Pi OS, or similar)
+* **Architecture:** x86_64 or ARM64
 
-### Install with Docker (Recommended)
+### Install (standard mode)
 
 ```bash
 # Clone the repository
@@ -144,8 +177,15 @@ cd windflow
 # Copy environment files
 cp .env.example .env
 
-# Start the application
+# Start WindFlow
 docker compose up --build -d
+```
+
+### Install (light mode — Raspberry Pi)
+
+```bash
+# Light mode: SQLite instead of PostgreSQL, no Redis
+./scripts/install.sh --light
 ```
 
 **Access:**
@@ -153,6 +193,10 @@ docker compose up --build -d
 * **Web Interface:** [http://localhost:8080](http://localhost:8080)
 * **API Documentation:** [http://localhost:8080/api/docs](http://localhost:8080/api/docs)
 * **CLI:** `docker exec -it windflow-cli windflow --help`
+
+### Install your first plugin
+
+Once WindFlow is running, open the web UI and go to **Marketplace**. Install the **Traefik** plugin to get a reverse proxy with automatic TLS, then deploy your first stack and assign it a domain — all from the interface.
 
 ### Development Setup
 
@@ -171,80 +215,11 @@ pip install -e ./cli
 windflow --help
 ```
 
-## 🎯 Deployment Examples
-
-WindFlow includes ready-to-use examples to deploy popular applications:
-
-### 📦 Available Applications
-
-#### Baserow — Open Source Airtable Alternative
-
-No-code database with a modern interface (PostgreSQL + Redis)
-
-```bash
-# Create data directories
-mkdir -p data/baserow/{postgres,redis,app,media}
-
-# Start Baserow
-docker compose -f examples/docker-compose.baserow.yml up -d
-
-# Access the UI
-# http://baserow.localhost
-```
-
-#### WordPress — Popular CMS
-
-Full-featured content management system (MySQL + Redis + WP-CLI)
-
-```bash
-# Create data directories
-mkdir -p data/wordpress/{mysql,redis,html,uploads,themes,plugins}
-
-# Start WordPress
-docker compose -f examples/docker-compose.wordpress.yml up -d
-
-# Access the UI
-# http://wordpress.localhost
-```
-
-### 🔧 WindFlow Integration
-
-The examples are configured for seamless integration:
-
-* ✅ **Shared network** with WindFlow (windflow-network)
-* ✅ **Auto-discovery** via Traefik labels
-* ✅ **Health checks** for monitoring
-* ✅ **WindFlow labels** for management in the UI
-
-📚 **Full documentation:** [examples/README.md](examples/README.md)
-
-## 📖 Documentation
-
-The complete documentation is in the `doc/` directory:
-
-### Main Documentation
-
-* **[Overview](doc/general_specs/01-overview.md)** — Project vision and goals
-* **[Architecture](doc/general_specs/02-architecture.md)** — Design principles
-* **[Technology Stack](doc/general_specs/03-technology-stack.md)** — Technologies used
-* **[Deployment Guide](doc/general_specs/15-deployment-guide.md)** — Installation and configuration
-
-### User Guides
-
-* **[Core Features](doc/general_specs/10-core-features.md)** — Detailed features
-* **[CLI Interface](doc/general_specs/08-cli-interface.md)** — Using the CLI/TUI
-* **[LLM Integration](doc/general_specs/17-llm-integration.md)** — Artificial intelligence
-
-### Developer Resources
-
-* **[Data Model](doc/general_specs/04-data-model.md)** — Data structure
-* **[API Design](doc/general_specs/07-api-design.md)** — API documentation
-* **[Workflows](doc/workflows/README.md)** — Development processes
-* **[Development Rules](.clinerules/README.md)** — Standards and conventions
+**Dev prerequisites:** Python ≥ 3.11 + Poetry ≥ 1.8, Node.js ≥ 20 + pnpm ≥ 9
 
 ## 🔧 Configuration
 
-### Main Environment Variables
+### Core Environment Variables
 
 ```bash
 # Application
@@ -258,87 +233,109 @@ API_HOST=0.0.0.0
 API_PORT=8000
 API_WORKERS=4
 
-# Database
+# Database (standard mode)
 DATABASE_URL=postgresql+asyncpg://windflow:password@localhost:5432/windflow
+# Database (light mode — Raspberry Pi)
+# DATABASE_URL=sqlite+aiosqlite:///data/windflow.db
+
+# Cache (standard mode)
 REDIS_URL=redis://localhost:6379/0
+# Cache (light mode — disabled, uses in-memory)
+# REDIS_URL=
 
 # Security
 SECRET_KEY=your-secret-key-here
 ACCESS_TOKEN_EXPIRE_MINUTES=30
-VAULT_URL=http://localhost:8200
-VAULT_TOKEN=your-vault-token
 
-# Artificial Intelligence
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4-turbo-preview
-OPENAI_API_KEY=your-openai-key
-OLLAMA_BASE_URL=http://localhost:11434
-
-# Monitoring
-PROMETHEUS_ENABLED=true
+# Logging
 LOG_LEVEL=INFO
 ```
 
-### Multi-Environment Configuration
+Plugin-specific configuration (reverse proxy, monitoring, AI, etc.) is managed through each plugin's settings in the UI — not in the core `.env` file.
 
-```bash
-# Development
-cp .env.example .env
-docker compose -f docker-compose.yml -f docker-compose.override.yml up
+## 📖 Documentation
 
-# Staging
-cp .env.staging .env
-docker compose -f docker-compose.yml -f docker-compose.staging.yml up
+The complete documentation is in the `doc/` directory:
 
-# Production
-cp .env.production .env
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up
-```
+### Main Documentation
 
-## 🚢 Deployment
+* **[Overview](doc/general_specs/01-overview.md)** — Project vision and goals
+* **[Architecture](doc/general_specs/02-architecture.md)** — Design principles
+* **[Modular Architecture](doc/ARCHITECTURE-MODULAIRE.md)** — Plugin system and extensions
+* **[Technology Stack](doc/general_specs/03-technology-stack.md)** — Technologies used
+* **[Deployment Guide](doc/general_specs/15-deployment-guide.md)** — Installation and configuration
 
-### Docker Deployment
+### User Guides
 
-```bash
-# Build and push images
-make docker-build
-docker tag windflow:latest registry.example.com/windflow:v1.0.0
-docker push registry.example.com/windflow:v1.0.0
+* **[Core Features](doc/general_specs/10-core-features.md)** — Detailed features
+* **[CLI Interface](doc/general_specs/08-cli-interface.md)** — Using the CLI/TUI
+* **[Plugin Development](doc/general_specs/plugin-development.md)** — Creating plugins
 
-# Deploy to server
-docker compose pull
-docker compose up -d --remove-orphans
-```
+### Developer Resources
 
-### Kubernetes Deployment
+* **[Data Model](doc/general_specs/04-data-model.md)** — Data structure
+* **[API Design](doc/general_specs/07-api-design.md)** — API documentation
+* **[Workflows](doc/workflows/README.md)** — Development processes
+* **[Development Rules](.clinerules/README.md)** — Standards and conventions
 
-```bash
-# Via Helm (recommended)
-helm repo add windflow https://charts.windflow.io
-helm install windflow windflow/windflow \
-  --namespace windflow \
-  --create-namespace \
-  --values values.yaml
+## 📊 Roadmap
 
-# Via manifests
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/secrets.yaml
-kubectl apply -f k8s/deployment.yaml
-kubectl apply -f k8s/service.yaml
-kubectl apply -f k8s/ingress.yaml
-```
+### Version 1.0 (March 2026) — Core Platform ✅
 
-### Production Ready
+* [x] Web UI (Vue.js 3 + TypeScript + Element Plus)
+* [x] REST API (FastAPI + SQLAlchemy async)
+* [x] CLI/TUI (Rich + Typer + Textual)
+* [x] Docker containers + Docker Compose orchestration
+* [x] Auth JWT + RBAC + Organizations
+* [x] Stacks with versioning + Jinja2 templates
+* [x] Interactive WebSocket terminal
+* [x] Deployment pipeline with real-time logs
+* [x] Targets CRUD + auto-discovery
 
-For a production deployment, make sure you have:
+### Version 1.1 (Q2 2026) — Plugin System & VMs
 
-* **Reverse Proxy:** Nginx, Traefik, or Caddy for TLS/HTTP2
-* **Monitoring:** Prometheus + Grafana + Alertmanager
-* **Backups:** Database and persistent volumes
-* **Secrets:** HashiCorp Vault in high availability
-* **Logs:** ELK Stack or equivalent solution
-* **Scaling:** Kubernetes HPA or Docker Swarm
+* [ ] Plugin manager (install, update, remove from UI/CLI)
+* [ ] Plugin marketplace with one-click install
+* [ ] Light mode for Raspberry Pi (SQLite, no Redis)
+* [ ] Multi-arch builds (ARM64 + x86_64)
+* [ ] KVM/QEMU VM management via libvirt
+* [ ] Proxmox VE integration
+* [ ] Volume browser UI
+* [ ] Docker networks with environment isolation
+* [ ] First plugins: Traefik, PostgreSQL, Redis, Uptime Kuma
+
+### Version 1.2 (Q3 2026) — Plugin Catalog & Multi-Target
+
+* [ ] Multi-target: manage remote machines via SSH
+* [ ] Kubernetes support (optional, Helm charts)
+* [ ] 15+ plugins: DNS, backup, monitoring, databases, messaging, storage, security
+* [ ] 10+ one-click stack templates (Nextcloud, Gitea, Jellyfin, Home Assistant…)
+
+### Version 1.3 (Q4 2026) — Security, Git & Polish
+
+* [ ] Secrets encryption (AES-256-GCM)
+* [ ] Git integration with auto-deploy on push
+* [ ] Vulnerability scanning plugin (Trivy)
+* [ ] SSO plugin (Keycloak)
+* [ ] Audit trail
+* [ ] Mail plugin (Mailu/Stalwart)
+* [ ] Onboarding wizard and i18n (FR/EN)
+
+### Version 2.0 (H1 2027) — Automation & Intelligence
+
+* [ ] Workflow engine plugin (n8n / Node-RED)
+* [ ] AI plugins (Ollama, LiteLLM) — config generation, diagnostics
+* [ ] Auto-updates with rollback
+* [ ] Plugin SDK for community contributions
+
+### Beyond (2027+)
+
+* [ ] Multi-instance federation
+* [ ] Mobile app
+* [ ] Community plugin marketplace with reviews
+* [ ] Lightweight PaaS (git push → deploy)
+
+See the **[Full Roadmap](doc/general_specs/18-roadmap.md)** for detailed phases, priorities, and success criteria.
 
 ## 🤝 Contributing
 
@@ -359,6 +356,10 @@ WindFlow is an open-source project and welcomes contributions!
 4. **Push** to the branch (`git push origin feature/amazing-feature`)
 5. **Open** a Pull Request
 
+### Creating Plugins
+
+Plugins are the best way to contribute to WindFlow. Check the **[Plugin Development Guide](doc/general_specs/plugin-development.md)** to get started.
+
 ### Local Development
 
 ```bash
@@ -370,36 +371,8 @@ make test
 make lint
 
 # Conventional commit
-git commit -m "feat(api): add deployment optimization endpoint"
+git commit -m "feat(api): add plugin lifecycle hooks"
 ```
-
-## 📊 Roadmap
-
-### Version 1.0 (Q1 2025)
-
-* [x] Modern web interface (Vue.js 3 + TypeScript)
-* [x] Full REST API (FastAPI + SQLAlchemy)
-* [x] Powerful CLI/TUI (Rich + Typer + Textual)
-* [x] Docker + Kubernetes orchestration
-* [ ] Artificial intelligence (LiteLLM)
-* [ ] Integrated monitoring (Prometheus + Grafana)
-
-### Version 1.1 (Q2 2025)
-
-* [ ] Community template marketplace
-* [ ] VM support (Vagrant + Libvirt)
-* [ ] Advanced visual workflows
-* [ ] Enterprise SSO (Keycloak)
-* [ ] Full audit trail
-
-### Version 1.2 (Q3 2025)
-
-* [ ] Multi-cloud provider (AWS, Azure, GCP)
-* [ ] GitOps integration (ArgoCD, Flux)
-* [ ] Extensible plugin system
-* [ ] Mobile app (React Native)
-
-See the **[Full Roadmap](doc/general_specs/18-roadmap.md)** for more details.
 
 ## 📄 License
 
@@ -407,18 +380,17 @@ WindFlow is released under the **MIT** license. See [LICENSE](LICENSE) for detai
 
 ## 🙏 Acknowledgements
 
-WindFlow is built on exceptional technologies:
+WindFlow is built on exceptional open-source technologies:
 
 * **[FastAPI](https://fastapi.tiangolo.com/)** — Modern web framework for Python
 * **[Vue.js](https://vuejs.org/)** — Progressive framework for user interfaces
 * **[Element Plus](https://element-plus.org/)** — Component library for Vue 3
 * **[Rich](https://rich.readthedocs.io/)** — Library for rich CLI interfaces
 * **[Docker](https://www.docker.com/)** — Containerization platform
-* **[Kubernetes](https://kubernetes.io/)** — Container orchestrator
+* **[libvirt](https://libvirt.org/)** — Virtualization API
+* **[Proxmox](https://www.proxmox.com/)** — Virtualization platform
 * **[PostgreSQL](https://www.postgresql.org/)** — Relational database
-* **[Redis](https://redis.io/)** — In-memory data store
-
-A big thank you to all the open-source communities that make WindFlow possible! 🚀
+* **[SQLite](https://www.sqlite.org/)** — Lightweight embedded database
 
 ---
 

@@ -21,22 +21,6 @@ Guide pour les contributions externes et internes :
 - **Communication** : Issues, discussions, reviews
 - **Validation** : Processus d'acceptance
 
-### 🚀 [release-workflow.md](release-workflow.md) - Workflow de Release
-Processus de release et déploiement :
-- **Version Strategy** : Semantic versioning, branches de release
-- **Preparation Release** : Tests, documentation, changelog
-- **Deployment Process** : Staging, production, rollback
-- **Post-Release** : Monitoring, hotfixes, communication
-- **Environments** : Dev, staging, production
-
-### 🧪 [testing-workflow.md](testing-workflow.md) - Workflow de Test
-Stratégie et processus de test :
-- **Test Strategy** : Pyramide des tests, niveaux de validation
-- **Development Testing** : TDD, tests unitaires, tests d'intégration
-- **Automated Testing** : Pipeline CI, tests E2E
-- **Quality Gates** : Couverture, performance, sécurité
-- **Manual Testing** : UAT, tests exploratoires
-
 ### 📝 [documentation-workflow.md](documentation-workflow.md) - Workflow de Documentation
 Processus de création et maintenance de la documentation :
 - **Types de Documentation** : Technique, utilisateur, API

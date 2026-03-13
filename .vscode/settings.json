@@ -8,5 +8,6 @@
             "database": "${workspaceFolder:windflow}/dev/data/windflow.db",
             "name": "windflow"
         }
-    ]
+    ],
+    "snyk.advanced.organization": "fad9774e-20df-43f6-b5a6-f2626a35ab3f"
 }

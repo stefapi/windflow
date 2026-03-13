@@ -9,10 +9,8 @@
 ## Métriques obligatoires
 - latence endpoints
 - taux d’erreur par service
-- CPU/RAM
 - métriques business (déploiements ok/ko)
 
 ## Outils cibles
 - Prometheus + Grafana
-- ELK
-- Tracing : OpenTelemetry + Jaeger (si intégré)
+- Tracing : OpenTelemetry

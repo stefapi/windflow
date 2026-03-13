@@ -2,99 +2,147 @@
 
 ## Vue d'Ensemble
 
-Ce guide couvre l'installation et la configuration complète de WindFlow, depuis un déploiement de développement jusqu'à une architecture de production haute disponibilité.
+Ce guide couvre l'installation de WindFlow, du mode léger sur Raspberry Pi jusqu'à un déploiement standard sur serveur dédié. WindFlow est conçu pour être installé en moins de 5 minutes.
 
-### Prérequis Système
+### Prérequis
 
-**Minimum (Développement) :**
-- CPU : 4 cores
-- RAM : 8 GB
-- Stockage : 50 GB SSD
-- OS : Ubuntu 20.04+ / RHEL 8+ / macOS 12+
+**Système :**
+- **OS** : Linux (Debian/Ubuntu, Raspberry Pi OS, Fedora, ou équivalent)
+- **Architecture** : x86_64 ou ARM64
+- **Docker** ≥ 20.10 + Docker Compose v2
 
-**Recommandé (Production) :**
-- CPU : 16 cores
-- RAM : 32 GB
-- Stockage : 200 GB SSD
-- OS : Ubuntu 22.04 LTS / RHEL 9
+**Pour le développement (optionnel) :**
+- Python ≥ 3.11 + Poetry ≥ 1.8
+- Node.js ≥ 20 + pnpm ≥ 9
 
-**Logiciels Requis :**
-- Docker 24.0+
-- Docker Compose v2
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL 15+
-- Redis 7+
+### Profils d'Installation
 
-## Installation Rapide (Development)
+| Profil | RAM minimum | CPU | Stockage | Machine type | Compose file |
+|--------|-------------|-----|----------|--------------|--------------|
+| **Léger** | 2 Go (512 Mo pour le core) | 1 core ARM | 8 Go | Raspberry Pi 4 (2 Go) | `docker-compose.light.yml` |
+| **Standard** | 4 Go (1.5 Go pour le core) | 2 cores | 20 Go | RPi 4 (4 Go), mini PC, VPS | `docker-compose.yml` |
+| **Développement** | 4 Go | 2 cores | 20 Go | Laptop / PC | Manuel (sans Docker) |
 
-### 1. Clone et Configuration
+---
+
+## Installation Mode Léger (Raspberry Pi)
+
+Le mode léger utilise SQLite au lieu de PostgreSQL et un cache en mémoire au lieu de Redis. Il est conçu pour les machines avec peu de RAM.
+
+### 1. Script d'Installation
 
 ```bash
-# Clone du repository
+# Télécharger et lancer l'installateur
+curl -fsSL https://get.windflow.io/install.sh | bash -s -- --light
+
+# Ou manuellement :
 git clone https://github.com/windflow/windflow.git
 cd windflow
-
-# Configuration de l'environnement
-cp .env.example .env
-vim .env  # Configurer les variables d'environnement
+./scripts/install.sh --light
 ```
 
-### 2. Variables d'Environnement
+### 2. Ce que fait le script
 
-```bash
-# .env configuration minimale
-DATABASE_URL=postgresql://windflow:password@localhost:5432/windflow
-REDIS_URL=redis://localhost:6379/0
-SECRET_KEY=your-secret-key-here
-VAULT_URL=http://localhost:8200
-VAULT_TOKEN=your-vault-token
+Le script `install.sh --light` :
+1. Vérifie que Docker est installé
+2. Détecte l'architecture (arm64 / amd64)
+3. Génère un `SECRET_KEY` aléatoire
+4. Crée le fichier `.env`
+5. Lance `docker compose -f docker-compose.light.yml up -d`
+6. Attend que l'API soit prête
+7. Initialise la base de données (SQLite)
+8. Demande la création du compte admin
+9. Affiche l'URL d'accès
 
-# Configuration LLM (optionnel)
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Configuration email
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-```
-
-### 3. Déploiement avec Docker Compose
-
-```bash
-# Démarrage des services
-docker compose up -d
-
-# Vérification du statut
-docker compose ps
-docker compose logs -f windflow-api
-```
-
-### 4. Configuration Initiale
-
-```bash
-# Initialisation de la base de données
-docker compose exec windflow-api alembic upgrade head
-
-# Création du super-administrateur
-docker compose exec windflow-api python scripts/create_superuser.py \
-  --username admin \
-  --email admin@windflow.local \
-  --password SecurePassword123!
-
-# Test de l'installation
-curl http://localhost:8000/api/v1/health
-```
-
-## Configuration Docker Compose
-
-### docker-compose.yml Complet
+### 3. docker-compose.light.yml
 
 ```yaml
-version: '3.8'
+services:
+  # API Backend
+  windflow-api:
+    image: windflow/api:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8000"
+    environment:
+      WINDFLOW_DB_MODE: light
+      DATABASE_URL: "sqlite+aiosqlite:///data/windflow.db"
+      SECRET_KEY: ${SECRET_KEY}
+      CELERY_BROKER_URL: "filesystem://"
+      CELERY_RESULT_BACKEND: "file:///data/celery-results"
+      LOG_LEVEL: INFO
+    volumes:
+      - windflow_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
+  # Worker Celery (1 process)
+  windflow-worker:
+    image: windflow/worker:latest
+    restart: unless-stopped
+    environment:
+      WINDFLOW_DB_MODE: light
+      DATABASE_URL: "sqlite+aiosqlite:///data/windflow.db"
+      SECRET_KEY: ${SECRET_KEY}
+      CELERY_BROKER_URL: "filesystem://"
+      CELERY_RESULT_BACKEND: "file:///data/celery-results"
+      CELERY_CONCURRENCY: 1
+    volumes:
+      - windflow_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      windflow-api:
+        condition: service_healthy
+
+  # Frontend
+  windflow-frontend:
+    image: windflow/frontend:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      API_URL: http://windflow-api:8000
+    depends_on:
+      - windflow-api
+
+volumes:
+  windflow_data:
+```
+
+**Empreinte** : ~3 containers, ~500 Mo RAM total. Pas de PostgreSQL, pas de Redis.
+
+### 4. Accès
+
+- **Interface Web** : `http://<ip-du-raspberry>` (port 80)
+- **API** : `http://<ip-du-raspberry>:8080/api/docs`
+- **CLI** : `docker exec -it windflow-api windflow --help`
+
+---
+
+## Installation Mode Standard
+
+Le mode standard utilise PostgreSQL et Redis. Recommandé pour les machines avec 4 Go de RAM ou plus.
+
+### 1. Script d'Installation
+
+```bash
+# Avec le script
+curl -fsSL https://get.windflow.io/install.sh | bash
+
+# Ou manuellement :
+git clone https://github.com/windflow/windflow.git
+cd windflow
+./scripts/install.sh
+```
+
+### 2. docker-compose.yml
+
+```yaml
 services:
   # Base de données PostgreSQL
   postgres:
@@ -106,665 +154,677 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U windflow"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Cache Redis
+  # Cache et Broker Redis
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
 
-  # Vault pour la gestion des secrets
-  vault:
-    image: hashicorp/vault:1.15
-    restart: unless-stopped
-    ports:
-      - "8200:8200"
-    environment:
-      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_TOKEN}
-      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
-    cap_add:
-      - IPC_LOCK
-    volumes:
-      - vault_data:/vault/data
-      - ./vault-config:/vault/config
-    command: vault server -dev -dev-listen-address=0.0.0.0:8200
-
   # API Backend
   windflow-api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
+    image: windflow/api:latest
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8080:8000"
     environment:
-      DATABASE_URL: postgresql://windflow:${POSTGRES_PASSWORD}@postgres:5432/windflow
+      DATABASE_URL: postgresql+asyncpg://windflow:${POSTGRES_PASSWORD}@postgres:5432/windflow
       REDIS_URL: redis://redis:6379/0
-      VAULT_URL: http://vault:8200
-      VAULT_TOKEN: ${VAULT_TOKEN}
       SECRET_KEY: ${SECRET_KEY}
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      LOG_LEVEL: INFO
     volumes:
-      - ./logs:/app/logs
+      - windflow_data:/data
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      vault:
-        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
-  # Worker Celery pour les tâches asynchrones
+  # Worker Celery
   windflow-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
+    image: windflow/worker:latest
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://windflow:${POSTGRES_PASSWORD}@postgres:5432/windflow
+      DATABASE_URL: postgresql+asyncpg://windflow:${POSTGRES_PASSWORD}@postgres:5432/windflow
       REDIS_URL: redis://redis:6379/0
-      VAULT_URL: http://vault:8200
-      VAULT_TOKEN: ${VAULT_TOKEN}
+      SECRET_KEY: ${SECRET_KEY}
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CELERY_CONCURRENCY: 2
     volumes:
-      - ./logs:/app/logs
+      - windflow_data:/data
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - postgres
       - redis
-      - vault
 
-  # Frontend Vue.js
+  # Frontend
   windflow-frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: windflow/frontend:latest
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "80:80"
     environment:
-      API_BASE_URL: http://localhost:8000/api/v1
+      API_URL: http://windflow-api:8000
     depends_on:
       - windflow-api
-
-  # Monitoring avec Prometheus
-  prometheus:
-    image: prom/prometheus:latest
-    restart: unless-stopped
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-
-  # Visualisation avec Grafana
-  grafana:
-    image: grafana/grafana:latest
-    restart: unless-stopped
-    ports:
-      - "3001:3000"
-    environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
 
 volumes:
   postgres_data:
   redis_data:
-  vault_data:
-  prometheus_data:
-  grafana_data:
+  windflow_data:
 
 networks:
   default:
     name: windflow
 ```
 
-## Déploiement Production
+### 3. Variables d'Environnement
 
-### Architecture Haute Disponibilité
+Le fichier `.env` ne contient que les variables du core. Les plugins gèrent leur propre configuration via l'UI.
+
+```bash
+# .env — généré automatiquement par install.sh
+SECRET_KEY=<généré automatiquement>
+POSTGRES_PASSWORD=<généré automatiquement>
+```
+
+C'est tout. Pas de VAULT_TOKEN, pas d'OPENAI_API_KEY, pas de SMTP — tout ça est géré par les plugins correspondants si vous les installez.
+
+### 4. Configuration Initiale
+
+```bash
+# Vérifier que tout tourne
+docker compose ps
+
+# Initialiser la base de données (fait automatiquement par install.sh)
+docker compose exec -T windflow-api alembic upgrade head
+
+# Créer le compte admin (fait automatiquement par install.sh)
+docker compose exec -it windflow-api windflow admin create \
+  --username admin \
+  --email admin@example.com
+# Le script demande le mot de passe de manière interactive
+
+# Tester
+curl http://localhost:8080/api/v1/health
+```
+
+### 5. Accès
+
+- **Interface Web** : `http://<ip-du-serveur>` (port 80)
+- **API** : `http://<ip-du-serveur>:8080/api/docs`
+- **CLI** : `docker exec -it windflow-api windflow --help`
+
+---
+
+## Installation Développement
+
+Pour contribuer au code de WindFlow ou le modifier.
+
+### Backend
+
+```bash
+git clone https://github.com/windflow/windflow.git
+cd windflow
+
+# Installer les dépendances
+poetry install --with dev
+
+# Lancer PostgreSQL et Redis avec Docker (pour le dev)
+docker compose -f docker-compose.dev-deps.yml up -d
+
+# Configurer l'environnement
+cp .env.dev.example .env
+
+# Initialiser la base de données
+poetry run alembic upgrade head
+
+# Créer un admin
+poetry run windflow admin create --username admin --email admin@localhost
+
+# Lancer le serveur de dev
+poetry run uvicorn windflow.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Frontend
+
+```bash
+cd frontend
+pnpm install
+pnpm dev   # http://localhost:5173
+```
+
+### CLI / TUI
+
+```bash
+pip install -e ./cli
+windflow --help
+```
+
+### docker-compose.dev-deps.yml
+
+Uniquement PostgreSQL et Redis pour le développement local :
 
 ```yaml
-# docker-compose.prod.yml
-version: '3.8'
-
 services:
-  # Load Balancer HAProxy
-  haproxy:
-    image: haproxy:2.8
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "8404:8404"  # Stats
-    volumes:
-      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
-      - ./ssl:/etc/ssl/private:ro
-    depends_on:
-      - windflow-api-1
-      - windflow-api-2
-
-  # API Backend - Instance 1
-  windflow-api-1:
-    extends:
-      file: docker-compose.yml
-      service: windflow-api
-    ports: []  # Pas d'exposition directe
-    environment:
-      INSTANCE_ID: api-1
-
-  # API Backend - Instance 2  
-  windflow-api-2:
-    extends:
-      file: docker-compose.yml
-      service: windflow-api
-    ports: []
-    environment:
-      INSTANCE_ID: api-2
-
-  # PostgreSQL Primary
-  postgres-primary:
+  postgres:
     image: postgres:15
-    restart: unless-stopped
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_DB: windflow
       POSTGRES_USER: windflow
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_REPLICATION_USER: replicator
-      POSTGRES_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD}
+      POSTGRES_PASSWORD: devpassword
     volumes:
-      - postgres_primary_data:/var/lib/postgresql/data
-      - ./postgres/primary.conf:/etc/postgresql/postgresql.conf
-      - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf
-    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+      - postgres_dev_data:/var/lib/postgresql/data
 
-  # PostgreSQL Standby (Read Replica)
-  postgres-standby:
-    image: postgres:15
-    restart: unless-stopped
-    environment:
-      PGUSER: replicator
-      POSTGRES_PASSWORD: ${REPLICATION_PASSWORD}
-      POSTGRES_PRIMARY_HOST: postgres-primary
-      POSTGRES_PRIMARY_PORT: 5432
-    volumes:
-      - postgres_standby_data:/var/lib/postgresql/data
-    command: |
-      bash -c "
-      pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U replicator -v -P -W &&
-      echo 'standby_mode = on' >> /var/lib/postgresql/data/recovery.conf &&
-      echo 'primary_conninfo = \"host=postgres-primary port=5432 user=replicator\"' >> /var/lib/postgresql/data/recovery.conf &&
-      postgres
-      "
-
-  # Redis Cluster
-  redis-1:
+  redis:
     image: redis:7-alpine
-    restart: unless-stopped
     ports:
-      - "7001:7001"
-    volumes:
-      - redis_1_data:/data
-    command: redis-server --port 7001 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
-
-  redis-2:
-    image: redis:7-alpine
-    restart: unless-stopped
-    ports:
-      - "7002:7002"
-    volumes:
-      - redis_2_data:/data
-    command: redis-server --port 7002 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
-
-  redis-3:
-    image: redis:7-alpine
-    restart: unless-stopped
-    ports:
-      - "7003:7003"
-    volumes:
-      - redis_3_data:/data
-    command: redis-server --port 7003 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
+      - "6379:6379"
 
 volumes:
-  postgres_primary_data:
-  postgres_standby_data:
-  redis_1_data:
-  redis_2_data:
-  redis_3_data:
+  postgres_dev_data:
 ```
 
-### Configuration HAProxy
+### .env.dev.example
 
+```bash
+# Développement local
+DATABASE_URL=postgresql+asyncpg://windflow:devpassword@localhost:5432/windflow
+REDIS_URL=redis://localhost:6379/0
+SECRET_KEY=dev-secret-key-not-for-production
+CELERY_BROKER_URL=redis://localhost:6379/1
+CELERY_RESULT_BACKEND=redis://localhost:6379/2
+LOG_LEVEL=DEBUG
+DEBUG=true
 ```
-# haproxy/haproxy.cfg
-global
-    daemon
-    maxconn 4096
-    log stdout local0
-    
-defaults
-    mode http
-    timeout connect 5s
-    timeout client 30s
-    timeout server 30s
-    option httplog
-    
-frontend windflow_frontend
-    bind *:80
-    bind *:443 ssl crt /etc/ssl/private/windflow.pem
-    redirect scheme https if !{ ssl_fc }
-    
-    # API requests
-    acl is_api path_beg /api/
-    use_backend windflow_api if is_api
-    
-    # Default to frontend
-    default_backend windflow_frontend
-    
-backend windflow_api
-    balance roundrobin
-    option httpchk GET /api/v1/health
-    server api-1 windflow-api-1:8000 check
-    server api-2 windflow-api-2:8000 check
-    
-backend windflow_frontend
-    balance roundrobin
-    option httpchk GET /health
-    server frontend-1 windflow-frontend:80 check
-    
-listen stats
-    bind *:8404
-    stats enable
-    stats uri /stats
-    stats refresh 30s
-```
-
-## Configuration Kubernetes
-
-### Namespace et ConfigMap
-
-```yaml
-# k8s/namespace.yml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: windflow
-  labels:
-    name: windflow
 
 ---
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: windflow-config
-  namespace: windflow
-data:
-  DATABASE_URL: "postgresql://windflow:password@postgres:5432/windflow"
-  REDIS_URL: "redis://redis:6379/0"
-  LOG_LEVEL: "INFO"
-```
 
-### Déploiement API
+## Après l'Installation : Premiers Pas
 
-```yaml
-# k8s/api-deployment.yml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: windflow-api
-  namespace: windflow
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: windflow-api
-  template:
-    metadata:
-      labels:
-        app: windflow-api
-    spec:
-      containers:
-      - name: windflow-api
-        image: windflow/api:latest
-        ports:
-        - containerPort: 8000
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: windflow-secrets
-              key: database-url
-        - name: SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              name: windflow-secrets
-              key: secret-key
-        envFrom:
-        - configMapRef:
-            name: windflow-config
-        livenessProbe:
-          httpGet:
-            path: /api/v1/health
-            port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /api/v1/ready
-            port: 8000
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        resources:
-          limits:
-            cpu: 1000m
-            memory: 2Gi
-          requests:
-            cpu: 500m
-            memory: 1Gi
+Une fois WindFlow installé et le compte admin créé :
+
+### 1. Se connecter
+
+Ouvrir l'interface web et se connecter avec le compte admin.
+
+### 2. Vérifier le Docker local
+
+WindFlow détecte automatiquement le Docker Engine local. Aller dans **Targets** pour vérifier qu'il apparaît avec ses capacités.
+
+### 3. Installer le premier plugin
+
+Aller dans **Marketplace** et installer un plugin utile, par exemple :
+- **Traefik** si vous voulez exposer des services avec un nom de domaine et du HTTPS
+- **Uptime Kuma** pour surveiller la disponibilité de vos services
+- **PostgreSQL Manager** si vous utilisez des containers PostgreSQL
+
+### 4. Déployer une première stack
+
+Aller dans **Marketplace > Stacks** et déployer une application, par exemple Gitea (serveur Git) ou Uptime Kuma. Le wizard de configuration vous guide.
+
+### 5. Ajouter une machine distante (optionnel)
+
+Si vous avez d'autres serveurs, aller dans **Targets > Ajouter** et configurer une connexion SSH. WindFlow détectera automatiquement Docker et/ou libvirt sur la machine distante.
 
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: windflow-api-service
-  namespace: windflow
-spec:
-  selector:
-    app: windflow-api
-  ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 8000
-  type: ClusterIP
-```
 
-### Ingress Controller
-
-```yaml
-# k8s/ingress.yml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: windflow-ingress
-  namespace: windflow
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/rate-limit: "100"
-spec:
-  tls:
-  - hosts:
-    - windflow.example.com
-    secretName: windflow-tls
-  rules:
-  - host: windflow.example.com
-    http:
-      paths:
-      - path: /api/
-        pathType: Prefix
-        backend:
-          service:
-            name: windflow-api-service
-            port:
-              number: 80
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: windflow-frontend-service
-            port:
-              number: 80
-```
-
-## Scripts d'Installation
-
-### Script d'Installation Automatique
+## Script d'Installation Complet
 
 ```bash
 #!/bin/bash
-# install-windflow.sh
-
+# install.sh — Script d'installation WindFlow
 set -e
 
-WINDFLOW_VERSION=${1:-latest}
-INSTALL_DIR=${2:-/opt/windflow}
-DOMAIN=${3:-localhost}
+# --- Paramètres ---
+WINDFLOW_VERSION=${WINDFLOW_VERSION:-latest}
+INSTALL_DIR=${INSTALL_DIR:-/opt/windflow}
+MODE="standard"
 
-echo "🚀 Installation de WindFlow ${WINDFLOW_VERSION}"
+# Parse des arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --light) MODE="light" ;;
+        --dir) INSTALL_DIR="$2"; shift ;;
+        --version) WINDFLOW_VERSION="$2"; shift ;;
+        *) echo "Option inconnue: $1"; exit 1 ;;
+    esac
+    shift
+done
 
-# Vérification des prérequis
+echo "========================================"
+echo "  WindFlow Installer (mode: ${MODE})"
+echo "========================================"
+echo
+
+# --- Vérifications ---
 check_requirements() {
-    echo "📋 Vérification des prérequis..."
-    
-    command -v docker >/dev/null 2>&1 || {
-        echo "❌ Docker n'est pas installé"
+    echo "[1/7] Vérification des prérequis..."
+
+    if ! command -v docker &> /dev/null; then
+        echo "  ✗ Docker n'est pas installé"
+        echo "  → Installer Docker : https://docs.docker.com/engine/install/"
         exit 1
-    }
-    
-    command -v docker compose >/dev/null 2>&1 || {
-        echo "❌ Docker Compose n'est pas installé"
+    fi
+    echo "  ✓ Docker $(docker --version | grep -oP '\d+\.\d+\.\d+')"
+
+    if ! docker compose version &> /dev/null; then
+        echo "  ✗ Docker Compose v2 n'est pas installé"
         exit 1
-    }
-    
-    echo "✅ Prérequis validés"
+    fi
+    echo "  ✓ Docker Compose $(docker compose version --short)"
+
+    # Vérification architecture
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64)  ARCH_LABEL="amd64" ;;
+        aarch64) ARCH_LABEL="arm64" ;;
+        *)
+            echo "  ✗ Architecture non supportée: $ARCH"
+            exit 1
+            ;;
+    esac
+    echo "  ✓ Architecture: ${ARCH_LABEL}"
+
+    # Vérification mémoire
+    TOTAL_MEM_MB=$(free -m | awk '/^Mem:/{print $2}')
+    if [ "$MODE" = "light" ] && [ "$TOTAL_MEM_MB" -lt 1500 ]; then
+        echo "  ⚠ Mémoire faible (${TOTAL_MEM_MB} Mo) — mode léger recommandé"
+    elif [ "$MODE" = "standard" ] && [ "$TOTAL_MEM_MB" -lt 3500 ]; then
+        echo "  ⚠ Mémoire faible (${TOTAL_MEM_MB} Mo) — le mode léger est recommandé (--light)"
+    fi
+    echo "  ✓ Mémoire: ${TOTAL_MEM_MB} Mo"
+    echo
 }
 
-# Création des répertoires
-setup_directories() {
-    echo "📁 Création des répertoires..."
-    sudo mkdir -p ${INSTALL_DIR}
-    sudo chown $(whoami):$(whoami) ${INSTALL_DIR}
-    cd ${INSTALL_DIR}
+# --- Répertoire d'installation ---
+setup_directory() {
+    echo "[2/7] Préparation du répertoire..."
+    sudo mkdir -p "${INSTALL_DIR}"
+    sudo chown "$(whoami):$(whoami)" "${INSTALL_DIR}"
+    cd "${INSTALL_DIR}"
+    echo "  ✓ ${INSTALL_DIR}"
+    echo
 }
 
-# Téléchargement des fichiers
-download_files() {
-    echo "⬇️ Téléchargement des fichiers WindFlow..."
-    
+# --- Téléchargement ---
+download() {
+    echo "[3/7] Téléchargement de WindFlow ${WINDFLOW_VERSION}..."
     if [ "$WINDFLOW_VERSION" = "latest" ]; then
-        curl -L https://github.com/windflow/windflow/archive/main.tar.gz | tar xz --strip-components=1
+        curl -sL https://github.com/windflow/windflow/archive/main.tar.gz | tar xz --strip-components=1
     else
-        curl -L https://github.com/windflow/windflow/archive/v${WINDFLOW_VERSION}.tar.gz | tar xz --strip-components=1
+        curl -sL "https://github.com/windflow/windflow/archive/v${WINDFLOW_VERSION}.tar.gz" | tar xz --strip-components=1
     fi
+    echo "  ✓ Fichiers téléchargés"
+    echo
 }
 
-# Configuration de l'environnement
-setup_environment() {
-    echo "⚙️ Configuration de l'environnement..."
-    
-    # Génération des secrets
+# --- Configuration ---
+configure() {
+    echo "[4/7] Configuration..."
+
     SECRET_KEY=$(openssl rand -hex 32)
-    POSTGRES_PASSWORD=$(openssl rand -base64 32)
-    VAULT_TOKEN=$(openssl rand -hex 16)
-    GRAFANA_PASSWORD=$(openssl rand -base64 16)
-    
-    # Création du fichier .env
-    cat > .env << EOF
-# Configuration WindFlow
-DOMAIN=${DOMAIN}
+
+    if [ "$MODE" = "light" ]; then
+        cat > .env << EOF
+# WindFlow — Mode Léger
 SECRET_KEY=${SECRET_KEY}
-
-# Base de données
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-
-# Vault
-VAULT_TOKEN=${VAULT_TOKEN}
-
-# Monitoring
-GRAFANA_PASSWORD=${GRAFANA_PASSWORD}
-
-# Email (à configurer)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@example.com
-SMTP_PASSWORD=your-password
-
-# LLM (optionnel)
-# OPENAI_API_KEY=sk-...
-# ANTHROPIC_API_KEY=sk-ant-...
+WINDFLOW_DB_MODE=light
 EOF
-
-    echo "✅ Fichier .env créé avec des secrets générés"
-}
-
-# Démarrage des services
-start_services() {
-    echo "🔄 Démarrage des services WindFlow..."
-    
-    docker compose pull
-    docker compose up -d
-    
-    echo "⏳ Attente du démarrage des services..."
-    sleep 30
-    
-    # Initialisation de la base de données
-    docker compose exec -T windflow-api alembic upgrade head
-    
-    echo "✅ Services démarrés avec succès"
-}
-
-# Création du super-administrateur
-create_superuser() {
-    echo "👤 Création du super-administrateur..."
-    
-    read -p "Nom d'utilisateur admin: " ADMIN_USERNAME
-    read -p "Email admin: " ADMIN_EMAIL
-    read -s -p "Mot de passe admin: " ADMIN_PASSWORD
-    echo
-    
-    docker compose exec -T windflow-api python scripts/create_superuser.py \
-        --username "${ADMIN_USERNAME}" \
-        --email "${ADMIN_EMAIL}" \
-        --password "${ADMIN_PASSWORD}"
-        
-    echo "✅ Super-administrateur créé"
-}
-
-# Test de l'installation
-test_installation() {
-    echo "🧪 Test de l'installation..."
-    
-    # Test API
-    if curl -f http://localhost:8000/api/v1/health >/dev/null 2>&1; then
-        echo "✅ API accessible"
+        COMPOSE_FILE="docker-compose.light.yml"
     else
-        echo "❌ API non accessible"
-        exit 1
+        POSTGRES_PASSWORD=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
+        cat > .env << EOF
+# WindFlow — Mode Standard
+SECRET_KEY=${SECRET_KEY}
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+EOF
+        COMPOSE_FILE="docker-compose.yml"
     fi
-    
-    # Test Frontend
-    if curl -f http://localhost:3000 >/dev/null 2>&1; then
-        echo "✅ Frontend accessible"
-    else
-        echo "❌ Frontend non accessible"
-        exit 1
-    fi
-}
 
-# Affichage des informations finales
-show_info() {
-    echo
-    echo "🎉 Installation de WindFlow terminée avec succès!"
-    echo
-    echo "📍 Accès aux services:"
-    echo "   Frontend: http://${DOMAIN}:3000"
-    echo "   API:      http://${DOMAIN}:8000"
-    echo "   Grafana:  http://${DOMAIN}:3001 (admin/$(cat .env | grep GRAFANA_PASSWORD | cut -d= -f2))"
-    echo
-    echo "📁 Répertoire d'installation: ${INSTALL_DIR}"
-    echo "📄 Configuration: ${INSTALL_DIR}/.env"
-    echo
-    echo "🔧 Commandes utiles:"
-    echo "   Logs:     docker compose logs -f"
-    echo "   Restart:  docker compose restart"
-    echo "   Stop:     docker compose down"
+    echo "  ✓ .env généré"
     echo
 }
 
-# Exécution principale
-main() {
-    check_requirements
-    setup_directories
-    download_files
-    setup_environment
-    start_services
-    create_superuser
-    test_installation
-    show_info
+# --- Démarrage ---
+start() {
+    echo "[5/7] Démarrage des services..."
+    docker compose -f "${COMPOSE_FILE}" pull
+    docker compose -f "${COMPOSE_FILE}" up -d
+
+    echo "  ⏳ Attente du démarrage de l'API..."
+    for i in $(seq 1 30); do
+        if curl -sf http://localhost:8080/api/v1/health > /dev/null 2>&1; then
+            echo "  ✓ API prête"
+            break
+        fi
+        if [ "$i" -eq 30 ]; then
+            echo "  ✗ L'API n'a pas démarré dans les temps"
+            echo "  → Consulter les logs : docker compose -f ${COMPOSE_FILE} logs windflow-api"
+            exit 1
+        fi
+        sleep 2
+    done
+    echo
 }
 
-main "$@"
+# --- Base de données ---
+init_db() {
+    echo "[6/7] Initialisation de la base de données..."
+    docker compose -f "${COMPOSE_FILE}" exec -T windflow-api alembic upgrade head
+    echo "  ✓ Base de données initialisée"
+    echo
+}
+
+# --- Admin ---
+create_admin() {
+    echo "[7/7] Création du compte administrateur"
+    read -rp "  Nom d'utilisateur : " ADMIN_USER
+    read -rp "  Email : " ADMIN_EMAIL
+    docker compose -f "${COMPOSE_FILE}" exec -it windflow-api windflow admin create \
+        --username "${ADMIN_USER}" \
+        --email "${ADMIN_EMAIL}"
+    echo
+}
+
+# --- Résumé ---
+show_summary() {
+    IP=$(hostname -I | awk '{print $1}')
+    echo "========================================"
+    echo "  Installation terminée !"
+    echo "========================================"
+    echo
+    echo "  Interface Web : http://${IP}"
+    echo "  API Docs      : http://${IP}:8080/api/docs"
+    echo "  CLI            : docker exec -it windflow-api windflow --help"
+    echo
+    echo "  Répertoire     : ${INSTALL_DIR}"
+    echo "  Mode           : ${MODE}"
+    echo "  Compose file   : ${COMPOSE_FILE}"
+    echo
+    echo "  Commandes utiles :"
+    echo "    Logs     : docker compose -f ${COMPOSE_FILE} logs -f"
+    echo "    Restart  : docker compose -f ${COMPOSE_FILE} restart"
+    echo "    Stop     : docker compose -f ${COMPOSE_FILE} down"
+    echo "    Update   : docker compose -f ${COMPOSE_FILE} pull && docker compose -f ${COMPOSE_FILE} up -d"
+    echo
+    echo "  Prochaines étapes :"
+    echo "    1. Se connecter à l'interface web"
+    echo "    2. Aller dans Marketplace et installer un plugin (ex: Traefik)"
+    echo "    3. Déployer votre première stack"
+    echo
+}
+
+# --- Main ---
+check_requirements
+setup_directory
+download
+configure
+start
+init_db
+create_admin
+show_summary
 ```
+
+---
+
+## Mise à Jour
+
+### Mise à jour standard
+
+```bash
+cd /opt/windflow
+
+# Tirer les nouvelles images
+docker compose pull
+
+# Relancer avec les nouvelles versions
+docker compose up -d
+
+# Appliquer les migrations de base de données
+docker compose exec -T windflow-api alembic upgrade head
+```
+
+### Mise à jour mode léger
+
+```bash
+cd /opt/windflow
+docker compose -f docker-compose.light.yml pull
+docker compose -f docker-compose.light.yml up -d
+docker compose -f docker-compose.light.yml exec -T windflow-api alembic upgrade head
+```
+
+---
 
 ## Sauvegarde et Restauration
 
-### Script de Sauvegarde
+### Sauvegarde
 
 ```bash
 #!/bin/bash
 # backup-windflow.sh
+set -e
 
 BACKUP_DIR=${1:-/backup/windflow}
 DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_NAME="windflow_backup_${DATE}"
+BACKUP_FILE="${BACKUP_DIR}/windflow_${DATE}.tar.gz"
 
-echo "💾 Sauvegarde WindFlow - ${DATE}"
+mkdir -p "${BACKUP_DIR}"
 
-# Création du répertoire de sauvegarde
-mkdir -p ${BACKUP_DIR}/${BACKUP_NAME}
+echo "Sauvegarde WindFlow — ${DATE}"
 
-# Sauvegarde de la base de données
-echo "📊 Sauvegarde de la base de données..."
-docker compose exec -T postgres pg_dump -U windflow windflow > ${BACKUP_DIR}/${BACKUP_NAME}/database.sql
+# Détection du mode
+if grep -q "WINDFLOW_DB_MODE=light" .env 2>/dev/null; then
+    MODE="light"
+    COMPOSE_FILE="docker-compose.light.yml"
+else
+    MODE="standard"
+    COMPOSE_FILE="docker-compose.yml"
+fi
 
-# Sauvegarde des volumes
-echo "💿 Sauvegarde des volumes..."
-docker run --rm -v windflow_postgres_data:/data -v ${BACKUP_DIR}/${BACKUP_NAME}:/backup alpine tar czf /backup/postgres_data.tar.gz -C /data .
-docker run --rm -v windflow_redis_data:/data -v ${BACKUP_DIR}/${BACKUP_NAME}:/backup alpine tar czf /backup/redis_data.tar.gz -C /data .
-docker run --rm -v windflow_vault_data:/data -v ${BACKUP_DIR}/${BACKUP_NAME}:/backup alpine tar czf /backup/vault_data.tar.gz -C /data .
+# Dossier temporaire
+TMP_DIR=$(mktemp -d)
 
-# Sauvegarde de la configuration
-echo "⚙️ Sauvegarde de la configuration..."
-cp .env ${BACKUP_DIR}/${BACKUP_NAME}/
-cp docker-compose.yml ${BACKUP_DIR}/${BACKUP_NAME}/
+# Configuration
+echo "  → Configuration..."
+cp .env "${TMP_DIR}/"
+cp "${COMPOSE_FILE}" "${TMP_DIR}/"
 
-# Compression finale
-echo "🗜️ Compression de la sauvegarde..."
-cd ${BACKUP_DIR}
-tar czf ${BACKUP_NAME}.tar.gz ${BACKUP_NAME}/
-rm -rf ${BACKUP_NAME}/
+# Base de données
+if [ "$MODE" = "light" ]; then
+    echo "  → Base SQLite..."
+    docker compose -f "${COMPOSE_FILE}" exec -T windflow-api cp /data/windflow.db /tmp/windflow.db.bak
+    docker compose -f "${COMPOSE_FILE}" cp windflow-api:/tmp/windflow.db.bak "${TMP_DIR}/windflow.db"
+else
+    echo "  → Base PostgreSQL..."
+    docker compose exec -T postgres pg_dump -U windflow windflow > "${TMP_DIR}/database.sql"
+fi
 
-echo "✅ Sauvegarde terminée: ${BACKUP_DIR}/${BACKUP_NAME}.tar.gz"
+# Données WindFlow (plugins installés, configs)
+echo "  → Données WindFlow..."
+docker run --rm \
+    -v windflow_windflow_data:/source:ro \
+    -v "${TMP_DIR}:/backup" \
+    alpine tar czf /backup/windflow_data.tar.gz -C /source .
+
+# Compression
+echo "  → Compression..."
+tar czf "${BACKUP_FILE}" -C "${TMP_DIR}" .
+rm -rf "${TMP_DIR}"
+
+echo "Sauvegarde terminée : ${BACKUP_FILE}"
+echo "Taille : $(du -h "${BACKUP_FILE}" | cut -f1)"
+```
+
+### Restauration
+
+```bash
+#!/bin/bash
+# restore-windflow.sh
+set -e
+
+BACKUP_FILE=$1
+if [ -z "$BACKUP_FILE" ]; then
+    echo "Usage: $0 <fichier-backup.tar.gz>"
+    exit 1
+fi
+
+echo "Restauration WindFlow depuis ${BACKUP_FILE}"
+
+# Arrêter WindFlow
+echo "  → Arrêt des services..."
+docker compose down 2>/dev/null || true
+docker compose -f docker-compose.light.yml down 2>/dev/null || true
+
+# Extraction
+TMP_DIR=$(mktemp -d)
+tar xzf "${BACKUP_FILE}" -C "${TMP_DIR}"
+
+# Restaurer la configuration
+echo "  → Restauration de la configuration..."
+cp "${TMP_DIR}/.env" .
+if [ -f "${TMP_DIR}/docker-compose.light.yml" ]; then
+    COMPOSE_FILE="docker-compose.light.yml"
+else
+    COMPOSE_FILE="docker-compose.yml"
+fi
+
+# Démarrer les services de base
+echo "  → Démarrage des services..."
+docker compose -f "${COMPOSE_FILE}" up -d
+
+# Attendre que les services soient prêts
+sleep 10
+
+# Restaurer la base de données
+if [ -f "${TMP_DIR}/windflow.db" ]; then
+    echo "  → Restauration base SQLite..."
+    docker compose -f "${COMPOSE_FILE}" cp "${TMP_DIR}/windflow.db" windflow-api:/data/windflow.db
+elif [ -f "${TMP_DIR}/database.sql" ]; then
+    echo "  → Restauration base PostgreSQL..."
+    docker compose exec -T postgres psql -U windflow windflow < "${TMP_DIR}/database.sql"
+fi
+
+# Restaurer les données
+if [ -f "${TMP_DIR}/windflow_data.tar.gz" ]; then
+    echo "  → Restauration des données..."
+    docker run --rm \
+        -v windflow_windflow_data:/target \
+        -v "${TMP_DIR}:/backup:ro" \
+        alpine sh -c "cd /target && tar xzf /backup/windflow_data.tar.gz"
+fi
+
+# Redémarrer pour appliquer
+docker compose -f "${COMPOSE_FILE}" restart
+
+rm -rf "${TMP_DIR}"
+echo "Restauration terminée."
+```
+
+---
+
+## Désinstallation
+
+```bash
+cd /opt/windflow
+
+# Arrêter et supprimer les containers et volumes
+docker compose down -v
+# ou
+docker compose -f docker-compose.light.yml down -v
+
+# Supprimer les fichiers
+sudo rm -rf /opt/windflow
+```
+
+---
+
+## Dépannage
+
+### L'API ne démarre pas
+
+```bash
+# Vérifier les logs
+docker compose logs windflow-api
+
+# Causes fréquentes :
+# - PostgreSQL pas prêt → vérifier "docker compose logs postgres"
+# - Port 8080 déjà utilisé → changer le port dans docker-compose.yml
+# - Pas assez de RAM → passer en mode léger (--light)
+```
+
+### Pas assez de mémoire sur Raspberry Pi
+
+```bash
+# Vérifier la mémoire disponible
+free -m
+
+# Si < 1 Go libre, utiliser le mode léger
+docker compose down
+docker compose -f docker-compose.light.yml up -d
+
+# Optionnel : augmenter le swap
+sudo dphys-swapfile swapoff
+sudo sed -i 's/CONF_SWAPSIZE=.*/CONF_SWAPSIZE=1024/' /etc/dphys-swapfile
+sudo dphys-swapfile setup
+sudo dphys-swapfile swapon
+```
+
+### Les images ne se téléchargent pas (ARM)
+
+```bash
+# Vérifier que les images multi-arch sont disponibles
+docker manifest inspect windflow/api:latest
+
+# Si erreur, vérifier l'architecture
+uname -m  # Doit afficher aarch64 (ARM64) ou x86_64
+
+# Forcer le pull pour la bonne plateforme
+docker pull --platform linux/arm64 windflow/api:latest
+```
+
+### Réinitialiser WindFlow
+
+```bash
+# Supprimer les volumes (perd toutes les données)
+docker compose down -v
+docker compose up -d
+docker compose exec -T windflow-api alembic upgrade head
+
+# Recréer un admin
+docker compose exec -it windflow-api windflow admin create \
+  --username admin --email admin@example.com
 ```
 
 ---
 
 **Références :**
-- [Vue d'Ensemble](01-overview.md) - Contexte du projet
-- [Architecture](02-architecture.md) - Architecture du système
+- [Vue d'Ensemble](01-overview.md) - Vision du projet
+- [Architecture](02-architecture.md) - Architecture et système de plugins
 - [Stack Technologique](03-technology-stack.md) - Technologies utilisées
-- [Configuration](06-rbac-permissions.md) - Permissions et RBAC
-- [Monitoring](12-monitoring.md) - Surveillance et métriques
+- [Fonctionnalités Principales](10-core-features.md) - Fonctionnalités core
+- [RBAC & Permissions](06-rbac-permissions.md) - Permissions et rôles

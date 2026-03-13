@@ -2,656 +2,590 @@
 
 ## Vue d'Ensemble
 
-WindFlow propose une interface en ligne de commande complète inspirée de VesselHarbor CLI, offrant une alternative puissante à l'interface web pour l'administration et l'automatisation.
+WindFlow propose une interface en ligne de commande (CLI) et une interface terminal interactive (TUI) comme alternatives à l'interface web. Les deux utilisent la même API REST que le frontend.
 
-### Philosophie CLI/TUI
+**Technologies :**
+- **Typer** : Framework CLI avec auto-complétion et aide auto-générée
+- **Rich** : Formatage avancé (tableaux, couleurs, barres de progression)
+- **Textual** : Interface TUI interactive
 
-**Principes de Conception :**
-- **Ergonomie** : Interface intuitive avec aide contextuelle
-- **Productivité** : Automatisation et scripts avancés
-- **Consistance** : API cohérente entre CLI et interface web
-- **Extensibilité** : Plugin system pour commandes personnalisées
-- **Accessibilité** : Support des terminaux variés et assistances
-
-## Architecture CLI Complète
-
-### Stack Technologique CLI
-
-**Composants Principaux :**
-- **argparse** : Parser de commandes avec sous-parsers hiérarchiques
-- **rich** : Interface CLI moderne avec couleurs et formatage avancé
-- **typer** : CLI type-safe avec auto-complétion
-- **click** : Alternative moderne pour commandes complexes
-- **python-dotenv** : Support des fichiers .env pour la configuration
-
-**Architecture des Services :**
-- **ServiceBase** : Classe de base pour tous les services CLI
-- **ServiceStore** : Store centralisé pour l'enregistrement des services
-- **ServiceDiscovery** : Découverte automatique des services disponibles
-- **ConfigurationMerger** : Fusion intelligente des configurations de services
-- **PluginLoader** : Chargement dynamique de plugins CLI
-
-## Commandes Principales
-
-### Authentification
+### Installation
 
 ```bash
-# Authentification interactive
-windflow auth login --username admin --password secret
+# Inclus dans WindFlow — accessible via Docker
+docker exec -it windflow-api windflow --help
 
-# Authentification par API key
-windflow auth login-key --api-key sk-xxx
+# Ou installation locale (pour gérer une instance distante)
+pip install windflow-cli
+windflow --help
+```
 
-# Authentification SSO avec ouverture de navigateur
-windflow auth login-sso --provider keycloak
+---
 
-# Vérification du statut d'authentification
+## Référence des Commandes
+
+### Auth — Authentification
+
+```bash
+# Login interactif
+windflow auth login
+# Username: admin
+# Password: ********
+# ✓ Connected to http://localhost:8080 as admin
+
+# Login vers une instance distante
+windflow auth login --url http://192.168.1.50:8080
+
+# Login par API key
+windflow auth login --api-key wf_ak_a1b2c3d4...
+
+# Statut de la session
 windflow auth status
+# Instance: http://192.168.1.50:8080
+# User: admin (Super Admin)
+# Token expires: in 24 minutes
 
-# Logout et nettoyage des tokens
+# Déconnexion
 windflow auth logout
 
-# Génération d'une nouvelle API key
-windflow auth create-key --name "ci-cd-key" --scopes "deployment,monitoring"
+# Gestion des API keys
+windflow auth api-key create --name "CI/CD" --expires 90d
+# → wf_ak_x7y8z9... (affiché une seule fois)
+
+windflow auth api-key list
+# NAME       CREATED      EXPIRES      LAST USED
+# CI/CD      2026-03-15   2026-06-13   2026-04-02
+
+windflow auth api-key revoke --name "CI/CD"
 ```
 
-### Configuration
+### Containers — Gestion Docker
 
 ```bash
-# Configuration du serveur WindFlow
-windflow config set-url https://api.windflow.local
-windflow config set-server windflow.local --port 8080
+# Lister les containers
+windflow containers list
+windflow containers list --target my-server
+windflow containers list --status running
 
-# Récupération de la configuration actuelle
-windflow config get-url
-windflow config show
+# Exemple de sortie :
+# NAME          IMAGE              STATUS    PORTS          TARGET
+# nextcloud     nextcloud:28       running   8080→80        local
+# postgres-1    postgres:15        running   5432→5432      local
+# redis         redis:7-alpine     running   6379→6379      local
+# old-app       myapp:1.0          stopped   —              local
 
-# Configuration des préférences utilisateur
-windflow config set-default-org "production-org"
-windflow config set-output-format json
+# Détails d'un container
+windflow containers inspect nextcloud
 
-# Configuration des providers cloud
-windflow config add-provider aws --region eu-west-1
-windflow config add-provider azure --subscription-id xxx
+# Démarrer / Arrêter / Redémarrer
+windflow containers start nextcloud
+windflow containers stop nextcloud
+windflow containers restart nextcloud
+
+# Supprimer
+windflow containers rm old-app
+windflow containers rm old-app --force  # Force kill + remove
+
+# Logs
+windflow containers logs nextcloud
+windflow containers logs nextcloud --tail 50 --follow
+windflow containers logs nextcloud --since 1h
+
+# Terminal interactif
+windflow containers exec nextcloud
+windflow containers exec nextcloud -- /bin/bash
+windflow containers exec nextcloud -- ls -la /var/www
+
+# Stats temps réel
+windflow containers stats nextcloud
+# CPU: 12.3%  MEM: 245 MB / 512 MB  NET I/O: 1.2 MB / 340 KB
 ```
 
-### Gestion des Organisations
+### VMs — Machines Virtuelles
 
 ```bash
-# Listing des organisations
-windflow org list
-windflow org list --format table --filter active=true
+# Lister les VMs
+windflow vms list
+windflow vms list --target proxmox-server
+windflow vms list --status running
 
-# Détails d'une organisation
-windflow org get <org_id>
-windflow org describe production-org --verbose
+# NAME         HYPERVISOR   STATUS    vCPU  RAM     TARGET
+# ubuntu-dev   kvm          running   2     2048    local
+# windows-10   proxmox      stopped   4     8192    proxmox-1
 
-# Création d'organisation
-windflow org create --name "Production" --description "Environnement de production"
+# Créer une VM
+windflow vms create my-vm \
+  --target local \
+  --cpus 2 --memory 2048 --disk 20 \
+  --iso /var/lib/libvirt/images/ubuntu-22.04.iso
 
-# Mise à jour d'organisation
-windflow org update <org_id> --name "New Name" --quotas '{"cpu": 100, "memory": "500GB"}'
+# Créer avec cloud-init
+windflow vms create my-vm \
+  --target local \
+  --cpus 2 --memory 2048 --disk 20 \
+  --cloud-image ubuntu-22.04 \
+  --cloud-init user-data.yml
 
-# Suppression d'organisation
-windflow org delete <org_id> --confirm
+# Démarrer / Arrêter
+windflow vms start my-vm
+windflow vms stop my-vm
+windflow vms force-stop my-vm
 
-# Gestion des utilisateurs dans l'organisation
-windflow org add-user <org_id> <user_id> --role admin
-windflow org remove-user <org_id> <user_id>
+# Snapshots
+windflow vms snapshot create my-vm --name "before-update"
+windflow vms snapshot list my-vm
+windflow vms snapshot restore my-vm --name "before-update"
+windflow vms snapshot delete my-vm --name "before-update"
+
+# Supprimer
+windflow vms rm my-vm
+windflow vms rm my-vm --delete-disks
 ```
 
-### Gestion des Environnements
+### Stacks — Docker Compose
 
 ```bash
-# Listing des environnements
-windflow env list --org <org_id>
-windflow env list --type production --status active
+# Lister les stacks
+windflow stacks list
+windflow stacks list --target my-server --status deployed
 
-# Détails d'un environnement
-windflow env get <env_id>
-windflow env describe staging --org production-org
+# NAME         TARGET    STATUS     VERSION  SERVICES
+# web-app      local     deployed   3        nginx, api, postgres
+# monitoring   local     stopped    1        grafana, prometheus
 
-# Création d'environnement
-windflow env create --org <org_id> --name "staging" --type staging
+# Créer une stack depuis un compose
+windflow stacks create my-app --file docker-compose.yml --target local
 
-# Configuration d'environnement
-windflow env config <env_id> --set resource_limits='{"cpu": 50, "memory": "200GB"}'
+# Créer depuis un template marketplace
+windflow stacks create my-nextcloud --template nextcloud --target local
 
-# Suppression d'environnement
-windflow env delete <env_id> --force
+# Éditer le compose d'une stack (ouvre $EDITOR)
+windflow stacks edit my-app
 
-# Clonage d'environnement
-windflow env clone <source_env_id> --name "staging-v2" --org <target_org_id>
+# Déployer
+windflow stacks deploy my-app
+windflow stacks deploy my-app --target remote-server
+
+# Arrêter tous les services
+windflow stacks stop my-app
+
+# Rollback à la version précédente
+windflow stacks rollback my-app
+windflow stacks rollback my-app --version 2
+
+# Historique des versions
+windflow stacks versions my-app
+# VERSION  DATE                DEPLOYED BY  STATUS
+# 3        2026-04-01 14:30    admin        deployed
+# 2        2026-03-28 10:15    admin        rolled_back
+# 1        2026-03-25 09:00    admin        —
+
+# Historique des déploiements
+windflow stacks deployments my-app
+# ID         STATUS    STARTED              DURATION  BY
+# dep-abc    success   2026-04-01 14:30     45s       admin
+# dep-def    failed    2026-03-30 16:00     12s       alice
+# dep-ghi    success   2026-03-28 10:15     38s       admin
+
+# Valider un compose sans déployer
+windflow stacks validate my-app
+
+# Supprimer
+windflow stacks rm my-app
 ```
 
-### Déploiements
+### Targets — Machines Cibles
 
 ```bash
-# Création de déploiement
-windflow deploy create --stack web-app --environment staging
-windflow deploy create --stack web-app --target docker --config deploy.yaml
+# Lister les targets
+windflow targets list
 
-# Déploiement avec validation préalable
-windflow deploy create --stack api-service --dry-run --validate
+# NAME           TYPE    HOST              STATUS   DOCKER  KVM  PROXMOX
+# local          local   —                 online   ✓       ✓    —
+# remote-srv     ssh     192.168.1.50      online   ✓       —    —
+# proxmox-1      proxmox 192.168.1.100     online   —       —    ✓
 
-# Listing des déploiements
-windflow deploy list --environment <env_id>
-windflow deploy list --status running --user <user_id>
+# Ajouter un target SSH
+windflow targets add my-server \
+  --type ssh \
+  --host 192.168.1.50 \
+  --user deploy \
+  --key ~/.ssh/id_rsa \
+  --env production
 
-# Status d'un déploiement
-windflow deploy status <deployment_id>
-windflow deploy status <deployment_id> --follow --interval 5
+# Ajouter un target Proxmox
+windflow targets add my-proxmox \
+  --type proxmox \
+  --host 192.168.1.100 \
+  --token-id user@pam!windflow \
+  --token-secret abc123... \
+  --env production
 
-# Logs de déploiement
-windflow deploy logs <deployment_id> --follow --tail 100
-windflow deploy logs <deployment_id> --since 1h --level error
+# Lancer la détection des capabilities
+windflow targets discover my-server
+# ✓ Docker 24.0.7 detected
+# ✓ Docker Compose 2.23.0 detected
+# ✗ libvirt not found
+# System: Debian 12, arm64, 4 cores, 4096 MB RAM, 64 GB disk
 
-# Rollback de déploiement
-windflow deploy rollback <deployment_id>
-windflow deploy rollback <deployment_id> --to-version v1.2.3
+# Voir les ressources d'un target
+windflow targets resources my-server
+# CPU: 23% (4 cores)  RAM: 1.8 GB / 4.0 GB  DISK: 28 GB / 64 GB
 
-# Scaling d'un déploiement
-windflow deploy scale <deployment_id> --replicas 5
-windflow deploy scale <deployment_id> --auto --min 2 --max 10
+# Supprimer un target
+windflow targets rm my-server
 ```
 
-### Stacks et Services
+### Plugins — Gestion des Plugins
 
 ```bash
-# Marketplace des stacks
-windflow stack list --marketplace
-windflow stack search --tag database --category web
+# Lister les plugins installés
+windflow plugins list
 
-# Détails d'un stack
-windflow stack get <stack_id>
-windflow stack describe lamp-stack --version latest
+# NAME              TYPE       STATUS    VERSION  RAM
+# traefik           hybrid     running   1.2.0    142 MB
+# postgresql-mgr    extension  running   1.0.0    28 MB
+# uptime-kuma       service    running   1.0.0    98 MB
 
-# Déploiement d'un stack depuis le marketplace
-windflow stack deploy wordpress --environment staging --params '{"domain": "test.local"}'
+# Installer un plugin
+windflow plugins install traefik
+windflow plugins install restic --registry https://my-registry.local/index.json
 
-# Création d'un stack personnalisé
-windflow stack create --name custom-stack --template template.yaml
+# Configurer un plugin
+windflow plugins config traefik --set acme_email=me@example.com
+windflow plugins config traefik --set dashboard_enabled=true
 
-# Validation d'un stack
-windflow stack validate custom-stack.yaml
-windflow stack validate --llm-optimize custom-stack.yaml
+# Voir la config d'un plugin
+windflow plugins config traefik --show
 
-# Gestion des services
-windflow service list --stack <stack_id>
-windflow service logs <service_id> --follow
-windflow service scale <service_id> --replicas 3
-windflow service restart <service_id>
+# Démarrer / Arrêter
+windflow plugins start traefik
+windflow plugins stop traefik
+
+# Mettre à jour
+windflow plugins update traefik
+windflow plugins update --all
+
+# Désinstaller
+windflow plugins remove uptime-kuma
 ```
 
-### Monitoring et Logs
+### Marketplace — Catalogue
 
 ```bash
-# Métriques en temps réel
-windflow metrics show --environment <env_id>
-windflow metrics show --stack <stack_id> --live
+# Parcourir le catalogue
+windflow marketplace search
+windflow marketplace search nextcloud
+windflow marketplace search --category monitoring
+windflow marketplace search --category database --arch arm64
 
-# Logs centralisés
-windflow logs search --query "error" --since 1h
-windflow logs tail --service <service_id> --follow
+# Voir la fiche d'un plugin/stack
+windflow marketplace info traefik
+# Name: Traefik
+# Type: hybrid
+# Category: access
+# Architectures: amd64, arm64
+# RAM minimum: 128 MB
+# Description: Reverse proxy avec TLS automatique via Let's Encrypt
+# Version: 1.2.0
+# Installed: Yes (running)
 
-# Health checks
-windflow health check --environment <env_id>
-windflow health check --stack <stack_id> --verbose
+# Installer directement depuis la marketplace
+windflow marketplace install nextcloud
 
-# Alertes
-windflow alerts list --severity critical
-windflow alerts ack <alert_id>
+# Rafraîchir le catalogue
+windflow marketplace refresh
 ```
 
-## Architecture des Services CLI
+### Volumes — Gestion des Volumes
 
-### Système de Services Modulaire
+```bash
+# Lister les volumes
+windflow volumes list
+windflow volumes list --target local
 
-```python
-class CLIServiceBase(ABC):
-    """Classe de base pour tous les services CLI."""
-    
-    params_link = {}
-    default_config = {}
-    
-    @abstractmethod
-    def subparser(self, parser):
-        """Configurer le sous-parser pour ce service."""
-        pass
-    
-    @abstractmethod
-    def handle_command(self, args):
-        """Traiter la commande du service."""
-        pass
-    
-    @staticmethod
-    def test_name(name):
-        """Tester si ce service gère ce nom de commande."""
-        return False
+# NAME                    DRIVER  SIZE     USED BY
+# nextcloud_data          local   2.1 GB   nextcloud
+# postgres_data           local   890 MB   postgres-1
+# orphan_volume           local   45 MB    —
 
-class CLIServiceStore:
-    """Store centralisé pour la gestion des services CLI."""
-    
-    def __init__(self):
-        self.services = []
-    
-    def register_service(self, service):
-        """Enregistrer un nouveau service."""
-        self.services.append(service)
-    
-    def find_service(self, command_name):
-        """Trouver le service approprié pour une commande."""
-        for service in self.services:
-            if service.test_name(command_name):
-                return service
-        return None
+# Nettoyer les volumes orphelins
+windflow volumes prune
+# Will remove 1 orphan volume(s) (45 MB). Continue? [y/N]
+
+# Naviguer dans un volume (file browser CLI)
+windflow volumes browse nextcloud_data
+windflow volumes browse nextcloud_data --path /config
+
+# Télécharger un fichier depuis un volume
+windflow volumes download nextcloud_data /config/config.php ./config.php
+
+# Uploader un fichier dans un volume
+windflow volumes upload nextcloud_data ./custom.conf /config/custom.conf
 ```
 
-### Services CLI Intégrés
+### Images — Images Docker
 
-#### AuthService - Gestion de l'Authentification
+```bash
+# Lister les images
+windflow images list
+windflow images list --target local
 
-```python
-class AuthService(CLIServiceBase):
-    commands = ["auth", "login", "logout", "token"]
-    
-    def subparser(self, parser):
-        auth_parser = parser.add_parser('auth', help='Authentication commands')
-        auth_subparsers = auth_parser.add_subparsers(dest='auth_action')
-        
-        # Login avec mot de passe
-        login_parser = auth_subparsers.add_parser('login')
-        login_parser.add_argument('--username', required=True)
-        login_parser.add_argument('--password', required=True)
-        
-        # Login avec API key
-        key_parser = auth_subparsers.add_parser('login-key')
-        key_parser.add_argument('--api-key', required=True)
-        
-        # Status
-        auth_subparsers.add_parser('status')
-        
-        # Logout
-        auth_subparsers.add_parser('logout')
-    
-    def handle_command(self, args):
-        if args.auth_action == 'login':
-            return self.login(args.username, args.password)
-        elif args.auth_action == 'login-key':
-            return self.login_with_key(args.api_key)
-        elif args.auth_action == 'status':
-            return self.show_status()
-        elif args.auth_action == 'logout':
-            return self.logout()
+# Pull une image
+windflow images pull postgres:15
+windflow images pull --target remote-server postgres:15
+
+# Nettoyer les images non utilisées
+windflow images prune
+# Will remove 5 unused image(s) (1.2 GB). Continue? [y/N]
 ```
 
-#### OrganizationService - Gestion des Organisations
+### Organizations & Environments
 
-```python
-class OrganizationService(CLIServiceBase):
-    commands = ["org", "organization", "organizations"]
-    
-    def handle_command(self, args):
-        if args.action == 'list':
-            return self.list_organizations(
-                format=args.format,
-                filter=args.filter
-            )
-        elif args.action == 'create':
-            return self.create_organization(
-                name=args.name,
-                description=args.description,
-                quotas=args.quotas
-            )
-        elif args.action == 'get':
-            return self.get_organization(args.org_id)
-        elif args.action == 'update':
-            return self.update_organization(args.org_id, **args.updates)
-        elif args.action == 'delete':
-            return self.delete_organization(args.org_id, confirm=args.confirm)
+```bash
+# Organisations
+windflow orgs list
+windflow orgs create --name "homelab" --description "Mon homelab"
+
+# Environnements
+windflow envs list --org homelab
+windflow envs create --org homelab --name production --type production
+windflow envs create --org homelab --name dev --type development
 ```
 
-#### DeploymentService - Gestion des Déploiements
+### Admin — Administration
 
-```python
-class DeploymentService(CLIServiceBase):
-    commands = ["deploy", "deployment", "deployments"]
-    
-    def handle_command(self, args):
-        if args.action == 'create':
-            return self.create_deployment(
-                stack=args.stack,
-                environment=args.environment,
-                target=args.target,
-                config=args.config,
-                dry_run=args.dry_run
-            )
-        elif args.action == 'list':
-            return self.list_deployments(
-                environment=args.environment,
-                status=args.status,
-                user=args.user
-            )
-        elif args.action == 'status':
-            return self.get_deployment_status(
-                deployment_id=args.deployment_id,
-                follow=args.follow
-            )
-        elif args.action == 'rollback':
-            return self.rollback_deployment(
-                deployment_id=args.deployment_id,
-                to_version=args.to_version
-            )
+```bash
+# Gestion des utilisateurs
+windflow admin user list
+windflow admin user create --username alice --email alice@example.com --org homelab --role operator
+windflow admin user role --username alice --org homelab --role admin
+windflow admin user remove --username alice --org homelab
+
+# Journal d'audit
+windflow admin audit --last 50
+windflow admin audit --user alice --action "stack.*"
+windflow admin audit --since 2026-04-01
+
+# Backup / Restore
+windflow admin backup --output /backup/windflow-$(date +%Y%m%d).tar.gz
+windflow admin restore --input /backup/windflow-20260401.tar.gz
+
+# Infos système
+windflow admin info
+# WindFlow v1.1.0
+# Mode: standard (PostgreSQL + Redis)
+# Architecture: arm64
+# Uptime: 15 days, 3 hours
+# Plugins: 3 installed, 3 running
+# Targets: 2 (1 online, 1 offline)
 ```
 
-## Interface TUI (Text User Interface)
+---
 
-### Architecture TUI Avancée
+## Interface TUI
 
-WindFlow intègre une interface utilisateur textuelle (TUI) sophistiquée basée sur `curses` et `textual`, offrant une expérience similaire à `cfdisk` pour la gestion visuelle des ressources.
+Le TUI est une interface terminal interactive lancée avec `windflow tui`. Elle offre une vue graphique des ressources avec navigation clavier.
 
-**Composants TUI :**
-- **InteractiveBase** : Classe de base pour toutes les interfaces TUI
-- **ScreenManager** : Gestionnaire d'écrans avec navigation
-- **PanelSystem** : Système de panneaux (liste, détails, actions)
-- **KeyboardHandler** : Gestionnaire de raccourcis clavier
-- **ColorTheme** : Système de thèmes avec support des couleurs
+### Lancement
 
-### Interfaces TUI Disponibles
+```bash
+windflow tui
+```
 
-#### Gestionnaire d'Organisations (`windflow tui orgs`)
+### Écran Principal
 
 ```
-┌─ WindFlow - Organisation Management ──────────────────────┐
-│ ↑/↓: Navigate | Enter: Select | c: Create | d: Delete     │
-├────────────────────────────────┬───────────────────────────┤
-│ Organizations                  │ Organization Details      │
-│ ► Production [org-123]         │ Name: Production          │
-│   Development [org-456]        │ ID: org-123               │
-│   Staging [org-789]            │ Description: Production   │
-│                                │ Environments: 3           │
-│                                │ Users: 15                 │
-│                                │ Created: 2025-01-15       │
-│                                │                           │
-├────────────────────────────────┴───────────────────────────┤
-│ Commands: c=Create | e=Edit | d=Delete | q=Quit | ?=Help   │
+┌─ WindFlow ─────────────────────────────────────────────────┐
+│ Target: local (arm64) | 2 containers running | 1 VM       │
+├──────────────────────────┬─────────────────────────────────┤
+│ Resources                │ Details                         │
+│                          │                                 │
+│ ▸ Containers (2/3)       │ nextcloud                       │
+│   ▸ nextcloud   ● run    │ Image: nextcloud:28             │
+│     postgres-1  ● run    │ Status: running (3 days)        │
+│     old-app     ○ stop   │ Ports: 8080 → 80               │
+│                          │ CPU: 5.2%  RAM: 234 MB          │
+│ ▸ VMs (1/1)              │ Network: windflow-prod          │
+│   ▸ ubuntu-dev  ● run    │                                 │
+│                          │ [s]tart [p]sto[p] [r]estart     │
+│ ▸ Stacks (2)             │ [l]ogs  [t]erminal [i]nspect    │
+│   ▸ web-app    deployed  │                                 │
+│     monitoring stopped   │                                 │
+│                          │                                 │
+├──────────────────────────┴─────────────────────────────────┤
+│ ↑↓ Navigate  Enter Select  t Target  m Marketplace  q Quit │
 └────────────────────────────────────────────────────────────┘
 ```
 
-#### Gestionnaire d'Environnements (`windflow tui envs`)
+### Raccourcis Clavier
 
 ```
-┌─ WindFlow - Environment Management ───────────────────────┐
-│ Org: Production | ↑/↓: Navigate | Enter: Select | c: Create│
-├────────────────────────────────┬───────────────────────────┤
-│ Environments                   │ Environment Details       │
-│ ► staging [env-456]            │ Name: staging             │
-│   production [env-789]         │ ID: env-456               │
-│   testing [env-012]            │ Organization: Production  │
-│                                │ Elements: 12              │
-│                                │ Active Deployments: 8     │
-│                                │ Status: Healthy           │
-│                                │                           │
-├────────────────────────────────┴───────────────────────────┤
-│ Commands: c=Create | e=Edit | d=Delete | s=Switch Org      │
+Navigation :
+  ↑/↓         Naviguer dans la liste
+  ←/→         Changer de panneau
+  Enter       Sélectionner / Développer
+  Esc         Retour / Fermer
+
+Actions :
+  s           Démarrer (container / VM / stack)
+  p           Arrêter
+  r           Redémarrer
+  l           Voir les logs (streaming)
+  t           Terminal interactif
+  i           Inspecter (détails complets)
+  d           Déployer (stack)
+  x           Supprimer
+
+Navigation globale :
+  Tab         Basculer entre Containers / VMs / Stacks
+  t           Changer de target
+  m           Ouvrir la marketplace
+  P           Voir les plugins installés
+  /           Rechercher
+  ?           Aide
+  q           Quitter
+```
+
+### Écran Logs
+
+```
+┌─ Logs: nextcloud ─────────────────────────────────────────┐
+│ 2026-04-01 14:30:01 [INFO] Apache started                  │
+│ 2026-04-01 14:30:02 [INFO] Nextcloud ready                 │
+│ 2026-04-01 14:31:15 [INFO] GET /status.php 200             │
+│ 2026-04-01 14:31:16 [INFO] GET /apps/dashboard/ 200        │
+│ 2026-04-01 14:32:00 [WARN] Slow query detected (2.1s)      │
+│ ▌                                                          │
+├────────────────────────────────────────────────────────────┤
+│ f Follow  /Search  ↑↓ Scroll  Esc Back                     │
 └────────────────────────────────────────────────────────────┘
 ```
 
-#### Gestionnaire de Déploiements (`windflow tui deployments`)
-
-```
-┌─ WindFlow - Deployment Management ────────────────────────┐
-│ Env: staging | Status: ●8 Running ●2 Pending ●1 Failed   │
-├────────────────────────────────┬───────────────────────────┤
-│ Deployments                    │ Deployment Details        │
-│ ► web-app-v1.2.3 [Running]     │ Name: web-app-v1.2.3      │
-│   api-service-v2.1.0 [Running] │ Status: Running           │
-│   redis-cluster [Pending]      │ Target: Docker Swarm      │
-│   monitoring [Failed]          │ Started: 2025-01-15 14:30│
-│                                │ Containers: 3/3 Healthy  │
-│                                │ Resources: CPU 45% RAM 60%│
-│                                │ Logs: [l] View Logs       │
-├────────────────────────────────┴───────────────────────────┤
-│ Commands: s=Start | p=Stop | r=Restart | l=Logs | b=Rollback│
-└────────────────────────────────────────────────────────────┘
-```
-
-### Implémentation TUI avec Textual
+### Implémentation
 
 ```python
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Button, Header, Footer, Static, DataTable
+from textual.containers import Horizontal, Vertical
+from textual.widgets import Header, Footer, Tree, Static, DataTable, Log
 
 class WindFlowTUI(App):
-    """Interface TUI principale de WindFlow."""
-    
-    CSS_PATH = "windflow.css"
+    """Interface TUI principale."""
+
+    CSS_PATH = "windflow.tcss"
     BINDINGS = [
-        ("d", "deploy", "Deploy"),
-        ("r", "refresh", "Refresh"),
-        ("l", "logs", "Logs"),
         ("q", "quit", "Quit"),
-        ("?", "help", "Help")
+        ("t", "change_target", "Target"),
+        ("m", "marketplace", "Marketplace"),
+        ("tab", "cycle_view", "Cycle"),
+        ("/", "search", "Search"),
+        ("?", "help", "Help"),
     ]
-    
+
     def compose(self) -> ComposeResult:
-        yield Header()
-        yield Container(
-            Horizontal(
-                # Panneau gauche - Liste des ressources
-                Vertical(
-                    Static("Deployments", classes="panel-title"),
-                    DataTable(id="deployments"),
-                    classes="panel left-panel"
-                ),
-                # Panneau droit - Détails
-                Vertical(
-                    Static("Details", classes="panel-title"),
-                    Container(id="details-content"),
-                    classes="panel right-panel"
-                ),
-                id="main-container"
-            )
+        yield Header(show_clock=True)
+        yield Horizontal(
+            Vertical(
+                Tree("Resources", id="resource-tree"),
+                id="left-panel",
+            ),
+            Vertical(
+                Static("Select a resource", id="details"),
+                id="right-panel",
+            ),
         )
         yield Footer()
-    
-    async def on_mount(self) -> None:
-        """Initialisation de l'interface."""
-        # Configuration des tables
-        deployments_table = self.query_one("#deployments", DataTable)
-        deployments_table.add_columns("Name", "Status", "Started", "Environment")
-        
-        # Chargement des données initiales
-        await self.refresh_deployments()
-    
-    async def action_deploy(self) -> None:
-        """Action de déploiement."""
-        # Ouvrir un modal de sélection de stack
-        self.push_screen(DeploymentModal())
-    
-    async def action_refresh(self) -> None:
-        """Actualisation des données."""
-        await self.refresh_deployments()
-    
-    async def action_logs(self) -> None:
-        """Affichage des logs."""
-        selected_deployment = self.get_selected_deployment()
-        if selected_deployment:
-            self.push_screen(LogsScreen(selected_deployment['id']))
+
+    async def on_mount(self):
+        tree = self.query_one("#resource-tree", Tree)
+        await self._populate_tree(tree)
+
+    async def _populate_tree(self, tree: Tree):
+        """Charge les containers, VMs et stacks dans l'arbre."""
+        containers = await self.api.get("/containers")
+        vms = await self.api.get("/vms")
+        stacks = await self.api.get("/stacks")
+
+        c_node = tree.root.add("Containers", expand=True)
+        for c in containers:
+            status = "●" if c["status"] == "running" else "○"
+            c_node.add_leaf(f"{status} {c['name']}", data={"type": "container", "id": c["id"]})
+
+        v_node = tree.root.add("VMs", expand=True)
+        for v in vms:
+            status = "●" if v["status"] == "running" else "○"
+            v_node.add_leaf(f"{status} {v['name']}", data={"type": "vm", "id": v["id"]})
+
+        s_node = tree.root.add("Stacks", expand=True)
+        for s in stacks:
+            s_node.add_leaf(f"{s['name']} [{s['status']}]", data={"type": "stack", "id": s["id"]})
 ```
 
-### Fonctionnalités TUI Avancées
+---
 
-#### Navigation et Interaction
+## Configuration CLI
 
-- **Navigation fluide** avec les flèches directionnelles
-- **Recherche instantanée** avec `/` + terme de recherche
-- **Filtrage rapide** par statut, type, ou tag
-- **Sélection multiple** avec `Espace` + actions groupées
-- **Modes d'affichage** (liste, grille, arbre)
-
-#### Messages et Notifications
-
-```python
-class NotificationSystem:
-    """Système de notifications pour TUI."""
-    
-    def __init__(self, app):
-        self.app = app
-        
-    def show_info(self, message: str):
-        """Affichage d'une notification d'information."""
-        self.app.notify(message, severity="information")
-    
-    def show_success(self, message: str):
-        """Affichage d'une notification de succès.""" 
-        self.app.notify(message, severity="success")
-    
-    def show_error(self, message: str):
-        """Affichage d'une notification d'erreur."""
-        self.app.notify(message, severity="error")
-    
-    def show_progress(self, task_name: str, total: int):
-        """Affichage d'une barre de progression."""
-        return self.app.progress_bar(task_name, total)
-```
-
-#### Raccourcis Clavier Globaux
-
-```
-Navigation:
-  ↑/↓       - Navigation verticale
-  ←/→       - Navigation horizontale/changement de panneau
-  Page Up/Dn - Navigation rapide
-  Home/End   - Début/fin de liste
-  /          - Recherche
-  Esc        - Annuler/retour
-
-Actions:
-  Enter      - Sélectionner/activer
-  Espace     - Sélection multiple
-  c          - Créer nouvel élément
-  e          - Éditer élément sélectionné
-  d          - Supprimer élément sélectionné
-  r          - Rafraîchir les données
-  
-Système:
-  ?          - Aide contextuelle
-  q          - Quitter l'interface
-  F1-F12     - Actions spécialisées selon le contexte
-```
-
-## Configuration et Extensibilité
-
-### Configuration Hiérarchique
-
-```python
-# Ordre de priorité (le plus haut l'emporte)
-configuration_sources = [
-    "default_values",           # 1. Valeurs par défaut dans le code
-    "config_file",             # 2. Fichier de configuration ~/.windflow/config.yaml
-    "environment_variables",    # 3. Variables d'environnement WINDFLOW_*
-    "dotenv_file",             # 4. Fichier .env dans le répertoire courant
-    "command_line_arguments"    # 5. Arguments de ligne de commande (priorité maximale)
-]
-```
-
-#### Variables d'Environnement Supportées
-
-```bash
-export WINDFLOW_API_URL="https://api.windflow.local"
-export WINDFLOW_SERVER_NAME="windflow.local"
-export WINDFLOW_SERVER_PORT="8080"
-export WINDFLOW_USERNAME="admin"
-export WINDFLOW_PASSWORD="secret"
-export WINDFLOW_API_KEY="sk-xxx"
-export WINDFLOW_ORG_ID="org-123"
-export WINDFLOW_ENV_ID="env-456"
-export WINDFLOW_OUTPUT_FORMAT="json"
-export WINDFLOW_DEFAULT_TARGET="docker"
-```
-
-#### Fichier de Configuration
+### Fichier de Configuration
 
 ```yaml
-# ~/.windflow/config.yaml
-api:
-  url: "https://api.windflow.local"
-  timeout: 30
-  retries: 3
-
-auth:
-  method: "interactive"  # interactive, api_key, sso
-  auto_refresh: true
-  store_tokens: true
-
-defaults:
-  organization: "production-org"
-  environment: "staging"
-  target: "docker"
-  output_format: "table"
-
-services:
-  deployment:
-    default_target: "docker"
-    backup_before_deploy: true
-    auto_rollback_on_failure: true
-    
-  monitoring:
-    auto_start_logs: true
-    log_level: "info"
-    refresh_interval: 5
-
-plugins:
-  enabled:
-    - "aws-integration"
-    - "slack-notifications"
-  disabled:
-    - "azure-integration"
-
-ui:
-  theme: "dark"
-  show_help_hints: true
-  page_size: 20
+# ~/.windflow/config.yml
+url: "http://192.168.1.50:8080"    # URL de l'instance WindFlow
+output: table                       # table, json, yaml
+color: true                         # Activer les couleurs
+pager: true                         # Utiliser un pager pour les longues sorties
 ```
 
-### Plugin System
-
-```python
-# Plugin personnalisé
-class CustomStackService(CLIServiceBase):
-    commands = ["custom-stack"]
-    
-    def subparser(self, parser):
-        custom_parser = parser.add_parser('custom-stack')
-        custom_parser.add_argument('--template', choices=['lamp', 'mean', 'django'])
-        
-    def handle_command(self, args):
-        return self.deploy_custom_stack(args.template)
-
-# Enregistrement automatique
-windflow.register_plugin(CustomStackService)
-```
-
-### Auto-complétion
+### Variables d'Environnement
 
 ```bash
-# Installation de l'auto-complétion pour bash
-windflow completion bash > /etc/bash_completion.d/windflow
+export WINDFLOW_URL="http://192.168.1.50:8080"
+export WINDFLOW_API_KEY="wf_ak_a1b2c3d4..."    # Auth par API key
+export WINDFLOW_OUTPUT="json"                    # Format de sortie
+```
 
-# Installation pour zsh
-windflow completion zsh > ~/.zsh/completions/_windflow
+Les variables d'environnement ont priorité sur le fichier de configuration. Les arguments CLI ont priorité sur tout.
 
-# Installation pour fish
-windflow completion fish > ~/.config/fish/completions/windflow.fish
+### Auto-Complétion
+
+```bash
+# Bash
+windflow --install-completion bash
+
+# Zsh
+windflow --install-completion zsh
+
+# Fish
+windflow --install-completion fish
+```
+
+### Format de Sortie
+
+```bash
+# Tableau (défaut, lisible)
+windflow containers list
+
+# JSON (pour scripts et automatisation)
+windflow containers list --output json
+
+# YAML
+windflow containers list --output yaml
+
+# Juste les noms (pour piping)
+windflow containers list --quiet
+# nextcloud
+# postgres-1
+# redis
+
+# Utilisation dans un script
+for c in $(windflow containers list --quiet --status stopped); do
+    windflow containers rm "$c"
+done
 ```
 
 ---
 
 **Références :**
-- [Vue d'Ensemble](01-overview.md) - Contexte du projet
-- [Authentification](05-authentication.md) - Système d'authentification
-- [API Design](07-api-design.md) - APIs utilisées par CLI
-- [Fonctionnalités Principales](10-core-features.md) - Fonctionnalités accessibles via CLI
-- [Guide de Déploiement](15-deployment-guide.md) - Installation et configuration
+- [API Design](07-api-design.md) — API consommée par la CLI
+- [Authentification](05-authentication.md) — Auth CLI et API keys
+- [Fonctionnalités Principales](10-core-features.md) — Fonctionnalités accessibles via CLI
+- [Guide de Déploiement](15-deployment-guide.md) — Installation

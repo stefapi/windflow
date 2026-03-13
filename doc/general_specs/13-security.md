@@ -2,480 +2,306 @@
 
 ## Vue d'Ensemble
 
-WindFlow adopte une approche "security-first" avec des mesures de sécurité intégrées à tous les niveaux de l'architecture, suivant les standards de l'industrie et les meilleures pratiques DevSecOps.
+WindFlow adopte une approche de sécurité pragmatique adaptée au self-hosting : protéger efficacement une petite infrastructure sans imposer une usine à gaz enterprise. Les mesures de sécurité fondamentales sont dans le core. Les fonctionnalités avancées (vulnerability scanning, 2FA, SSO, secrets management avancé) sont des plugins.
 
-### Modèle de Sécurité
+### Principes
 
-**Principes Fondamentaux :**
-- **Zero Trust Architecture** : Vérification continue de tous les accès
-- **Defense in Depth** : Multiples couches de sécurité
-- **Least Privilege** : Accès minimal nécessaire par défaut
-- **Security by Design** : Sécurité intégrée dès la conception
-- **Audit Trail** : Traçabilité complète de toutes les actions
+- **Sécurisé par défaut** : Les secrets sont chiffrés, les mots de passe hashés, les tokens expirent, le rate limiting est actif — sans configuration supplémentaire.
+- **Moindre privilège** : Le rôle par défaut est Viewer (lecture seule). Les permissions s'ajoutent explicitement.
+- **Audit trail** : Toutes les actions modifiantes sont loggées avec l'utilisateur, l'IP, et l'horodatage.
+- **Core vs Plugin** : Les mesures essentielles sont dans le core. Les mesures avancées sont des plugins installables.
 
-## Authentification et Autorisation
+### Ce qui est Core vs Plugin
 
-### Authentification Multi-Facteur
+| Core (toujours actif) | Plugin (optionnel) |
+|---|---|
+| Hashage bcrypt des mots de passe | Vulnerability scanning (Trivy) |
+| Chiffrement AES-256 des secrets en base | Secrets management avancé (Vault) |
+| JWT avec expiration + refresh tokens | SSO / LDAP / 2FA (Keycloak) |
+| RBAC (4 rôles) | 2FA devant les services exposés (Authelia) |
+| Rate limiting sur login | Scanner de configuration |
+| Audit trail en base | Alerting multi-canal |
+| Protection du Docker socket via RBAC | |
+
+---
+
+## Chiffrement des Secrets
+
+### Secrets en Base de Données
+
+Toutes les données sensibles stockées en base (mots de passe de services, tokens, clés SSH des targets, variables d'environnement des stacks) sont chiffrées avec AES-256 via Fernet. La clé de chiffrement est dérivée du `SECRET_KEY` de l'instance.
 
 ```python
-class MFAService:
-    """Service d'authentification multi-facteur."""
-    
-    async def setup_totp(self, user_id: str) -> TOTPSetup:
-        """Configuration TOTP pour un utilisateur."""
-        secret = pyotp.random_base32()
-        
-        # Stockage temporaire chiffré
-        await self.vault.store_temp_secret(user_id, secret)
-        
-        # Génération QR code
-        totp = pyotp.TOTP(secret)
-        qr_uri = totp.provisioning_uri(
-            name=f"{user_id}@windflow",
-            issuer_name="WindFlow"
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
+import base64
+
+class SecretManager:
+    """Chiffrement des données sensibles en base."""
+
+    def __init__(self, master_key: str):
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=b"windflow-secrets-v1",
+            iterations=480000,
         )
-        
-        return TOTPSetup(
-            secret=secret,
-            qr_code=qrcode.make(qr_uri),
-            backup_codes=self._generate_backup_codes(user_id)
-        )
-    
-    async def verify_totp(self, user_id: str, token: str) -> bool:
-        """Vérification du token TOTP."""
-        secret = await self.vault.get_totp_secret(user_id)
-        totp = pyotp.TOTP(secret)
-        
-        # Vérification avec fenêtre de tolérance
-        return totp.verify(token, valid_window=2)
+        key = base64.urlsafe_b64encode(kdf.derive(master_key.encode()))
+        self.fernet = Fernet(key)
+
+    def encrypt(self, plaintext: str) -> str:
+        """Chiffre une valeur avant stockage en base."""
+        return self.fernet.encrypt(plaintext.encode()).decode()
+
+    def decrypt(self, ciphertext: str) -> str:
+        """Déchiffre une valeur lue depuis la base."""
+        return self.fernet.decrypt(ciphertext.encode()).decode()
 ```
 
-### Gestion des Sessions Sécurisées
+**Ce qui est chiffré :**
+- `stacks.env_vars_encrypted` : variables d'environnement sensibles des stacks
+- `targets.connection_config` : clés SSH, tokens Proxmox
+- `plugin_configs.value` (quand `encrypted=true`) : configurations sensibles des plugins (clés API, mots de passe)
+- `api_keys.key_hash` : hashé avec bcrypt (pas chiffré — on ne peut pas retrouver la clé)
 
-```python
-class SecureSessionManager:
-    """Gestionnaire de sessions sécurisées."""
-    
-    def __init__(self, redis: Redis, encryption_key: bytes):
-        self.redis = redis
-        self.fernet = Fernet(encryption_key)
-        
-    async def create_session(self, user: User, device_info: DeviceInfo) -> Session:
-        """Création d'une session sécurisée."""
-        
-        session_id = secrets.token_urlsafe(32)
-        
-        session_data = {
-            "user_id": user.id,
-            "created_at": datetime.utcnow().isoformat(),
-            "last_activity": datetime.utcnow().isoformat(),
-            "device_fingerprint": self._generate_device_fingerprint(device_info),
-            "ip_address": device_info.ip_address,
-            "user_agent": device_info.user_agent,
-            "permissions": await self._get_user_permissions(user),
-            "session_type": "web"  # web, api, cli
-        }
-        
-        # Chiffrement des données de session
-        encrypted_data = self.fernet.encrypt(json.dumps(session_data).encode())
-        
-        # Stockage avec TTL
-        await self.redis.setex(
-            f"session:{session_id}",
-            3600,  # 1 heure
-            encrypted_data
-        )
-        
-        return Session(id=session_id, expires_at=datetime.utcnow() + timedelta(hours=1))
-    
-    async def validate_session(self, session_id: str, device_info: DeviceInfo) -> Optional[User]:
-        """Validation d'une session avec détection d'anomalies."""
-        
-        encrypted_data = await self.redis.get(f"session:{session_id}")
-        if not encrypted_data:
-            return None
-        
-        try:
-            session_data = json.loads(self.fernet.decrypt(encrypted_data).decode())
-        except InvalidToken:
-            return None
-        
-        # Vérification du device fingerprint
-        if session_data["device_fingerprint"] != self._generate_device_fingerprint(device_info):
-            await self._log_security_event("session_hijack_attempt", session_data)
-            await self.revoke_session(session_id)
-            return None
-        
-        # Mise à jour de la dernière activité
-        session_data["last_activity"] = datetime.utcnow().isoformat()
-        encrypted_data = self.fernet.encrypt(json.dumps(session_data).encode())
-        await self.redis.setex(f"session:{session_id}", 3600, encrypted_data)
-        
-        return await self.db.get_user_by_id(session_data["user_id"])
+### Protection du SECRET_KEY
+
+Le `SECRET_KEY` est la clé maître de l'instance. Sa compromission compromet tous les secrets et tous les JWT.
+
+**Recommandations :**
+- Généré automatiquement par `install.sh` (64 caractères hex aléatoires)
+- Stocké dans le fichier `.env` avec permissions `600`
+- Ne jamais le commiter dans un dépôt Git
+- Si compromis : changer le `SECRET_KEY`, re-chiffrer tous les secrets, invalider tous les tokens
+
+### Secrets Avancés (Plugin Vault)
+
+Pour les besoins avancés (rotation automatique, secrets dynamiques par service, audit des accès aux secrets), le plugin HashiCorp Vault est disponible. Il remplace le `SecretManager` natif par une intégration Vault complète.
+
+---
+
+## Authentification
+
+Détaillé dans [05-authentication.md](05-authentication.md). Résumé des mesures de sécurité :
+
+- **Hashage bcrypt** : Mots de passe hashés avec bcrypt (cost factor 12)
+- **JWT signé HS256** : Access tokens de 30 minutes, signés avec le SECRET_KEY
+- **Refresh tokens opaques** : Stockés hashés en base, 7 jours de validité
+- **Rate limiting** : 5 tentatives de login par minute par IP, puis blocage 5 minutes
+- **API keys** : Préfixées `wf_ak_`, hashées en base, expiration configurable
+
+---
+
+## RBAC
+
+Détaillé dans [06-rbac-permissions.md](06-rbac-permissions.md). Résumé :
+
+4 rôles hiérarchiques : **Viewer** (lecture seule) → **Operator** (actions opérationnelles) → **Admin** (gestion complète) → **Super Admin** (accès total). Permissions vérifiées sur chaque endpoint API et chaque action WebSocket.
+
+---
+
+## Sécurité du Docker Socket
+
+Le Docker socket (`/var/run/docker.sock`) est le point de sécurité le plus critique de WindFlow. Quiconque a accès au socket Docker a un accès root de facto sur la machine hôte.
+
+### Mesures de Protection
+
+**Accès exclusif via WindFlow** : Seuls les containers `windflow-api` et `windflow-worker` montent le Docker socket. Les containers déployés par les utilisateurs n'y ont jamais accès.
+
+**RBAC sur les opérations Docker** : Les appels à l'API Docker passent toujours par l'API WindFlow, qui vérifie les permissions RBAC avant d'exécuter. Un Viewer ne peut pas démarrer un container, même s'il connaît l'API Docker.
+
+**Pas d'exposition réseau** : Le Docker socket n'est jamais exposé sur le réseau (pas de Docker API en TCP). Les machines distantes sont gérées via SSH.
+
+```yaml
+# docker-compose.yml — seuls les services core montent le socket
+services:
+  windflow-api:
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Lecture seule quand possible
+  windflow-worker:
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 ```
 
-## Chiffrement et Protection des Données
+### Risques Résiduels
 
-### Chiffrement End-to-End
+- Un plugin **extension** (qui s'exécute dans le process core) a théoriquement accès au Docker SDK. C'est pourquoi seuls les plugins de confiance (officiels ou audités) devraient être installés.
+- Un plugin **service** (qui tourne dans son propre container) n'a pas accès au socket, sauf s'il le demande explicitement dans son manifest — ce qui devrait déclencher un avertissement dans la marketplace.
+
+---
+
+## Sécurité Réseau
+
+### Isolation par Environnement
+
+Chaque environnement (dev, staging, prod) peut avoir son propre network Docker. Les containers d'un environnement ne voient pas ceux des autres par défaut.
 
 ```python
-class EncryptionService:
-    """Service de chiffrement pour données sensibles."""
-    
-    def __init__(self, master_key: bytes):
-        self.master_key = master_key
-        
-    def encrypt_sensitive_data(self, data: str, context: str = None) -> EncryptedData:
-        """Chiffrement AES-256-GCM avec contexte."""
-        
-        # Génération clé dérivée par contexte
-        salt = os.urandom(16)
-        key = self._derive_key(self.master_key, salt, context)
-        
-        # Chiffrement AES-GCM
-        iv = os.urandom(12)
-        cipher = Cipher(algorithms.AES(key), modes.GCM(iv))
-        encryptor = cipher.encryptor()
-        
-        if context:
-            encryptor.authenticate_additional_data(context.encode())
-        
-        ciphertext = encryptor.update(data.encode()) + encryptor.finalize()
-        
-        return EncryptedData(
-            ciphertext=ciphertext,
-            iv=iv,
-            salt=salt,
-            tag=encryptor.tag,
-            context=context
-        )
-    
-    def decrypt_sensitive_data(self, encrypted_data: EncryptedData) -> str:
-        """Déchiffrement avec vérification d'intégrité."""
-        
-        # Régénération de la clé
-        key = self._derive_key(self.master_key, encrypted_data.salt, encrypted_data.context)
-        
-        # Déchiffrement AES-GCM
-        cipher = Cipher(algorithms.AES(key), modes.GCM(encrypted_data.iv, encrypted_data.tag))
-        decryptor = cipher.decryptor()
-        
-        if encrypted_data.context:
-            decryptor.authenticate_additional_data(encrypted_data.context.encode())
-        
-        plaintext = decryptor.update(encrypted_data.ciphertext) + decryptor.finalize()
-        
-        return plaintext.decode()
+# Réseau isolé par environnement
+network_name = f"windflow-{org_name}-{env_name}"
+docker_client.networks.create(
+    name=network_name,
+    driver="bridge",
+    internal=False,  # True pour bloquer l'accès Internet
+)
 ```
 
-### Protection des Secrets avec Vault
+### Ports Exposés
+
+WindFlow expose par défaut :
+- Port **80** : Frontend (Nginx)
+- Port **8080** : API (FastAPI)
+
+Recommandations :
+- En production, placer WindFlow derrière un reverse proxy (plugin Traefik ou Caddy) pour le HTTPS
+- Ne pas exposer le port 8080 directement sur Internet — le reverse proxy doit gérer le routage
+
+### Machines Distantes (SSH)
+
+Les connexions aux targets distants utilisent SSH avec authentification par clé. Les clés sont stockées chiffrées en base.
 
 ```python
-class VaultSecurityService:
-    """Interface sécurisée avec HashiCorp Vault."""
-    
-    def __init__(self, vault_client: hvac.Client):
-        self.vault = vault_client
-        
-    async def store_deployment_secrets(self, deployment_id: str, secrets: Dict[str, str]):
-        """Stockage sécurisé des secrets de déploiement."""
-        
-        # Chiffrement supplémentaire avant stockage
-        encrypted_secrets = {}
-        for key, value in secrets.items():
-            encrypted_secrets[key] = self.encrypt_sensitive_data(value, f"deployment:{deployment_id}")
-        
-        # Stockage dans Vault avec TTL
-        await self.vault.secrets.kv.v2.create_or_update_secret(
-            path=f"deployments/{deployment_id}",
-            secret=encrypted_secrets,
-            metadata={
-                "created_by": "windflow",
-                "deployment_id": deployment_id,
-                "expires_at": (datetime.utcnow() + timedelta(days=30)).isoformat()
-            }
-        )
-    
-    async def rotate_secrets(self, deployment_id: str):
-        """Rotation automatique des secrets."""
-        
-        # Génération de nouveaux secrets
-        new_secrets = await self._generate_new_secrets(deployment_id)
-        
-        # Déploiement des nouveaux secrets
-        await self._deploy_new_secrets(deployment_id, new_secrets)
-        
-        # Validation du déploiement
-        if await self._validate_new_secrets(deployment_id):
-            # Suppression des anciens secrets
-            await self._cleanup_old_secrets(deployment_id)
-        else:
-            # Rollback en cas d'échec
-            await self._rollback_secrets(deployment_id)
+# Connexion SSH sécurisée
+async def connect_to_target(target: Target) -> SSHConnection:
+    key_data = secret_manager.decrypt(target.connection_config["ssh_key"])
+    pkey = paramiko.RSAKey.from_private_key(StringIO(key_data))
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())  # Pas d'auto-accept
+    client.connect(
+        hostname=target.host,
+        username=target.connection_config.get("username", "deploy"),
+        pkey=pkey,
+        timeout=10,
+    )
+    return client
 ```
 
-## Sécurité des Déploiements
+**Recommandation** : Créer un utilisateur dédié (`deploy`) sur les machines distantes avec uniquement les permissions nécessaires (Docker, libvirt selon les besoins). Ne pas utiliser root.
 
-### Scan de Vulnérabilités
+---
 
-```python
-class VulnerabilityScanner:
-    """Scanner de vulnérabilités pour images et configurations."""
-    
-    def __init__(self):
-        self.scanners = {
-            "trivy": TrivyScanner(),
-            "grype": GrypeScanner(),
-            "clair": ClairScanner()
-        }
-        
-    async def scan_container_image(self, image: str) -> ScanResult:
-        """Scan de vulnérabilités d'une image container."""
-        
-        results = []
-        
-        for scanner_name, scanner in self.scanners.items():
-            try:
-                result = await scanner.scan_image(image)
-                results.append(result)
-            except Exception as e:
-                logger.error(f"Scanner {scanner_name} failed: {e}")
-        
-        # Agrégation des résultats
-        aggregated_result = self._aggregate_scan_results(results)
-        
-        # Vérification des seuils de sécurité
-        if aggregated_result.critical_count > 0:
-            aggregated_result.deployment_allowed = False
-            aggregated_result.block_reason = "Critical vulnerabilities found"
-        elif aggregated_result.high_count > 10:
-            aggregated_result.deployment_allowed = False
-            aggregated_result.block_reason = "Too many high severity vulnerabilities"
-        
-        return aggregated_result
-    
-    async def scan_configuration(self, config: Dict) -> ConfigScanResult:
-        """Scan de sécurité d'une configuration de déploiement."""
-        
-        security_issues = []
-        
-        # Vérification des bonnes pratiques
-        security_issues.extend(await self._check_security_policies(config))
-        security_issues.extend(await self._check_network_policies(config))
-        security_issues.extend(await self._check_resource_limits(config))
-        security_issues.extend(await self._check_secret_management(config))
-        
-        return ConfigScanResult(
-            issues=security_issues,
-            compliance_score=self._calculate_compliance_score(security_issues)
-        )
+## Audit Trail
+
+### Ce qui est Loggé
+
+Toute action modifiante est enregistrée dans la table `audit_logs` :
+
+| Action | Détails loggés |
+|--------|----------------|
+| `user.login` | Username, IP, succès/échec |
+| `user.login_failed` | Username, IP, raison |
+| `user.created` | Username, email, rôle, par qui |
+| `user.role_changed` | Username, ancien rôle, nouveau rôle, par qui |
+| `stack.deployed` | Stack name, target, par qui |
+| `stack.rollback` | Stack name, version source → cible, par qui |
+| `container.started` | Container name, target, par qui |
+| `container.stopped` | Container name, target, par qui |
+| `vm.created` | VM name, specs, target, par qui |
+| `vm.snapshot` | VM name, snapshot name, par qui |
+| `plugin.installed` | Plugin name, version, par qui |
+| `plugin.removed` | Plugin name, par qui |
+| `target.added` | Target name, type, host, par qui |
+| `target.removed` | Target name, par qui |
+| `settings.changed` | Setting key, ancienne/nouvelle valeur, par qui |
+
+### Consultation
+
+```bash
+# Via CLI
+windflow admin audit --last 50
+windflow admin audit --user alice --action "stack.*"
+windflow admin audit --since 2026-04-01
+
+# Via API
+GET /api/v1/admin/audit?user_id=...&action=stack.deployed&since=2026-04-01
 ```
 
-### Isolation et Sandboxing
+### Rétention
 
-```python
-class DeploymentIsolation:
-    """Service d'isolation des déploiements."""
-    
-    async def create_isolated_environment(self, deployment: Deployment) -> IsolatedEnvironment:
-        """Création d'un environnement isolé pour déploiement."""
-        
-        # Création du namespace Kubernetes dédié
-        namespace = await self._create_kubernetes_namespace(deployment)
-        
-        # Application des NetworkPolicies
-        network_policies = await self._create_network_policies(deployment, namespace)
-        
-        # Configuration des PodSecurityPolicies
-        security_policies = await self._create_security_policies(deployment, namespace)
-        
-        # Limitation des ressources
-        resource_quotas = await self._create_resource_quotas(deployment, namespace)
-        
-        return IsolatedEnvironment(
-            namespace=namespace,
-            network_policies=network_policies,
-            security_policies=security_policies,
-            resource_quotas=resource_quotas
-        )
-    
-    async def _create_network_policies(self, deployment: Deployment, namespace: str) -> List[NetworkPolicy]:
-        """Création de politiques réseau restrictives."""
-        
-        policies = []
-        
-        # Politique de déni par défaut
-        default_deny = NetworkPolicy(
-            metadata={"name": "default-deny", "namespace": namespace},
-            spec={
-                "podSelector": {},
-                "policyTypes": ["Ingress", "Egress"]
-            }
-        )
-        policies.append(default_deny)
-        
-        # Politiques d'autorisation spécifiques
-        for service in deployment.services:
-            if service.network_access:
-                service_policy = await self._create_service_network_policy(service, namespace)
-                policies.append(service_policy)
-        
-        return policies
-```
+Les logs d'audit sont conservés indéfiniment en base par défaut. Sur les installations avec peu d'espace disque (RPi), une politique de rétention peut être configurée :
 
-## Audit et Monitoring de Sécurité
-
-### Logging de Sécurité
-
-```python
-class SecurityAuditLogger:
-    """Logger spécialisé pour les événements de sécurité."""
-    
-    def __init__(self, elasticsearch_client):
-        self.es = elasticsearch_client
-        
-    async def log_security_event(self, event_type: str, user_id: str, details: Dict):
-        """Logging structuré des événements de sécurité."""
-        
-        event = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "event_type": event_type,
-            "user_id": user_id,
-            "ip_address": self._get_client_ip(),
-            "user_agent": self._get_user_agent(),
-            "session_id": self._get_session_id(),
-            "details": details,
-            "severity": self._calculate_severity(event_type),
-            "tags": ["security", "audit", event_type]
-        }
-        
-        # Indexation dans Elasticsearch
-        await self.es.index(
-            index=f"windflow-security-{datetime.utcnow().strftime('%Y-%m')}",
-            body=event
-        )
-        
-        # Alerting si événement critique
-        if event["severity"] == "critical":
-            await self._trigger_security_alert(event)
-    
-    async def _trigger_security_alert(self, event: Dict):
-        """Déclenchement d'alertes de sécurité."""
-        
-        alert_channels = ["email", "slack", "webhook"]
-        
-        for channel in alert_channels:
-            try:
-                await self._send_alert(channel, event)
-            except Exception as e:
-                logger.error(f"Failed to send alert via {channel}: {e}")
-```
-
-### Détection d'Anomalies
-
-```python
-class SecurityAnomalyDetector:
-    """Détecteur d'anomalies de sécurité basé sur ML."""
-    
-    def __init__(self):
-        self.models = {
-            "login_anomaly": IsolationForest(),
-            "api_usage_anomaly": OneClassSVM(),
-            "deployment_anomaly": LocalOutlierFactor()
-        }
-        
-    async def detect_login_anomalies(self, user_id: str, login_data: Dict) -> AnomalyResult:
-        """Détection d'anomalies dans les patterns de login."""
-        
-        # Extraction des features
-        features = self._extract_login_features(login_data)
-        
-        # Prédiction d'anomalie
-        anomaly_score = self.models["login_anomaly"].decision_function([features])[0]
-        is_anomaly = self.models["login_anomaly"].predict([features])[0] == -1
-        
-        if is_anomaly:
-            # Logging de l'anomalie
-            await self.security_logger.log_security_event(
-                "login_anomaly_detected",
-                user_id,
-                {
-                    "anomaly_score": float(anomaly_score),
-                    "features": features,
-                    "risk_level": self._calculate_risk_level(anomaly_score)
-                }
-            )
-        
-        return AnomalyResult(
-            is_anomaly=is_anomaly,
-            confidence=abs(anomaly_score),
-            risk_level=self._calculate_risk_level(anomaly_score)
-        )
-```
-
-## Compliance et Gouvernance
-
-### Conformité Réglementaire
-
-```python
-class ComplianceManager:
-    """Gestionnaire de conformité réglementaire."""
-    
-    def __init__(self):
-        self.compliance_frameworks = {
-            "SOC2": SOC2Compliance(),
-            "GDPR": GDPRCompliance(),
-            "HIPAA": HIPAACompliance(),
-            "PCI_DSS": PCIDSSCompliance()
-        }
-        
-    async def validate_compliance(self, deployment: Deployment) -> ComplianceReport:
-        """Validation de conformité avant déploiement."""
-        
-        results = {}
-        
-        for framework_name, framework in self.compliance_frameworks.items():
-            if framework.is_applicable(deployment):
-                result = await framework.validate(deployment)
-                results[framework_name] = result
-        
-        return ComplianceReport(
-            framework_results=results,
-            overall_compliance=all(r.is_compliant for r in results.values()),
-            recommendations=self._generate_compliance_recommendations(results)
-        )
-    
-class GDPRCompliance:
-    """Vérification de conformité GDPR."""
-    
-    async def validate(self, deployment: Deployment) -> ComplianceResult:
-        """Validation GDPR d'un déploiement."""
-        
-        issues = []
-        
-        # Vérification du traitement des données personnelles
-        if deployment.processes_personal_data:
-            if not deployment.has_data_protection_measures:
-                issues.append("Missing data protection measures")
-            
-            if not deployment.has_consent_management:
-                issues.append("Missing consent management")
-            
-            if not deployment.has_data_retention_policy:
-                issues.append("Missing data retention policy")
-        
-        return ComplianceResult(
-            is_compliant=len(issues) == 0,
-            issues=issues,
-            framework="GDPR"
-        )
+```bash
+# Garder uniquement les 90 derniers jours
+AUDIT_RETENTION_DAYS=90
 ```
 
 ---
 
+## Sécurité des Plugins
+
+### Niveaux de Confiance
+
+| Type | Confiance requise | Risque |
+|------|-------------------|--------|
+| **Service plugin** | Faible — tourne dans son propre container isolé | Limité au container |
+| **Extension plugin** | Élevée — s'exécute dans le process core | Accès au Docker SDK et à la base |
+| **Hybrid plugin** | Élevée (partie extension) | Accès au process core |
+
+### Vérifications à l'Installation
+
+- **Checksum SHA-256** : Le package est vérifié contre le registre
+- **Signature** (futur) : Les plugins officiels seront signés
+- **Avertissements** : L'UI affiche un avertissement si un plugin demande l'accès au Docker socket ou à des ressources sensibles
+
+### Recommandations
+
+- N'installer que des plugins **officiels** ou provenant de sources de confiance
+- Les plugins communautaires non audités ne devraient pas être installés sur des instances en production
+- Vérifier les permissions demandées par un plugin avant installation (affichées dans la fiche marketplace)
+
+---
+
+## Sécurité via Plugins (optionnel)
+
+### Plugin Trivy — Vulnerability Scanning
+
+Scan des images Docker avant et après déploiement. Affiche un dashboard de vulnérabilités triées par sévérité. Peut bloquer le déploiement si des vulnérabilités critiques sont trouvées.
+
+### Plugin Authelia — 2FA pour les Services
+
+Ajoute une authentification 2FA (TOTP, WebAuthn) devant les services exposés via le reverse proxy. Complémentaire au plugin Traefik.
+
+### Plugin Vault — Secrets Management Avancé
+
+HashiCorp Vault pour la rotation automatique, les secrets dynamiques, et l'audit des accès aux secrets. Remplace le `SecretManager` natif.
+
+### Plugin Keycloak — SSO et 2FA
+
+SSO complet avec LDAP/AD, OIDC, SAML. Ajoute le 2FA (TOTP, WebAuthn) sur le login WindFlow lui-même.
+
+---
+
+## Checklist de Sécurité
+
+### À l'Installation
+
+- [ ] `SECRET_KEY` généré aléatoirement (fait automatiquement par `install.sh`)
+- [ ] Fichier `.env` en permissions `600`
+- [ ] Mot de passe admin suffisamment fort
+- [ ] WindFlow pas accessible directement sur Internet sans reverse proxy HTTPS
+
+### En Production
+
+- [ ] Reverse proxy avec HTTPS (plugin Traefik ou Caddy)
+- [ ] Utilisateurs avec le rôle minimum nécessaire
+- [ ] Machines distantes avec un utilisateur SSH dédié (pas root)
+- [ ] Backups réguliers (plugin Restic ou manuel)
+- [ ] Mise à jour régulière de WindFlow et des plugins
+- [ ] Plugin Trivy installé pour scanner les images
+
+### Optionnel mais Recommandé
+
+- [ ] Plugin Authelia pour 2FA devant les services exposés
+- [ ] Plugin Keycloak si plusieurs utilisateurs (SSO + 2FA sur le login)
+- [ ] Plugin Vault si secrets sensibles avec rotation nécessaire
+- [ ] Audit trail consulté régulièrement
+
+---
+
 **Références :**
-- [Vue d'Ensemble](01-overview.md) - Contexte du projet
-- [Architecture](02-architecture.md) - Architecture sécurisée
-- [Authentification](05-authentication.md) - Système d'authentification
-- [RBAC](06-rbac-permissions.md) - Contrôle d'accès
-- [API Design](07-api-design.md) - Sécurité des APIs
+- [Authentification](05-authentication.md) — JWT, API keys, brute-force protection
+- [RBAC et Permissions](06-rbac-permissions.md) — Rôles et matrice de permissions
+- [Architecture](02-architecture.md) — Architecture de sécurité
+- [Guide de Déploiement](15-deployment-guide.md) — Installation sécurisée
+- [Plugins](09-plugins.md) — Plugins de sécurité (Trivy, Authelia, Vault, Keycloak)

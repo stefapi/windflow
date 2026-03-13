@@ -2,853 +2,614 @@
 
 ## Vue d'Ensemble
 
-Le modèle de données de WindFlow est conçu pour supporter une architecture multi-tenant flexible avec des relations complexes entre les entités de déploiement, d'infrastructure et de gestion des utilisateurs.
+Le modèle de données de WindFlow est conçu pour être simple, adapté au self-hosting, et compatible avec les deux backends de base de données : PostgreSQL (mode standard) et SQLite (mode léger).
 
 ### Principes de Conception
 
-**Principes Fondamentaux :**
-- **Multi-tenant** : Isolation complète des données par organisation
-- **Évolutivité** : Support de millions d'entités avec performance
-- **Flexibilité** : Schema extensible avec métadonnées JSON
-- **Auditabilité** : Traçabilité complète de toutes les modifications
-- **Cohérence** : Intégrité référentielle stricte
+- **Simplicité** : Peu de tables, relations claires. Pas d'over-engineering relationnel.
+- **Compatibilité SQLite** : Pas de types PostgreSQL spécifiques (CIDR, INET, arrays). Les types complexes utilisent JSON.
+- **Extensibilité via JSON** : Les colonnes `configuration` et `metadata` en JSON permettent de stocker des données structurées sans migration pour chaque nouveau champ.
+- **Plugins séparés** : Les plugins stockent leurs propres données dans des tables préfixées (`plugin_traefik_*`) ou dans la colonne JSON `metadata` de l'entité concernée. Le modèle core ne contient pas de tables pour le DNS, les domaines, les certificats, le monitoring, etc.
 
-## Architecture Relationnelle Complète
+---
 
-### Diagramme Entité-Relations Principal
+## Diagramme Entité-Relations
 
 ```mermaid
 erDiagram
-    User ||--o{ UserGroup : belongs_to
-    User ||--o{ UserOrganization : belongs_to
-    User ||--o{ PolicyUser : has
-    User ||--o{ UserTag : has
-    User ||--o{ AuditLog : creates
+    User ||--o{ UserOrganization : "belongs to"
+    Organization ||--o{ UserOrganization : "has members"
+    Organization ||--o{ Environment : "contains"
+    Environment ||--o{ Target : "contains"
+    Target ||--o{ Stack : "runs"
+    Stack ||--o{ Deployment : "creates"
+    Deployment ||--o{ DeploymentEvent : "generates"
+    User ||--o{ APIKey : "owns"
+    User ||--o{ AuditLog : "creates"
 
-    Organization ||--o{ UserOrganization : has
-    Organization ||--o{ Environment : contains
-    Organization ||--o{ Group : contains
-    Organization ||--o{ Policy : defines
+    Plugin ||--o{ PluginConfig : "has"
 
-    Environment ||--o{ Element : contains
-    Environment ||--o{ Rule : applies_to
-    Environment ||--o{ EnvironmentTag : has
+    User {
+        uuid id PK
+        string username UK
+        string email UK
+        string hashed_password
+        boolean is_superadmin
+        boolean is_active
+        timestamp created_at
+        timestamp last_login
+    }
 
-    Element ||--o{ Rule : applies_to
-    Element ||--o{ ElementTag : has
-    Element ||--o{ Stack : can_contain
-    Element ||--o{ Domain : can_have
-    Element ||--o{ Network : can_have
-    Element ||--o{ Volume : can_have
-    Element ||--o{ ContainerCluster : can_have
-    Element ||--o{ VM : can_have
-    Element ||--o{ PhysicalHost : can_have
+    Organization {
+        uuid id PK
+        string name UK
+        string description
+        boolean is_active
+        json settings
+        timestamp created_at
+    }
 
-    Stack ||--o{ Application : contains
-    Stack ||--o{ ContainerCluster : manages
-    Stack ||--o{ VM : manages
-    Stack ||--o{ Gateway : contains
-    Stack ||--o{ Deployment : creates
+    UserOrganization {
+        uuid user_id PK_FK
+        uuid organization_id PK_FK
+        string role
+        timestamp joined_at
+    }
 
-    Application ||--o{ VolumeApplication : attached_to
-    Application ||--o{ NetworkApplication : connected_to
-    Application ||--o{ Deployment : creates
+    Environment {
+        uuid id PK
+        string name
+        string type
+        uuid organization_id FK
+        json configuration
+        boolean is_active
+        timestamp created_at
+    }
 
-    ContainerCluster ||--o{ ContainerNode : contains
-    ContainerCluster ||--o{ VolumeContainerCluster : attached_to
+    Target {
+        uuid id PK
+        string name
+        string type
+        string host
+        uuid environment_id FK
+        json capabilities
+        json connection_config
+        string status
+        timestamp last_seen
+        timestamp created_at
+    }
 
-    VM ||--o{ VolumeVM : attached_to
-    VM ||--o{ NetworkVM : connected_to
+    Stack {
+        uuid id PK
+        string name
+        uuid target_id FK
+        text compose_content
+        string template_id
+        string git_url
+        string git_branch
+        json configuration
+        json env_vars_encrypted
+        int version
+        string status
+        timestamp created_at
+        timestamp updated_at
+    }
 
-    Domain ||--o{ DNSRecord : contains
-    Domain ||--o{ DNSSECKey : secured_by
+    Deployment {
+        uuid id PK
+        uuid stack_id FK
+        uuid triggered_by FK
+        string status
+        json configuration
+        json previous_state
+        timestamp started_at
+        timestamp completed_at
+    }
 
-    Volume ||--o{ VolumeApplication : attached_to
-    Volume ||--o{ VolumeContainerCluster : attached_to
-    Volume ||--o{ VolumeVM : attached_to
+    DeploymentEvent {
+        uuid id PK
+        uuid deployment_id FK
+        string event_type
+        string level
+        text message
+        json data
+        timestamp created_at
+    }
 
-    Network ||--o{ NetworkApplication : connects
-    Network ||--o{ NetworkContainerNode : connects
-    Network ||--o{ NetworkVM : connects
-    Network ||--o{ NetworkPhysicalHost : connects
-    Network ||--o{ NetworkGateway : connects
+    Plugin {
+        uuid id PK
+        string name UK
+        string version
+        string type
+        string category
+        string status
+        json manifest
+        json resource_usage
+        timestamp installed_at
+        timestamp updated_at
+    }
 
-    Gateway ||--o{ NetworkGateway : connected_to
+    PluginConfig {
+        uuid id PK
+        uuid plugin_id FK
+        string key
+        text value
+        boolean encrypted
+    }
 
-    Group ||--o{ UserGroup : contains
-    Group ||--o{ PolicyGroup : has
-    Group ||--o{ GroupTag : has
+    APIKey {
+        uuid id PK
+        uuid user_id FK
+        string name
+        string key_hash
+        timestamp expires_at
+        timestamp last_used_at
+        boolean revoked
+        timestamp created_at
+    }
 
-    Policy ||--o{ Rule : contains
-    Policy ||--o{ PolicyUser : assigned_to
-    Policy ||--o{ PolicyGroup : assigned_to
-    Policy ||--o{ PolicyTag : has
-
-    Rule }|--|| Function : grants
-
-    Tag ||--o{ UserTag : applied_to
-    Tag ||--o{ GroupTag : applied_to
-    Tag ||--o{ PolicyTag : applied_to
-    Tag ||--o{ ElementTag : applied_to
-    Tag ||--o{ EnvironmentTag : applied_to
-
-    Deployment ||--o{ DeploymentEvent : generates
-    Deployment ||--o{ DeploymentLog : creates
+    AuditLog {
+        uuid id PK
+        uuid user_id FK
+        string action
+        string resource_type
+        string resource_id
+        json details
+        string ip_address
+        timestamp created_at
+    }
 ```
 
-## Entités Principales
+---
 
-### Gestion des Utilisateurs et Organisations
+## Entités Core
 
-#### User - Utilisateur du Système
+### User — Utilisateur
+
 ```sql
 CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY,                      -- UUID stocké en TEXT (compatible SQLite)
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
     is_superadmin BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
-    email_verified BOOLEAN DEFAULT FALSE,
-    last_login TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    -- Métadonnées utilisateur extensibles
-    profile JSONB DEFAULT '{}',
-    preferences JSONB DEFAULT '{}',
-    
-    -- Index pour performances
-    CONSTRAINT users_username_check CHECK (length(username) >= 3),
-    CONSTRAINT users_email_check CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+    last_login TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_active ON users(is_active);
-CREATE INDEX idx_users_profile ON users USING GIN(profile);
 ```
 
-#### Organization - Organisation Multi-Tenant
+### Organization — Organisation
+
 ```sql
 CREATE TABLE organizations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY,
     name VARCHAR(100) UNIQUE NOT NULL,
     description TEXT,
     is_active BOOLEAN DEFAULT TRUE,
-    
-    -- Configuration organisation
-    settings JSONB DEFAULT '{}',
-    quotas JSONB DEFAULT '{}',
-    
-    -- Métadonnées de facturation
-    billing_info JSONB DEFAULT '{}',
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    CONSTRAINT org_name_check CHECK (length(name) >= 2)
+    settings TEXT DEFAULT '{}',               -- JSON : préférences, limites
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
-CREATE INDEX idx_organizations_name ON organizations(name);
-CREATE INDEX idx_organizations_active ON organizations(is_active);
-CREATE INDEX idx_organizations_settings ON organizations USING GIN(settings);
 ```
 
-#### UserOrganization - Relation Utilisateur-Organisation
+### UserOrganization — Appartenance avec Rôle
+
 ```sql
 CREATE TABLE user_organizations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    role VARCHAR(50) NOT NULL DEFAULT 'member',
-    is_default BOOLEAN DEFAULT FALSE,
-    joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    -- Permissions spécifiques à l'organisation
-    permissions JSONB DEFAULT '[]',
-    
-    UNIQUE(user_id, organization_id),
-    CONSTRAINT user_org_role_check CHECK (role IN ('owner', 'admin', 'member', 'viewer'))
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL DEFAULT 'viewer',  -- viewer, operator, admin
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, organization_id)
 );
 
-CREATE INDEX idx_user_org_user ON user_organizations(user_id);
 CREATE INDEX idx_user_org_org ON user_organizations(organization_id);
-CREATE INDEX idx_user_org_role ON user_organizations(role);
 ```
 
-### Infrastructure et Environnements
+### Environment — Environnement
 
-#### Environment - Environnement de Déploiement
 ```sql
 CREATE TABLE environments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    description TEXT,
-    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    environment_type VARCHAR(20) NOT NULL DEFAULT 'development',
+    type VARCHAR(20) NOT NULL DEFAULT 'development',  -- development, staging, production, ou libre
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    configuration TEXT DEFAULT '{}',           -- JSON : paramètres réseau, variables partagées
     is_active BOOLEAN DEFAULT TRUE,
-    
-    -- Configuration spécifique à l'environnement
-    configuration JSONB DEFAULT '{}',
-    
-    -- Limites de ressources
-    resource_limits JSONB DEFAULT '{}',
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    UNIQUE(organization_id, name),
-    CONSTRAINT env_type_check CHECK (environment_type IN ('development', 'testing', 'staging', 'production', 'disaster_recovery'))
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(organization_id, name)
 );
 
 CREATE INDEX idx_environments_org ON environments(organization_id);
-CREATE INDEX idx_environments_type ON environments(environment_type);
-CREATE INDEX idx_environments_active ON environments(is_active);
 ```
 
-#### Element - Élément d'Infrastructure
+### Target — Machine Cible
+
+Le Target est la représentation d'une machine (locale ou distante) dans WindFlow.
+
 ```sql
-CREATE TABLE elements (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE TABLE targets (
+    id TEXT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    description TEXT,
-    environment_id UUID NOT NULL REFERENCES environments(id) ON DELETE CASCADE,
-    element_type VARCHAR(30) NOT NULL,
-    status VARCHAR(20) DEFAULT 'inactive',
-    
-    -- Configuration de l'élément
-    configuration JSONB DEFAULT '{}',
-    
-    -- Métadonnées de monitoring
-    monitoring_config JSONB DEFAULT '{}',
-    last_health_check TIMESTAMP WITH TIME ZONE,
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    UNIQUE(environment_id, name),
-    CONSTRAINT element_type_check CHECK (element_type IN (
-        'container_cluster', 'vm', 'physical_host', 'domain', 'network', 'volume', 'gateway'
-    )),
-    CONSTRAINT element_status_check CHECK (status IN (
-        'inactive', 'provisioning', 'active', 'error', 'maintenance', 'terminated'
-    ))
+    type VARCHAR(20) NOT NULL,                -- local, ssh, proxmox
+    host VARCHAR(255),                        -- null pour local, IP/hostname pour distant
+    environment_id TEXT NOT NULL REFERENCES environments(id) ON DELETE CASCADE,
+    capabilities TEXT DEFAULT '{}',           -- JSON : voir ci-dessous
+    connection_config TEXT DEFAULT '{}',      -- JSON : SSH key path, Proxmox token, etc. (chiffré)
+    status VARCHAR(20) DEFAULT 'unknown',     -- online, offline, unknown, error
+    last_seen TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(environment_id, name)
 );
 
-CREATE INDEX idx_elements_env ON elements(environment_id);
-CREATE INDEX idx_elements_type ON elements(element_type);
-CREATE INDEX idx_elements_status ON elements(status);
-CREATE INDEX idx_elements_config ON elements USING GIN(configuration);
+CREATE INDEX idx_targets_env ON targets(environment_id);
+CREATE INDEX idx_targets_status ON targets(status);
 ```
 
-### Stacks et Applications
+**Format capabilities (JSON) :**
 
-#### Stack - Conteneur Logique de Services
+```json
+{
+    "system": {
+        "arch": "arm64",
+        "os": "Raspberry Pi OS 12",
+        "cpu_cores": 4,
+        "memory_mb": 4096,
+        "disk_gb": 64
+    },
+    "docker": {
+        "version": "24.0.7",
+        "compose_version": "2.23.0"
+    },
+    "libvirt": {
+        "hypervisor": "QEMU/KVM",
+        "version": "9.0.0"
+    },
+    "proxmox": null
+}
+```
+
+### Stack — Groupe de Services
+
 ```sql
 CREATE TABLE stacks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    description TEXT,
-    element_id UUID NOT NULL REFERENCES elements(id) ON DELETE CASCADE,
-    template_id VARCHAR(100),
-    
-    -- Configuration du stack
-    configuration JSONB DEFAULT '{}',
-    
-    -- Optimisations IA
-    llm_optimized BOOLEAN DEFAULT FALSE,
-    llm_optimization_version VARCHAR(20),
-    
-    -- Workflow associé
-    workflow_id UUID,
-    
-    -- Status et déploiement
-    status VARCHAR(20) DEFAULT 'draft',
-    last_deployed_at TIMESTAMP WITH TIME ZONE,
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    UNIQUE(element_id, name),
-    CONSTRAINT stack_status_check CHECK (status IN (
-        'draft', 'validating', 'ready', 'deploying', 'deployed', 'error', 'archived'
-    ))
+    target_id TEXT NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
+    compose_content TEXT,                     -- Contenu docker-compose.yml
+    template_id VARCHAR(100),                 -- Référence au template marketplace (nullable)
+    git_url VARCHAR(500),                     -- URL du dépôt Git (nullable, plugin Git)
+    git_branch VARCHAR(100) DEFAULT 'main',
+    configuration TEXT DEFAULT '{}',          -- JSON : variables du template
+    env_vars_encrypted TEXT DEFAULT '{}',     -- JSON : variables d'env sensibles (chiffrées)
+    version INTEGER DEFAULT 1,                -- Incrémenté à chaque modification
+    status VARCHAR(20) DEFAULT 'created',     -- created, deploying, deployed, stopped, error
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(target_id, name)
 );
 
-CREATE INDEX idx_stacks_element ON stacks(element_id);
-CREATE INDEX idx_stacks_template ON stacks(template_id);
+CREATE INDEX idx_stacks_target ON stacks(target_id);
 CREATE INDEX idx_stacks_status ON stacks(status);
-CREATE INDEX idx_stacks_llm ON stacks(llm_optimized);
 ```
 
-#### Application - Application Déployable
-```sql
-CREATE TABLE applications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    description TEXT,
-    stack_id UUID NOT NULL REFERENCES stacks(id) ON DELETE CASCADE,
-    
-    -- Configuration de l'application
-    application_type VARCHAR(20) NOT NULL,
-    plugin_name VARCHAR(50),
-    plugin_version VARCHAR(20),
-    
-    -- Configuration déploiement
-    deployment_config JSONB DEFAULT '{}',
-    
-    -- Status de déploiement
-    deployment_status VARCHAR(20) DEFAULT 'pending',
-    
-    -- Ressources allouées
-    allocated_resources JSONB DEFAULT '{}',
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    UNIQUE(stack_id, name),
-    CONSTRAINT app_type_check CHECK (application_type IN ('container', 'vm', 'physical')),
-    CONSTRAINT deployment_status_check CHECK (deployment_status IN (
-        'pending', 'deploying', 'deployed', 'failed', 'stopped', 'scaling', 'updating'
-    ))
-);
+### Deployment — Déploiement
 
-CREATE INDEX idx_applications_stack ON applications(stack_id);
-CREATE INDEX idx_applications_type ON applications(application_type);
-CREATE INDEX idx_applications_status ON applications(deployment_status);
-CREATE INDEX idx_applications_plugin ON applications(plugin_name, plugin_version);
-```
-
-### Orchestration et Clusters
-
-#### ContainerCluster - Cluster de Containers
-```sql
-CREATE TABLE container_clusters (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    element_id UUID NOT NULL REFERENCES elements(id) ON DELETE CASCADE,
-    cluster_mode VARCHAR(20) NOT NULL DEFAULT 'docker',
-    version VARCHAR(20),
-    
-    -- Configuration haute disponibilité
-    ha_enabled BOOLEAN DEFAULT FALSE,
-    
-    -- Endpoint de connexion
-    endpoint JSONB DEFAULT '{}',
-    
-    -- Configuration du cluster
-    cluster_config JSONB DEFAULT '{}',
-    
-    -- Status et métriques
-    status VARCHAR(20) DEFAULT 'initializing',
-    node_count INTEGER DEFAULT 0,
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    UNIQUE(element_id, name),
-    CONSTRAINT cluster_mode_check CHECK (cluster_mode IN ('docker', 'swarm', 'kubernetes')),
-    CONSTRAINT cluster_status_check CHECK (status IN (
-        'initializing', 'healthy', 'degraded', 'unhealthy', 'maintenance'
-    ))
-);
-
-CREATE INDEX idx_container_clusters_element ON container_clusters(element_id);
-CREATE INDEX idx_container_clusters_mode ON container_clusters(cluster_mode);
-CREATE INDEX idx_container_clusters_status ON container_clusters(status);
-```
-
-#### ContainerNode - Nœud de Cluster
-```sql
-CREATE TABLE container_nodes (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    cluster_id UUID NOT NULL REFERENCES container_clusters(id) ON DELETE CASCADE,
-    
-    -- Informations du nœud
-    hostname VARCHAR(255),
-    ip_address INET,
-    
-    -- Rôle dans le cluster
-    node_role VARCHAR(20) DEFAULT 'worker',
-    
-    -- Ressources
-    cpu_cores INTEGER,
-    memory_gb DECIMAL(6,2),
-    disk_gb DECIMAL(8,2),
-    
-    -- Status et santé
-    status VARCHAR(20) DEFAULT 'joining',
-    last_heartbeat TIMESTAMP WITH TIME ZONE,
-    
-    -- Configuration du nœud
-    node_config JSONB DEFAULT '{}',
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    UNIQUE(cluster_id, name),
-    CONSTRAINT node_role_check CHECK (node_role IN ('master', 'worker', 'manager')),
-    CONSTRAINT node_status_check CHECK (status IN (
-        'joining', 'ready', 'not_ready', 'unknown', 'terminated'
-    ))
-);
-
-CREATE INDEX idx_container_nodes_cluster ON container_nodes(cluster_id);
-CREATE INDEX idx_container_nodes_role ON container_nodes(node_role);
-CREATE INDEX idx_container_nodes_status ON container_nodes(status);
-CREATE INDEX idx_container_nodes_ip ON container_nodes(ip_address);
-```
-
-### Machines Virtuelles
-
-#### VM - Machine Virtuelle
-```sql
-CREATE TABLE vms (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    element_id UUID NOT NULL REFERENCES elements(id) ON DELETE CASCADE,
-    stack_id UUID REFERENCES stacks(id) ON DELETE SET NULL,
-    
-    -- Spécifications hardware
-    cpu_cores INTEGER NOT NULL,
-    memory_gb DECIMAL(6,2) NOT NULL,
-    disk_gb DECIMAL(8,2) NOT NULL,
-    
-    -- Configuration OS
-    os_type VARCHAR(20) NOT NULL,
-    os_version VARCHAR(50),
-    
-    -- Configuration réseau
-    ip_address INET,
-    hostname VARCHAR(255),
-    
-    -- Status et métadonnées
-    status VARCHAR(20) DEFAULT 'creating',
-    hypervisor_type VARCHAR(20),
-    
-    -- Configuration VM
-    vm_config JSONB DEFAULT '{}',
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    UNIQUE(element_id, name),
-    CONSTRAINT vm_os_type_check CHECK (os_type IN ('linux', 'windows', 'freebsd', 'other')),
-    CONSTRAINT vm_status_check CHECK (status IN (
-        'creating', 'starting', 'running', 'stopping', 'stopped', 'error', 'destroyed'
-    ))
-);
-
-CREATE INDEX idx_vms_element ON vms(element_id);
-CREATE INDEX idx_vms_stack ON vms(stack_id);
-CREATE INDEX idx_vms_status ON vms(status);
-CREATE INDEX idx_vms_os ON vms(os_type);
-CREATE INDEX idx_vms_ip ON vms(ip_address);
-```
-
-### Infrastructure Réseau
-
-#### Network - Réseau Overlay
-```sql
-CREATE TABLE networks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    element_id UUID NOT NULL REFERENCES elements(id) ON DELETE CASCADE,
-    
-    -- Configuration réseau
-    network_type VARCHAR(20) NOT NULL DEFAULT 'overlay',
-    subnet CIDR,
-    gateway INET,
-    
-    -- Sécurité
-    encryption_enabled BOOLEAN DEFAULT TRUE,
-    cross_cluster BOOLEAN DEFAULT FALSE,
-    
-    -- Configuration avancée
-    network_config JSONB DEFAULT '{}',
-    
-    -- Status
-    status VARCHAR(20) DEFAULT 'creating',
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    UNIQUE(element_id, name),
-    CONSTRAINT network_type_check CHECK (network_type IN ('overlay', 'bridge', 'host', 'macvlan')),
-    CONSTRAINT network_status_check CHECK (status IN (
-        'creating', 'active', 'error', 'deleting'
-    ))
-);
-
-CREATE INDEX idx_networks_element ON networks(element_id);
-CREATE INDEX idx_networks_type ON networks(network_type);
-CREATE INDEX idx_networks_status ON networks(status);
-CREATE INDEX idx_networks_subnet ON networks(subnet);
-```
-
-#### Gateway - Passerelle Load Balancer
-```sql
-CREATE TABLE gateways (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    stack_id UUID NOT NULL REFERENCES stacks(id) ON DELETE CASCADE,
-    
-    -- Configuration gateway
-    gateway_type VARCHAR(10) NOT NULL,
-    
-    -- SSL/TLS automatique
-    auto_ssl BOOLEAN DEFAULT TRUE,
-    ssl_config JSONB DEFAULT '{}',
-    
-    -- Load balancing
-    load_balancing_strategy VARCHAR(20) DEFAULT 'round_robin',
-    
-    -- Rate limiting
-    rate_limiting BOOLEAN DEFAULT FALSE,
-    rate_limit_config JSONB DEFAULT '{}',
-    
-    -- Configuration complète
-    gateway_config JSONB DEFAULT '{}',
-    
-    -- Status
-    status VARCHAR(20) DEFAULT 'configuring',
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    UNIQUE(stack_id, name),
-    CONSTRAINT gateway_type_check CHECK (gateway_type IN ('http', 'tcp', 'udp')),
-    CONSTRAINT lb_strategy_check CHECK (load_balancing_strategy IN (
-        'round_robin', 'least_conn', 'ip_hash', 'weighted', 'health_based'
-    )),
-    CONSTRAINT gateway_status_check CHECK (status IN (
-        'configuring', 'active', 'error', 'updating'
-    ))
-);
-
-CREATE INDEX idx_gateways_stack ON gateways(stack_id);
-CREATE INDEX idx_gateways_type ON gateways(gateway_type);
-CREATE INDEX idx_gateways_status ON gateways(status);
-```
-
-### Stockage et Volumes
-
-#### Volume - Volume de Stockage
-```sql
-CREATE TABLE volumes (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    element_id UUID NOT NULL REFERENCES elements(id) ON DELETE CASCADE,
-    
-    -- Configuration volume
-    volume_type VARCHAR(20) NOT NULL,
-    size_gb DECIMAL(10,2) NOT NULL,
-    
-    -- Options de sauvegarde
-    backup_enabled BOOLEAN DEFAULT TRUE,
-    backup_schedule VARCHAR(50),
-    
-    -- Partage
-    shared BOOLEAN DEFAULT FALSE,
-    access_mode VARCHAR(20) DEFAULT 'read_write_once',
-    
-    -- Configuration stockage
-    storage_config JSONB DEFAULT '{}',
-    
-    -- Status
-    status VARCHAR(20) DEFAULT 'creating',
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    UNIQUE(element_id, name),
-    CONSTRAINT volume_type_check CHECK (volume_type IN (
-        'local_ssd', 'local_hdd', 'nfs', 'ceph', 's3', 'azure_blob', 'gcs', 'glusterfs'
-    )),
-    CONSTRAINT access_mode_check CHECK (access_mode IN (
-        'read_write_once', 'read_only_many', 'read_write_many'
-    )),
-    CONSTRAINT volume_status_check CHECK (status IN (
-        'creating', 'available', 'bound', 'error', 'deleting'
-    ))
-);
-
-CREATE INDEX idx_volumes_element ON volumes(element_id);
-CREATE INDEX idx_volumes_type ON volumes(volume_type);
-CREATE INDEX idx_volumes_status ON volumes(status);
-CREATE INDEX idx_volumes_size ON volumes(size_gb);
-```
-
-### DNS et Domaines
-
-#### Domain - Domaine DNS
-```sql
-CREATE TABLE domains (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    fqdn VARCHAR(255) UNIQUE NOT NULL,
-    element_id UUID NOT NULL REFERENCES elements(id) ON DELETE CASCADE,
-    
-    -- Configuration DNSSEC
-    dnssec_enabled BOOLEAN DEFAULT FALSE,
-    dnssec_status VARCHAR(20) DEFAULT 'disabled',
-    
-    -- SSL automatique
-    auto_ssl BOOLEAN DEFAULT TRUE,
-    wildcard_support BOOLEAN DEFAULT FALSE,
-    
-    -- Configuration DNS
-    dns_config JSONB DEFAULT '{}',
-    
-    -- Status
-    status VARCHAR(20) DEFAULT 'configuring',
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    CONSTRAINT dnssec_status_check CHECK (dnssec_status IN (
-        'disabled', 'unsigned', 'signed', 'error'
-    )),
-    CONSTRAINT domain_status_check CHECK (status IN (
-        'configuring', 'active', 'error', 'suspended'
-    ))
-);
-
-CREATE INDEX idx_domains_fqdn ON domains(fqdn);
-CREATE INDEX idx_domains_element ON domains(element_id);
-CREATE INDEX idx_domains_dnssec ON domains(dnssec_enabled);
-CREATE INDEX idx_domains_status ON domains(status);
-```
-
-## Relations et Tables de Liaison
-
-### Relations Many-to-Many
-
-#### Relations Volume-Application
-```sql
-CREATE TABLE volume_applications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    volume_id UUID NOT NULL REFERENCES volumes(id) ON DELETE CASCADE,
-    application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
-    mount_path VARCHAR(255) NOT NULL,
-    mount_options JSONB DEFAULT '{}',
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    UNIQUE(volume_id, application_id, mount_path)
-);
-
-CREATE INDEX idx_vol_app_volume ON volume_applications(volume_id);
-CREATE INDEX idx_vol_app_application ON volume_applications(application_id);
-```
-
-#### Relations Network-Application
-```sql
-CREATE TABLE network_applications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    network_id UUID NOT NULL REFERENCES networks(id) ON DELETE CASCADE,
-    application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
-    ip_address INET,
-    connection_config JSONB DEFAULT '{}',
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    UNIQUE(network_id, application_id)
-);
-
-CREATE INDEX idx_net_app_network ON network_applications(network_id);
-CREATE INDEX idx_net_app_application ON network_applications(application_id);
-CREATE INDEX idx_net_app_ip ON network_applications(ip_address);
-```
-
-### Déploiements et Historique
-
-#### Deployment - Déploiement
 ```sql
 CREATE TABLE deployments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    stack_id UUID NOT NULL REFERENCES stacks(id) ON DELETE CASCADE,
-    application_id UUID REFERENCES applications(id) ON DELETE SET NULL,
-    
-    -- Métadonnées du déploiement
-    deployment_version VARCHAR(50),
-    deployment_type VARCHAR(20) DEFAULT 'standard',
-    
-    -- Configuration utilisée
-    deployment_config JSONB NOT NULL,
-    
-    -- Status et timing
-    status VARCHAR(20) DEFAULT 'pending',
-    started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    completed_at TIMESTAMP WITH TIME ZONE,
-    
-    -- Utilisateur ayant déclenché le déploiement
-    triggered_by UUID NOT NULL REFERENCES users(id),
-    
-    -- Logs et résultats
-    logs TEXT,
-    result JSONB DEFAULT '{}',
-    
-    -- Rollback
-    parent_deployment_id UUID REFERENCES deployments(id),
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    CONSTRAINT deployment_type_check CHECK (deployment_type IN (
-        'standard', 'blue_green', 'canary', 'rolling', 'rollback'
-    )),
-    CONSTRAINT deployment_status_check CHECK (status IN (
-        'pending', 'running', 'completed', 'failed', 'cancelled', 'rolled_back'
-    ))
+    id TEXT PRIMARY KEY,
+    stack_id TEXT NOT NULL REFERENCES stacks(id) ON DELETE CASCADE,
+    triggered_by TEXT NOT NULL REFERENCES users(id),
+    status VARCHAR(20) DEFAULT 'pending',     -- pending, running, success, failed, rolled_back
+    configuration TEXT DEFAULT '{}',          -- JSON : config utilisée pour ce déploiement
+    previous_state TEXT,                      -- JSON : état précédent pour rollback
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP,
+    UNIQUE(stack_id, started_at)
 );
 
 CREATE INDEX idx_deployments_stack ON deployments(stack_id);
-CREATE INDEX idx_deployments_app ON deployments(application_id);
 CREATE INDEX idx_deployments_status ON deployments(status);
-CREATE INDEX idx_deployments_triggered_by ON deployments(triggered_by);
-CREATE INDEX idx_deployments_started_at ON deployments(started_at);
+CREATE INDEX idx_deployments_started ON deployments(started_at);
 ```
 
-#### DeploymentEvent - Événements de Déploiement
+### DeploymentEvent — Événements de Déploiement
+
 ```sql
 CREATE TABLE deployment_events (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    deployment_id UUID NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
-    
-    -- Type et détails de l'événement
-    event_type VARCHAR(50) NOT NULL,
-    event_data JSONB DEFAULT '{}',
-    
-    -- Timing
-    occurred_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    -- Message descriptif
+    id TEXT PRIMARY KEY,
+    deployment_id TEXT NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
+    event_type VARCHAR(50) NOT NULL,          -- pulling, deploying, health_check, success, error, rollback
+    level VARCHAR(10) DEFAULT 'info',         -- debug, info, warning, error
     message TEXT,
-    
-    -- Niveau de l'événement
-    level VARCHAR(10) DEFAULT 'info'
+    data TEXT DEFAULT '{}',                   -- JSON : données supplémentaires
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_deployment_events_deployment ON deployment_events(deployment_id);
-CREATE INDEX idx_deployment_events_type ON deployment_events(event_type);
-CREATE INDEX idx_deployment_events_occurred_at ON deployment_events(occurred_at);
-CREATE INDEX idx_deployment_events_level ON deployment_events(level);
+CREATE INDEX idx_deploy_events_deployment ON deployment_events(deployment_id);
+CREATE INDEX idx_deploy_events_created ON deployment_events(created_at);
 ```
 
-## Vues et Requêtes Complexes
+---
 
-### Vues Matérialisées pour Performance
+## Entités Plugin
 
-#### Vue des Déploiements Actifs
+### Plugin — Plugin Installé
+
 ```sql
-CREATE MATERIALIZED VIEW active_deployments AS
-SELECT 
-    d.id,
-    d.stack_id,
-    s.name as stack_name,
-    d.status,
-    d.started_at,
-    s.element_id,
-    e.name as element_name,
-    e.environment_id,
-    env.name as environment_name,
-    env.organization_id,
-    org.name as organization_name
-FROM deployments d
-JOIN stacks s ON d.stack_id = s.id
-JOIN elements e ON s.element_id = e.id
-JOIN environments env ON e.environment_id = env.id
-JOIN organizations org ON env.organization_id = org.id
-WHERE d.status IN ('running', 'pending', 'deploying')
-AND s.status = 'deployed'
-AND e.status = 'active'
-AND env.is_active = true
-AND org.is_active = true;
+CREATE TABLE plugins (
+    id TEXT PRIMARY KEY,
+    name VARCHAR(100) UNIQUE NOT NULL,        -- Identifiant unique (ex: traefik, postgresql-manager)
+    version VARCHAR(20) NOT NULL,
+    type VARCHAR(20) NOT NULL,                -- service, extension, hybrid
+    category VARCHAR(30),                     -- access, dns, database, monitoring, etc.
+    status VARCHAR(20) DEFAULT 'installed',   -- installed, running, stopped, error, updating
+    manifest TEXT DEFAULT '{}',               -- JSON : manifest complet du plugin
+    resource_usage TEXT DEFAULT '{}',         -- JSON : RAM, CPU mesurés
+    installed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-CREATE UNIQUE INDEX idx_active_deployments_id ON active_deployments(id);
-CREATE INDEX idx_active_deployments_org ON active_deployments(organization_id);
-CREATE INDEX idx_active_deployments_env ON active_deployments(environment_id);
+CREATE INDEX idx_plugins_status ON plugins(status);
+CREATE INDEX idx_plugins_category ON plugins(category);
 ```
 
-#### Vue des Ressources par Organisation
-```sql
-CREATE MATERIALIZED VIEW organization_resources AS
-SELECT 
-    org.id as organization_id,
-    org.name as organization_name,
-    COUNT(DISTINCT env.id) as environment_count,
-    COUNT(DISTINCT e.id) as element_count,
-    COUNT(DISTINCT s.id) as stack_count,
-    COUNT(DISTINCT a.id) as application_count,
-    COUNT(DISTINCT d.id) FILTER (WHERE d.status = 'running') as active_deployments,
-    SUM(v.size_gb) as total_storage_gb,
-    COUNT(DISTINCT cc.id) as cluster_count,
-    COUNT(DISTINCT vm.id) as vm_count
-FROM organizations org
-LEFT JOIN environments env ON org.id = env.organization_id AND env.is_active = true
-LEFT JOIN elements e ON env.id = e.environment_id AND e.status = 'active'
-LEFT JOIN stacks s ON e.id = s.element_id
-LEFT JOIN applications a ON s.id = a.stack_id
-LEFT JOIN deployments d ON s.id = d.stack_id
-LEFT JOIN volumes v ON e.id = v.element_id
-LEFT JOIN container_clusters cc ON e.id = cc.element_id
-LEFT JOIN vms vm ON e.id = vm.element_id
-WHERE org.is_active = true
-GROUP BY org.id, org.name;
+### PluginConfig — Configuration d'un Plugin
 
-CREATE UNIQUE INDEX idx_org_resources_id ON organization_resources(organization_id);
+```sql
+CREATE TABLE plugin_configs (
+    id TEXT PRIMARY KEY,
+    plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE,
+    key VARCHAR(100) NOT NULL,
+    value TEXT,                                -- Valeur (chiffrée si encrypted=true)
+    encrypted BOOLEAN DEFAULT FALSE,
+    UNIQUE(plugin_id, key)
+);
+
+CREATE INDEX idx_plugin_configs_plugin ON plugin_configs(plugin_id);
 ```
 
-## Procédures Stockées et Fonctions
+---
 
-### Fonctions de Gestion des Déploiements
+## Entités Auth
+
+### APIKey — Clé API
 
 ```sql
--- Fonction pour créer un déploiement avec validation
-CREATE OR REPLACE FUNCTION create_deployment(
-    p_stack_id UUID,
-    p_user_id UUID,
-    p_config JSONB,
-    p_deployment_type VARCHAR DEFAULT 'standard'
-) RETURNS UUID AS $$
-DECLARE
-    v_deployment_id UUID;
-    v_stack_status VARCHAR;
-    v_user_permissions JSONB;
-BEGIN
-    -- Vérifier que le stack est déployable
-    SELECT status INTO v_stack_status FROM stacks WHERE id = p_stack_id;
-    
-    IF v_stack_status NOT IN ('ready', 'deployed') THEN
-        RAISE EXCEPTION 'Stack status % is not deployable', v_stack_status;
-    END IF;
-    
-    -- Vérifier les permissions utilisateur
-    -- (logique de vérification des permissions)
-    
-    -- Créer le déploiement
-    INSERT INTO deployments (
-        stack_id,
-        triggered_by,
-        deployment_config,
-        deployment_type,
-        status
-    ) VALUES (
-        p_stack_id,
-        p_user_id,
-        p_config,
-        p_deployment_type,
-        'pending'
-    ) RETURNING id INTO v_deployment_id;
-    
-    -- Logger l'événement
-    INSERT INTO deployment_events (
-        deployment_id,
-        event_type,
-        message,
-        level
-    ) VALUES (
-        v_deployment_id,
-        'deployment.created',
-        'Deployment created by user
+CREATE TABLE api_keys (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    key_hash VARCHAR(255) NOT NULL,           -- Hash bcrypt de la clé (la clé brute n'est jamais stockée)
+    expires_at TIMESTAMP,                     -- null = n'expire jamais
+    last_used_at TIMESTAMP,
+    revoked BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_api_keys_user ON api_keys(user_id);
+```
+
+### RefreshToken — Token de Rafraîchissement
+
+```sql
+CREATE TABLE refresh_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+CREATE INDEX idx_refresh_tokens_expires ON refresh_tokens(expires_at);
+```
+
+---
+
+## Entités Audit
+
+### AuditLog — Journal d'Audit
+
+```sql
+CREATE TABLE audit_logs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    action VARCHAR(50) NOT NULL,              -- user.login, stack.deploy, plugin.install, etc.
+    resource_type VARCHAR(30),                -- stack, target, plugin, user, etc.
+    resource_id TEXT,
+    details TEXT DEFAULT '{}',                -- JSON : détails de l'action
+    ip_address VARCHAR(45),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_audit_user ON audit_logs(user_id);
+CREATE INDEX idx_audit_action ON audit_logs(action);
+CREATE INDEX idx_audit_resource ON audit_logs(resource_type, resource_id);
+CREATE INDEX idx_audit_created ON audit_logs(created_at);
+```
+
+---
+
+## Modèle SQLAlchemy
+
+### Exemple d'Implémentation
+
+```python
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import String, Boolean, DateTime, Integer, Text, ForeignKey, JSON
+from uuid import UUID, uuid4
+from datetime import datetime
+
+class Base(DeclarativeBase):
+    pass
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255))
+    is_superadmin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    organizations: Mapped[list["UserOrganization"]] = relationship(back_populates="user")
+    api_keys: Mapped[list["APIKey"]] = relationship(back_populates="user")
+
+class Target(Base):
+    __tablename__ = "targets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    name: Mapped[str] = mapped_column(String(100))
+    type: Mapped[str] = mapped_column(String(20))  # local, ssh, proxmox
+    host: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    environment_id: Mapped[str] = mapped_column(ForeignKey("environments.id"))
+    capabilities: Mapped[dict] = mapped_column(JSON, default=dict)
+    connection_config: Mapped[dict] = mapped_column(JSON, default=dict)  # chiffré en application
+    status: Mapped[str] = mapped_column(String(20), default="unknown")
+    last_seen: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    environment: Mapped["Environment"] = relationship(back_populates="targets")
+    stacks: Mapped[list["Stack"]] = relationship(back_populates="target")
+
+class Stack(Base):
+    __tablename__ = "stacks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    name: Mapped[str] = mapped_column(String(100))
+    target_id: Mapped[str] = mapped_column(ForeignKey("targets.id"))
+    compose_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    template_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    git_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    git_branch: Mapped[str] = mapped_column(String(100), default="main")
+    configuration: Mapped[dict] = mapped_column(JSON, default=dict)
+    env_vars_encrypted: Mapped[dict] = mapped_column(JSON, default=dict)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(20), default="created")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    target: Mapped["Target"] = relationship(back_populates="stacks")
+    deployments: Mapped[list["Deployment"]] = relationship(back_populates="stack")
+
+class Plugin(Base):
+    __tablename__ = "plugins"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    version: Mapped[str] = mapped_column(String(20))
+    type: Mapped[str] = mapped_column(String(20))  # service, extension, hybrid
+    category: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="installed")
+    manifest: Mapped[dict] = mapped_column(JSON, default=dict)
+    resource_usage: Mapped[dict] = mapped_column(JSON, default=dict)
+    installed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    configs: Mapped[list["PluginConfig"]] = relationship(back_populates="plugin")
+```
+
+---
+
+## Compatibilité SQLite
+
+Le schéma est conçu pour fonctionner sur PostgreSQL et SQLite sans modification. Points clés :
+
+- **UUID en TEXT** : SQLite n'a pas de type UUID natif. On stocke les UUID en `TEXT(36)`. Sur PostgreSQL, ça fonctionne aussi (légère perte de performance vs un vrai UUID, acceptable pour la cible).
+- **JSON en TEXT** : SQLite supporte `json()` mais le type natif est TEXT. SQLAlchemy gère la sérialisation/désérialisation automatiquement avec `JSON`.
+- **Pas de types PostgreSQL spécifiques** : Pas de CIDR, INET, ARRAY, ou vues matérialisées. Les adresses IP sont stockées en VARCHAR.
+- **Pas de procédures stockées** : Toute la logique est dans le code Python (SQLAlchemy), pas dans la base de données.
+- **Timestamps sans timezone** : SQLite ne supporte pas `TIMESTAMP WITH TIME ZONE`. Les timestamps sont stockés en UTC.
+
+### Migrations Alembic
+
+Les migrations sont écrites pour être compatibles avec les deux backends :
+
+```python
+# Exemple de migration compatible PostgreSQL + SQLite
+def upgrade():
+    op.create_table(
+        "targets",
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column("name", sa.String(100), nullable=False),
+        sa.Column("type", sa.String(20), nullable=False),
+        sa.Column("host", sa.String(255), nullable=True),
+        sa.Column("environment_id", sa.String(36), sa.ForeignKey("environments.id"), nullable=False),
+        sa.Column("capabilities", sa.JSON, default={}),
+        sa.Column("connection_config", sa.JSON, default={}),
+        sa.Column("status", sa.String(20), default="unknown"),
+        sa.Column("last_seen", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime, default=sa.func.now()),
+    )
+```
+
+---
+
+## Données des Plugins
+
+Les plugins ne modifient pas le schéma core. Ils ont deux options pour stocker leurs données :
+
+### Option 1 : Tables Préfixées
+
+Les plugins complexes (comme Traefik) peuvent créer leurs propres tables avec un préfixe :
+
+```sql
+-- Créées par le plugin Traefik
+CREATE TABLE plugin_traefik_routes (
+    id TEXT PRIMARY KEY,
+    domain VARCHAR(255) NOT NULL,
+    service_name VARCHAR(100) NOT NULL,
+    stack_id TEXT REFERENCES stacks(id),
+    tls_enabled BOOLEAN DEFAULT TRUE,
+    certificate_expiry TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+Le Plugin Manager gère la création et la suppression de ces tables lors de l'installation/désinstallation du plugin.
+
+### Option 2 : Table PluginConfig
+
+Les plugins simples stockent leur configuration dans la table `plugin_configs` (clé/valeur).
+
+---
+
+## Résumé des Tables
+
+| Table | Entité | Description |
+|-------|--------|-------------|
+| `users` | User | Utilisateurs du système |
+| `organizations` | Organization | Organisations (groupes de travail) |
+| `user_organizations` | UserOrganization | Appartenance utilisateur ↔ organisation avec rôle |
+| `environments` | Environment | Environnements (dev, staging, prod) |
+| `targets` | Target | Machines cibles (locale, SSH, Proxmox) |
+| `stacks` | Stack | Groupes de services Docker Compose |
+| `deployments` | Deployment | Historique des déploiements |
+| `deployment_events` | DeploymentEvent | Événements détaillés par déploiement |
+| `plugins` | Plugin | Plugins installés |
+| `plugin_configs` | PluginConfig | Configuration clé/valeur des plugins |
+| `api_keys` | APIKey | Clés API pour l'authentification non-interactive |
+| `refresh_tokens` | RefreshToken | Tokens de rafraîchissement JWT |
+| `audit_logs` | AuditLog | Journal d'audit |
+
+**Total : 13 tables core.** Les plugins ajoutent leurs propres tables si nécessaire (préfixées `plugin_{name}_*`).
+
+---
+
+**Références :**
+- [Architecture](02-architecture.md) — Architecture et modèle de données conceptuel
+- [Stack Technologique](03-technology-stack.md) — SQLAlchemy, PostgreSQL, SQLite
+- [RBAC et Permissions](06-rbac-permissions.md) — Rôles et table user_organizations
+- [Authentification](05-authentication.md) — API keys, refresh tokens
