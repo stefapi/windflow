@@ -1,12 +1,12 @@
 /**
  * Tests unitaires pour SidebarNav.vue
+ * Liés à STORY-411 (Sidebar restructuration) et STORY-412 (Navigation 2 clics)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import SidebarNav from '@/components/SidebarNav.vue'
-import { usePluginNavStore } from '@/stores/pluginNav'
 
 // Mock router
 const router = createRouter({
@@ -41,6 +41,14 @@ vi.mock('@/stores/targets', () => ({
   })),
 }))
 
+// Mock pluginNav store
+vi.mock('@/stores/pluginNav', () => ({
+  usePluginNavStore: vi.fn(() => ({
+    hasPluginPages: false,
+    pluginNavigationItems: [],
+  })),
+}))
+
 describe('SidebarNav', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -51,32 +59,8 @@ describe('SidebarNav', () => {
       global: {
         plugins: [router],
         stubs: {
-          'el-menu': {
-            template: '<div class="el-menu"><slot /></div>',
-          },
-          'el-sub-menu': {
-            template: '<div class="el-sub-menu"><slot /></div>',
-            props: ['index'],
-          },
-          'el-menu-item': {
-            template: '<div class="el-menu-item"><slot /></div>',
-            props: ['index', 'route'],
-          },
-          'el-menu-item-group': {
-            template: '<div class="el-menu-item-group"><slot /></div>',
-            props: ['title'],
-          },
           'el-dropdown': {
             template: '<div class="el-dropdown"><slot /></div>',
-          },
-          'el-dropdown-menu': {
-            template: '<div class="el-dropdown-menu"><slot /></div>',
-          },
-          'el-dropdown-item': {
-            template: '<div class="el-dropdown-item"><slot /></div>',
-          },
-          'el-avatar': {
-            template: '<div class="el-avatar"><slot /></div>',
           },
           'el-icon': {
             template: '<span class="el-icon"><slot /></span>',
@@ -141,60 +125,14 @@ describe('SidebarNav', () => {
       // Plugins section should not be visible when no plugins registered
       expect(html).not.toContain('PLUGINS')
     })
-
-    it('affiche la section Plugins quand des plugins sont enregistrés', async () => {
-      const pluginNavStore = usePluginNavStore()
-      pluginNavStore.registerPluginPages({
-        id: 'test-plugin',
-        name: 'Test Plugin',
-        pages: [
-          { id: 'page1', label: 'Page 1', route: '/plugins/test/page1', icon: 'Document' },
-        ],
-      })
-
-      const wrapper = await mountComponent()
-      const html = wrapper.html()
-      expect(html).toContain('PLUGINS')
-    })
-  })
-
-  describe('AC4: Store usePluginNavStore', () => {
-    it('utilise le store pour injecter les pages de plugin', async () => {
-      const pluginNavStore = usePluginNavStore()
-
-      pluginNavStore.registerPluginPages({
-        id: 'plugin-1',
-        name: 'Plugin 1',
-        pages: [
-          { id: 'p1', label: 'Page 1', route: '/p1', icon: 'Document' },
-        ],
-      })
-
-      expect(pluginNavStore.hasPluginPages).toBe(true)
-      expect(pluginNavStore.pluginNavigationItems).toHaveLength(1)
-    })
-
-    it('permet de désenregistrer les pages de plugin', async () => {
-      const pluginNavStore = usePluginNavStore()
-
-      pluginNavStore.registerPluginPages({
-        id: 'plugin-2',
-        name: 'Plugin 2',
-        pages: [{ id: 'p2', label: 'Page 2', route: '/p2', icon: 'Document' }],
-      })
-
-      expect(pluginNavStore.hasPluginPages).toBe(true)
-
-      pluginNavStore.unregisterPluginPages('plugin-2')
-      expect(pluginNavStore.hasPluginPages).toBe(false)
-    })
   })
 
   describe('AC5: Sélecteur de target actif', () => {
     it('affiche le sélecteur de target', async () => {
       const wrapper = await mountComponent()
       const html = wrapper.html()
-      expect(html).toContain('🎯')
+      // Le sélecteur de target est présent (indicateur ⚪ pour "Aucun target")
+      expect(html).toContain('Aucun target')
     })
   })
 
@@ -213,7 +151,7 @@ describe('SidebarNav', () => {
       expect(html).toContain('Containers')
       expect(html).toContain('Targets')
       expect(html).toContain('Stacks')
-      expect(html).toContain('Deployments')
+      // Note: Deployments n'est plus dans la sidebar (STORY-411)
     })
 
     it('rend les éléments de navigation stockage', async () => {

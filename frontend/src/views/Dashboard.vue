@@ -7,7 +7,7 @@
     <!-- Statistiques globales -->
     <el-row :gutter="20" v-loading="dashboardStore.loading">
       <el-col :span="6">
-        <el-card>
+        <el-card class="clickable-card" @click="$router.push('/targets')">
           <el-statistic title="Total Targets" :value="dashboardStore.totalTargets">
             <template #suffix>
               <el-tag type="success" size="small" v-if="dashboardStore.onlineTargets > 0">
@@ -18,17 +18,17 @@
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card>
+        <el-card class="clickable-card" @click="$router.push('/stacks')">
           <el-statistic title="Total Stacks" :value="dashboardStore.totalStacks" />
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card>
+        <el-card class="clickable-card" @click="$router.push('/deployments')">
           <el-statistic title="Active Deployments" :value="dashboardStore.activeDeployments" />
         </el-card>
       </el-col>
       <el-col :span="6">
-        <el-card>
+        <el-card class="clickable-card" @click="$router.push('/workflows')">
           <el-statistic title="Workflows" :value="dashboardStore.totalWorkflows" />
         </el-card>
       </el-col>
@@ -109,5 +109,15 @@ onMounted(() => {
 <style scoped>
 .dashboard {
   padding: 20px;
+}
+
+.clickable-card {
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.clickable-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 </style>
