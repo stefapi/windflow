@@ -7,7 +7,6 @@
 - [x] STORY-404 : Nettoyage imports, routes et références orphelines
 
 #### Navigation & Layout
-- [ ] STORY-411 : Restructuration Sidebar selon les specs
 - [ ] STORY-412 : Règle des 2 clics — validation et ajustement navigation
 - [ ] STORY-413 : Responsive sidebar rétractable (tablette)
 
@@ -42,7 +41,7 @@
 
 ## 🚧 REVIEW (En attente de validation)
 
-*(Aucune story en attente de validation)*
+- [x] STORY-411 : Restructuration Sidebar selon les specs
 
 ## ✅ DONE (Terminé)
 - [x] STORY-401 : Audit & suppression Marketplace frontend

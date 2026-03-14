@@ -30,6 +30,17 @@ const routes: RouteRecordRaw[] = [
         name: 'Dashboard',
         component: () => import('@/views/Dashboard.vue'),
       },
+      // Infrastructure
+      {
+        path: 'containers',
+        name: 'Containers',
+        component: () => import('@/views/Containers.vue'),
+      },
+      {
+        path: 'vms',
+        name: 'VMs',
+        component: () => import('@/views/VMs.vue'),
+      },
       {
         path: 'targets',
         name: 'Targets',
@@ -70,6 +81,44 @@ const routes: RouteRecordRaw[] = [
         name: 'Terminal',
         component: () => import('@/views/Terminal.vue'),
         props: true,
+      },
+      // Storage & Network
+      {
+        path: 'volumes',
+        name: 'Volumes',
+        component: () => import('@/views/Volumes.vue'),
+      },
+      {
+        path: 'networks',
+        name: 'Networks',
+        component: () => import('@/views/Networks.vue'),
+      },
+      {
+        path: 'images',
+        name: 'Images',
+        component: () => import('@/views/Images.vue'),
+      },
+      // Marketplace
+      {
+        path: 'marketplace',
+        name: 'Marketplace',
+        component: () => import('@/views/Marketplace.vue'),
+      },
+      {
+        path: 'plugins',
+        name: 'Plugins',
+        component: () => import('@/views/Plugins.vue'),
+      },
+      // Administration
+      {
+        path: 'settings',
+        name: 'Settings',
+        component: () => import('@/views/Settings.vue'),
+      },
+      {
+        path: 'audit',
+        name: 'Audit',
+        component: () => import('@/views/Audit.vue'),
       },
     ],
   },
