@@ -6,7 +6,6 @@
 #### Nettoyage Marketplace
 
 #### Navigation & Layout
-- [ ] STORY-412 : Règle des 2 clics — validation et ajustement navigation
 - [ ] STORY-413 : Responsive sidebar rétractable (tablette)
 
 #### Design System
@@ -43,6 +42,7 @@
 *Aucune story en attente de validation*
 
 ## ✅ DONE (Terminé)
+- [x] STORY-412 : Règle des 2 clics — validation et ajustement navigation
 - [x] STORY-401 : Audit & suppression Marketplace frontend
 - [x] STORY-402 : Suppression API backend marketplace
 - [x] STORY-403 : Migration Alembic — suppression tables stack_review et user_favorite

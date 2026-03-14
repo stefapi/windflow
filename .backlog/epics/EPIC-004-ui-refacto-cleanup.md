@@ -69,7 +69,7 @@ Cette epic a deux axes :
 
 ### Navigation & Layout
 - [x] STORY-411 : Restructuration Sidebar selon specs (Infrastructure / Stockage & Réseau / Marketplace / Plugins / Administration + section dynamique plugins)
-- [ ] STORY-412 : Règle des 2 clics — validation et ajustement de la navigation complète
+- [x] STORY-412 : Règle des 2 clics — validation et ajustement de la navigation complète
 - [ ] STORY-413 : Responsive sidebar rétractable (tablette ≥768px)
 
 ### Design System

@@ -5,6 +5,7 @@
     </el-aside>
     <el-container>
       <el-main class="main-content">
+        <Breadcrumb />
         <router-view />
       </el-main>
     </el-container>
@@ -13,6 +14,7 @@
 
 <script setup lang="ts">
 import SidebarNav from '@/components/SidebarNav.vue'
+import Breadcrumb from '@/components/Breadcrumb.vue'
 </script>
 
 <style scoped>

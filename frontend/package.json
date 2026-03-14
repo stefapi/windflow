@@ -61,6 +61,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.37.0",
+    "jsdom": "^26.0.0",
+    "@vue/test-utils": "^2.4.6",
     "@iconify-json/carbon": "^1.2.13",
     "@iconify-json/ep": "^1.2.3",
     "@iconify-json/fa": "^1.2.2",
