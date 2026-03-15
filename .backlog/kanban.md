@@ -11,6 +11,7 @@
 - [ ] STORY-421 : Palette de couleurs thème sombre (tokens UnoCSS)
 - [ ] STORY-422 : Typographie (Inter + JetBrains Mono)
 - [ ] STORY-423 : Composants de base harmonisés (badges, barres, icônes)
+- [ ] STORY-471 : Refonte Page Login avec design unifié et nouveau logo
 
 #### Dashboard
 - [ ] STORY-431 : Barre métriques système
