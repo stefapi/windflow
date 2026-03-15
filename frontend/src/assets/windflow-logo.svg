@@ -1,0 +1,33 @@
+<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- WindFlow Logo — Source of truth for the logo design -->
+  <!-- Uses currentColor for stroke: set CSS 'color' to control the color -->
+
+  <!-- Top flow line (lighter layer) -->
+  <path
+    d="M12 22 C20 18, 30 18, 38 22 C46 26, 52 22, 56 18"
+    stroke="currentColor"
+    stroke-width="3"
+    stroke-linecap="round"
+    fill="none"
+    opacity="0.45"
+  />
+
+  <!-- Central flow line (bold — the core) -->
+  <path
+    d="M8 32 C18 26, 30 26, 40 32 C50 38, 56 32, 60 26"
+    stroke="currentColor"
+    stroke-width="3.5"
+    stroke-linecap="round"
+    fill="none"
+  />
+
+  <!-- Bottom flow line (lighter layer) -->
+  <path
+    d="M12 42 C20 38, 30 38, 38 42 C46 46, 52 42, 56 38"
+    stroke="currentColor"
+    stroke-width="3"
+    stroke-linecap="round"
+    fill="none"
+    opacity="0.45"
+  />
+</svg>

@@ -1,23 +1,7 @@
 <template>
   <div class="splash-screen">
     <div class="splash-content">
-      <div class="logo">
-        <svg
-          class="windflow-icon"
-          viewBox="0 0 24 24"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M3 10C3 10 5.5 8 9 8C12.5 8 15 10 15 10M9 16C9 16 11.5 14 15 14C18.5 14 21 16 21 16"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-          />
-          <circle cx="9" cy="10" r="1.5" fill="currentColor" />
-          <circle cx="15" cy="16" r="1.5" fill="currentColor" />
-        </svg>
-      </div>
+      <WindFlowLogo size="large" :animate="true" />
       <h1 class="title">WindFlow</h1>
       <div class="loading-container">
         <div class="spinner"></div>
@@ -28,7 +12,8 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, withDefaults } from 'vue'
+import { withDefaults, defineProps } from 'vue'
+import WindFlowLogo from '@/components/WindFlowLogo.vue'
 
 interface Props {
   message?: string
@@ -46,42 +31,25 @@ withDefaults(defineProps<Props>(), {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-color: #0c0e14;
+  background-image: radial-gradient(ellipse at 50% 40%, rgba(79, 143, 247, 0.1) 0%, transparent 60%);
   z-index: 9999;
 }
 
 .splash-content {
   text-align: center;
   color: white;
-}
-
-.logo {
-  margin-bottom: 1.5rem;
   display: flex;
-  justify-content: center;
-}
-
-.windflow-icon {
-  width: 80px;
-  height: 80px;
-  color: white;
-  animation: float 3s ease-in-out infinite;
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
+  flex-direction: column;
+  align-items: center;
 }
 
 .title {
   font-size: 2.5rem;
   font-weight: 700;
-  margin: 0 0 2rem 0;
+  margin: 16px 0 2rem;
   letter-spacing: 0.05em;
+  color: #fff;
 }
 
 .loading-container {
@@ -94,8 +62,8 @@ withDefaults(defineProps<Props>(), {
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
+  border: 3px solid rgba(79, 143, 247, 0.2);
+  border-top-color: #4f8ff7;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -108,7 +76,8 @@ withDefaults(defineProps<Props>(), {
 
 .loading-text {
   font-size: 0.95rem;
-  opacity: 0.9;
+  opacity: 0.7;
   margin: 0;
+  color: #7c8098;
 }
 </style>

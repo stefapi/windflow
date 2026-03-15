@@ -1,6 +1,6 @@
 # STORY-471 : Refonte Page Login avec Design Unifié et Nouveau Logo
 
-**Statut :** TODO
+**Statut :** DONE
 **Epic Parent :** EPIC-004 — Refonte UI, Navigation & Nettoyage Marketplace
 **Priorité :** Haute
 **Type :** Improvement
@@ -16,37 +16,37 @@ La page de login actuelle utilise un gradient violet/bleu (`#667eea` → `#764ba
 ## Critères d'acceptation (AC)
 
 ### AC-1 : Thème sombre unifié
-- [ ] Le fond de la page login utilise le même thème sombre que la sidebar (`#0c0e14`)
-- [ ] Les couleurs d'accent sont alignées sur le design system (`#4f8ff7`, `#3b82f6`)
-- [ ] La carte de login utilise des bordures subtiles (`#252838`) et un fond semi-transparent
+- [x] Le fond de la page login utilise le même thème sombre que la sidebar (`#0c0e14`)
+- [x] Les couleurs d'accent sont alignées sur le design system (`#4f8ff7`, `#3b82f6`)
+- [x] La carte de login utilise des bordures subtiles (`#252838`) et un fond semi-transparent
 
 ### AC-2 : Nouveau logo WindFlow
-- [ ] Un composant `WindFlowLogo.vue` est créé avec un SVG moderne
-- [ ] Le logo représente le concept "vent/flow" avec une spirale/tourbillon stylisée
-- [ ] Le logo supporte une animation subtile (rotation lente ou pulsation) désactivable via prop
-- [ ] Le logo est disponible en plusieurs tailles (small, medium, large) via props
-- [ ] Le composant est réutilisable dans Login, SidebarNav et SplashScreen
+- [x] Un composant `WindFlowLogo.vue` est créé avec un SVG moderne
+- [x] Le logo représente le concept "vent/flow" avec une spirale/tourbillon stylisée
+- [x] Le logo supporte une animation subtile (rotation lente ou pulsation) désactivable via prop
+- [x] Le logo est disponible en plusieurs tailles (small, medium, large) via props
+- [x] Le composant est réutilisable dans Login, SidebarNav et SplashScreen
 
 ### AC-3 : Formulaire de login stylisé
-- [ ] Les inputs utilisent le thème sombre avec bordures subtiles
-- [ ] Le bouton de login a un gradient et un effet hover moderne
-- [ ] Les labels et textes sont dans la couleur `#e2e5f0`
-- [ ] Le formulaire est centré et responsive
+- [x] Les inputs utilisent le thème sombre avec bordures subtiles
+- [x] Le bouton de login a un gradient et un effet hover moderne
+- [x] Les labels et textes sont dans la couleur `#e2e5f0`
+- [x] Le formulaire est centré et responsive
 
 ### AC-4 : Intégration du logo
-- [ ] Le nouveau logo remplace l'emoji `🌀` dans SidebarNav
-- [ ] Le nouveau logo est utilisé dans la page Login avec animation
-- [ ] Le nouveau logo est utilisé dans SplashScreen (remplace le SVG existant)
+- [x] Le nouveau logo remplace l'emoji `🌀` dans SidebarNav
+- [x] Le nouveau logo est utilisé dans la page Login avec animation
+- [x] Le nouveau logo est utilisé dans SplashScreen (remplace le SVG existant)
 
 ### AC-5 : Animations et transitions
-- [ ] Animation d'entrée fluide pour la carte de login
-- [ ] Animation subtile du logo (rotation lente 10s ou pulsation)
-- [ ] Transitions hover sur les éléments interactifs
+- [x] Animation d'entrée fluide pour la carte de login
+- [x] Animation subtile du logo (pulsation 4s avec glow)
+- [x] Transitions hover sur les éléments interactifs
 
 ### AC-6 : Responsive design
-- [ ] La page s'adapte aux écrans mobiles (< 768px)
-- [ ] Le logo et le formulaire restent lisibles sur petit écran
-- [ ] Les inputs sont utilisables sur tactile
+- [x] La page s'adapte aux écrans mobiles (< 768px)
+- [x] Le logo et le formulaire restent lisibles sur petit écran
+- [x] Les inputs sont utilisables sur tactile
 
 ## Analyse d'impact
 
@@ -102,9 +102,33 @@ La page de login actuelle utilise un gradient violet/bleu (`#667eea` → `#764ba
 
 ## Notes d'implémentation
 
-*(À compléter après implémentation)*
+**Date :** 15/03/2026
+
+### Fichiers créés
+- `frontend/src/components/WindFlowLogo.vue` : Composant logo SVG réutilisable avec props `size` (small/medium/large), `animate` (pulsation), `showText` (texte "WindFlow")
+- `frontend/tests/unit/components/WindFlowLogo.spec.ts` : 17 tests unitaires couvrant tous les props et l'accessibilité
+- `frontend/tests/unit/views/Login.spec.ts` : 14 tests unitaires couvrant thème, logo, formulaire et structure
+
+### Fichiers modifiés
+- `frontend/src/views/Login.vue` : Refonte complète — fond sombre `#0c0e14`, carte semi-transparente avec backdrop-filter, particules de fond animées, inputs dark theme via `:deep()`, bouton gradient bleu, animation d'entrée fadeIn
+- `frontend/src/components/SidebarNav.vue` : Remplacement emoji `🌀` par composant `WindFlowLogo` (size="small", showText dynamique selon état collapsed)
+- `frontend/src/components/SplashScreen.vue` : Remplacement SVG inline par composant `WindFlowLogo` (size="large", animate=true), fond sombre unifié
+
+### Décisions techniques
+- **SVG avec gradients** : Utilisation de `linearGradient` pour des couleurs riches dans le logo (3 gradients : main, light, accent)
+- **Animation pulsation** : Préféré à une rotation pour le logo car plus subtil et non distrayant pendant la saisie du formulaire
+- **Backdrop-filter** : Effet de flou derrière la carte de login pour un rendu glassmorphism élégant
+- **Particules de fond** : 3 divs avec blur et animation float pour donner de la profondeur sans surcharger le GPU
+- **Override Element Plus** : Utilisation de `:deep(.el-input__wrapper)` pour styler les inputs en thème sombre
+
+### Tests
+- `WindFlowLogo.spec.ts` : 17/17 tests passent ✅
+- `Login.spec.ts` : 14/14 tests passent ✅
+- `SidebarNav.spec.ts` : 22/22 tests passent (non-régression) ✅
+- Total : 53/53 tests passent
+- Build Vite : ✅
 
 ---
 
 **Créé le :** 15/03/2026
-**Assigné à :** —
+**Terminé le :** 15/03/2026

@@ -11,7 +11,6 @@
 - [ ] STORY-421 : Palette de couleurs thème sombre (tokens UnoCSS)
 - [ ] STORY-422 : Typographie (Inter + JetBrains Mono)
 - [ ] STORY-423 : Composants de base harmonisés (badges, barres, icônes)
-- [ ] STORY-471 : Refonte Page Login avec design unifié et nouveau logo
 
 #### Dashboard
 - [ ] STORY-431 : Barre métriques système
@@ -37,9 +36,12 @@
 ### EPIC-002 : Gestion des Machines Virtuelles — KVM & Proxmox (Phase 2 — Q2 2026)
 ### EPIC-003 : Sécurité, GitOps & Multi-Machines (Phase 3-4 — Q3–Q4 2026)
 
+## 🏗️ IN PROGRESS (En cours)
+
 ## 🚧 REVIEW (En attente de validation)
 
 ## ✅ DONE (Terminé)
+- [x] STORY-471 : Refonte Page Login avec design unifié et nouveau logo
 - [x] STORY-413 : Responsive sidebar rétractable (tablette)
 - [x] STORY-412 : Règle des 2 clics — validation et ajustement navigation
 - [x] STORY-401 : Audit & suppression Marketplace frontend

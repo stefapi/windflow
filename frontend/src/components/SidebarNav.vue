@@ -2,8 +2,7 @@
   <nav class="sidebar-nav" :class="{ collapsed: isCollapsed }">
     <!-- Logo -->
     <div class="sidebar-logo">
-      <span class="logo-icon">🌀</span>
-      <span class="logo-text" v-show="!isCollapsed">WindFlow</span>
+      <WindFlowLogo size="small" :show-text="!isCollapsed" variant="dark" />
       <!-- Toggle button (desktop only) -->
       <button
         v-if="sidebar.isDesktop.value"
@@ -234,6 +233,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useTargetsStore } from '@/stores/targets'
 import { usePluginNavStore } from '@/stores/pluginNav'
 import { useSidebar } from '@/composables/useSidebar'
+import WindFlowLogo from '@/components/WindFlowLogo.vue'
 import {
   Odometer,
   Box,
@@ -376,18 +376,6 @@ function handleUserCommand(command: string): void {
   min-height: 64px;
 }
 
-.logo-icon {
-  font-size: 24px;
-  flex-shrink: 0;
-}
-
-.logo-text {
-  font-size: 18px;
-  font-weight: 600;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-}
 
 /* Toggle button */
 .toggle-btn {
