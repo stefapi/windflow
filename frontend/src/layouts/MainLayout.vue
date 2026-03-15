@@ -26,10 +26,16 @@
           </el-icon>
         </button>
         <span class="mobile-title">WindFlow</span>
+        <div class="mobile-header-actions">
+          <ThemeToggle />
+        </div>
       </el-header>
 
       <el-main class="main-content">
-        <Breadcrumb />
+        <div class="content-header">
+          <Breadcrumb />
+          <ThemeToggle v-if="!sidebar.isMobile.value" />
+        </div>
         <router-view />
       </el-main>
     </el-container>
@@ -40,6 +46,7 @@
 import { computed } from 'vue'
 import SidebarNav from '@/components/SidebarNav.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 import { useSidebar } from '@/composables/useSidebar'
 import { Menu, Close } from '@element-plus/icons-vue'
 
@@ -61,7 +68,7 @@ const sidebarWidth = computed(() => {
 }
 
 .sidebar-aside {
-  background-color: #0c0e14;
+  background-color: var(--color-bg-primary);
   height: 100vh;
   overflow: hidden;
   transition: width 0.3s ease;
@@ -83,14 +90,14 @@ const sidebarWidth = computed(() => {
   display: flex;
   align-items: center;
   padding: 0 16px;
-  background-color: #0c0e14;
-  border-bottom: 1px solid #252838;
+  background-color: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .hamburger-btn {
   background: transparent;
   border: none;
-  color: #e2e5f0;
+  color: var(--color-text-primary);
   cursor: pointer;
   padding: 8px;
   border-radius: 4px;
@@ -101,21 +108,32 @@ const sidebarWidth = computed(() => {
 }
 
 .hamburger-btn:hover {
-  background-color: #1c1f2b;
+  background-color: var(--color-bg-hover);
 }
 
 .mobile-title {
   margin-left: 12px;
   font-size: 18px;
   font-weight: 600;
-  color: #fff;
+  color: var(--color-text-primary);
+}
+
+.mobile-header-actions {
+  margin-left: auto;
 }
 
 .main-content {
-  background-color: #f0f2f5;
+  background-color: var(--color-bg-secondary);
   padding: 20px;
   overflow-y: auto;
   height: 100vh;
+}
+
+.content-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
 }
 
 /* Responsive adjustments */

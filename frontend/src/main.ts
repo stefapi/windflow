@@ -9,6 +9,9 @@ import 'element-plus/dist/index.css'
 import '@unocss/reset/tailwind.css'
 import 'uno.css'
 
+// Theme CSS (must be imported after element-plus to override styles)
+import './styles/theme.css'
+
 import App from './App.vue'
 import SplashScreen from './components/SplashScreen.vue'
 import router from './router'

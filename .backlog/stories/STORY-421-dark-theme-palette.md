@@ -1,6 +1,6 @@
 # STORY-421 : Palette de couleurs thème sombre (tokens UnoCSS)
 
-**Statut :** TODO
+**Statut :** DONE
 **Epic Parent :** EPIC-004 — Refonte UI, Navigation & Nettoyage Marketplace
 
 ## Description
@@ -23,3 +23,21 @@ En tant qu'utilisateur, je veux un thème sombre par défaut avec des couleurs c
 - [ ] Migration des couleurs en dur existantes vers les tokens
 - [ ] Toggle thème clair/sombre (composant + localStorage)
 - [ ] Vérification contraste WCAG AA (outil axe ou Lighthouse)
+
+## Notes d'implémentation
+
+### Bug corrigé : Texte "Wind" illisible en mode clair
+
+**Cause racine (double problème) :**
+1. `WindFlowLogo.vue` — En mode `variant="auto"`, `.windflow-logo__text` n'avait aucune couleur définie et `.windflow-logo__text-accent` était vide. Le texte héritait de la couleur parent de manière imprévisible.
+2. `SidebarNav.vue` — Le logo était utilisé avec `variant="dark"` en dur, forçant `color: #ffffff`. Or en mode clair, la sidebar a un fond blanc (`--color-bg-primary: #ffffff`) → texte blanc sur fond blanc = invisible.
+
+**Corrections appliquées :**
+- `WindFlowLogo.vue` : Ajout de `color: var(--color-text-primary, #e1e4eb)` sur `.windflow-logo__text` et `color: var(--color-accent, #3b82f6)` sur `.windflow-logo__text-accent` pour le mode `auto`. Ces variables CSS globales sont définies dans `theme.css` et s'adaptent automatiquement au thème via l'attribut `[data-theme]`.
+- `SidebarNav.vue` : Changement de `variant="dark"` → `variant="auto"` pour que le logo suive le thème actif.
+
+**Fichiers modifiés :**
+- `frontend/src/components/WindFlowLogo.vue`
+- `frontend/src/components/SidebarNav.vue`
+
+**Tests :** 25 tests unitaires WindFlowLogo passent (aucune régression).

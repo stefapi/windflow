@@ -8,7 +8,6 @@
 #### Navigation & Layout
 
 #### Design System
-- [ ] STORY-421 : Palette de couleurs thème sombre (tokens UnoCSS)
 - [ ] STORY-422 : Typographie (Inter + JetBrains Mono)
 - [ ] STORY-423 : Composants de base harmonisés (badges, barres, icônes)
 
@@ -41,6 +40,7 @@
 ## 🚧 REVIEW (En attente de validation)
 
 ## ✅ DONE (Terminé)
+- [x] STORY-421 : Palette de couleurs thème sombre (tokens UnoCSS)
 - [x] STORY-471 : Refonte Page Login avec design unifié et nouveau logo
 - [x] STORY-413 : Responsive sidebar rétractable (tablette)
 - [x] STORY-412 : Règle des 2 clics — validation et ajustement navigation

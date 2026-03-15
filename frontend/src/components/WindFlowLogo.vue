@@ -107,17 +107,17 @@ const strokeColor = computed(() => {
   }
 }
 
-/* Texte */
+/* Texte - utilise les variables CSS globales du thème */
 .windflow-logo__text {
   font-weight: 500;
-  color: var(--windflow-text-color, #fff);
+  color: var(--color-text-primary, #e1e4eb);
   white-space: nowrap;
   overflow: hidden;
   letter-spacing: 0.01em;
 }
 
 .windflow-logo__text-accent {
-  color: var(--windflow-logo-color, #3b82f6);
+  color: var(--color-accent, #3b82f6);
 }
 
 .windflow-logo--small .windflow-logo__text {
@@ -132,22 +132,7 @@ const strokeColor = computed(() => {
   font-size: 28px;
 }
 
-/* Dark mode auto-detection */
-@media (prefers-color-scheme: dark) {
-  .windflow-logo {
-    --windflow-logo-color: #60a5fa;
-    --windflow-text-color: #e8e8f0;
-  }
-}
-
-@media (prefers-color-scheme: light) {
-  .windflow-logo {
-    --windflow-logo-color: #3b82f6;
-    --windflow-text-color: #1a1a2e;
-  }
-}
-
-/* Explicit variant overrides (take priority over media queries) */
+/* Explicit variant overrides (take priority over CSS variables) */
 .windflow-logo--dark .windflow-logo__text {
   color: #ffffff;
 }
@@ -157,10 +142,10 @@ const strokeColor = computed(() => {
 }
 
 .windflow-logo--light .windflow-logo__text {
-  color: #1a1a2e;
+  color: #1e293b;
 }
 
 .windflow-logo--light .windflow-logo__text-accent {
-  color: #3b82f6;
+  color: #2563eb;
 }
 </style>

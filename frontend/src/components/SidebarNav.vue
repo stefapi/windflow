@@ -2,7 +2,7 @@
   <nav class="sidebar-nav" :class="{ collapsed: isCollapsed }">
     <!-- Logo -->
     <div class="sidebar-logo">
-      <WindFlowLogo size="small" :show-text="!isCollapsed" variant="dark" />
+      <WindFlowLogo size="small" :show-text="!isCollapsed" variant="auto" />
       <!-- Toggle button (desktop only) -->
       <button
         v-if="sidebar.isDesktop.value"
@@ -356,8 +356,8 @@ function handleUserCommand(command: string): void {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #0c0e14;
-  color: #e2e5f0;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
   width: 220px;
   transition: width 0.3s ease;
 }
@@ -372,17 +372,16 @@ function handleUserCommand(command: string): void {
   align-items: center;
   gap: 10px;
   padding: 20px;
-  border-bottom: 1px solid #252838;
+  border-bottom: 1px solid var(--color-border);
   min-height: 64px;
 }
-
 
 /* Toggle button */
 .toggle-btn {
   margin-left: auto;
   background: transparent;
   border: none;
-  color: #7c8098;
+  color: var(--color-text-secondary);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -393,8 +392,8 @@ function handleUserCommand(command: string): void {
 }
 
 .toggle-btn:hover {
-  color: #e2e5f0;
-  background-color: #1c1f2b;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-elevated);
 }
 
 .sidebar-content {
@@ -412,7 +411,7 @@ function handleUserCommand(command: string): void {
   padding: 8px 20px 4px;
   font-size: 11px;
   font-weight: 600;
-  color: #7c8098;
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap;
@@ -431,22 +430,22 @@ function handleUserCommand(command: string): void {
   padding: 10px 20px;
   cursor: pointer;
   transition: background-color 0.2s;
-  color: #e2e5f0;
+  color: var(--color-text-primary);
 }
 
 .nav-item:hover {
-  background-color: #1c1f2b;
+  background-color: var(--color-bg-elevated);
 }
 
 .nav-item.active {
-  background-color: #1c1f2b;
-  color: #4f8ff7;
+  background-color: var(--color-bg-elevated);
+  color: var(--color-accent);
 }
 
 .nav-item.plugin-title {
   font-size: 11px;
   font-weight: 500;
-  color: #7c8098;
+  color: var(--color-text-secondary);
   padding: 6px 20px;
   cursor: default;
 }
@@ -476,7 +475,7 @@ function handleUserCommand(command: string): void {
 }
 
 .nav-badge {
-  background-color: #4f8ff7;
+  background-color: var(--color-accent);
   color: #fff;
   font-size: 11px;
   padding: 2px 6px;
@@ -511,8 +510,8 @@ function handleUserCommand(command: string): void {
 
 .sidebar-footer {
   padding: 12px 16px;
-  border-top: 1px solid #252838;
-  background-color: #0c0e14;
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-bg-primary);
 }
 
 .target-selector {
@@ -520,7 +519,7 @@ function handleUserCommand(command: string): void {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background-color: #151821;
+  background-color: var(--color-bg-secondary);
   border-radius: 8px;
   cursor: pointer;
   margin-bottom: 8px;
@@ -528,7 +527,7 @@ function handleUserCommand(command: string): void {
 }
 
 .target-selector:hover {
-  background-color: #1c1f2b;
+  background-color: var(--color-bg-elevated);
 }
 
 .target-indicator {
@@ -538,7 +537,7 @@ function handleUserCommand(command: string): void {
 
 .target-name {
   font-size: 13px;
-  color: #e2e5f0;
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -562,20 +561,20 @@ function handleUserCommand(command: string): void {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background-color: #151821;
+  background-color: var(--color-bg-secondary);
   border-radius: 8px;
 }
 
 .user-icon {
   font-size: 16px;
-  color: #7c8098;
+  color: var(--color-text-secondary);
   flex-shrink: 0;
 }
 
 .user-name {
   flex: 1;
   font-size: 13px;
-  color: #e2e5f0;
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -583,12 +582,12 @@ function handleUserCommand(command: string): void {
 .user-menu-trigger {
   cursor: pointer;
   padding: 4px;
-  color: #7c8098;
+  color: var(--color-text-secondary);
   transition: color 0.2s;
 }
 
 .user-menu-trigger:hover {
-  color: #e2e5f0;
+  color: var(--color-text-primary);
 }
 
 /* Collapsed user info */
