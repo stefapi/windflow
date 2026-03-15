@@ -70,7 +70,7 @@ Cette epic a deux axes :
 ### Navigation & Layout
 - [x] STORY-411 : Restructuration Sidebar selon specs (Infrastructure / Stockage & Réseau / Marketplace / Plugins / Administration + section dynamique plugins)
 - [x] STORY-412 : Règle des 2 clics — validation et ajustement de la navigation complète
-- [ ] STORY-413 : Responsive sidebar rétractable (tablette ≥768px)
+- [x] STORY-413 : Responsive sidebar rétractable (tablette ≥768px)
 
 ### Design System
 - [ ] STORY-421 : Palette de couleurs thème sombre (tokens UnoCSS, fond `#0f1117`, accent `#3b82f6`, etc.)

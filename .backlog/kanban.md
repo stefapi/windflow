@@ -6,7 +6,6 @@
 #### Nettoyage Marketplace
 
 #### Navigation & Layout
-- [ ] STORY-413 : Responsive sidebar rétractable (tablette)
 
 #### Design System
 - [ ] STORY-421 : Palette de couleurs thème sombre (tokens UnoCSS)
@@ -39,9 +38,8 @@
 
 ## 🚧 REVIEW (En attente de validation)
 
-*Aucune story en attente de validation*
-
 ## ✅ DONE (Terminé)
+- [x] STORY-413 : Responsive sidebar rétractable (tablette)
 - [x] STORY-412 : Règle des 2 clics — validation et ajustement navigation
 - [x] STORY-401 : Audit & suppression Marketplace frontend
 - [x] STORY-402 : Suppression API backend marketplace

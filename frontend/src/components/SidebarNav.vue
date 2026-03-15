@@ -1,9 +1,21 @@
 <template>
-  <nav class="sidebar-nav">
+  <nav class="sidebar-nav" :class="{ collapsed: isCollapsed }">
     <!-- Logo -->
     <div class="sidebar-logo">
       <span class="logo-icon">🌀</span>
-      <span class="logo-text">WindFlow</span>
+      <span class="logo-text" v-show="!isCollapsed">WindFlow</span>
+      <!-- Toggle button (desktop only) -->
+      <button
+        v-if="sidebar.isDesktop.value"
+        class="toggle-btn"
+        @click="sidebar.toggle()"
+        :title="isCollapsed ? 'Déplier la sidebar' : 'Rétracter la sidebar'"
+      >
+        <el-icon>
+          <ArrowLeft v-if="!isCollapsed" />
+          <ArrowRight v-else />
+        </el-icon>
+      </button>
     </div>
 
     <!-- Navigation Sections -->
@@ -18,15 +30,24 @@
             :class="{ active: isActive(item.path) }"
             @click="navigate(item.path)"
           >
-            <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
-            <span class="nav-label">{{ item.label }}</span>
+            <el-tooltip
+              :content="item.label"
+              placement="right"
+              :disabled="!isCollapsed"
+              :show-after="300"
+            >
+              <div class="nav-item-content">
+                <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+                <span class="nav-label">{{ item.label }}</span>
+              </div>
+            </el-tooltip>
           </li>
         </ul>
       </div>
 
       <!-- Infrastructure Section -->
       <div class="nav-section">
-        <div class="section-title">INFRASTRUCTURE</div>
+        <div class="section-title" v-show="!isCollapsed">INFRASTRUCTURE</div>
         <ul class="nav-list">
           <li
             v-for="item in infrastructureItems"
@@ -35,15 +56,24 @@
             :class="{ active: isActive(item.path) }"
             @click="navigate(item.path)"
           >
-            <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
-            <span class="nav-label">{{ item.label }}</span>
+            <el-tooltip
+              :content="item.label"
+              placement="right"
+              :disabled="!isCollapsed"
+              :show-after="300"
+            >
+              <div class="nav-item-content">
+                <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+                <span class="nav-label">{{ item.label }}</span>
+              </div>
+            </el-tooltip>
           </li>
         </ul>
       </div>
 
       <!-- Storage & Network Section -->
       <div class="nav-section">
-        <div class="section-title">STOCKAGE & RÉSEAU</div>
+        <div class="section-title" v-show="!isCollapsed">STOCKAGE & RÉSEAU</div>
         <ul class="nav-list">
           <li
             v-for="item in storageNetworkItems"
@@ -52,15 +82,24 @@
             :class="{ active: isActive(item.path) }"
             @click="navigate(item.path)"
           >
-            <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
-            <span class="nav-label">{{ item.label }}</span>
+            <el-tooltip
+              :content="item.label"
+              placement="right"
+              :disabled="!isCollapsed"
+              :show-after="300"
+            >
+              <div class="nav-item-content">
+                <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+                <span class="nav-label">{{ item.label }}</span>
+              </div>
+            </el-tooltip>
           </li>
         </ul>
       </div>
 
       <!-- Marketplace Section -->
       <div class="nav-section">
-        <div class="section-title">MARKETPLACE</div>
+        <div class="section-title" v-show="!isCollapsed">MARKETPLACE</div>
         <ul class="nav-list">
           <li
             v-for="item in marketplaceItems"
@@ -69,22 +108,32 @@
             :class="{ active: isActive(item.path) }"
             @click="navigate(item.path)"
           >
-            <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
-            <span class="nav-label">{{ item.label }}</span>
-            <span v-if="item.badge" class="nav-badge">{{ item.badge }}</span>
+            <el-tooltip
+              :content="item.label"
+              placement="right"
+              :disabled="!isCollapsed"
+              :show-after="300"
+            >
+              <div class="nav-item-content">
+                <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+                <span class="nav-label">{{ item.label }}</span>
+                <span v-if="item.badge" class="nav-badge">{{ item.badge }}</span>
+              </div>
+            </el-tooltip>
           </li>
         </ul>
       </div>
 
       <!-- Dynamic Plugin Sections -->
       <div v-if="pluginNavStore.hasPluginPages" class="nav-section plugin-section">
-        <div class="section-title">PLUGINS</div>
+        <div class="section-title" v-show="!isCollapsed">PLUGINS</div>
         <ul class="nav-list">
           <li
             v-for="section in pluginNavStore.sections"
             :key="section.pluginId"
             class="nav-item plugin-title"
             disabled
+            v-show="!isCollapsed"
           >
             <span class="nav-label">{{ section.title }}</span>
           </li>
@@ -95,15 +144,24 @@
             :class="{ active: isActive(item.path) }"
             @click="navigate(item.path)"
           >
-            <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
-            <span class="nav-label">{{ item.label }}</span>
+            <el-tooltip
+              :content="item.label"
+              placement="right"
+              :disabled="!isCollapsed"
+              :show-after="300"
+            >
+              <div class="nav-item-content">
+                <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+                <span class="nav-label">{{ item.label }}</span>
+              </div>
+            </el-tooltip>
           </li>
         </ul>
       </div>
 
       <!-- Administration Section -->
       <div class="nav-section">
-        <div class="section-title">ADMINISTRATION</div>
+        <div class="section-title" v-show="!isCollapsed">ADMINISTRATION</div>
         <ul class="nav-list">
           <li
             v-for="item in administrationItems"
@@ -112,8 +170,17 @@
             :class="{ active: isActive(item.path) }"
             @click="navigate(item.path)"
           >
-            <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
-            <span class="nav-label">{{ item.label }}</span>
+            <el-tooltip
+              :content="item.label"
+              placement="right"
+              :disabled="!isCollapsed"
+              :show-after="300"
+            >
+              <div class="nav-item-content">
+                <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+                <span class="nav-label">{{ item.label }}</span>
+              </div>
+            </el-tooltip>
           </li>
         </ul>
       </div>
@@ -122,26 +189,40 @@
     <!-- Footer: Target Selector & User -->
     <div class="sidebar-footer">
       <!-- Active Target Selector -->
-      <div class="target-selector" @click="openTargetSelector">
-        <span class="target-indicator">{{ targetIndicator }}</span>
-        <span class="target-name">{{ activeTargetName }}</span>
-      </div>
+      <el-tooltip
+        :content="activeTargetName"
+        placement="right"
+        :disabled="!isCollapsed"
+        :show-after="300"
+      >
+        <div class="target-selector" @click="openTargetSelector">
+          <span class="target-indicator">{{ targetIndicator }}</span>
+          <span class="target-name" v-show="!isCollapsed">{{ activeTargetName }}</span>
+        </div>
+      </el-tooltip>
 
       <!-- User Info -->
-      <div class="user-info">
-        <el-icon class="user-icon"><User /></el-icon>
-        <span class="user-name">{{ authStore.user?.username || 'Utilisateur' }}</span>
-        <el-dropdown @command="handleUserCommand">
-          <span class="user-menu-trigger">
-            <el-icon><MoreFilled /></el-icon>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="logout">Déconnexion</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
+      <el-tooltip
+        :content="authStore.user?.username || 'Utilisateur'"
+        placement="right"
+        :disabled="!isCollapsed"
+        :show-after="300"
+      >
+        <div class="user-info">
+          <el-icon class="user-icon"><User /></el-icon>
+          <span class="user-name" v-show="!isCollapsed">{{ authStore.user?.username || 'Utilisateur' }}</span>
+          <el-dropdown @command="handleUserCommand" v-show="!isCollapsed">
+            <span class="user-menu-trigger">
+              <el-icon><MoreFilled /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="logout">Déconnexion</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+      </el-tooltip>
     </div>
   </nav>
 </template>
@@ -152,6 +233,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useTargetsStore } from '@/stores/targets'
 import { usePluginNavStore } from '@/stores/pluginNav'
+import { useSidebar } from '@/composables/useSidebar'
 import {
   Odometer,
   Box,
@@ -167,6 +249,8 @@ import {
   DocumentChecked,
   User,
   MoreFilled,
+  ArrowLeft,
+  ArrowRight,
 } from '@element-plus/icons-vue'
 import type { NavItem, PluginNavItem } from '@/types/navigation'
 
@@ -175,6 +259,15 @@ const router = useRouter()
 const authStore = useAuthStore()
 const targetsStore = useTargetsStore()
 const pluginNavStore = usePluginNavStore()
+
+// Sidebar responsive state
+const sidebar = useSidebar()
+const isCollapsed = computed(() => {
+  if (sidebar.isMobile.value) {
+    return !sidebar.isMobileOpen.value // Sur mobile, collapsed = fermé
+  }
+  return sidebar.isCollapsed.value
+})
 
 // Dashboard items (no section title)
 const dashboardItems: NavItem[] = [
@@ -265,6 +358,13 @@ function handleUserCommand(command: string): void {
   height: 100%;
   background-color: #0c0e14;
   color: #e2e5f0;
+  width: 220px;
+  transition: width 0.3s ease;
+}
+
+/* Collapsed state */
+.sidebar-nav.collapsed {
+  width: 64px;
 }
 
 .sidebar-logo {
@@ -273,21 +373,46 @@ function handleUserCommand(command: string): void {
   gap: 10px;
   padding: 20px;
   border-bottom: 1px solid #252838;
+  min-height: 64px;
 }
 
 .logo-icon {
   font-size: 24px;
+  flex-shrink: 0;
 }
 
 .logo-text {
   font-size: 18px;
   font-weight: 600;
   color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Toggle button */
+.toggle-btn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #7c8098;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggle-btn:hover {
+  color: #e2e5f0;
+  background-color: #1c1f2b;
 }
 
 .sidebar-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 10px 0;
 }
 
@@ -302,6 +427,8 @@ function handleUserCommand(command: string): void {
   color: #7c8098;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .nav-list {
@@ -313,7 +440,6 @@ function handleUserCommand(command: string): void {
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
   padding: 10px 20px;
   cursor: pointer;
   transition: background-color 0.2s;
@@ -341,13 +467,24 @@ function handleUserCommand(command: string): void {
   background-color: transparent;
 }
 
+/* Nav item content wrapper */
+.nav-item-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
 .nav-icon {
   font-size: 18px;
+  flex-shrink: 0;
 }
 
 .nav-label {
   flex: 1;
   font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .nav-badge {
@@ -356,6 +493,32 @@ function handleUserCommand(command: string): void {
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 10px;
+}
+
+/* Collapsed state adjustments */
+.sidebar-nav.collapsed .sidebar-logo {
+  flex-direction: column;
+  padding: 12px 8px;
+  gap: 8px;
+}
+
+.sidebar-nav.collapsed .toggle-btn {
+  margin-left: 0;
+  width: 100%;
+}
+
+.sidebar-nav.collapsed .nav-item {
+  justify-content: center;
+  padding: 10px;
+}
+
+.sidebar-nav.collapsed .nav-item-content {
+  justify-content: center;
+}
+
+.sidebar-nav.collapsed .nav-label,
+.sidebar-nav.collapsed .nav-badge {
+  display: none;
 }
 
 .sidebar-footer {
@@ -382,11 +545,28 @@ function handleUserCommand(command: string): void {
 
 .target-indicator {
   font-size: 12px;
+  flex-shrink: 0;
 }
 
 .target-name {
   font-size: 13px;
   color: #e2e5f0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Collapsed footer */
+.sidebar-nav.collapsed .sidebar-footer {
+  padding: 12px 8px;
+}
+
+.sidebar-nav.collapsed .target-selector {
+  justify-content: center;
+  padding: 8px;
+}
+
+.sidebar-nav.collapsed .target-name {
+  display: none;
 }
 
 .user-info {
@@ -401,12 +581,15 @@ function handleUserCommand(command: string): void {
 .user-icon {
   font-size: 16px;
   color: #7c8098;
+  flex-shrink: 0;
 }
 
 .user-name {
   flex: 1;
   font-size: 13px;
   color: #e2e5f0;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .user-menu-trigger {
@@ -418,5 +601,37 @@ function handleUserCommand(command: string): void {
 
 .user-menu-trigger:hover {
   color: #e2e5f0;
+}
+
+/* Collapsed user info */
+.sidebar-nav.collapsed .user-info {
+  justify-content: center;
+  padding: 8px;
+}
+
+.sidebar-nav.collapsed .user-name {
+  display: none;
+}
+
+/* Responsive: Mobile overlay sidebar */
+@media (max-width: 767px) {
+  .sidebar-nav {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    z-index: 1000;
+    transform: translateX(-100%);
+    width: 220px !important;
+  }
+
+  .sidebar-nav:not(.collapsed) {
+    transform: translateX(0);
+  }
+
+  /* On mobile, collapsed means hidden */
+  .sidebar-nav.collapsed {
+    transform: translateX(-100%);
+  }
 }
 </style>
