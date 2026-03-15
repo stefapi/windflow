@@ -27,10 +27,18 @@
     "sizecheck": "npx vite-bundle-visualizer",
     "test": "vitest",
     "test:ci": "vitest --watch=false",
+    "test:unit": "vitest run --dir tests/unit",
+    "test:unit:watch": "vitest --dir tests/unit",
+    "test:integration": "vitest run --dir tests/integration",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:ci": "vitest run --coverage --watch=false",
     "test:e2e": "start-server-and-test preview http://localhost:3001 'npx playwright test'",
     "test:e2e:dev": "start-server-and-test dev http://localhost:3001 'npx playwright test'",
+    "test:e2e:ci": "npx playwright test",
     "test:e2eui:dev": "start-server-and-test dev http://localhost:3001 'npx playwright test --ui'",
-    "test:record:dev": "start-server-and-test dev http://localhost:3001 'npx playwright codegen http://localhost:3001'"
+    "test:record:dev": "start-server-and-test dev http://localhost:3001 'npx playwright codegen http://localhost:3001'",
+    "test:all": "pnpm test:unit && pnpm test:integration && pnpm test:e2e",
+    "test:all:ci": "pnpm test:unit && pnpm test:integration && pnpm test:e2e:ci"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

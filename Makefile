@@ -147,8 +147,17 @@ backend-typecheck: ## 🔍 Type check the backend code
 backend-build: ## 🏗 Build backend package
 	$(POETRY) build
 
-backend-test: ## 🧪 Run backend tests
-	$(POETRY) run pytest $(BACKEND_DIR)/tests/ -v --cov=$(BACKEND_DIR) --cov-report=html --cov-report=term
+backend-test-unit: ## 🧪 Run backend unit tests only
+	$(POETRY) run pytest $(BACKEND_DIR)/tests/unit/ -v --cov=$(BACKEND_DIR) --cov-report=html --cov-report=term
+
+backend-test-integration: ## 🧪 Run backend integration tests only
+	$(POETRY) run pytest $(BACKEND_DIR)/tests/integration/ -v --cov=$(BACKEND_DIR) --cov-report=html --cov-report=term
+
+backend-test-coverage: ## ☂️ Run backend tests with coverage report
+	$(POETRY) run pytest $(BACKEND_DIR)/tests/ --cov=$(BACKEND_DIR) --cov-report=html --cov-report=term
+	$(BROWSER) htmlcov/index.html
+
+backend-test-all: backend-test-unit backend-test-integration ## 🧪 Run all backend tests (unit + integration)
 
 backend-format: ## 🧺 Format backend code
 	$(POETRY) run isort $(BACKEND_DIR)
@@ -226,7 +235,22 @@ frontend-format: ## 🧺 Format frontend code
 frontend-test: ## 🧪 Run frontend unit tests
 	cd $(FRONTEND_DIR) && $(PNPM) test:ci
 
+frontend-test-unit: ## 🧪 Run frontend unit tests only
+	cd $(FRONTEND_DIR) && $(PNPM) test:unit
+
+frontend-test-unit-watch: ## 🧪 Run frontend unit tests in watch mode
+	cd $(FRONTEND_DIR) && $(PNPM) test:unit:watch
+
+frontend-test-integration: ## 🧪 Run frontend integration tests
+	cd $(FRONTEND_DIR) && $(PNPM) test:integration
+
+frontend-test-coverage: ## ☂️ Run frontend tests with coverage report
+	cd $(FRONTEND_DIR) && $(PNPM) test:coverage
+
 frontend-test-e2e: ## 🧪 Run frontend end-to-end tests
+	cd $(FRONTEND_DIR) && $(PNPM) test:e2e
+
+frontend-test-e2e-dev: ## 🧪 Run frontend end-to-end tests with dev server
 	cd $(FRONTEND_DIR) && $(PNPM) test:e2e:dev
 
 frontend-test-e2e-ui: ## 🧪 Run frontend end-to-end tests with UI
@@ -234,6 +258,9 @@ frontend-test-e2e-ui: ## 🧪 Run frontend end-to-end tests with UI
 
 frontend-test-record: ## 🎥 Record frontend end-to-end tests
 	cd $(FRONTEND_DIR) && $(PNPM) test:record:dev
+
+frontend-test-all: ## 🧪 Run all frontend tests (unit, integration, e2e)
+	cd $(FRONTEND_DIR) && $(PNPM) test:all
 
 frontend-typecheck: ## 🔍 Type check frontend code
 	cd $(FRONTEND_DIR) && $(PNPM) typecheck
