@@ -155,24 +155,33 @@ async def login(
     session: AsyncSession = Depends(get_db)
 ):
     """User authentication and JWT token generation."""
-    # Récupérer l'utilisateur
-    user = await UserService.get_by_username(session, form_data.username)
-    if not user:
-        user = await UserService.get_by_email(session, form_data.username)
+    # Mode développement : auto-login avec credentials vides
+    if settings.disable_auth and not form_data.username and not form_data.password:
+        user = await UserService.get_first_superadmin(session)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No superadmin user found in database for development mode"
+            )
+    else:
+        # Récupérer l'utilisateur
+        user = await UserService.get_by_username(session, form_data.username)
+        if not user:
+            user = await UserService.get_by_email(session, form_data.username)
 
-    # Vérifier le mot de passe et mettre à jour le hash si nécessaire
-    if not user or not await UserService.verify_and_update_user(session, user, form_data.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        # Vérifier le mot de passe et mettre à jour le hash si nécessaire
+        if not user or not await UserService.verify_and_update_user(session, user, form_data.password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user"
-        )
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Inactive user"
+            )
 
     # Créer la paire de tokens JWT
     token_data = {

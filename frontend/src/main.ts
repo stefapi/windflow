@@ -105,12 +105,18 @@ async function initializeApp() {
     const authStore = useAuthStore()
 
     console.log('🔐 Initializing authentication...')
-    const isAuthenticated = await authStore.initFromStorage()
+    let isAuthenticated = await authStore.initFromStorage()
 
     if (isAuthenticated) {
       console.log('✅ Authentication restored from storage')
     } else {
-      console.log('ℹ️ No valid session found')
+      // No stored session — try auto-login (works only if backend has DISABLE_AUTH=true)
+      console.log('ℹ️ No valid session found, trying auto-login...')
+      isAuthenticated = await authStore.tryAutoLogin()
+
+      if (!isAuthenticated) {
+        console.log('ℹ️ Auto-login not available, manual login required')
+      }
     }
 
     // Register router after auth is initialized

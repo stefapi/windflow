@@ -134,6 +134,18 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function tryAutoLogin(): Promise<boolean> {
+    try {
+      console.log('🔓 Attempting auto-login with empty credentials...')
+      await login({ username: '', password: '' })
+      console.log('✅ Auto-login successful (debug mode)')
+      return true
+    } catch {
+      // Auto-login failed — expected in production
+      return false
+    }
+  }
+
   async function initFromStorage(): Promise<boolean> {
     const storedToken = localStorage.getItem('access_token')
     const storedUser = localStorage.getItem('user')
@@ -348,6 +360,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     fetchCurrentUser,
     initFromStorage,
+    tryAutoLogin,
     refreshAccessToken,
     scheduleTokenRefresh,
     getTimeUntilRefresh,
