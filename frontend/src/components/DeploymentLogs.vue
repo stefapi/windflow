@@ -344,7 +344,7 @@ watch(logs, () => {
   overflow-y: auto;
   background: #1e1e1e;
   padding: 12px;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.6;
   color: #d4d4d4;

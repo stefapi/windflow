@@ -69,10 +69,14 @@ let webLinksAddon: WebLinksAddon | null = null
 function initTerminal() {
   if (!terminalRef.value) return
 
+  // Récupérer la police mono depuis les variables CSS
+  const computedStyle = getComputedStyle(document.documentElement)
+  const fontMono = computedStyle.getPropertyValue('--font-mono').trim() || '"JetBrains Mono", monospace'
+
   // Créer le terminal xterm
   xterm = new Terminal({
     cursorBlink: true,
-    fontFamily: '"Fira Code", "JetBrains Mono", "Cascadia Code", "ui-monospace", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+    fontFamily: fontMono,
     fontSize: fontSize.value,
     theme: props.theme === 'dark' ? {
       background: '#0c0c0c',

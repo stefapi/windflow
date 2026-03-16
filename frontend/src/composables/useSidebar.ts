@@ -2,7 +2,7 @@
  * Composable pour la gestion de l'état responsive de la sidebar
  * STORY-413 : Responsive sidebar rétractable
  */
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 // Breakpoints alignés avec les AC de la STORY-413
 const BREAKPOINTS = {
@@ -18,9 +18,6 @@ const STORAGE_KEY = 'windflow-sidebar-collapsed'
 const isCollapsed = ref(false)
 const isMobileOpen = ref(false)
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
-
-// Instance unique du ResizeObserver
-let resizeObserver: ResizeObserver | null = null
 
 /**
  * Détecte le type d'écran actuel

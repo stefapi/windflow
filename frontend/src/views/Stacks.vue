@@ -561,7 +561,7 @@ onMounted(() => {
   width: 100%;
   min-height: 400px;
   padding: 12px;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.6;
   background: #1e1e1e;
