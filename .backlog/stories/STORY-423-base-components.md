@@ -1,6 +1,6 @@
 # STORY-423 : Composants de base harmonisés (badges, barres, icônes)
 
-**Statut :** REVIEW
+**Statut :** DONE
 **Epic Parent :** EPIC-004 — Refonte UI, Navigation & Nettoyage Marketplace
 
 ## Description

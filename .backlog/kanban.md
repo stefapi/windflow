@@ -39,10 +39,8 @@
 
 ## 🚧 REVIEW (En attente de validation)
 
-### EPIC-004 : Refonte UI, Navigation & Nettoyage Marketplace
-- [?] STORY-423 : Composants de base harmonisés (badges, barres, icônes)
-
 ## ✅ DONE (Terminé)
+- [x] STORY-423 : Composants de base harmonisés (badges, barres, icônes)
 - [x] STORY-481 : Intégration composants UI harmonisés dans Stacks
 - [x] STORY-422 : Typographie (Inter + JetBrains Mono)
 - [x] STORY-421 : Palette de couleurs thème sombre (tokens UnoCSS)
