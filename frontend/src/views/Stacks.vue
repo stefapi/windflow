@@ -17,11 +17,17 @@
             {{ formatDate(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="Actions" width="300" fixed="right">
+        <el-table-column label="Status" width="130">
           <template #default="{ row }">
-            <el-button size="small" @click.stop="selectStack(row)">Edit</el-button>
-            <el-button size="small" type="success" @click.stop="openDeployDialog(row)">Deploy</el-button>
-            <el-button size="small" type="danger" @click.stop="confirmDelete(row.id)">Delete</el-button>
+            <StatusBadge :status="getStackStatus(row)" size="small" />
+          </template>
+        </el-table-column>
+        <el-table-column label="Actions" width="150" fixed="right">
+          <template #default="{ row }">
+            <ActionButtons
+              :actions="['edit', 'deploy', 'delete']"
+              @action="(type) => handleStackAction(type, row)"
+            />
           </template>
         </el-table-column>
       </el-table>
@@ -229,6 +235,10 @@ import { useAuthStore } from '@/stores/auth'
 import { stacksApi } from '@/services/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Stack, StackCreate, StackVersion } from '@/types/api'
+import ActionButtons from '@/components/ui/ActionButtons.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
+import type { StatusType } from '@/components/ui/StatusBadge.vue'
+import type { ActionType } from '@/components/ui/ActionButtons.vue'
 
 const stacksStore = useStacksStore()
 const targetsStore = useTargetsStore()
@@ -269,6 +279,17 @@ const deployForm = reactive({
 })
 
 const yamlEditorRef = ref<HTMLTextAreaElement | null>(null)
+
+// Get stack status based on metadata
+function getStackStatus(stack: Stack): StatusType {
+  if (!stack.metadata) return 'draft'
+  const metadata = stack.metadata as Record<string, unknown>
+  const status = metadata['status']
+  if (status === 'deployed') return 'deployed'
+  if (status === 'error') return 'error'
+  if (status === 'deploying') return 'deploying'
+  return 'draft'
+}
 
 // Computed: parse env vars from compose content
 const envVars = computed(() => {
@@ -479,6 +500,21 @@ async function confirmDelete(id: string): Promise<void> {
     ElMessage.success('Stack deleted successfully')
   } catch {
     // cancelled or error
+  }
+}
+
+// Handle action button clicks
+function handleStackAction(type: ActionType, stack: Stack): void {
+  switch (type) {
+    case 'edit':
+      selectStack(stack)
+      break
+    case 'deploy':
+      openDeployDialog(stack)
+      break
+    case 'delete':
+      confirmDelete(stack.id)
+      break
   }
 }
 

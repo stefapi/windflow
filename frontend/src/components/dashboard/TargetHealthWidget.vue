@@ -2,17 +2,20 @@
   <el-card header="Target Health">
     <div class="target-health">
       <div class="health-summary">
-        <el-tag v-for="(count, status) in targetHealth" :key="status" :type="statusTagType(status)" effect="dark" class="health-tag">
-          {{ status }}: {{ count }}
-        </el-tag>
+        <StatusBadge
+          v-for="(count, status) in targetHealth"
+          :key="status"
+          :status="mapStatus(status)"
+          :label="`${status}: ${count}`"
+          size="small"
+        />
       </div>
       <el-divider />
       <div class="targets-list">
         <div v-for="target in targetsDetail" :key="target.id" class="target-item">
-          <span class="target-dot" :class="`dot-${target.status}`" />
+          <StatusBadge :status="mapStatus(target.status)" size="small" />
           <span class="target-name">{{ target.name }}</span>
           <span class="target-host">{{ target.host }}</span>
-          <el-tag :type="statusTagType(target.status)" size="small">{{ target.status }}</el-tag>
         </div>
         <el-empty v-if="targetsDetail.length === 0" description="Aucune target configurée" :image-size="60" />
       </div>
@@ -22,6 +25,7 @@
 
 <script setup lang="ts">
 import type { TargetHealthItem } from '@/types/api'
+import StatusBadge, { type StatusType } from '@/components/ui/StatusBadge.vue'
 
 interface Props {
   targetHealth: Record<string, number>
@@ -30,16 +34,14 @@ interface Props {
 
 defineProps<Props>()
 
-type TagType = 'success' | 'warning' | 'danger' | 'info' | 'primary'
-
-function statusTagType(status: string): TagType {
-  const map: Record<string, TagType> = {
-    online: 'success',
-    offline: 'danger',
-    error: 'danger',
-    maintenance: 'warning',
+function mapStatus(status: string): StatusType {
+  const map: Record<string, StatusType> = {
+    online: 'online',
+    offline: 'offline',
+    error: 'error',
+    maintenance: 'maintenance',
   }
-  return map[status] ?? 'info'
+  return map[status] ?? 'offline'
 }
 </script>
 

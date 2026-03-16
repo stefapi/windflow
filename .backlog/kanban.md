@@ -8,7 +8,6 @@
 #### Navigation & Layout
 
 #### Design System
-- [ ] STORY-423 : Composants de base harmonisés (badges, barres, icônes)
 
 #### Dashboard
 - [ ] STORY-431 : Barre métriques système
@@ -36,9 +35,15 @@
 
 ## 🏗️ IN PROGRESS (En cours)
 
+### EPIC-004 : Refonte UI, Navigation & Nettoyage Marketplace
+
 ## 🚧 REVIEW (En attente de validation)
 
+### EPIC-004 : Refonte UI, Navigation & Nettoyage Marketplace
+- [?] STORY-423 : Composants de base harmonisés (badges, barres, icônes)
+
 ## ✅ DONE (Terminé)
+- [x] STORY-481 : Intégration composants UI harmonisés dans Stacks
 - [x] STORY-422 : Typographie (Inter + JetBrains Mono)
 - [x] STORY-421 : Palette de couleurs thème sombre (tokens UnoCSS)
 - [x] STORY-471 : Refonte Page Login avec design unifié et nouveau logo

@@ -7,30 +7,38 @@
     <!-- Statistiques globales -->
     <el-row :gutter="20" v-loading="dashboardStore.loading">
       <el-col :span="6">
-        <el-card class="clickable-card" @click="$router.push('/targets')">
-          <el-statistic title="Total Targets" :value="dashboardStore.totalTargets">
-            <template #suffix>
-              <el-tag type="success" size="small" v-if="dashboardStore.onlineTargets > 0">
-                {{ dashboardStore.onlineTargets }} online
-              </el-tag>
-            </template>
-          </el-statistic>
-        </el-card>
+        <CounterCard
+          :count="dashboardStore.totalTargets"
+          label="Targets"
+          :icon="Monitor"
+          to="/targets"
+          :badge="dashboardStore.onlineTargets > 0 ? `${dashboardStore.onlineTargets} online` : undefined"
+          badge-type="success"
+        />
       </el-col>
       <el-col :span="6">
-        <el-card class="clickable-card" @click="$router.push('/stacks')">
-          <el-statistic title="Total Stacks" :value="dashboardStore.totalStacks" />
-        </el-card>
+        <CounterCard
+          :count="dashboardStore.totalStacks"
+          label="Stacks"
+          :icon="Files"
+          to="/stacks"
+        />
       </el-col>
       <el-col :span="6">
-        <el-card class="clickable-card" @click="$router.push('/deployments')">
-          <el-statistic title="Active Deployments" :value="dashboardStore.activeDeployments" />
-        </el-card>
+        <CounterCard
+          :count="dashboardStore.activeDeployments"
+          label="Deployments"
+          :icon="Upload"
+          to="/deployments"
+        />
       </el-col>
       <el-col :span="6">
-        <el-card class="clickable-card" @click="$router.push('/workflows')">
-          <el-statistic title="Workflows" :value="dashboardStore.totalWorkflows" />
-        </el-card>
+        <CounterCard
+          :count="dashboardStore.totalWorkflows"
+          label="Workflows"
+          :icon="Connection"
+          to="/workflows"
+        />
       </el-col>
     </el-row>
 
@@ -85,8 +93,10 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { Monitor, Files, Upload, Connection } from '@element-plus/icons-vue'
 import { useDashboardStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
+import CounterCard from '@/components/ui/CounterCard.vue'
 import TargetHealthWidget from '@/components/dashboard/TargetHealthWidget.vue'
 import ActivityFeedWidget from '@/components/dashboard/ActivityFeedWidget.vue'
 import DeploymentMetricsWidget from '@/components/dashboard/DeploymentMetricsWidget.vue'

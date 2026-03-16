@@ -8,10 +8,12 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ActionButtons: typeof import('./components/ui/ActionButtons.vue')['default']
     ActivityFeedWidget: typeof import('./components/dashboard/ActivityFeedWidget.vue')['default']
     AlertsNotificationsWidget: typeof import('./components/dashboard/AlertsNotificationsWidget.vue')['default']
     Breadcrumb: typeof import('./components/Breadcrumb.vue')['default']
     ContainerTerminal: typeof import('./components/ContainerTerminal.vue')['default']
+    CounterCard: typeof import('./components/ui/CounterCard.vue')['default']
     DeploymentLogs: typeof import('./components/DeploymentLogs.vue')['default']
     DeploymentMetricsWidget: typeof import('./components/dashboard/DeploymentMetricsWidget.vue')['default']
     DynamicFormField: typeof import('./components/DynamicFormField.vue')['default']
@@ -59,11 +61,13 @@ declare module 'vue' {
     ElTimeline: typeof import('element-plus/es')['ElTimeline']
     ElTimelineItem: typeof import('element-plus/es')['ElTimelineItem']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
+    ResourceBar: typeof import('./components/ui/ResourceBar.vue')['default']
     ResourceChartsWidget: typeof import('./components/dashboard/ResourceChartsWidget.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SidebarNav: typeof import('./components/SidebarNav.vue')['default']
     SplashScreen: typeof import('./components/SplashScreen.vue')['default']
+    StatusBadge: typeof import('./components/ui/StatusBadge.vue')['default']
     TargetHealthWidget: typeof import('./components/dashboard/TargetHealthWidget.vue')['default']
     ThemeToggle: typeof import('./components/ThemeToggle.vue')['default']
     WindFlowLogo: typeof import('./components/WindFlowLogo.vue')['default']

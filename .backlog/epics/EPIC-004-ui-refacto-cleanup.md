@@ -75,8 +75,9 @@ Cette epic a deux axes :
 ### Design System
 - [x] STORY-421 : Palette de couleurs thème sombre (tokens UnoCSS, fond `#0f1117`, accent `#3b82f6`, etc.)
 - [x] STORY-422 : Typographie (Inter/IBM Plex Sans pour UI, JetBrains Mono pour code/logs)
-- [ ] STORY-423 : Composants de base harmonisés (badges statut, barres de progression, icônes actions)
+- [~] STORY-423 : Composants de base harmonisés (badges statut, barres de progression, icônes actions)
 - [x] STORY-471 : Refonte Page Login avec design unifié et nouveau logo WindFlow
+- [x] STORY-481 : Intégration composants UI harmonisés dans Stacks
 
 ### Dashboard
 - [ ] STORY-431 : Barre métriques système (CPU, RAM, disque, uptime du target actif)

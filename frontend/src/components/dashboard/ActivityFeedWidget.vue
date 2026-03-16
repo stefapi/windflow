@@ -9,9 +9,7 @@
         placement="top"
       >
         <div class="activity-item">
-          <el-tag :type="activityType(item.status)" size="small" class="activity-type-tag">
-            {{ item.type }}
-          </el-tag>
+          <StatusBadge :status="mapStatus(item.status)" :label="item.type" size="small" />
           <span class="activity-title">{{ item.title }}</span>
         </div>
         <p v-if="item.details" class="activity-details">{{ item.details }}</p>
@@ -23,6 +21,7 @@
 
 <script setup lang="ts">
 import type { ActivityFeedItem } from '@/types/api'
+import StatusBadge, { type StatusType } from '@/components/ui/StatusBadge.vue'
 
 interface Props {
   activities: ActivityFeedItem[]
@@ -41,6 +40,17 @@ function activityType(status: string): TagType {
     stopped: 'info',
   }
   return map[status] ?? 'info'
+}
+
+function mapStatus(status: string): StatusType {
+  const map: Record<string, StatusType> = {
+    running: 'running',
+    pending: 'pending',
+    deploying: 'deploying',
+    failed: 'failed',
+    stopped: 'stopped',
+  }
+  return map[status] ?? 'pending'
 }
 
 function formatDate(timestamp: string): string {

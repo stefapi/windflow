@@ -45,25 +45,18 @@
         <el-table-column prop="port" label="Port" width="100" />
         <el-table-column label="Status" width="150">
           <template #default="{ row }">
-            <div class="status-indicator">
-              <span class="status-dot" :class="`status-${row.status}`" />
-              {{ row.status }}
-            </div>
+            <StatusBadge :status="row.status" />
           </template>
         </el-table-column>
-        <el-table-column label="Actions" width="250">
+        <el-table-column label="Actions" width="120">
           <template #default="{ row }">
-            <el-button
-              size="small"
-              type="primary"
-              :icon="Refresh"
-              @click="refreshCapabilities(row.id)"
-              :loading="scanningTargets.has(row.id)"
-              title="Refresh capabilities"
-            >
-              Scan
-            </el-button>
-            <el-button size="small" type="danger" @click="deleteTarget(row.id)">Delete</el-button>
+            <ActionButtons
+              :actions="[
+                { type: 'scan', disabled: scanningTargets.has(row.id) },
+                'delete'
+              ]"
+              @action="handleTargetAction($event, row.id)"
+            />
           </template>
         </el-table-column>
       </el-table>
@@ -106,9 +99,10 @@ import { ref, reactive, onMounted } from 'vue'
 import { useTargetsStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
 import { targetsApi } from '@/services/api'
 import type { TargetCreate, Target } from '@/types/api'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
+import ActionButtons, { type ActionType } from '@/components/ui/ActionButtons.vue'
 
 const targetsStore = useTargetsStore()
 const authStore = useAuthStore()
@@ -194,6 +188,18 @@ const refreshCapabilities = async (targetId: string) => {
   }
 }
 
+// Handle action from ActionButtons component
+const handleTargetAction = (action: ActionType, targetId: string) => {
+  switch (action) {
+    case 'scan':
+      refreshCapabilities(targetId)
+      break
+    case 'delete':
+      deleteTarget(targetId)
+      break
+  }
+}
+
 onMounted(() => {
   targetsStore.fetchTargets(authStore.organizationId || undefined)
 })
@@ -204,34 +210,6 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.status-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.status-online {
-  background-color: #67c23a; /* Green */
-}
-
-.status-offline {
-  background-color: #f56c6c; /* Red */
-}
-
-.status-error {
-  background-color: #e6a23c; /* Orange */
-}
-
-.status-maintenance {
-  background-color: #f0ad4e; /* Yellow */
 }
 
 .capabilities-section {
