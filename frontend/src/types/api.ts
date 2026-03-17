@@ -424,3 +424,47 @@ export interface ContainerLogsResponse {
   container_id: string
   timestamp: string
 }
+
+// Docker Container Detail types (for inspect)
+export interface ContainerDetail {
+  id: string
+  name: string
+  created: string
+  path: string
+  args: string[]
+  state: Record<string, unknown>
+  image: string
+  config: Record<string, unknown>
+  host_config: Record<string, unknown>
+  network_settings: Record<string, unknown>
+  mounts: Record<string, unknown>[]
+}
+
+export interface ContainerEnvVar {
+  key: string
+  value: string
+  isSecret: boolean
+}
+
+export interface ContainerPortMapping {
+  hostIp: string
+  hostPort: string
+  containerPort: string
+  protocol: string
+}
+
+export interface ContainerMount {
+  type: string
+  source: string
+  destination: string
+  mode: string
+  name?: string
+}
+
+export interface ContainerNetworkInfo {
+  networkId: string
+  networkName: string
+  ipAddress: string
+  macAddress: string
+  gateway: string
+}

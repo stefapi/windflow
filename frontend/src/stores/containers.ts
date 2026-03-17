@@ -6,7 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { containersApi } from '@/services/api'
-import type { Container, ContainerState } from '@/types/api'
+import type { Container, ContainerDetail, ContainerState } from '@/types/api'
 
 export const useContainersStore = defineStore('containers', () => {
   // State
@@ -14,6 +14,8 @@ export const useContainersStore = defineStore('containers', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const currentContainer = ref<Container | null>(null)
+  const containerDetail = ref<ContainerDetail | null>(null)
+  const detailLoading = ref(false)
 
   // Getters
   const runningContainers = computed(() =>
@@ -72,6 +74,23 @@ export const useContainersStore = defineStore('containers', () => {
       throw err
     } finally {
       loading.value = false
+    }
+  }
+
+  async function inspectContainer(id: string): Promise<ContainerDetail> {
+    detailLoading.value = true
+    error.value = null
+
+    try {
+      const response = await containersApi.inspect(id)
+      containerDetail.value = response.data
+      return response.data
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors du chargement des détails du container'
+      error.value = errorMessage
+      throw err
+    } finally {
+      detailLoading.value = false
     }
   }
 
@@ -155,10 +174,13 @@ export const useContainersStore = defineStore('containers', () => {
     const failed: string[] = []
 
     results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
-        success.push(ids[index])
-      } else {
-        failed.push(ids[index])
+      const id = ids[index]
+      if (id !== undefined) {
+        if (result.status === 'fulfilled') {
+          success.push(id)
+        } else {
+          failed.push(id)
+        }
       }
     })
 
@@ -183,10 +205,13 @@ export const useContainersStore = defineStore('containers', () => {
     const failed: string[] = []
 
     results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
-        success.push(ids[index])
-      } else {
-        failed.push(ids[index])
+      const id = ids[index]
+      if (id !== undefined) {
+        if (result.status === 'fulfilled') {
+          success.push(id)
+        } else {
+          failed.push(id)
+        }
       }
     })
 
@@ -211,10 +236,13 @@ export const useContainersStore = defineStore('containers', () => {
     const failed: string[] = []
 
     results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
-        success.push(ids[index])
-      } else {
-        failed.push(ids[index])
+      const id = ids[index]
+      if (id !== undefined) {
+        if (result.status === 'fulfilled') {
+          success.push(id)
+        } else {
+          failed.push(id)
+        }
       }
     })
 
@@ -233,10 +261,13 @@ export const useContainersStore = defineStore('containers', () => {
     const failed: string[] = []
 
     results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
-        success.push(ids[index])
-      } else {
-        failed.push(ids[index])
+      const id = ids[index]
+      if (id !== undefined) {
+        if (result.status === 'fulfilled') {
+          success.push(id)
+        } else {
+          failed.push(id)
+        }
       }
     })
 
@@ -251,6 +282,8 @@ export const useContainersStore = defineStore('containers', () => {
     loading.value = false
     error.value = null
     currentContainer.value = null
+    containerDetail.value = null
+    detailLoading.value = false
   }
 
   return {
@@ -259,6 +292,8 @@ export const useContainersStore = defineStore('containers', () => {
     loading,
     error,
     currentContainer,
+    containerDetail,
+    detailLoading,
     // Getters
     runningContainers,
     stoppedContainers,
@@ -266,6 +301,7 @@ export const useContainersStore = defineStore('containers', () => {
     // Actions
     fetchContainers,
     fetchContainer,
+    inspectContainer,
     startContainer,
     stopContainer,
     restartContainer,

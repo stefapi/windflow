@@ -33,6 +33,7 @@ import type {
   ScheduledTaskUpdate,
   Container,
   ContainerLogsResponse,
+  ContainerDetail,
 } from '@/types/api'
 
 // Auth API
@@ -230,6 +231,9 @@ export const containersApi = {
 
   get: (id: string) =>
     http.get<Container>(`/docker/containers/${id}`),
+
+  inspect: (id: string) =>
+    http.get<ContainerDetail>(`/docker/containers/${id}`),
 
   start: (id: string) =>
     http.post<void>(`/docker/containers/${id}/start`),
