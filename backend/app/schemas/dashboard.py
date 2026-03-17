@@ -63,12 +63,16 @@ class ResourceMetricPoint(BaseModel):
 
 
 class ResourceMetrics(BaseModel):
-    """Métriques de ressources système (CPU/RAM)."""
+    """Métriques de ressources système (CPU/RAM/Disque/Uptime)."""
 
     current_cpu: float = Field(0.0, description="CPU actuel en pourcentage")
     current_memory: float = Field(0.0, description="Mémoire actuelle en pourcentage")
     total_memory_mb: float = Field(0.0, description="Mémoire totale en Mo")
     used_memory_mb: float = Field(0.0, description="Mémoire utilisée en Mo")
+    current_disk: float = Field(0.0, description="Disque actuel en pourcentage")
+    total_disk_gb: float = Field(0.0, description="Disque total en Go")
+    used_disk_gb: float = Field(0.0, description="Disque utilisé en Go")
+    uptime_seconds: int = Field(0, description="Uptime en secondes")
     history: List[ResourceMetricPoint] = Field(
         default_factory=list,
         description="Historique des métriques (dernières 60 minutes)"

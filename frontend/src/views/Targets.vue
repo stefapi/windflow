@@ -48,10 +48,11 @@
             <StatusBadge :status="row.status" />
           </template>
         </el-table-column>
-        <el-table-column label="Actions" width="120">
+        <el-table-column label="Actions" width="160">
           <template #default="{ row }">
             <ActionButtons
               :actions="[
+                { type: 'select', disabled: targetsStore.currentTarget?.id === row.id },
                 { type: 'scan', disabled: scanningTargets.has(row.id) },
                 'delete'
               ]"
@@ -188,9 +189,25 @@ const refreshCapabilities = async (targetId: string) => {
   }
 }
 
+// Select target as active for dashboard metrics
+const selectTarget = async (targetId: string) => {
+  try {
+    await targetsStore.fetchTarget(targetId)
+    const target = targetsStore.currentTarget
+    if (target) {
+      ElMessage.success(`Target "${target.name}" sélectionnée`)
+    }
+  } catch {
+    ElMessage.error('Failed to select target')
+  }
+}
+
 // Handle action from ActionButtons component
 const handleTargetAction = (action: ActionType, targetId: string) => {
   switch (action) {
+    case 'select':
+      selectTarget(targetId)
+      break
     case 'scan':
       refreshCapabilities(targetId)
       break

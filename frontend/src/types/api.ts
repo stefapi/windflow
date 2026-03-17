@@ -348,6 +348,10 @@ export interface ResourceMetrics {
   current_memory: number
   total_memory_mb: number
   used_memory_mb: number
+  current_disk: number
+  total_disk_gb: number
+  used_disk_gb: number
+  uptime_seconds: number
   history: ResourceMetricPoint[]
 }
 

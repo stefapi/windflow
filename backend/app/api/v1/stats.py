@@ -2,6 +2,8 @@
 Endpoints API pour les statistiques du dashboard.
 """
 
+import time
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
@@ -188,11 +190,19 @@ async def get_dashboard_stats(
         import psutil
         cpu_percent = psutil.cpu_percent(interval=0.1)
         mem = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        # Calcul uptime
+        uptime_seconds = int(time.time() - psutil.boot_time())
+
         resource_metrics = ResourceMetrics(
             current_cpu=round(cpu_percent, 1),
             current_memory=round(mem.percent, 1),
             total_memory_mb=round(mem.total / (1024 * 1024), 0),
             used_memory_mb=round(mem.used / (1024 * 1024), 0),
+            current_disk=round(disk.percent, 1),
+            total_disk_gb=round(disk.total / (1024 * 1024 * 1024), 1),
+            used_disk_gb=round(disk.used / (1024 * 1024 * 1024), 1),
+            uptime_seconds=uptime_seconds,
             history=[
                 ResourceMetricPoint(
                     timestamp=(datetime.utcnow() - timedelta(minutes=i)).isoformat(),

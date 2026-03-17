@@ -46,10 +46,11 @@ import {
   Delete,
   Edit,
   Upload,
+  Check,
 } from '@element-plus/icons-vue'
 
 /** Predefined action types */
-export type ActionType = 'start' | 'stop' | 'restart' | 'logs' | 'delete' | 'edit' | 'deploy' | 'scan'
+export type ActionType = 'start' | 'stop' | 'restart' | 'logs' | 'delete' | 'edit' | 'deploy' | 'scan' | 'select'
 
 /** Action configuration (simplified for string usage) */
 export type ActionConfig = ActionType | ActionConfigObject
@@ -115,6 +116,10 @@ const defaultActionConfig: Record<ActionType, { icon: typeof VideoPlay; tooltip:
   scan: {
     icon: Refresh,
     tooltip: 'Scanner',
+  },
+  select: {
+    icon: Check,
+    tooltip: 'Sélectionner',
   },
 }
 
@@ -205,5 +210,10 @@ function handleAction(type: ActionType): void {
 .action-buttons__btn--scan:hover:not(:disabled) {
   color: var(--color-accent);
   border-color: var(--color-accent);
+}
+
+.action-buttons__btn--select:hover:not(:disabled) {
+  color: var(--color-success);
+  border-color: var(--color-success);
 }
 </style>

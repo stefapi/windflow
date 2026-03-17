@@ -42,10 +42,16 @@
       </el-col>
     </el-row>
 
-    <!-- Graphiques temps réel CPU/RAM -->
+    <!-- Métriques système unifiées (valeurs actuelles + historique) -->
     <el-row :gutter="20" style="margin-top: 20px">
       <el-col :span="24">
-        <ResourceChartsWidget :metrics="dashboardStore.resourceMetrics" />
+        <ResourceMetricsWidget
+          :metrics="dashboardStore.resourceMetrics"
+          :error="metricsError"
+          :target-name="targetsStore.currentTarget?.name ?? undefined"
+          :loading="dashboardStore.loading"
+          :no-target="!targetsStore.currentTarget"
+        />
       </el-col>
     </el-row>
 
@@ -92,27 +98,47 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { Monitor, Files, Upload, Connection } from '@element-plus/icons-vue'
 import { useDashboardStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
+import { useTargetsStore } from '@/stores/targets'
 import CounterCard from '@/components/ui/CounterCard.vue'
 import TargetHealthWidget from '@/components/dashboard/TargetHealthWidget.vue'
 import ActivityFeedWidget from '@/components/dashboard/ActivityFeedWidget.vue'
 import DeploymentMetricsWidget from '@/components/dashboard/DeploymentMetricsWidget.vue'
 import AlertsNotificationsWidget from '@/components/dashboard/AlertsNotificationsWidget.vue'
-import ResourceChartsWidget from '@/components/dashboard/ResourceChartsWidget.vue'
+import ResourceMetricsWidget from '@/components/dashboard/ResourceMetricsWidget.vue'
 
 const authStore = useAuthStore()
 const dashboardStore = useDashboardStore()
+const targetsStore = useTargetsStore()
+
+// Polling pour les métriques système (toutes les 30s)
+let metricsInterval: number | null = null
+const metricsError = ref<string | null>(null)
 
 async function refreshDashboard(): Promise<void> {
   const orgId = authStore.organizationId || undefined
-  await dashboardStore.fetchDashboardStats(orgId)
+  try {
+    metricsError.value = null
+    await dashboardStore.fetchDashboardStats(orgId)
+  } catch {
+    metricsError.value = 'Unable to retrieve system metrics'
+  }
 }
 
 onMounted(() => {
   refreshDashboard()
+  // Polling toutes les 30 secondes
+  metricsInterval = window.setInterval(refreshDashboard, 30000)
+})
+
+onUnmounted(() => {
+  if (metricsInterval) {
+    window.clearInterval(metricsInterval)
+    metricsInterval = null
+  }
 })
 </script>
 
