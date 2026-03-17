@@ -83,9 +83,10 @@ Cette epic a deux axes :
 - [x] STORY-431 : Barre métriques système (CPU, RAM, disque, uptime du target actif)
 - [x] STORY-432 : Tuiles compteurs Containers / VMs / Stacks (cliquables)
 - [x] STORY-433 : Liste derniers déploiements avec statut + action directe
-- [x] STORY-441 : Liste containers avec actions inline
+- [x] STORY-434 : Zone widgets plugins (vide proprement si aucun plugin — peuplée par EPIC-001)
 
 ### Vue Containers (remplace Deployments)
+- [x] STORY-441 : Vue Containers — liste avec actions inline (start/stop/restart/logs/supprimer)
 - [ ] STORY-442 : Vue Containers — filtres (statut, target) + recherche + sélection multiple
 - [ ] STORY-443 : Vue ContainerDetail — onglets Infos (ports, volumes, env, réseau)
 - [ ] STORY-444 : Vue ContainerDetail — onglet Logs (réutilise DeploymentLogs.vue)

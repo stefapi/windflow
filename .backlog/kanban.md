@@ -38,6 +38,7 @@
 
 ## ✅ DONE (Terminé)
 - [x] STORY-441 : Liste containers avec actions inline
+- [x] STORY-434 : Zone widgets plugins sur le dashboard
 - [x] STORY-433 : Liste derniers déploiements avec statut
 - [x] STORY-432 : Tuiles compteurs Containers / VMs / Stacks
 - [x] STORY-431 : Barre métriques système
