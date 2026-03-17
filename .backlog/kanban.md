@@ -10,7 +10,6 @@
 #### Design System
 
 #### Dashboard
-- [ ] STORY-433 : Liste derniers déploiements avec statut
 - [ ] STORY-434 : Zone widgets plugins
 
 #### Vue Containers
@@ -40,6 +39,7 @@
 ### EPIC-004 : Refonte UI, Navigation & Nettoyage Marketplace
 
 ## ✅ DONE (Terminé)
+- [x] STORY-433 : Liste derniers déploiements avec statut
 - [x] STORY-432 : Tuiles compteurs Containers / VMs / Stacks
 - [x] STORY-431 : Barre métriques système
 - [x] STORY-423 : Composants de base harmonisés (badges, barres, icônes)

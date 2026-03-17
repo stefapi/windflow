@@ -48,6 +48,16 @@
       </el-col>
     </el-row>
 
+    <!-- Derniers déploiements (STORY-433) -->
+    <el-row
+      :gutter="20"
+      style="margin-top: 20px"
+    >
+      <el-col :span="24">
+        <RecentDeploymentsWidget :limit="10" />
+      </el-col>
+    </el-row>
+
     <!-- Métriques système unifiées (valeurs actuelles + historique) -->
     <el-row
       :gutter="20"
@@ -143,6 +153,7 @@ import ActivityFeedWidget from '@/components/dashboard/ActivityFeedWidget.vue'
 import DeploymentMetricsWidget from '@/components/dashboard/DeploymentMetricsWidget.vue'
 import AlertsNotificationsWidget from '@/components/dashboard/AlertsNotificationsWidget.vue'
 import ResourceMetricsWidget from '@/components/dashboard/ResourceMetricsWidget.vue'
+import RecentDeploymentsWidget from '@/components/dashboard/RecentDeploymentsWidget.vue'
 
 const authStore = useAuthStore()
 const dashboardStore = useDashboardStore()
