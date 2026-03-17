@@ -9,13 +9,26 @@
         placement="top"
       >
         <div class="activity-item">
-          <StatusBadge :status="mapStatus(item.status)" :label="item.type" size="small" />
+          <StatusBadge
+            :status="mapStatus(item.status)"
+            :label="item.type"
+            size="small"
+          />
           <span class="activity-title">{{ item.title }}</span>
         </div>
-        <p v-if="item.details" class="activity-details">{{ item.details }}</p>
+        <p
+          v-if="item.details"
+          class="activity-details"
+        >
+          {{ item.details }}
+        </p>
       </el-timeline-item>
     </el-timeline>
-    <el-empty v-else description="Aucune activité récente" :image-size="60" />
+    <el-empty
+      v-else
+      description="Aucune activité récente"
+      :image-size="60"
+    />
   </el-card>
 </template>
 

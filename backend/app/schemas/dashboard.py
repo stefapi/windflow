@@ -44,6 +44,14 @@ class ActivityFeedItem(BaseModel):
     details: Optional[str] = Field(None, description="Détails supplémentaires")
 
 
+class ResourceCounter(BaseModel):
+    """Compteur de ressources avec statut running/stopped."""
+
+    total: int = Field(0, description="Nombre total de ressources")
+    running: int = Field(0, description="Ressources en cours d'exécution")
+    stopped: int = Field(0, description="Ressources arrêtées")
+
+
 class DeploymentMetrics(BaseModel):
     """Métriques de performance des déploiements."""
 
@@ -82,12 +90,32 @@ class ResourceMetrics(BaseModel):
 class DashboardStats(BaseModel):
     """Réponse consolidée pour le dashboard."""
 
-    # Compteurs globaux
+    # Compteurs globaux (legacy - conservés pour compatibilité)
     total_targets: int = Field(0, description="Nombre total de targets")
     online_targets: int = Field(0, description="Targets en ligne")
     total_stacks: int = Field(0, description="Nombre total de stacks")
     active_deployments: int = Field(0, description="Déploiements actifs")
     total_workflows: int = Field(0, description="Nombre total de workflows")
+
+    # Compteurs ressources par statut (STORY-432)
+    containers: ResourceCounter = Field(
+        default_factory=ResourceCounter,
+        description="Compteur de containers (running/stopped/total)"
+    )
+    vms: ResourceCounter = Field(
+        default_factory=ResourceCounter,
+        description="Compteur de VMs (running/stopped/total)"
+    )
+    stacks: ResourceCounter = Field(
+        default_factory=ResourceCounter,
+        description="Compteur de stacks (active/inactive/total)"
+    )
+
+    # Indicateur de disponibilité VMs
+    vms_available: bool = Field(
+        False,
+        description="True si EPIC-002 livrée, False affiche 'Bientôt disponible'"
+    )
 
     # Santé des targets
     target_health: Dict[str, int] = Field(

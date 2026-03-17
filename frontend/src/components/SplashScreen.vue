@@ -1,11 +1,18 @@
 <template>
   <div class="splash-screen">
     <div class="splash-content">
-      <WindFlowLogo size="large" :animate="true" />
-      <h1 class="title">WindFlow</h1>
+      <WindFlowLogo
+        size="large"
+        :animate="true"
+      />
+      <h1 class="title">
+        WindFlow
+      </h1>
       <div class="loading-container">
-        <div class="spinner"></div>
-        <p class="loading-text">{{ message }}</p>
+        <div class="spinner" />
+        <p class="loading-text">
+          {{ message }}
+        </p>
       </div>
     </div>
   </div>

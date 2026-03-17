@@ -329,6 +329,12 @@ export interface ActivityFeedItem {
   details: string | null
 }
 
+export interface ResourceCounter {
+  total: number
+  running: number
+  stopped: number
+}
+
 export interface DeploymentMetrics {
   total: number
   success: number
@@ -356,11 +362,17 @@ export interface ResourceMetrics {
 }
 
 export interface DashboardStats {
+  // Legacy counters (conservés pour compatibilité)
   total_targets: number
   online_targets: number
   total_stacks: number
   active_deployments: number
   total_workflows: number
+  // Resource counters (STORY-432)
+  containers: ResourceCounter
+  vms: ResourceCounter
+  stacks: ResourceCounter
+  vms_available: boolean
   target_health: Record<string, number>
   targets_detail: TargetHealthItem[]
   deployment_metrics: DeploymentMetrics

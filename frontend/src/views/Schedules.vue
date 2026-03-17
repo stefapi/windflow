@@ -4,39 +4,72 @@
       <template #header>
         <div class="card-header">
           <span>Scheduled Tasks</span>
-          <el-button type="primary" @click="openCreateDialog">New Task</el-button>
+          <el-button
+            type="primary"
+            @click="openCreateDialog"
+          >
+            New Task
+          </el-button>
         </div>
       </template>
 
-      <el-table :data="schedulesStore.tasks" v-loading="schedulesStore.loading">
-        <el-table-column prop="name" label="Name" min-width="150" />
-        <el-table-column label="Type" width="160">
+      <el-table
+        v-loading="schedulesStore.loading"
+        :data="schedulesStore.tasks"
+      >
+        <el-table-column
+          prop="name"
+          label="Name"
+          min-width="150"
+        />
+        <el-table-column
+          label="Type"
+          width="160"
+        >
           <template #default="{ row }">
-            <el-tag size="small">{{ taskTypeLabel(row.task_type) }}</el-tag>
+            <el-tag size="small">
+              {{ taskTypeLabel(row.task_type) }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="Cron" width="150">
+        <el-table-column
+          label="Cron"
+          width="150"
+        >
           <template #default="{ row }">
             <code>{{ row.cron_expression }}</code>
           </template>
         </el-table-column>
-        <el-table-column label="Status" width="100" align="center">
+        <el-table-column
+          label="Status"
+          width="100"
+          align="center"
+        >
           <template #default="{ row }">
             <el-switch
               :model-value="row.enabled"
-              @change="handleToggle(row.id)"
               active-text=""
               inactive-text=""
+              @change="handleToggle(row.id)"
             />
           </template>
         </el-table-column>
-        <el-table-column label="Last Run" width="180">
+        <el-table-column
+          label="Last Run"
+          width="180"
+        >
           <template #default="{ row }">
             <span v-if="row.last_run">{{ formatDate(row.last_run) }}</span>
-            <span v-else class="text-muted">Never</span>
+            <span
+              v-else
+              class="text-muted"
+            >Never</span>
           </template>
         </el-table-column>
-        <el-table-column label="Last Status" width="120">
+        <el-table-column
+          label="Last Status"
+          width="120"
+        >
           <template #default="{ row }">
             <el-tag
               v-if="row.last_status"
@@ -45,18 +78,40 @@
             >
               {{ row.last_status }}
             </el-tag>
-            <span v-else class="text-muted">—</span>
+            <span
+              v-else
+              class="text-muted"
+            >—</span>
           </template>
         </el-table-column>
-        <el-table-column label="Runs" width="80" align="center">
+        <el-table-column
+          label="Runs"
+          width="80"
+          align="center"
+        >
           <template #default="{ row }">
             {{ row.run_count }}
           </template>
         </el-table-column>
-        <el-table-column label="Actions" width="200" fixed="right">
+        <el-table-column
+          label="Actions"
+          width="200"
+          fixed="right"
+        >
           <template #default="{ row }">
-            <el-button size="small" @click="openEditDialog(row)">Edit</el-button>
-            <el-button size="small" type="danger" @click="confirmDelete(row.id)">Delete</el-button>
+            <el-button
+              size="small"
+              @click="openEditDialog(row)"
+            >
+              Edit
+            </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              @click="confirmDelete(row.id)"
+            >
+              Delete
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -67,18 +122,40 @@
       <template #header>
         <span>Predefined Tasks</span>
       </template>
-      <el-descriptions :column="1" border size="small">
+      <el-descriptions
+        :column="1"
+        border
+        size="small"
+      >
         <el-descriptions-item label="Cleanup Logs">
           Daily at 02:00 UTC — Removes deployment logs older than 30 days
-          <el-tag size="small" type="info" class="ml-2">0 2 * * *</el-tag>
+          <el-tag
+            size="small"
+            type="info"
+            class="ml-2"
+          >
+            0 2 * * *
+          </el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="Health Check Targets">
           Every 5 minutes — Checks connectivity of all targets
-          <el-tag size="small" type="info" class="ml-2">*/5 * * * *</el-tag>
+          <el-tag
+            size="small"
+            type="info"
+            class="ml-2"
+          >
+            */5 * * * *
+          </el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="Retry Pending Deployments">
           Every 10 minutes — Retries stuck pending deployments
-          <el-tag size="small" type="info" class="ml-2">*/10 * * * *</el-tag>
+          <el-tag
+            size="small"
+            type="info"
+            class="ml-2"
+          >
+            */10 * * * *
+          </el-tag>
         </el-descriptions-item>
       </el-descriptions>
     </el-card>
@@ -90,24 +167,65 @@
       width="600px"
       destroy-on-close
     >
-      <el-form :model="form" label-width="140px">
-        <el-form-item label="Name" required>
-          <el-input v-model="form.name" placeholder="My scheduled task" />
+      <el-form
+        :model="form"
+        label-width="140px"
+      >
+        <el-form-item
+          label="Name"
+          required
+        >
+          <el-input
+            v-model="form.name"
+            placeholder="My scheduled task"
+          />
         </el-form-item>
         <el-form-item label="Description">
-          <el-input v-model="form.description" type="textarea" :rows="2" />
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="2"
+          />
         </el-form-item>
-        <el-form-item label="Task Type" required v-if="!editingTask">
-          <el-select v-model="form.task_type" style="width: 100%">
-            <el-option label="Cleanup Logs" value="cleanup_logs" />
-            <el-option label="Health Check" value="health_check" />
-            <el-option label="Git Sync" value="git_sync" />
-            <el-option label="Retry Deployments" value="retry_deployments" />
-            <el-option label="Custom" value="custom" />
+        <el-form-item
+          v-if="!editingTask"
+          label="Task Type"
+          required
+        >
+          <el-select
+            v-model="form.task_type"
+            style="width: 100%"
+          >
+            <el-option
+              label="Cleanup Logs"
+              value="cleanup_logs"
+            />
+            <el-option
+              label="Health Check"
+              value="health_check"
+            />
+            <el-option
+              label="Git Sync"
+              value="git_sync"
+            />
+            <el-option
+              label="Retry Deployments"
+              value="retry_deployments"
+            />
+            <el-option
+              label="Custom"
+              value="custom"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item label="Cron Expression" required>
-          <el-input v-model="form.cron_expression" placeholder="0 * * * *" />
+        <el-form-item
+          label="Cron Expression"
+          required
+        >
+          <el-input
+            v-model="form.cron_expression"
+            placeholder="0 * * * *"
+          />
           <div class="cron-help">
             Format: minute hour day month weekday (e.g. <code>0 2 * * *</code> = daily at 2am)
           </div>
@@ -117,8 +235,14 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showDialog = false">Cancel</el-button>
-        <el-button type="primary" @click="handleSave" :loading="saving">
+        <el-button @click="showDialog = false">
+          Cancel
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="handleSave"
+        >
           {{ editingTask ? 'Update' : 'Create' }}
         </el-button>
       </template>

@@ -5,11 +5,21 @@
       <div class="logs-title">
         <span class="i-carbon-document-blank mr-2" />
         <span>Logs de déploiement</span>
-        <el-tag v-if="isConnected" type="success" size="small" class="ml-2">
+        <el-tag
+          v-if="isConnected"
+          type="success"
+          size="small"
+          class="ml-2"
+        >
           <span class="i-carbon-dot-mark animate-pulse" />
           En direct
         </el-tag>
-        <el-tag v-else type="info" size="small" class="ml-2">
+        <el-tag
+          v-else
+          type="info"
+          size="small"
+          class="ml-2"
+        >
           Hors ligne
         </el-tag>
       </div>
@@ -21,7 +31,10 @@
         </span>
 
         <!-- Auto-scroll toggle -->
-        <el-tooltip content="Défilement automatique" placement="top">
+        <el-tooltip
+          content="Défilement automatique"
+          placement="top"
+        >
           <el-button
             :type="autoScroll ? 'primary' : 'default'"
             size="small"
@@ -33,39 +46,48 @@
         </el-tooltip>
 
         <!-- Effacer les logs -->
-        <el-tooltip content="Effacer les logs" placement="top">
+        <el-tooltip
+          content="Effacer les logs"
+          placement="top"
+        >
           <el-button
             type="default"
             size="small"
             circle
-            @click="handleClearLogs"
             :disabled="logs.length === 0"
+            @click="handleClearLogs"
           >
             <span class="i-carbon-clean" />
           </el-button>
         </el-tooltip>
 
         <!-- Copier dans le presse-papier -->
-        <el-tooltip content="Copier dans le presse-papier" placement="top">
+        <el-tooltip
+          content="Copier dans le presse-papier"
+          placement="top"
+        >
           <el-button
             type="default"
             size="small"
             circle
-            @click="copyToClipboard"
             :disabled="logs.length === 0"
+            @click="copyToClipboard"
           >
             <span class="i-carbon-copy" />
           </el-button>
         </el-tooltip>
 
         <!-- Télécharger les logs -->
-        <el-tooltip content="Télécharger les logs" placement="top">
+        <el-tooltip
+          content="Télécharger les logs"
+          placement="top"
+        >
           <el-button
             type="default"
             size="small"
             circle
-            @click="downloadLogs"
             :disabled="logs.length === 0"
+            @click="downloadLogs"
           >
             <span class="i-carbon-download" />
           </el-button>
@@ -76,7 +98,10 @@
     <!-- Conteneur des logs avec barre de progression -->
     <div class="logs-container">
       <!-- Barre de progression si disponible -->
-      <div v-if="progress > 0" class="logs-progress">
+      <div
+        v-if="progress > 0"
+        class="logs-progress"
+      >
         <el-progress
           :percentage="progress"
           :status="status === 'failed' ? 'exception' : status === 'completed' ? 'success' : undefined"
@@ -95,15 +120,26 @@
         :class="{ 'auto-scroll': autoScroll }"
         @scroll="handleScroll"
       >
-        <div v-if="logs.length === 0" class="logs-empty">
+        <div
+          v-if="logs.length === 0"
+          class="logs-empty"
+        >
           <span class="i-carbon-document-blank text-4xl text-gray-300 mb-2" />
-          <p class="text-gray-500">Aucun log disponible</p>
-          <p v-if="!isConnected" class="text-sm text-gray-400 mt-2">
+          <p class="text-gray-500">
+            Aucun log disponible
+          </p>
+          <p
+            v-if="!isConnected"
+            class="text-sm text-gray-400 mt-2"
+          >
             Connexion aux logs en temps réel...
           </p>
         </div>
 
-        <div v-else class="logs-lines">
+        <div
+          v-else
+          class="logs-lines"
+        >
           <div
             v-for="(line, index) in logs"
             :key="index"
@@ -117,7 +153,10 @@
       </div>
 
       <!-- Message d'erreur si présent -->
-      <div v-if="errorMessage" class="logs-error">
+      <div
+        v-if="errorMessage"
+        class="logs-error"
+      >
         <el-alert
           type="error"
           :closable="false"
@@ -132,7 +171,10 @@
     </div>
 
     <!-- Footer avec dernière mise à jour -->
-    <div v-if="lastUpdate" class="logs-footer">
+    <div
+      v-if="lastUpdate"
+      class="logs-footer"
+    >
       <span class="text-xs text-gray-500">
         Dernière mise à jour : {{ formatDate(lastUpdate) }}
       </span>

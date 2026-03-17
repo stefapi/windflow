@@ -4,22 +4,59 @@
       <template #header>
         <div class="card-header">
           <span>Workflows</span>
-          <el-button type="primary" @click="createWorkflow">Create Workflow</el-button>
+          <el-button
+            type="primary"
+            @click="createWorkflow"
+          >
+            Create Workflow
+          </el-button>
         </div>
       </template>
-      <el-table :data="workflowsStore.workflows" v-loading="workflowsStore.loading">
-        <el-table-column prop="name" label="Name" />
-        <el-table-column prop="description" label="Description" />
-        <el-table-column label="Nodes" width="100">
+      <el-table
+        v-loading="workflowsStore.loading"
+        :data="workflowsStore.workflows"
+      >
+        <el-table-column
+          prop="name"
+          label="Name"
+        />
+        <el-table-column
+          prop="description"
+          label="Description"
+        />
+        <el-table-column
+          label="Nodes"
+          width="100"
+        >
           <template #default="{ row }">
             {{ row.nodes?.length || 0 }}
           </template>
         </el-table-column>
-        <el-table-column label="Actions" width="250">
+        <el-table-column
+          label="Actions"
+          width="250"
+        >
           <template #default="{ row }">
-            <el-button size="small" @click="editWorkflow(row.id)">Edit</el-button>
-            <el-button size="small" type="success" @click="executeWorkflow(row.id)">Execute</el-button>
-            <el-button size="small" type="danger" @click="deleteWorkflow(row.id)">Delete</el-button>
+            <el-button
+              size="small"
+              @click="editWorkflow(row.id)"
+            >
+              Edit
+            </el-button>
+            <el-button
+              size="small"
+              type="success"
+              @click="executeWorkflow(row.id)"
+            >
+              Execute
+            </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              @click="deleteWorkflow(row.id)"
+            >
+              Delete
+            </el-button>
           </template>
         </el-table-column>
       </el-table>

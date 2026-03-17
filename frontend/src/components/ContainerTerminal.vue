@@ -239,14 +239,26 @@ defineExpose({
           size="small"
           class="status-tag"
         >
-          <span v-if="connected" class="status-dot connected"></span>
-          <span v-else-if="connecting" class="status-dot connecting"></span>
-          <span v-else class="status-dot disconnected"></span>
+          <span
+            v-if="connected"
+            class="status-dot connected"
+          />
+          <span
+            v-else-if="connecting"
+            class="status-dot connecting"
+          />
+          <span
+            v-else
+            class="status-dot disconnected"
+          />
           {{ connected ? 'Connected' : connecting ? 'Connecting...' : 'Disconnected' }}
         </el-tag>
 
         <!-- Exec ID si connecté -->
-        <span v-if="execId" class="exec-id">
+        <span
+          v-if="execId"
+          class="exec-id"
+        >
           Session: {{ execId }}
         </span>
 
@@ -260,37 +272,52 @@ defineExpose({
         <!-- Taille de police -->
         <el-select
           v-model="fontSize"
-          @change="changeFontSize"
           size="small"
           class="font-size-select"
+          @change="changeFontSize"
         >
-          <el-option label="10px" :value="10" />
-          <el-option label="12px" :value="12" />
-          <el-option label="14px" :value="14" />
-          <el-option label="16px" :value="16" />
-          <el-option label="18px" :value="18" />
+          <el-option
+            label="10px"
+            :value="10"
+          />
+          <el-option
+            label="12px"
+            :value="12"
+          />
+          <el-option
+            label="14px"
+            :value="14"
+          />
+          <el-option
+            label="16px"
+            :value="16"
+          />
+          <el-option
+            label="18px"
+            :value="18"
+          />
         </el-select>
 
         <!-- Boutons d'action -->
         <el-button-group size="small">
           <el-button
             :disabled="!connected"
-            @click="clear"
             title="Clear terminal (Ctrl+L)"
+            @click="clear"
           >
             <el-icon><Delete /></el-icon>
           </el-button>
           <el-button
             :disabled="!connected"
-            @click="copyOutput"
             title="Copy output"
+            @click="copyOutput"
           >
             <el-icon><CopyDocument /></el-icon>
           </el-button>
           <el-button
             :disabled="connected"
-            @click="() => authStore.token && connect(authStore.token)"
             title="Reconnect"
+            @click="() => authStore.token && connect(authStore.token)"
           >
             <el-icon><Refresh /></el-icon>
           </el-button>
@@ -303,25 +330,37 @@ defineExpose({
       ref="terminalRef"
       class="terminal-container"
       :class="{ 'theme-dark': theme === 'dark', 'theme-light': theme === 'light' }"
-    ></div>
+    />
 
     <!-- Message d'erreur -->
-    <div v-if="error" class="error-message">
-      <el-alert type="error" :closable="false">
+    <div
+      v-if="error"
+      class="error-message"
+    >
+      <el-alert
+        type="error"
+        :closable="false"
+      >
         {{ error }}
       </el-alert>
     </div>
 
     <!-- Message si pas connecté -->
-    <div v-if="!connected && !connecting && !error" class="not-connected-message">
+    <div
+      v-if="!connected && !connecting && !error"
+      class="not-connected-message"
+    >
       <el-button
         type="primary"
-        @click="() => authStore.token && connect(authStore.token)"
         :disabled="!authStore.token"
+        @click="() => authStore.token && connect(authStore.token)"
       >
         Connect to Terminal
       </el-button>
-      <p v-if="!authStore.token" class="login-hint">
+      <p
+        v-if="!authStore.token"
+        class="login-hint"
+      >
         Please login to access the terminal
       </p>
     </div>

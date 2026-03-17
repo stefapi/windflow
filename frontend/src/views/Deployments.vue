@@ -4,22 +4,48 @@
       <template #header>
         <div class="card-header">
           <span>Deployments</span>
-          <el-button type="primary" @click="openDialog">New Deployment</el-button>
+          <el-button
+            type="primary"
+            @click="openDialog"
+          >
+            New Deployment
+          </el-button>
         </div>
       </template>
-      <el-table :data="deploymentsStore.deployments" v-loading="deploymentsStore.loading">
-        <el-table-column prop="id" label="ID" width="100" />
-        <el-table-column prop="status" label="Status">
+      <el-table
+        v-loading="deploymentsStore.loading"
+        :data="deploymentsStore.deployments"
+      >
+        <el-table-column
+          prop="id"
+          label="ID"
+          width="100"
+        />
+        <el-table-column
+          prop="status"
+          label="Status"
+        >
           <template #default="{ row }">
             <el-tag :type="getStatusType(getRealtimeStatus(row.id, row.status))">
               {{ getRealtimeStatus(row.id, row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="created_at" label="Created At" />
-        <el-table-column label="Actions" width="420">
+        <el-table-column
+          prop="created_at"
+          label="Created At"
+        />
+        <el-table-column
+          label="Actions"
+          width="420"
+        >
           <template #default="{ row }">
-            <el-button size="small" @click="viewDetails(row.id)">Details</el-button>
+            <el-button
+              size="small"
+              @click="viewDetails(row.id)"
+            >
+              Details
+            </el-button>
             <el-button
               size="small"
               type="success"
@@ -28,9 +54,29 @@
               <span class="i-carbon-document-blank mr-1" />
               Logs
             </el-button>
-            <el-button size="small" type="warning" @click="cancelDeployment(row.id)" v-if="row.status === 'pending' || row.status === 'installing'">Cancel</el-button>
-            <el-button size="small" type="info" @click="retryDeployment(row.id)" v-if="row.status === 'failed'">Retry</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(row.id, row.name)">Delete</el-button>
+            <el-button
+              v-if="row.status === 'pending' || row.status === 'installing'"
+              size="small"
+              type="warning"
+              @click="cancelDeployment(row.id)"
+            >
+              Cancel
+            </el-button>
+            <el-button
+              v-if="row.status === 'failed'"
+              size="small"
+              type="info"
+              @click="retryDeployment(row.id)"
+            >
+              Retry
+            </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              @click="handleDelete(row.id, row.name)"
+            >
+              Delete
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -74,8 +120,8 @@
             v-model="form.stack_id"
             placeholder="Sélectionner un stack"
             style="width: 100%"
-            @change="onStackChange"
             clearable
+            @change="onStackChange"
           >
             <el-option
               v-for="stack in stacksStore.stacks"
@@ -130,8 +176,8 @@
           <DynamicFormField
             v-for="field in dynamicFields"
             :key="field.key"
-            :field="field"
             v-model="form[field.key]"
+            :field="field"
             @regenerate="handleRegenerateVariable(field.key)"
           />
         </template>
@@ -147,12 +193,14 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="closeDialog">Annuler</el-button>
+        <el-button @click="closeDialog">
+          Annuler
+        </el-button>
         <el-button
           type="primary"
-          @click="handleCreate"
           :loading="deploying"
           :disabled="!form.stack_id || !form.target_id"
+          @click="handleCreate"
         >
           Déployer
         </el-button>

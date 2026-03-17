@@ -5,24 +5,55 @@
       <template #header>
         <div class="card-header">
           <span>Stacks Management</span>
-          <el-button type="primary" @click="openCreateDialog">Create Stack</el-button>
+          <el-button
+            type="primary"
+            @click="openCreateDialog"
+          >
+            Create Stack
+          </el-button>
         </div>
       </template>
 
-      <el-table :data="stacksStore.stacks" v-loading="stacksStore.loading" @row-click="selectStack">
-        <el-table-column prop="name" label="Name" min-width="150" />
-        <el-table-column prop="description" label="Description" min-width="200" show-overflow-tooltip />
-        <el-table-column label="Created" width="180">
+      <el-table
+        v-loading="stacksStore.loading"
+        :data="stacksStore.stacks"
+        @row-click="selectStack"
+      >
+        <el-table-column
+          prop="name"
+          label="Name"
+          min-width="150"
+        />
+        <el-table-column
+          prop="description"
+          label="Description"
+          min-width="200"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="Created"
+          width="180"
+        >
           <template #default="{ row }">
             {{ formatDate(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="Status" width="130">
+        <el-table-column
+          label="Status"
+          width="130"
+        >
           <template #default="{ row }">
-            <StatusBadge :status="getStackStatus(row)" size="small" />
+            <StatusBadge
+              :status="getStackStatus(row)"
+              size="small"
+            />
           </template>
         </el-table-column>
-        <el-table-column label="Actions" width="150" fixed="right">
+        <el-table-column
+          label="Actions"
+          width="150"
+          fixed="right"
+        >
           <template #default="{ row }">
             <ActionButtons
               :actions="['edit', 'deploy', 'delete']"
@@ -34,28 +65,71 @@
     </el-card>
 
     <!-- Panneau de détail / édition du stack sélectionné -->
-    <el-card v-if="selectedStack" style="margin-top: 20px">
+    <el-card
+      v-if="selectedStack"
+      style="margin-top: 20px"
+    >
       <template #header>
         <div class="card-header">
           <span>{{ isEditing ? 'Edit Stack' : 'Stack Details' }}: {{ selectedStack.name }}</span>
           <div>
-            <el-button v-if="!isEditing" type="primary" size="small" @click="startEditing">Edit</el-button>
-            <el-button v-if="isEditing" type="success" size="small" @click="saveStack" :loading="saving">Save</el-button>
-            <el-button v-if="isEditing" size="small" @click="cancelEditing">Cancel</el-button>
-            <el-button size="small" @click="selectedStack = null">Close</el-button>
+            <el-button
+              v-if="!isEditing"
+              type="primary"
+              size="small"
+              @click="startEditing"
+            >
+              Edit
+            </el-button>
+            <el-button
+              v-if="isEditing"
+              type="success"
+              size="small"
+              :loading="saving"
+              @click="saveStack"
+            >
+              Save
+            </el-button>
+            <el-button
+              v-if="isEditing"
+              size="small"
+              @click="cancelEditing"
+            >
+              Cancel
+            </el-button>
+            <el-button
+              size="small"
+              @click="selectedStack = null"
+            >
+              Close
+            </el-button>
           </div>
         </div>
       </template>
 
       <el-tabs v-model="activeTab">
         <!-- Onglet Compose -->
-        <el-tab-pane label="Compose YAML" name="compose">
+        <el-tab-pane
+          label="Compose YAML"
+          name="compose"
+        >
           <div class="compose-editor-section">
-            <div class="editor-toolbar" v-if="isEditing">
-              <el-button size="small" @click="validateCompose" :loading="validating">
+            <div
+              v-if="isEditing"
+              class="editor-toolbar"
+            >
+              <el-button
+                size="small"
+                :loading="validating"
+                @click="validateCompose"
+              >
                 Validate YAML
               </el-button>
-              <el-tag v-if="validationResult !== null" :type="validationResult ? 'success' : 'danger'" size="small">
+              <el-tag
+                v-if="validationResult !== null"
+                :type="validationResult ? 'success' : 'danger'"
+                size="small"
+              >
                 {{ validationResult ? '✓ Valid' : '✗ Invalid' }}
               </el-tag>
             </div>
@@ -69,7 +143,10 @@
                 wrap="off"
               />
             </div>
-            <div v-if="validationErrors.length > 0" class="validation-errors">
+            <div
+              v-if="validationErrors.length > 0"
+              class="validation-errors"
+            >
               <el-alert
                 v-for="(err, idx) in validationErrors"
                 :key="idx"
@@ -84,12 +161,25 @@
         </el-tab-pane>
 
         <!-- Onglet Variables d'environnement -->
-        <el-tab-pane label="Environment Variables" name="env">
+        <el-tab-pane
+          label="Environment Variables"
+          name="env"
+        >
           <div class="env-section">
             <div v-if="envVars.length > 0">
-              <el-table :data="envVars" size="small">
-                <el-table-column prop="key" label="Variable" min-width="200" />
-                <el-table-column label="Value" min-width="300">
+              <el-table
+                :data="envVars"
+                size="small"
+              >
+                <el-table-column
+                  prop="key"
+                  label="Variable"
+                  min-width="200"
+                />
+                <el-table-column
+                  label="Value"
+                  min-width="300"
+                >
                   <template #default="{ row }">
                     <div class="env-value-cell">
                       <span v-if="row.hidden && !row.revealed">••••••••</span>
@@ -105,88 +195,200 @@
                     </div>
                   </template>
                 </el-table-column>
-                <el-table-column prop="service" label="Service" width="150" />
+                <el-table-column
+                  prop="service"
+                  label="Service"
+                  width="150"
+                />
               </el-table>
             </div>
-            <el-empty v-else description="No environment variables detected" :image-size="60" />
+            <el-empty
+              v-else
+              description="No environment variables detected"
+              :image-size="60"
+            />
           </div>
         </el-tab-pane>
 
         <!-- Onglet Prévisualisation -->
-        <el-tab-pane label="Preview" name="preview">
+        <el-tab-pane
+          label="Preview"
+          name="preview"
+        >
           <div class="preview-section">
             <h4>Services detected</h4>
-            <el-descriptions v-if="parsedServices.length > 0" :column="1" border size="small">
-              <el-descriptions-item v-for="svc in parsedServices" :key="svc.name" :label="svc.name">
-                <el-tag size="small" class="mr-2">{{ svc.image || 'build' }}</el-tag>
-                <el-tag v-for="port in svc.ports" :key="port" size="small" type="info" class="mr-1">
+            <el-descriptions
+              v-if="parsedServices.length > 0"
+              :column="1"
+              border
+              size="small"
+            >
+              <el-descriptions-item
+                v-for="svc in parsedServices"
+                :key="svc.name"
+                :label="svc.name"
+              >
+                <el-tag
+                  size="small"
+                  class="mr-2"
+                >
+                  {{ svc.image || 'build' }}
+                </el-tag>
+                <el-tag
+                  v-for="port in svc.ports"
+                  :key="port"
+                  size="small"
+                  type="info"
+                  class="mr-1"
+                >
                   {{ port }}
                 </el-tag>
               </el-descriptions-item>
             </el-descriptions>
-            <el-empty v-else description="Unable to parse compose content" :image-size="60" />
+            <el-empty
+              v-else
+              description="Unable to parse compose content"
+              :image-size="60"
+            />
           </div>
         </el-tab-pane>
 
         <!-- Onglet Historique des versions -->
-        <el-tab-pane label="History" name="history">
+        <el-tab-pane
+          label="History"
+          name="history"
+        >
           <div class="history-section">
-            <div class="history-toolbar" style="margin-bottom: 12px">
-              <el-button size="small" type="primary" @click="createSnapshot" :loading="creatingVersion">
+            <div
+              class="history-toolbar"
+              style="margin-bottom: 12px"
+            >
+              <el-button
+                size="small"
+                type="primary"
+                :loading="creatingVersion"
+                @click="createSnapshot"
+              >
                 Create Snapshot
               </el-button>
-              <el-button size="small" @click="loadVersions" :loading="loadingVersions">
+              <el-button
+                size="small"
+                :loading="loadingVersions"
+                @click="loadVersions"
+              >
                 Refresh
               </el-button>
             </div>
-            <el-table v-if="versions.length > 0" :data="versions" size="small" v-loading="loadingVersions">
-              <el-table-column label="Version" width="90">
+            <el-table
+              v-if="versions.length > 0"
+              v-loading="loadingVersions"
+              :data="versions"
+              size="small"
+            >
+              <el-table-column
+                label="Version"
+                width="90"
+              >
                 <template #default="{ row }">
-                  <el-tag size="small">v{{ row.version_number }}</el-tag>
+                  <el-tag size="small">
+                    v{{ row.version_number }}
+                  </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="change_summary" label="Summary" min-width="200" show-overflow-tooltip />
-              <el-table-column label="Author" width="130">
+              <el-table-column
+                prop="change_summary"
+                label="Summary"
+                min-width="200"
+                show-overflow-tooltip
+              />
+              <el-table-column
+                label="Author"
+                width="130"
+              >
                 <template #default="{ row }">
                   {{ row.author_name || '—' }}
                 </template>
               </el-table-column>
-              <el-table-column label="Date" width="170">
+              <el-table-column
+                label="Date"
+                width="170"
+              >
                 <template #default="{ row }">
                   {{ formatDate(row.created_at) }}
                 </template>
               </el-table-column>
-              <el-table-column label="Actions" width="180" fixed="right">
+              <el-table-column
+                label="Actions"
+                width="180"
+                fixed="right"
+              >
                 <template #default="{ row }">
-                  <el-button size="small" link @click="previewVersion(row)">View</el-button>
+                  <el-button
+                    size="small"
+                    link
+                    @click="previewVersion(row)"
+                  >
+                    View
+                  </el-button>
                   <el-popconfirm
                     title="Restore this version?"
                     confirm-button-text="Restore"
                     @confirm="restoreVersion(row)"
                   >
                     <template #reference>
-                      <el-button size="small" link type="warning">Restore</el-button>
+                      <el-button
+                        size="small"
+                        link
+                        type="warning"
+                      >
+                        Restore
+                      </el-button>
                     </template>
                   </el-popconfirm>
                 </template>
               </el-table-column>
             </el-table>
-            <el-empty v-else description="No version history yet" :image-size="60" />
+            <el-empty
+              v-else
+              description="No version history yet"
+              :image-size="60"
+            />
           </div>
         </el-tab-pane>
       </el-tabs>
     </el-card>
 
     <!-- Dialog de création -->
-    <el-dialog v-model="showCreateDialog" title="Create Stack" width="700px" destroy-on-close>
-      <el-form :model="createForm" label-width="140px">
-        <el-form-item label="Name" required>
-          <el-input v-model="createForm.name" placeholder="my-stack" />
+    <el-dialog
+      v-model="showCreateDialog"
+      title="Create Stack"
+      width="700px"
+      destroy-on-close
+    >
+      <el-form
+        :model="createForm"
+        label-width="140px"
+      >
+        <el-form-item
+          label="Name"
+          required
+        >
+          <el-input
+            v-model="createForm.name"
+            placeholder="my-stack"
+          />
         </el-form-item>
         <el-form-item label="Description">
-          <el-input v-model="createForm.description" type="textarea" :rows="2" />
+          <el-input
+            v-model="createForm.description"
+            type="textarea"
+            :rows="2"
+          />
         </el-form-item>
-        <el-form-item label="Compose Content" required>
+        <el-form-item
+          label="Compose Content"
+          required
+        >
           <textarea
             v-model="createForm.compose_content"
             class="yaml-textarea"
@@ -198,19 +400,45 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">Cancel</el-button>
-        <el-button type="primary" @click="handleCreate" :loading="stacksStore.loading">Create</el-button>
+        <el-button @click="showCreateDialog = false">
+          Cancel
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="stacksStore.loading"
+          @click="handleCreate"
+        >
+          Create
+        </el-button>
       </template>
     </el-dialog>
 
     <!-- Dialog de déploiement -->
-    <el-dialog v-model="showDeployDialog" title="Deploy Stack" width="500px" destroy-on-close>
-      <el-form :model="deployForm" label-width="120px">
+    <el-dialog
+      v-model="showDeployDialog"
+      title="Deploy Stack"
+      width="500px"
+      destroy-on-close
+    >
+      <el-form
+        :model="deployForm"
+        label-width="120px"
+      >
         <el-form-item label="Stack">
-          <el-input :model-value="deployStack?.name" disabled />
+          <el-input
+            :model-value="deployStack?.name"
+            disabled
+          />
         </el-form-item>
-        <el-form-item label="Target" required>
-          <el-select v-model="deployForm.target_id" placeholder="Select target" style="width: 100%">
+        <el-form-item
+          label="Target"
+          required
+        >
+          <el-select
+            v-model="deployForm.target_id"
+            placeholder="Select target"
+            style="width: 100%"
+          >
             <el-option
               v-for="target in targetsStore.targets"
               :key="target.id"
@@ -221,8 +449,16 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showDeployDialog = false">Cancel</el-button>
-        <el-button type="success" @click="handleDeploy" :loading="deploying">Deploy</el-button>
+        <el-button @click="showDeployDialog = false">
+          Cancel
+        </el-button>
+        <el-button
+          type="success"
+          :loading="deploying"
+          @click="handleDeploy"
+        >
+          Deploy
+        </el-button>
       </template>
     </el-dialog>
   </div>

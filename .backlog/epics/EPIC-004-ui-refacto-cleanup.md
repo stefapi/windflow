@@ -80,8 +80,8 @@ Cette epic a deux axes :
 - [x] STORY-481 : Intégration composants UI harmonisés dans Stacks
 
 ### Dashboard
-- [ ] STORY-431 : Barre métriques système (CPU, RAM, disque, uptime du target actif)
-- [ ] STORY-432 : Tuiles compteurs Containers / VMs / Stacks (cliquables)
+- [x] STORY-431 : Barre métriques système (CPU, RAM, disque, uptime du target actif)
+- [x] STORY-432 : Tuiles compteurs Containers / VMs / Stacks (cliquables)
 - [ ] STORY-433 : Liste derniers déploiements avec statut + action directe
 - [ ] STORY-434 : Zone widgets plugins (vide proprement si aucun plugin — peuplée par EPIC-001)
 

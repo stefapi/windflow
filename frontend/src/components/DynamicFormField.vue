@@ -1,8 +1,18 @@
 <template>
   <!-- Header de groupe -->
-  <div v-if="field.isGroupHeader" class="group-header">
-    <h4 class="group-title">{{ field.label }}</h4>
-    <p v-if="field.description" class="group-description">{{ field.description }}</p>
+  <div
+    v-if="field.isGroupHeader"
+    class="group-header"
+  >
+    <h4 class="group-title">
+      {{ field.label }}
+    </h4>
+    <p
+      v-if="field.description"
+      class="group-description"
+    >
+      {{ field.description }}
+    </p>
   </div>
 
   <!-- Champ de formulaire normal -->
@@ -46,7 +56,10 @@
     </el-select>
 
     <!-- Password → Input type password avec bouton show/hide -->
-    <div v-else-if="field.type === 'password'" class="input-with-regenerate">
+    <div
+      v-else-if="field.type === 'password'"
+      class="input-with-regenerate"
+    >
       <el-input
         v-model="localValue"
         type="password"
@@ -62,14 +75,17 @@
         <el-button
           class="regenerate-button"
           :icon="Refresh"
-          @click="emit('regenerate')"
           circle
+          @click="emit('regenerate')"
         />
       </el-tooltip>
     </div>
 
     <!-- Number → Input number avec min/max -->
-    <div v-else-if="field.type === 'number' || field.type === 'integer'" class="input-with-regenerate">
+    <div
+      v-else-if="field.type === 'number' || field.type === 'integer'"
+      class="input-with-regenerate"
+    >
       <el-input-number
         v-model="localValue"
         :min="field.min"
@@ -87,8 +103,8 @@
         <el-button
           class="regenerate-button"
           :icon="Refresh"
-          @click="emit('regenerate')"
           circle
+          @click="emit('regenerate')"
         />
       </el-tooltip>
     </div>
@@ -101,7 +117,10 @@
     />
 
     <!-- String par défaut → Input text -->
-    <div v-else class="input-with-regenerate">
+    <div
+      v-else
+      class="input-with-regenerate"
+    >
       <el-input
         v-model="localValue"
         :placeholder="`Entrer ${field.label}`"
@@ -115,16 +134,21 @@
         <el-button
           class="regenerate-button"
           :icon="Refresh"
-          @click="emit('regenerate')"
           circle
+          @click="emit('regenerate')"
         />
       </el-tooltip>
     </div>
 
     <!-- Description (aide contextuelle) -->
-    <template v-if="field.description" #extra>
+    <template
+      v-if="field.description"
+      #extra
+    >
       <div class="field-description">
-        <el-icon class="description-icon"><InfoFilled /></el-icon>
+        <el-icon class="description-icon">
+          <InfoFilled />
+        </el-icon>
         <span>{{ field.description }}</span>
       </div>
     </template>

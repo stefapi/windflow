@@ -94,28 +94,33 @@ function formatContainerId(id: string): string {
       <div class="header-left">
         <el-button
           text
-          @click="$router.push('/deployments')"
           class="back-button"
+          @click="$router.push('/deployments')"
         >
           <el-icon><ArrowLeft /></el-icon>
           Back to Deployments
         </el-button>
-        <h1 class="page-title">Terminal</h1>
+        <h1 class="page-title">
+          Terminal
+        </h1>
       </div>
     </div>
 
     <!-- Sélecteur de container -->
     <el-card class="selector-card">
-      <el-row :gutter="20" align="middle">
+      <el-row
+        :gutter="20"
+        align="middle"
+      >
         <el-col :span="12">
           <el-form-item label="Container">
             <el-select
               v-model="selectedContainerId"
               placeholder="Select a running container"
               filterable
-              @change="onContainerChange"
               :loading="isLoading"
               style="width: 100%"
+              @change="onContainerChange"
             >
               <el-option
                 v-for="container in availableContainers"
@@ -125,7 +130,12 @@ function formatContainerId(id: string): string {
               >
                 <div class="container-option">
                   <span class="container-name">{{ container.name }}</span>
-                  <el-tag size="small" type="success">{{ container.status }}</el-tag>
+                  <el-tag
+                    size="small"
+                    type="success"
+                  >
+                    {{ container.status }}
+                  </el-tag>
                   <code class="container-id">{{ formatContainerId(container.id) }}</code>
                 </div>
               </el-option>
@@ -135,7 +145,10 @@ function formatContainerId(id: string): string {
 
         <el-col :span="6">
           <el-form-item label="Shell">
-            <el-select v-model="selectedShell" style="width: 100%">
+            <el-select
+              v-model="selectedShell"
+              style="width: 100%"
+            >
               <el-option
                 v-for="shell in shellOptions"
                 :key="shell.value"
@@ -167,14 +180,20 @@ function formatContainerId(id: string): string {
         description="No running containers found. Deploy a stack first to access the terminal."
         :image-size="80"
       >
-        <el-button type="primary" @click="$router.push('/stacks')">
+        <el-button
+          type="primary"
+          @click="$router.push('/stacks')"
+        >
           Go to Stacks
         </el-button>
       </el-empty>
     </el-card>
 
     <!-- Terminal -->
-    <el-card class="terminal-card" v-if="selectedContainerId">
+    <el-card
+      v-if="selectedContainerId"
+      class="terminal-card"
+    >
       <ContainerTerminal
         :container-id="selectedContainerId"
         :shell="selectedShell"
@@ -185,8 +204,14 @@ function formatContainerId(id: string): string {
     </el-card>
 
     <!-- Message d'aide -->
-    <el-card class="help-card" v-else>
-      <el-alert type="info" :closable="false">
+    <el-card
+      v-else
+      class="help-card"
+    >
+      <el-alert
+        type="info"
+        :closable="false"
+      >
         <template #title>
           <span>How to use the terminal</span>
         </template>

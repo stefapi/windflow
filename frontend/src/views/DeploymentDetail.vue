@@ -1,12 +1,19 @@
 <template>
   <div class="deployment-detail">
-    <el-page-header @back="$router.push('/deployments')" style="margin-bottom: 20px">
+    <el-page-header
+      style="margin-bottom: 20px"
+      @back="$router.push('/deployments')"
+    >
       <template #content>
         <span>Deployment Details</span>
       </template>
     </el-page-header>
 
-    <div v-if="deploymentsStore.loading && !deployment" v-loading="true" style="min-height: 200px" />
+    <div
+      v-if="deploymentsStore.loading && !deployment"
+      v-loading="true"
+      style="min-height: 200px"
+    />
 
     <template v-if="deployment">
       <!-- En-tête avec statut et actions -->
@@ -15,7 +22,10 @@
           <div class="card-header">
             <div class="header-left">
               <span class="deployment-title">{{ deployment.name || deployment.id.slice(0, 12) }}</span>
-              <el-tag :type="getStatusType(deployment.status)" size="large">
+              <el-tag
+                :type="getStatusType(deployment.status)"
+                size="large"
+              >
                 {{ deployment.status }}
               </el-tag>
             </div>
@@ -23,24 +33,24 @@
               <el-button
                 v-if="deployment.status === 'running'"
                 type="danger"
-                @click="handleCancel"
                 :loading="actionLoading"
+                @click="handleCancel"
               >
                 Stop
               </el-button>
               <el-button
                 v-if="deployment.status === 'failed' || deployment.status === 'cancelled'"
                 type="warning"
-                @click="handleRetry"
                 :loading="actionLoading"
+                @click="handleRetry"
               >
                 Retry
               </el-button>
               <el-button
                 v-if="deployment.status === 'completed' || deployment.status === 'running'"
                 type="primary"
-                @click="handleRedeploy"
                 :loading="actionLoading"
+                @click="handleRedeploy"
               >
                 Redeploy
               </el-button>
@@ -50,34 +60,65 @@
 
         <!-- Timeline de progression -->
         <div class="deployment-timeline">
-          <el-steps :active="currentStepIndex" finish-status="success" :process-status="processStatus" align-center>
-            <el-step title="Pending" description="Waiting to start" />
-            <el-step title="Building" description="Preparing stack" />
-            <el-step title="Deploying" description="Deploying to target" />
-            <el-step title="Running" description="Active and healthy" />
+          <el-steps
+            :active="currentStepIndex"
+            finish-status="success"
+            :process-status="processStatus"
+            align-center
+          >
+            <el-step
+              title="Pending"
+              description="Waiting to start"
+            />
+            <el-step
+              title="Building"
+              description="Preparing stack"
+            />
+            <el-step
+              title="Deploying"
+              description="Deploying to target"
+            />
+            <el-step
+              title="Running"
+              description="Active and healthy"
+            />
           </el-steps>
         </div>
       </el-card>
 
       <!-- Informations détaillées -->
       <el-card style="margin-top: 20px">
-        <el-descriptions :column="2" border>
+        <el-descriptions
+          :column="2"
+          border
+        >
           <el-descriptions-item label="ID">
             <code>{{ deployment.id }}</code>
           </el-descriptions-item>
           <el-descriptions-item label="Status">
-            <el-tag :type="getStatusType(deployment.status)" size="small">
+            <el-tag
+              :type="getStatusType(deployment.status)"
+              size="small"
+            >
               {{ deployment.status }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="Stack">
-            <router-link v-if="deployment.stack" to="/stacks" class="link">
+            <router-link
+              v-if="deployment.stack"
+              to="/stacks"
+              class="link"
+            >
               {{ deployment.stack.name }}
             </router-link>
             <code v-else>{{ deployment.stack_id.slice(0, 12) }}...</code>
           </el-descriptions-item>
           <el-descriptions-item label="Target">
-            <router-link v-if="deployment.target" to="/targets" class="link">
+            <router-link
+              v-if="deployment.target"
+              to="/targets"
+              class="link"
+            >
               {{ deployment.target.name }} ({{ deployment.target.host }})
             </router-link>
             <code v-else>{{ deployment.target_id.slice(0, 12) }}...</code>
@@ -95,7 +136,10 @@
       <el-card style="margin-top: 20px">
         <el-tabs v-model="activeTab">
           <!-- Logs en temps réel -->
-          <el-tab-pane label="Logs" name="logs">
+          <el-tab-pane
+            label="Logs"
+            name="logs"
+          >
             <div class="logs-container">
               <DeploymentLogs
                 :deployment-id="deploymentId"
@@ -105,11 +149,24 @@
           </el-tab-pane>
 
           <!-- Variables d'environnement -->
-          <el-tab-pane label="Environment" name="env">
+          <el-tab-pane
+            label="Environment"
+            name="env"
+          >
             <div v-if="envVars.length > 0">
-              <el-table :data="envVars" size="small">
-                <el-table-column prop="key" label="Variable" min-width="200" />
-                <el-table-column label="Value" min-width="300">
+              <el-table
+                :data="envVars"
+                size="small"
+              >
+                <el-table-column
+                  prop="key"
+                  label="Variable"
+                  min-width="200"
+                />
+                <el-table-column
+                  label="Value"
+                  min-width="300"
+                >
                   <template #default="{ row }">
                     <div class="env-value-cell">
                       <span v-if="row.hidden && !row.revealed">••••••••</span>
@@ -127,12 +184,23 @@
                 </el-table-column>
               </el-table>
             </div>
-            <el-empty v-else description="No environment variables available" :image-size="60" />
+            <el-empty
+              v-else
+              description="No environment variables available"
+              :image-size="60"
+            />
           </el-tab-pane>
 
           <!-- Métriques -->
-          <el-tab-pane label="Metrics" name="metrics">
-            <el-descriptions :column="2" border v-if="deployment.metadata">
+          <el-tab-pane
+            label="Metrics"
+            name="metrics"
+          >
+            <el-descriptions
+              v-if="deployment.metadata"
+              :column="2"
+              border
+            >
               <el-descriptions-item label="Uptime">
                 {{ deployment.metadata['uptime'] || 'N/A' }}
               </el-descriptions-item>
@@ -146,12 +214,23 @@
                 {{ deployment.metadata['restart_count'] ?? 'N/A' }}
               </el-descriptions-item>
             </el-descriptions>
-            <el-empty v-else description="No metrics available yet" :image-size="60" />
+            <el-empty
+              v-else
+              description="No metrics available yet"
+              :image-size="60"
+            />
           </el-tab-pane>
 
           <!-- Terminal interactif -->
-          <el-tab-pane label="Terminal" name="terminal" :disabled="deployment.status !== 'running' || !deployment.container_id">
-            <div v-if="deployment.status === 'running' && deployment.container_id" class="terminal-pane">
+          <el-tab-pane
+            label="Terminal"
+            name="terminal"
+            :disabled="deployment.status !== 'running' || !deployment.container_id"
+          >
+            <div
+              v-if="deployment.status === 'running' && deployment.container_id"
+              class="terminal-pane"
+            >
               <ContainerTerminal
                 :container-id="deployment.container_id"
                 :shell="selectedShell"
@@ -160,12 +239,20 @@
                 :font-size="14"
               />
             </div>
-            <el-empty v-else description="Terminal is only available for running containers" :image-size="60">
+            <el-empty
+              v-else
+              description="Terminal is only available for running containers"
+              :image-size="60"
+            >
               <template v-if="deployment.status !== 'running'">
-                <p class="empty-hint">Start the deployment to access the terminal</p>
+                <p class="empty-hint">
+                  Start the deployment to access the terminal
+                </p>
               </template>
               <template v-else-if="!deployment.container_id">
-                <p class="empty-hint">No container associated with this deployment</p>
+                <p class="empty-hint">
+                  No container associated with this deployment
+                </p>
               </template>
             </el-empty>
           </el-tab-pane>
@@ -173,7 +260,10 @@
       </el-card>
     </template>
 
-    <el-empty v-if="!deploymentsStore.loading && !deployment" description="Deployment not found" />
+    <el-empty
+      v-if="!deploymentsStore.loading && !deployment"
+      description="Deployment not found"
+    />
   </div>
 </template>
 

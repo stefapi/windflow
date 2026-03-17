@@ -1,5 +1,8 @@
 <template>
-  <el-tooltip :content="themeStore.isDark() ? 'Passer au thème clair' : 'Passer au thème sombre'" placement="bottom">
+  <el-tooltip
+    :content="themeStore.isDark() ? 'Passer au thème clair' : 'Passer au thème sombre'"
+    placement="bottom"
+  >
     <el-button
       class="theme-toggle"
       circle

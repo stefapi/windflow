@@ -4,51 +4,89 @@
       <template #header>
         <div class="card-header">
           <span>Targets Management</span>
-          <el-button type="primary" @click="showDialog = true">Add Target</el-button>
+          <el-button
+            type="primary"
+            @click="showDialog = true"
+          >
+            Add Target
+          </el-button>
         </div>
       </template>
       <el-table
-        :data="targetsStore.targets"
         v-loading="targetsStore.loading"
+        :data="targetsStore.targets"
         :expand-row-keys="expandedRowId ? [expandedRowId] : []"
         row-key="id"
         @expand-change="handleExpandChange"
       >
         <el-table-column type="expand">
           <template #default="{ row }">
-            <div class="capabilities-section" v-loading="loadingCapabilities.has(row.id)">
-              <h4 class="capabilities-title">Detected Capabilities</h4>
+            <div
+              v-loading="loadingCapabilities.has(row.id)"
+              class="capabilities-section"
+            >
+              <h4 class="capabilities-title">
+                Detected Capabilities
+              </h4>
               <el-table
-                :data="row.capabilities"
                 v-if="row.capabilities && row.capabilities.length > 0"
+                :data="row.capabilities"
                 class="capabilities-table"
               >
-                <el-table-column prop="capability_type" label="Capability Type" width="250">
+                <el-table-column
+                  prop="capability_type"
+                  label="Capability Type"
+                  width="250"
+                >
                   <template #default="{ row: capRow }">
-                    <el-tag size="small">{{ capRow.capability_type }}</el-tag>
+                    <el-tag size="small">
+                      {{ capRow.capability_type }}
+                    </el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column prop="version" label="Version">
+                <el-table-column
+                  prop="version"
+                  label="Version"
+                >
                   <template #default="{ row: capRow }">
                     {{ capRow.version || 'N/A' }}
                   </template>
                 </el-table-column>
               </el-table>
-              <div v-else-if="!loadingCapabilities.has(row.id)" class="no-capabilities">
+              <div
+                v-else-if="!loadingCapabilities.has(row.id)"
+                class="no-capabilities"
+              >
                 <el-empty description="No capabilities detected. Click 'Scan' to detect capabilities." />
               </div>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="Name" />
-        <el-table-column prop="host" label="Host" />
-        <el-table-column prop="port" label="Port" width="100" />
-        <el-table-column label="Status" width="150">
+        <el-table-column
+          prop="name"
+          label="Name"
+        />
+        <el-table-column
+          prop="host"
+          label="Host"
+        />
+        <el-table-column
+          prop="port"
+          label="Port"
+          width="100"
+        />
+        <el-table-column
+          label="Status"
+          width="150"
+        >
           <template #default="{ row }">
             <StatusBadge :status="row.status" />
           </template>
         </el-table-column>
-        <el-table-column label="Actions" width="160">
+        <el-table-column
+          label="Actions"
+          width="160"
+        >
           <template #default="{ row }">
             <ActionButtons
               :actions="[
@@ -63,33 +101,72 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="showDialog" title="Add Target" width="500px">
-      <el-form :model="form" label-width="100px">
+    <el-dialog
+      v-model="showDialog"
+      title="Add Target"
+      width="500px"
+    >
+      <el-form
+        :model="form"
+        label-width="100px"
+      >
         <el-form-item label="Name">
           <el-input v-model="form.name" />
         </el-form-item>
         <el-form-item label="Type">
-          <el-select v-model="form.type" style="width: 100%">
-            <el-option label="Docker" value="docker" />
-            <el-option label="Docker Swarm" value="docker_swarm" />
-            <el-option label="Kubernetes" value="kubernetes" />
-            <el-option label="VM" value="vm" />
-            <el-option label="Physical" value="physical" />
+          <el-select
+            v-model="form.type"
+            style="width: 100%"
+          >
+            <el-option
+              label="Docker"
+              value="docker"
+            />
+            <el-option
+              label="Docker Swarm"
+              value="docker_swarm"
+            />
+            <el-option
+              label="Kubernetes"
+              value="kubernetes"
+            />
+            <el-option
+              label="VM"
+              value="vm"
+            />
+            <el-option
+              label="Physical"
+              value="physical"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="Host">
           <el-input v-model="form.host" />
         </el-form-item>
         <el-form-item label="Port">
-          <el-input-number v-model="form.port" :min="1" :max="65535" />
+          <el-input-number
+            v-model="form.port"
+            :min="1"
+            :max="65535"
+          />
         </el-form-item>
         <el-form-item label="Description">
-          <el-input v-model="form.description" type="textarea" />
+          <el-input
+            v-model="form.description"
+            type="textarea"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showDialog = false">Cancel</el-button>
-        <el-button type="primary" @click="handleCreate">Create</el-button>
+        <el-button @click="showDialog = false">
+          Cancel
+        </el-button>
+        <el-button
+          type="primary"
+          @click="handleCreate"
+        >
+          Create
+        </el-button>
       </template>
     </el-dialog>
   </div>

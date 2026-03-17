@@ -12,12 +12,23 @@
       </div>
       <el-divider />
       <div class="targets-list">
-        <div v-for="target in targetsDetail" :key="target.id" class="target-item">
-          <StatusBadge :status="mapStatus(target.status)" size="small" />
+        <div
+          v-for="target in targetsDetail"
+          :key="target.id"
+          class="target-item"
+        >
+          <StatusBadge
+            :status="mapStatus(target.status)"
+            size="small"
+          />
           <span class="target-name">{{ target.name }}</span>
           <span class="target-host">{{ target.host }}</span>
         </div>
-        <el-empty v-if="targetsDetail.length === 0" description="Aucune target configurée" :image-size="60" />
+        <el-empty
+          v-if="targetsDetail.length === 0"
+          description="Aucune target configurée"
+          :image-size="60"
+        />
       </div>
     </div>
   </el-card>

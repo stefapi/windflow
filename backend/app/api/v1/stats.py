@@ -22,6 +22,7 @@ from ...schemas.dashboard import (
     DeploymentMetrics,
     ResourceMetrics,
     ResourceMetricPoint,
+    ResourceCounter,
 )
 from ...auth.dependencies import get_current_active_user
 from ...models.user import User
@@ -65,11 +66,19 @@ async def get_dashboard_stats(
         ))
     online_targets = target_health.get("online", 0)
 
-    # --- Stacks ---
-    stacks_count_stmt = select(func.count()).select_from(Stack)
+    # --- Stacks (STORY-432) ---
+    # Note: Stack n'a pas de champ status, on compte juste le total
+    stacks_count_stmt = select(func.count(Stack.id))
     if org_id:
         stacks_count_stmt = stacks_count_stmt.where(Stack.organization_id == org_id)
     total_stacks = (await db.execute(stacks_count_stmt)).scalar() or 0
+
+    # Les stacks n'ont pas de statut running/stopped, on met tout en "running" (disponibles)
+    stacks_counter = ResourceCounter(
+        total=total_stacks,
+        running=total_stacks,  # Stacks disponibles = running
+        stopped=0,  # Pas de notion de stack arrêté
+    )
 
     # --- Deployments ---
     dep_base = select(Deployment)
@@ -102,6 +111,27 @@ async def get_dashboard_stats(
         running=active_dep,
         success_rate=round(success_rate, 1),
     )
+
+    # --- Compteurs Containers (STORY-432) ---
+    # Les containers sont déduits des deployments avec statut running/stopped
+    containers_running = status_counts.get("running", 0)
+    containers_stopped = status_counts.get("stopped", 0) + status_counts.get("failed", 0)
+    containers_total = containers_running + containers_stopped
+
+    containers_counter = ResourceCounter(
+        total=containers_total,
+        running=containers_running,
+        stopped=containers_stopped,
+    )
+
+    # --- Compteurs VMs (STORY-432) ---
+    # VMs non disponibles (EPIC-002 non livrée) -> stub gracieux
+    vms_counter = ResourceCounter(
+        total=0,
+        running=0,
+        stopped=0,
+    )
+    vms_available = False  # Sera True quand EPIC-002 sera livrée
 
     # --- Activité récente (derniers déploiements) ---
     recent_dep_stmt = (
@@ -221,6 +251,10 @@ async def get_dashboard_stats(
         total_stacks=total_stacks,
         active_deployments=active_dep,
         total_workflows=0,  # Workflows non implémentés encore
+        containers=containers_counter,
+        vms=vms_counter,
+        stacks=stacks_counter,
+        vms_available=vms_available,
         target_health=target_health,
         targets_detail=targets_detail,
         deployment_metrics=deployment_metrics,

@@ -18,8 +18,15 @@
 
     <el-container>
       <!-- Mobile header with hamburger -->
-      <el-header v-if="sidebar.isMobile.value" class="mobile-header" height="56px">
-        <button class="hamburger-btn" @click="sidebar.toggleMobile()">
+      <el-header
+        v-if="sidebar.isMobile.value"
+        class="mobile-header"
+        height="56px"
+      >
+        <button
+          class="hamburger-btn"
+          @click="sidebar.toggleMobile()"
+        >
           <el-icon :size="24">
             <Close v-if="sidebar.isMobileOpen.value" />
             <Menu v-else />

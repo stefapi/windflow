@@ -3,11 +3,19 @@
     <template #header>
       <div class="alerts-header">
         <span>Alertes & Notifications</span>
-        <el-badge v-if="criticalCount > 0" :value="criticalCount" type="danger" class="ml-2" />
+        <el-badge
+          v-if="criticalCount > 0"
+          :value="criticalCount"
+          type="danger"
+          class="ml-2"
+        />
       </div>
     </template>
 
-    <div v-if="alerts.length > 0" class="alerts-list">
+    <div
+      v-if="alerts.length > 0"
+      class="alerts-list"
+    >
       <div
         v-for="alert in alerts"
         :key="alert.id"
@@ -22,10 +30,17 @@
           </el-icon>
         </div>
         <div class="alert-content">
-          <div class="alert-title">{{ alert.title }}</div>
-          <div class="alert-message">{{ alert.message }}</div>
+          <div class="alert-title">
+            {{ alert.title }}
+          </div>
+          <div class="alert-message">
+            {{ alert.message }}
+          </div>
           <div class="alert-meta">
-            <el-tag :type="severityTagType(alert.severity)" size="small">
+            <el-tag
+              :type="severityTagType(alert.severity)"
+              size="small"
+            >
               {{ alert.source }}
             </el-tag>
             <span class="alert-time">{{ formatDate(alert.timestamp) }}</span>
@@ -33,7 +48,11 @@
         </div>
       </div>
     </div>
-    <el-empty v-else description="Aucune alerte active" :image-size="60" />
+    <el-empty
+      v-else
+      description="Aucune alerte active"
+      :image-size="60"
+    />
   </el-card>
 </template>
 

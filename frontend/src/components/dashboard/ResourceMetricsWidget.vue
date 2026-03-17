@@ -1,14 +1,23 @@
 <template>
-  <el-card class="resource-metrics-widget" data-testid="resource-metrics-widget">
+  <el-card
+    class="resource-metrics-widget"
+    data-testid="resource-metrics-widget"
+  >
     <!-- Header with target name -->
     <template #header>
       <div class="resource-metrics-widget__header">
         <div class="header-left">
           <el-icon><Monitor /></el-icon>
           <span class="header-title">System Resources</span>
-          <span v-if="targetName" class="target-name">{{ targetName }}</span>
+          <span
+            v-if="targetName"
+            class="target-name"
+          >{{ targetName }}</span>
         </div>
-        <div v-if="lastUpdate" class="last-update">
+        <div
+          v-if="lastUpdate"
+          class="last-update"
+        >
           <el-icon><Clock /></el-icon>
           <span>{{ lastUpdate }}</span>
         </div>
@@ -16,8 +25,15 @@
     </template>
 
     <!-- Error state -->
-    <div v-if="error" class="resource-metrics-widget__error">
-      <el-alert type="error" :closable="false" show-icon>
+    <div
+      v-if="error"
+      class="resource-metrics-widget__error"
+    >
+      <el-alert
+        type="error"
+        :closable="false"
+        show-icon
+      >
         <template #default>
           <div class="error-content">
             <el-icon><Warning /></el-icon>
@@ -28,18 +44,30 @@
     </div>
 
     <!-- No target state -->
-    <div v-else-if="noTarget" class="resource-metrics-widget__no-target">
+    <div
+      v-else-if="noTarget"
+      class="resource-metrics-widget__no-target"
+    >
       <el-icon><InfoFilled /></el-icon>
       <span>No target selected. <router-link to="/targets">Select a target</router-link> to view its metrics.</span>
     </div>
 
     <!-- Loading state -->
-    <div v-else-if="loading" class="resource-metrics-widget__loading">
-      <el-skeleton :rows="4" animated />
+    <div
+      v-else-if="loading"
+      class="resource-metrics-widget__loading"
+    >
+      <el-skeleton
+        :rows="4"
+        animated
+      />
     </div>
 
     <!-- Content -->
-    <div v-else-if="metrics" class="resource-metrics-widget__content">
+    <div
+      v-else-if="metrics"
+      class="resource-metrics-widget__content"
+    >
       <!-- Current metrics with ResourceBars -->
       <div class="metrics-grid">
         <div class="metric-card">
@@ -47,7 +75,11 @@
             <span class="metric-label">CPU</span>
             <span class="metric-value">{{ formatPercent(metrics.current_cpu) }}</span>
           </div>
-          <ResourceBar :value="metrics.current_cpu" label="" :show-value="false" />
+          <ResourceBar
+            :value="metrics.current_cpu"
+            label=""
+            :show-value="false"
+          />
         </div>
 
         <div class="metric-card">
@@ -55,7 +87,11 @@
             <span class="metric-label">RAM</span>
             <span class="metric-value">{{ formatMemory(metrics) }}</span>
           </div>
-          <ResourceBar :value="metrics.current_memory" label="" :show-value="false" />
+          <ResourceBar
+            :value="metrics.current_memory"
+            label=""
+            :show-value="false"
+          />
         </div>
 
         <div class="metric-card">
@@ -63,7 +99,11 @@
             <span class="metric-label">Disk</span>
             <span class="metric-value">{{ formatDisk(metrics) }}</span>
           </div>
-          <ResourceBar :value="metrics.current_disk" label="" :show-value="false" />
+          <ResourceBar
+            :value="metrics.current_disk"
+            label=""
+            :show-value="false"
+          />
         </div>
 
         <div class="metric-card metric-card--uptime">
@@ -78,17 +118,31 @@
       </div>
 
       <!-- Historical charts -->
-      <div v-if="hasHistory" class="charts-section">
-        <v-chart :option="chartOption" autoresize class="history-chart" />
+      <div
+        v-if="hasHistory"
+        class="charts-section"
+      >
+        <v-chart
+          :option="chartOption"
+          autoresize
+          class="history-chart"
+        />
       </div>
-      <div v-else class="no-history">
+      <div
+        v-else
+        class="no-history"
+      >
         <el-icon><TrendCharts /></el-icon>
         <span>Collecting historical data...</span>
       </div>
     </div>
 
     <!-- Empty state -->
-    <el-empty v-else description="No resource metrics available" :image-size="60" />
+    <el-empty
+      v-else
+      description="No resource metrics available"
+      :image-size="60"
+    />
   </el-card>
 </template>
 

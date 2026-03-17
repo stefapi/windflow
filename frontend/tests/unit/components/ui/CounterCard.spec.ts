@@ -149,4 +149,53 @@ describe('CounterCard', () => {
       expect(wrapper.find('.counter-card--clickable').exists()).toBe(false)
     })
   })
+
+  // STORY-432: Running/Stopped indicators
+  describe('Running/Stopped indicators (STORY-432)', () => {
+    it('does not display status indicators when runningCount and stoppedCount are undefined', () => {
+      const wrapper = mountCounterCard({
+        count: 10,
+        label: 'Test',
+        icon: MockIcon,
+      })
+      expect(wrapper.find('.counter-card__status').exists()).toBe(false)
+    })
+
+    it('displays status indicators when runningCount is provided', () => {
+      const wrapper = mountCounterCard({
+        count: 10,
+        label: 'Containers',
+        icon: MockIcon,
+        runningCount: 7,
+      })
+      expect(wrapper.find('.counter-card__status').exists()).toBe(true)
+      expect(wrapper.find('.counter-card__status-item--running').exists()).toBe(true)
+      expect(wrapper.find('.counter-card__status-item--running .counter-card__status-count').text()).toBe('7')
+    })
+
+    it('displays status indicators when stoppedCount is provided', () => {
+      const wrapper = mountCounterCard({
+        count: 10,
+        label: 'Containers',
+        icon: MockIcon,
+        stoppedCount: 3,
+      })
+      expect(wrapper.find('.counter-card__status').exists()).toBe(true)
+      expect(wrapper.find('.counter-card__status-item--stopped').exists()).toBe(true)
+      expect(wrapper.find('.counter-card__status-item--stopped .counter-card__status-count').text()).toBe('3')
+    })
+
+    it('displays both running and stopped counts when both are provided', () => {
+      const wrapper = mountCounterCard({
+        count: 10,
+        label: 'Containers',
+        icon: MockIcon,
+        runningCount: 7,
+        stoppedCount: 3,
+      })
+      expect(wrapper.find('.counter-card__status').exists()).toBe(true)
+      expect(wrapper.find('.counter-card__status-item--running .counter-card__status-count').text()).toBe('7')
+      expect(wrapper.find('.counter-card__status-item--stopped .counter-card__status-count').text()).toBe('3')
+    })
+  })
 })

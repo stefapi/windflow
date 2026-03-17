@@ -2,48 +2,57 @@
   <div class="dashboard">
     <h1>Dashboard</h1>
 
-    <el-alert v-if="dashboardStore.error" :title="dashboardStore.error" type="error" show-icon closable style="margin-bottom: 20px" />
+    <el-alert
+      v-if="dashboardStore.error"
+      :title="dashboardStore.error"
+      type="error"
+      show-icon
+      closable
+      style="margin-bottom: 20px"
+    />
 
-    <!-- Statistiques globales -->
-    <el-row :gutter="20" v-loading="dashboardStore.loading">
+    <!-- Statistiques globales (STORY-432) -->
+    <el-row
+      v-loading="dashboardStore.loading"
+      :gutter="20"
+    >
       <el-col :span="6">
         <CounterCard
-          :count="dashboardStore.totalTargets"
-          label="Targets"
-          :icon="Monitor"
-          to="/targets"
-          :badge="dashboardStore.onlineTargets > 0 ? `${dashboardStore.onlineTargets} online` : undefined"
-          badge-type="success"
+          :count="dashboardStore.containers.total"
+          label="Containers"
+          :icon="Box"
+          to="/containers"
+          :running-count="dashboardStore.containers.running"
+          :stopped-count="dashboardStore.containers.stopped"
         />
       </el-col>
       <el-col :span="6">
         <CounterCard
-          :count="dashboardStore.totalStacks"
+          :count="dashboardStore.stacks.total"
           label="Stacks"
           :icon="Files"
           to="/stacks"
+          :running-count="dashboardStore.stacks.running"
+          :stopped-count="dashboardStore.stacks.stopped"
         />
       </el-col>
       <el-col :span="6">
         <CounterCard
-          :count="dashboardStore.activeDeployments"
-          label="Deployments"
-          :icon="Upload"
-          to="/deployments"
-        />
-      </el-col>
-      <el-col :span="6">
-        <CounterCard
-          :count="dashboardStore.totalWorkflows"
-          label="Workflows"
-          :icon="Connection"
-          to="/workflows"
+          :count="0"
+          label="VMs"
+          :icon="Monitor"
+          to="/vms"
+          badge="Coming soon"
+          badge-type="info"
         />
       </el-col>
     </el-row>
 
     <!-- Métriques système unifiées (valeurs actuelles + historique) -->
-    <el-row :gutter="20" style="margin-top: 20px">
+    <el-row
+      :gutter="20"
+      style="margin-top: 20px"
+    >
       <el-col :span="24">
         <ResourceMetricsWidget
           :metrics="dashboardStore.resourceMetrics"
@@ -56,14 +65,20 @@
     </el-row>
 
     <!-- Métriques déploiements -->
-    <el-row :gutter="20" style="margin-top: 20px">
+    <el-row
+      :gutter="20"
+      style="margin-top: 20px"
+    >
       <el-col :span="24">
         <DeploymentMetricsWidget :metrics="dashboardStore.deploymentMetrics" />
       </el-col>
     </el-row>
 
     <!-- Alertes + Santé targets -->
-    <el-row :gutter="20" style="margin-top: 20px">
+    <el-row
+      :gutter="20"
+      style="margin-top: 20px"
+    >
       <el-col :span="12">
         <AlertsNotificationsWidget :alerts="dashboardStore.alerts" />
       </el-col>
@@ -76,19 +91,38 @@
     </el-row>
 
     <!-- Activité récente -->
-    <el-row :gutter="20" style="margin-top: 20px">
+    <el-row
+      :gutter="20"
+      style="margin-top: 20px"
+    >
       <el-col :span="24">
         <ActivityFeedWidget :activities="dashboardStore.recentActivity" />
       </el-col>
     </el-row>
 
     <!-- Actions rapides -->
-    <el-row :gutter="20" style="margin-top: 20px">
+    <el-row
+      :gutter="20"
+      style="margin-top: 20px"
+    >
       <el-col :span="24">
         <el-card header="Quick Actions">
-          <el-button type="primary" @click="$router.push('/stacks')">Create Stack</el-button>
-          <el-button type="success" @click="$router.push('/deployments')">Deploy</el-button>
-          <el-button @click="refreshDashboard" :loading="dashboardStore.loading">
+          <el-button
+            type="primary"
+            @click="$router.push('/stacks')"
+          >
+            Create Stack
+          </el-button>
+          <el-button
+            type="success"
+            @click="$router.push('/deployments')"
+          >
+            Deploy
+          </el-button>
+          <el-button
+            :loading="dashboardStore.loading"
+            @click="refreshDashboard"
+          >
             Refresh
           </el-button>
         </el-card>
@@ -99,7 +133,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
-import { Monitor, Files, Upload, Connection } from '@element-plus/icons-vue'
+import { Monitor, Files, Box } from '@element-plus/icons-vue'
 import { useDashboardStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 import { useTargetsStore } from '@/stores/targets'

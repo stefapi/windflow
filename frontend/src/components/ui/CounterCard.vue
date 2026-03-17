@@ -13,8 +13,25 @@
     <div class="counter-card__content">
       <div class="counter-card__header">
         <span class="counter-card__count">{{ formattedCount }}</span>
-        <span v-if="badge" :class="['counter-card__badge', `counter-card__badge--${badgeType}`]">
+        <span
+          v-if="badge"
+          :class="['counter-card__badge', `counter-card__badge--${badgeType}`]"
+        >
           {{ badge }}
+        </span>
+      </div>
+      <!-- Running/Stopped indicators (STORY-432) -->
+      <div
+        v-if="hasRunningStopped"
+        class="counter-card__status"
+      >
+        <span class="counter-card__status-item counter-card__status-item--running">
+          <span class="counter-card__status-dot">🟢</span>
+          <span class="counter-card__status-count">{{ runningCount }}</span>
+        </span>
+        <span class="counter-card__status-item counter-card__status-item--stopped">
+          <span class="counter-card__status-dot">🔴</span>
+          <span class="counter-card__status-count">{{ stoppedCount }}</span>
         </span>
       </div>
       <span class="counter-card__label">{{ label }}</span>
@@ -55,6 +72,10 @@ export interface CounterCardProps {
   badge?: string
   /** Badge type for styling */
   badgeType?: 'success' | 'warning' | 'error' | 'info'
+  /** Running count (STORY-432 - displays 🟢 indicator) */
+  runningCount?: number
+  /** Stopped count (STORY-432 - displays 🔴 indicator) */
+  stoppedCount?: number
 }
 
 const props = withDefaults(defineProps<CounterCardProps>(), {
@@ -91,6 +112,11 @@ const formattedCount = computed(() => {
     return `${(count / 1000).toFixed(1)}K`
   }
   return count.toString()
+})
+
+// Check if running/stopped indicators should be displayed (STORY-432)
+const hasRunningStopped = computed(() => {
+  return props.runningCount !== undefined || props.stoppedCount !== undefined
 })
 </script>
 
@@ -221,5 +247,39 @@ const formattedCount = computed(() => {
 .counter-card__badge--info {
   background-color: var(--color-info-light);
   color: var(--color-info);
+}
+
+/* Running/Stopped status indicators (STORY-432) */
+.counter-card__status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.counter-card__status-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-secondary);
+}
+
+.counter-card__status-dot {
+  font-size: 0.625rem;
+  line-height: 1;
+}
+
+.counter-card__status-count {
+  font-family: var(--font-mono, monospace);
+  font-weight: 500;
+}
+
+.counter-card__status-item--running .counter-card__status-count {
+  color: var(--color-success, #22c55e);
+}
+
+.counter-card__status-item--stopped .counter-card__status-count {
+  color: var(--color-error, #ef4444);
 }
 </style>

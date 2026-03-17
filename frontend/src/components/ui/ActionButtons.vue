@@ -1,5 +1,8 @@
 <template>
-  <div class="action-buttons" data-testid="action-buttons">
+  <div
+    class="action-buttons"
+    data-testid="action-buttons"
+  >
     <el-tooltip
       v-for="action in visibleActions"
       :key="action.type"

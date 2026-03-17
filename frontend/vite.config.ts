@@ -157,6 +157,7 @@ export default defineConfig({
       entryRoot: 'src', // root directory for the declaration files
       cleanVueFileName: true, // removes .vue suffix from filenames
       staticImport: true, // uses static imports in declaration files
+      exclude: ['src/views/**/*.vue'], // Exclude large view components from type generation (TS7056 fix)
     }),
 
     // 🐞 Vue Devtools in development (local)

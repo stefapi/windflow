@@ -1,8 +1,17 @@
 <template>
-  <div class="resource-bar" data-testid="resource-bar">
-    <div v-if="label" class="resource-bar__header">
+  <div
+    class="resource-bar"
+    data-testid="resource-bar"
+  >
+    <div
+      v-if="label"
+      class="resource-bar__header"
+    >
       <span class="resource-bar__label">{{ label }}</span>
-      <span v-if="showValue" class="resource-bar__value">{{ formattedValue }}</span>
+      <span
+        v-if="showValue"
+        class="resource-bar__value"
+      >{{ formattedValue }}</span>
     </div>
     <div class="resource-bar__track">
       <div

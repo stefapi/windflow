@@ -1,6 +1,13 @@
 <template>
-  <el-breadcrumb separator="/" class="breadcrumb">
-    <el-breadcrumb-item v-for="(item, index) in breadcrumbs" :key="index" :to="item.path ?? undefined">
+  <el-breadcrumb
+    separator="/"
+    class="breadcrumb"
+  >
+    <el-breadcrumb-item
+      v-for="(item, index) in breadcrumbs"
+      :key="index"
+      :to="item.path ?? undefined"
+    >
       {{ item.label }}
     </el-breadcrumb-item>
   </el-breadcrumb>

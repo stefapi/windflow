@@ -1,6 +1,12 @@
 <template>
-  <span :class="badgeClasses" data-testid="status-badge">
-    <el-icon v-if="showIcon" class="status-badge__icon">
+  <span
+    :class="badgeClasses"
+    data-testid="status-badge"
+  >
+    <el-icon
+      v-if="showIcon"
+      class="status-badge__icon"
+    >
       <component :is="iconComponent" />
     </el-icon>
     <span class="status-badge__label">{{ displayLabel }}</span>

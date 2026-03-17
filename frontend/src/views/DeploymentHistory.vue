@@ -1,22 +1,49 @@
 <template>
   <div class="deployment-history p-6">
-    <h1 class="text-2xl font-bold mb-6">Historique des déploiements</h1>
+    <h1 class="text-2xl font-bold mb-6">
+      Historique des déploiements
+    </h1>
 
     <!-- Filtres -->
     <el-card class="mb-6">
       <el-form :inline="true">
         <el-form-item label="Stack">
-          <el-select v-model="filters.stackId" placeholder="Tous" clearable @change="loadHistory">
-            <el-option label="Tous les stacks" value="" />
+          <el-select
+            v-model="filters.stackId"
+            placeholder="Tous"
+            clearable
+            @change="loadHistory"
+          >
+            <el-option
+              label="Tous les stacks"
+              value=""
+            />
             <!-- Options stacks dynamiques -->
           </el-select>
         </el-form-item>
         <el-form-item label="Statut">
-          <el-select v-model="filters.status" placeholder="Tous" clearable @change="loadHistory">
-            <el-option label="Tous" value="" />
-            <el-option label="Succès" value="success" />
-            <el-option label="Échec" value="failed" />
-            <el-option label="En cours" value="running" />
+          <el-select
+            v-model="filters.status"
+            placeholder="Tous"
+            clearable
+            @change="loadHistory"
+          >
+            <el-option
+              label="Tous"
+              value=""
+            />
+            <el-option
+              label="Succès"
+              value="success"
+            />
+            <el-option
+              label="Échec"
+              value="failed"
+            />
+            <el-option
+              label="En cours"
+              value="running"
+            />
           </el-select>
         </el-form-item>
       </el-form>
@@ -33,9 +60,15 @@
         <el-card>
           <div class="flex justify-between items-start">
             <div>
-              <h3 class="text-lg font-medium">{{ deployment.name }}</h3>
-              <p class="text-sm text-gray-600">Stack: {{ deployment.stack?.name }}</p>
-              <p class="text-sm text-gray-600">Cible: {{ deployment.target?.name }}</p>
+              <h3 class="text-lg font-medium">
+                {{ deployment.name }}
+              </h3>
+              <p class="text-sm text-gray-600">
+                Stack: {{ deployment.stack?.name }}
+              </p>
+              <p class="text-sm text-gray-600">
+                Cible: {{ deployment.target?.name }}
+              </p>
             </div>
             <el-tag :type="getStatusTagType(deployment.status)">
               {{ deployment.status }}
@@ -45,7 +78,10 @@
       </el-timeline-item>
     </el-timeline>
 
-    <div v-else class="text-center py-12 text-gray-500">
+    <div
+      v-else
+      class="text-center py-12 text-gray-500"
+    >
       Aucun déploiement dans l'historique
     </div>
   </div>

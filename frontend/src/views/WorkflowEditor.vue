@@ -3,10 +3,21 @@
     <el-card>
       <template #header>
         <div class="card-header">
-          <el-input v-model="workflowName" placeholder="Workflow Name" style="width: 300px" />
+          <el-input
+            v-model="workflowName"
+            placeholder="Workflow Name"
+            style="width: 300px"
+          />
           <div>
-            <el-button @click="$router.back()">Cancel</el-button>
-            <el-button type="primary" @click="saveWorkflow">Save</el-button>
+            <el-button @click="$router.back()">
+              Cancel
+            </el-button>
+            <el-button
+              type="primary"
+              @click="saveWorkflow"
+            >
+              Save
+            </el-button>
           </div>
         </div>
       </template>
@@ -25,9 +36,24 @@
       </div>
       <div class="node-palette">
         <h4>Node Types</h4>
-        <el-button @click="addNode('deploy')" size="small">Deploy Node</el-button>
-        <el-button @click="addNode('condition')" size="small">Condition Node</el-button>
-        <el-button @click="addNode('notification')" size="small">Notification Node</el-button>
+        <el-button
+          size="small"
+          @click="addNode('deploy')"
+        >
+          Deploy Node
+        </el-button>
+        <el-button
+          size="small"
+          @click="addNode('condition')"
+        >
+          Condition Node
+        </el-button>
+        <el-button
+          size="small"
+          @click="addNode('notification')"
+        >
+          Notification Node
+        </el-button>
       </div>
     </el-card>
   </div>

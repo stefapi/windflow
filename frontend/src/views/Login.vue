@@ -11,9 +11,16 @@
     <div class="login-card">
       <!-- Logo section -->
       <div class="login-card__header">
-        <WindFlowLogo size="large" :animate="true" />
-        <h1 class="login-card__title">WindFlow</h1>
-        <p class="login-card__subtitle">Container Deployment Platform</p>
+        <WindFlowLogo
+          size="large"
+          :animate="true"
+        />
+        <h1 class="login-card__title">
+          WindFlow
+        </h1>
+        <p class="login-card__subtitle">
+          Container Deployment Platform
+        </p>
       </div>
 
       <!-- Form -->
@@ -55,7 +62,10 @@
             :disabled="authStore.loading"
           >
             <span v-if="!authStore.loading">Sign In</span>
-            <span v-else class="login-card__btn-loading">
+            <span
+              v-else
+              class="login-card__btn-loading"
+            >
               <span class="login-card__spinner" />
               Connecting...
             </span>

@@ -1,14 +1,21 @@
 <template>
-  <nav class="sidebar-nav" :class="{ collapsed: isCollapsed }">
+  <nav
+    class="sidebar-nav"
+    :class="{ collapsed: isCollapsed }"
+  >
     <!-- Logo -->
     <div class="sidebar-logo">
-      <WindFlowLogo size="small" :show-text="!isCollapsed" variant="auto" />
+      <WindFlowLogo
+        size="small"
+        :show-text="!isCollapsed"
+        variant="auto"
+      />
       <!-- Toggle button (desktop only) -->
       <button
         v-if="sidebar.isDesktop.value"
         class="toggle-btn"
-        @click="sidebar.toggle()"
         :title="isCollapsed ? 'Déplier la sidebar' : 'Rétracter la sidebar'"
+        @click="sidebar.toggle()"
       >
         <el-icon>
           <ArrowLeft v-if="!isCollapsed" />
@@ -36,7 +43,9 @@
               :show-after="300"
             >
               <div class="nav-item-content">
-                <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+                <el-icon class="nav-icon">
+                  <component :is="item.icon" />
+                </el-icon>
                 <span class="nav-label">{{ item.label }}</span>
               </div>
             </el-tooltip>
@@ -46,7 +55,12 @@
 
       <!-- Infrastructure Section -->
       <div class="nav-section">
-        <div class="section-title" v-show="!isCollapsed">INFRASTRUCTURE</div>
+        <div
+          v-show="!isCollapsed"
+          class="section-title"
+        >
+          INFRASTRUCTURE
+        </div>
         <ul class="nav-list">
           <li
             v-for="item in infrastructureItems"
@@ -62,7 +76,9 @@
               :show-after="300"
             >
               <div class="nav-item-content">
-                <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+                <el-icon class="nav-icon">
+                  <component :is="item.icon" />
+                </el-icon>
                 <span class="nav-label">{{ item.label }}</span>
               </div>
             </el-tooltip>
@@ -72,7 +88,12 @@
 
       <!-- Storage & Network Section -->
       <div class="nav-section">
-        <div class="section-title" v-show="!isCollapsed">STOCKAGE & RÉSEAU</div>
+        <div
+          v-show="!isCollapsed"
+          class="section-title"
+        >
+          STOCKAGE & RÉSEAU
+        </div>
         <ul class="nav-list">
           <li
             v-for="item in storageNetworkItems"
@@ -88,7 +109,9 @@
               :show-after="300"
             >
               <div class="nav-item-content">
-                <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+                <el-icon class="nav-icon">
+                  <component :is="item.icon" />
+                </el-icon>
                 <span class="nav-label">{{ item.label }}</span>
               </div>
             </el-tooltip>
@@ -98,7 +121,12 @@
 
       <!-- Marketplace Section -->
       <div class="nav-section">
-        <div class="section-title" v-show="!isCollapsed">MARKETPLACE</div>
+        <div
+          v-show="!isCollapsed"
+          class="section-title"
+        >
+          MARKETPLACE
+        </div>
         <ul class="nav-list">
           <li
             v-for="item in marketplaceItems"
@@ -114,9 +142,14 @@
               :show-after="300"
             >
               <div class="nav-item-content">
-                <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+                <el-icon class="nav-icon">
+                  <component :is="item.icon" />
+                </el-icon>
                 <span class="nav-label">{{ item.label }}</span>
-                <span v-if="item.badge" class="nav-badge">{{ item.badge }}</span>
+                <span
+                  v-if="item.badge"
+                  class="nav-badge"
+                >{{ item.badge }}</span>
               </div>
             </el-tooltip>
           </li>
@@ -124,15 +157,23 @@
       </div>
 
       <!-- Dynamic Plugin Sections -->
-      <div v-if="pluginNavStore.hasPluginPages" class="nav-section plugin-section">
-        <div class="section-title" v-show="!isCollapsed">PLUGINS</div>
+      <div
+        v-if="pluginNavStore.hasPluginPages"
+        class="nav-section plugin-section"
+      >
+        <div
+          v-show="!isCollapsed"
+          class="section-title"
+        >
+          PLUGINS
+        </div>
         <ul class="nav-list">
           <li
             v-for="section in pluginNavStore.sections"
+            v-show="!isCollapsed"
             :key="section.pluginId"
             class="nav-item plugin-title"
             disabled
-            v-show="!isCollapsed"
           >
             <span class="nav-label">{{ section.title }}</span>
           </li>
@@ -150,7 +191,9 @@
               :show-after="300"
             >
               <div class="nav-item-content">
-                <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+                <el-icon class="nav-icon">
+                  <component :is="item.icon" />
+                </el-icon>
                 <span class="nav-label">{{ item.label }}</span>
               </div>
             </el-tooltip>
@@ -160,7 +203,12 @@
 
       <!-- Administration Section -->
       <div class="nav-section">
-        <div class="section-title" v-show="!isCollapsed">ADMINISTRATION</div>
+        <div
+          v-show="!isCollapsed"
+          class="section-title"
+        >
+          ADMINISTRATION
+        </div>
         <ul class="nav-list">
           <li
             v-for="item in administrationItems"
@@ -176,7 +224,9 @@
               :show-after="300"
             >
               <div class="nav-item-content">
-                <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+                <el-icon class="nav-icon">
+                  <component :is="item.icon" />
+                </el-icon>
                 <span class="nav-label">{{ item.label }}</span>
               </div>
             </el-tooltip>
@@ -194,9 +244,15 @@
         :disabled="!isCollapsed"
         :show-after="300"
       >
-        <div class="target-selector" @click="openTargetSelector">
+        <div
+          class="target-selector"
+          @click="openTargetSelector"
+        >
           <span class="target-indicator">{{ targetIndicator }}</span>
-          <span class="target-name" v-show="!isCollapsed">{{ activeTargetName }}</span>
+          <span
+            v-show="!isCollapsed"
+            class="target-name"
+          >{{ activeTargetName }}</span>
         </div>
       </el-tooltip>
 
@@ -208,15 +264,25 @@
         :show-after="300"
       >
         <div class="user-info">
-          <el-icon class="user-icon"><User /></el-icon>
-          <span class="user-name" v-show="!isCollapsed">{{ authStore.user?.username || 'Utilisateur' }}</span>
-          <el-dropdown @command="handleUserCommand" v-show="!isCollapsed">
+          <el-icon class="user-icon">
+            <User />
+          </el-icon>
+          <span
+            v-show="!isCollapsed"
+            class="user-name"
+          >{{ authStore.user?.username || 'Utilisateur' }}</span>
+          <el-dropdown
+            v-show="!isCollapsed"
+            @command="handleUserCommand"
+          >
             <span class="user-menu-trigger">
               <el-icon><MoreFilled /></el-icon>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="logout">Déconnexion</el-dropdown-item>
+                <el-dropdown-item command="logout">
+                  Déconnexion
+                </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>

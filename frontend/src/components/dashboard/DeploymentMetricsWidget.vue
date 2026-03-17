@@ -1,25 +1,45 @@
 <template>
   <el-card header="Deployment Metrics">
-    <div v-if="metrics" class="metrics-grid">
+    <div
+      v-if="metrics"
+      class="metrics-grid"
+    >
       <div class="metric-item">
-        <el-statistic title="Total" :value="metrics.total" />
+        <el-statistic
+          title="Total"
+          :value="metrics.total"
+        />
       </div>
       <div class="metric-item">
-        <el-statistic title="Running" :value="metrics.running">
+        <el-statistic
+          title="Running"
+          :value="metrics.running"
+        >
           <template #suffix>
-            <el-icon color="var(--el-color-success)"><CircleCheckFilled /></el-icon>
+            <el-icon color="var(--el-color-success)">
+              <CircleCheckFilled />
+            </el-icon>
           </template>
         </el-statistic>
       </div>
       <div class="metric-item">
-        <el-statistic title="Failed" :value="metrics.failed">
+        <el-statistic
+          title="Failed"
+          :value="metrics.failed"
+        >
           <template #suffix>
-            <el-icon color="var(--el-color-danger)"><CircleCloseFilled /></el-icon>
+            <el-icon color="var(--el-color-danger)">
+              <CircleCloseFilled />
+            </el-icon>
           </template>
         </el-statistic>
       </div>
       <div class="metric-item">
-        <el-statistic title="Success Rate" :value="metrics.success_rate" suffix="%" />
+        <el-statistic
+          title="Success Rate"
+          :value="metrics.success_rate"
+          suffix="%"
+        />
       </div>
       <div class="progress-section">
         <span class="progress-label">Success Rate</span>
@@ -32,7 +52,11 @@
         />
       </div>
     </div>
-    <el-empty v-else description="Aucune donnée de déploiement" :image-size="60" />
+    <el-empty
+      v-else
+      description="Aucune donnée de déploiement"
+      :image-size="60"
+    />
   </el-card>
 </template>
 

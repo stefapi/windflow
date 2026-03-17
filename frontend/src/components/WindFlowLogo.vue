@@ -19,7 +19,10 @@
       :style="{ color: strokeColor }"
       v-html="svgInnerContent"
     />
-    <span v-if="showText" class="windflow-logo__text">
+    <span
+      v-if="showText"
+      class="windflow-logo__text"
+    >
       Wind<span class="windflow-logo__text-accent">Flow</span>
     </span>
   </div>

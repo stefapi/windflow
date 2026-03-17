@@ -8,7 +8,12 @@
         </div>
       </template>
       <el-empty description="Cette fonctionnalité sera disponible prochainement">
-        <el-button type="primary" @click="$router.push('/')">Retour au Dashboard</el-button>
+        <el-button
+          type="primary"
+          @click="$router.push('/')"
+        >
+          Retour au Dashboard
+        </el-button>
       </el-empty>
     </el-card>
   </div>

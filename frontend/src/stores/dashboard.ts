@@ -5,7 +5,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { dashboardApi } from '@/services/api'
-import type { DashboardStats } from '@/types/api'
+import type { DashboardStats, ResourceCounter } from '@/types/api'
 
 export const useDashboardStore = defineStore('dashboard', () => {
   // State
@@ -25,6 +25,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const totalStacks = computed(() => stats.value?.total_stacks ?? 0)
   const activeDeployments = computed(() => stats.value?.active_deployments ?? 0)
   const totalWorkflows = computed(() => stats.value?.total_workflows ?? 0)
+
+  // Resource counters (STORY-432)
+  const containers = computed<ResourceCounter>(() => stats.value?.containers ?? { total: 0, running: 0, stopped: 0 })
+  const vms = computed<ResourceCounter>(() => stats.value?.vms ?? { total: 0, running: 0, stopped: 0 })
+  const stacks = computed<ResourceCounter>(() => stats.value?.stacks ?? { total: 0, running: 0, stopped: 0 })
+  const vmsAvailable = computed(() => stats.value?.vms_available ?? false)
 
   // Actions
   async function fetchDashboardStats(organizationId?: string): Promise<void> {
@@ -56,6 +62,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
     activeDeployments,
     totalWorkflows,
     alerts,
+    // Resource counters (STORY-432)
+    containers,
+    vms,
+    stacks,
+    vmsAvailable,
     fetchDashboardStats,
   }
 })
