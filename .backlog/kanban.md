@@ -10,7 +10,7 @@
 #### Design System
 
 #### Dashboard
-- [ ] STORY-434 : Zone widgets plugins
+- [x] STORY-434 : Zone widgets plugins
 
 #### Vue Containers
 - [ ] STORY-441 : Liste containers avec actions inline

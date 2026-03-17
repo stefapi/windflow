@@ -56,6 +56,8 @@ declare module 'vue' {
     ElTimeline: typeof import('element-plus/es')['ElTimeline']
     ElTimelineItem: typeof import('element-plus/es')['ElTimelineItem']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
+    PlaceholderWidget: typeof import('./components/dashboard/plugins/PlaceholderWidget.vue')['default']
+    PluginWidgetZone: typeof import('./components/dashboard/PluginWidgetZone.vue')['default']
     RecentDeploymentsWidget: typeof import('./components/dashboard/RecentDeploymentsWidget.vue')['default']
     ResourceBar: typeof import('./components/ui/ResourceBar.vue')['default']
     ResourceMetricsWidget: typeof import('./components/dashboard/ResourceMetricsWidget.vue')['default']

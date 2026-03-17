@@ -138,13 +138,16 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- Zone widgets plugins (STORY-434) -->
+    <PluginWidgetZone />
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 import { Monitor, Files, Box } from '@element-plus/icons-vue'
-import { useDashboardStore } from '@/stores'
+import { useDashboardStore, usePluginWidgetStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 import { useTargetsStore } from '@/stores/targets'
 import CounterCard from '@/components/ui/CounterCard.vue'
@@ -154,14 +157,42 @@ import DeploymentMetricsWidget from '@/components/dashboard/DeploymentMetricsWid
 import AlertsNotificationsWidget from '@/components/dashboard/AlertsNotificationsWidget.vue'
 import ResourceMetricsWidget from '@/components/dashboard/ResourceMetricsWidget.vue'
 import RecentDeploymentsWidget from '@/components/dashboard/RecentDeploymentsWidget.vue'
+import PluginWidgetZone from '@/components/dashboard/PluginWidgetZone.vue'
+
+// Dev-only: import placeholder widget
+const PlaceholderWidget = import.meta.env.DEV
+  ? () => import('@/components/dashboard/plugins/PlaceholderWidget.vue')
+  : null
 
 const authStore = useAuthStore()
 const dashboardStore = useDashboardStore()
 const targetsStore = useTargetsStore()
+const pluginWidgetStore = usePluginWidgetStore()
 
 // Polling pour les métriques système (toutes les 30s)
 let metricsInterval: number | null = null
 const metricsError = ref<string | null>(null)
+
+// Dev-only: register placeholder widget
+function registerDevPlaceholderWidget(): void {
+  if (PlaceholderWidget) {
+    PlaceholderWidget().then((module) => {
+      pluginWidgetStore.registerWidget({
+        pluginId: 'dev-placeholder',
+        widget: {
+          id: 'dev-placeholder-widget',
+          component: module.default,
+          title: 'Demo Widget (Dev Mode)',
+          order: 999,
+          props: {
+            pluginName: 'dev-placeholder',
+            version: '1.0.0',
+          },
+        },
+      })
+    })
+  }
+}
 
 async function refreshDashboard(): Promise<void> {
   const orgId = authStore.organizationId || undefined
@@ -177,12 +208,18 @@ onMounted(() => {
   refreshDashboard()
   // Polling toutes les 30 secondes
   metricsInterval = window.setInterval(refreshDashboard, 30000)
+  // Dev-only: register placeholder widget
+  registerDevPlaceholderWidget()
 })
 
 onUnmounted(() => {
   if (metricsInterval) {
     window.clearInterval(metricsInterval)
     metricsInterval = null
+  }
+  // Dev-only: unregister placeholder widget
+  if (import.meta.env.DEV) {
+    pluginWidgetStore.unregisterPlugin('dev-placeholder')
   }
 })
 </script>

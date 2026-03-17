@@ -82,8 +82,8 @@ Cette epic a deux axes :
 ### Dashboard
 - [x] STORY-431 : Barre métriques système (CPU, RAM, disque, uptime du target actif)
 - [x] STORY-432 : Tuiles compteurs Containers / VMs / Stacks (cliquables)
-- [ ] STORY-433 : Liste derniers déploiements avec statut + action directe
-- [ ] STORY-434 : Zone widgets plugins (vide proprement si aucun plugin — peuplée par EPIC-001)
+- [x] STORY-433 : Liste derniers déploiements avec statut + action directe
+- [x] STORY-434 : Zone widgets plugins (vide proprement si aucun plugin — peuplée par EPIC-001)
 
 ### Vue Containers (remplace Deployments)
 - [ ] STORY-441 : Vue Containers — liste avec actions inline (start/stop/restart/logs/supprimer)
