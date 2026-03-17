@@ -10,10 +10,8 @@
 #### Design System
 
 #### Dashboard
-- [x] STORY-434 : Zone widgets plugins
 
 #### Vue Containers
-- [ ] STORY-441 : Liste containers avec actions inline
 - [ ] STORY-442 : Filtres, recherche et sélection multiple
 - [ ] STORY-443 : ContainerDetail — onglet Infos
 - [ ] STORY-444 : ContainerDetail — onglet Logs
@@ -39,6 +37,7 @@
 ### EPIC-004 : Refonte UI, Navigation & Nettoyage Marketplace
 
 ## ✅ DONE (Terminé)
+- [x] STORY-441 : Liste containers avec actions inline
 - [x] STORY-433 : Liste derniers déploiements avec statut
 - [x] STORY-432 : Tuiles compteurs Containers / VMs / Stacks
 - [x] STORY-431 : Barre métriques système

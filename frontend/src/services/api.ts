@@ -31,6 +31,8 @@ import type {
   ScheduledTask,
   ScheduledTaskCreate,
   ScheduledTaskUpdate,
+  Container,
+  ContainerLogsResponse,
 } from '@/types/api'
 
 // Auth API
@@ -221,6 +223,30 @@ export const dashboardApi = {
   },
 }
 
+// Docker Containers API
+export const containersApi = {
+  list: (all: boolean = true) =>
+    http.get<Container[]>('/docker/containers', { params: { all } }),
+
+  get: (id: string) =>
+    http.get<Container>(`/docker/containers/${id}`),
+
+  start: (id: string) =>
+    http.post<void>(`/docker/containers/${id}/start`),
+
+  stop: (id: string, timeout: number = 10) =>
+    http.post<void>(`/docker/containers/${id}/stop`, null, { params: { timeout } }),
+
+  restart: (id: string, timeout: number = 10) =>
+    http.post<void>(`/docker/containers/${id}/restart`, null, { params: { timeout } }),
+
+  remove: (id: string, force: boolean = false) =>
+    http.delete<void>(`/docker/containers/${id}`, { params: { force } }),
+
+  getLogs: (id: string, tail: number = 100, timestamps: boolean = false) =>
+    http.get<ContainerLogsResponse>(`/docker/containers/${id}/logs`, { params: { tail, timestamps } }),
+}
+
 export default {
   auth: authApi,
   users: usersApi,
@@ -231,4 +257,5 @@ export default {
   workflows: workflowsApi,
   dashboard: dashboardApi,
   schedules: schedulesApi,
+  containers: containersApi,
 }

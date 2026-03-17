@@ -392,3 +392,35 @@ export interface StackVersion {
   author_name: string | null
   created_at: string
 }
+
+// Docker Container types
+export type ContainerState = 'running' | 'exited' | 'paused' | 'restarting' | 'created' | 'dead'
+
+export interface ContainerPort {
+  IP?: string
+  PrivatePort?: number
+  PublicPort?: number
+  Type?: string
+}
+
+export interface Container {
+  id: string
+  name: string
+  image: string
+  imageId: string
+  command: string
+  created: string
+  state: ContainerState
+  status: string
+  ports: ContainerPort[]
+  labels: Record<string, string>
+  networks: string[]
+  mounts: Record<string, unknown>[]
+  restart_count: number
+}
+
+export interface ContainerLogsResponse {
+  logs: string
+  container_id: string
+  timestamp: string
+}
