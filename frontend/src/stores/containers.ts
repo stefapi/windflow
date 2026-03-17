@@ -136,6 +136,116 @@ export const useContainersStore = defineStore('containers', () => {
     }
   }
 
+  // Batch actions for multiple containers
+  async function startContainers(ids: string[]): Promise<{ success: string[]; failed: string[] }> {
+    const results = await Promise.allSettled(
+      ids.map(async (id) => {
+        await containersApi.start(id)
+        // Update local state
+        const container = containers.value.find(c => c.id === id)
+        if (container) {
+          container.state = 'running'
+          container.status = 'Up'
+        }
+        return id
+      })
+    )
+
+    const success: string[] = []
+    const failed: string[] = []
+
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        success.push(ids[index])
+      } else {
+        failed.push(ids[index])
+      }
+    })
+
+    return { success, failed }
+  }
+
+  async function stopContainers(ids: string[], timeout: number = 10): Promise<{ success: string[]; failed: string[] }> {
+    const results = await Promise.allSettled(
+      ids.map(async (id) => {
+        await containersApi.stop(id, timeout)
+        // Update local state
+        const container = containers.value.find(c => c.id === id)
+        if (container) {
+          container.state = 'exited'
+          container.status = 'Exited'
+        }
+        return id
+      })
+    )
+
+    const success: string[] = []
+    const failed: string[] = []
+
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        success.push(ids[index])
+      } else {
+        failed.push(ids[index])
+      }
+    })
+
+    return { success, failed }
+  }
+
+  async function restartContainers(ids: string[], timeout: number = 10): Promise<{ success: string[]; failed: string[] }> {
+    const results = await Promise.allSettled(
+      ids.map(async (id) => {
+        await containersApi.restart(id, timeout)
+        // Update local state
+        const container = containers.value.find(c => c.id === id)
+        if (container) {
+          container.state = 'running'
+          container.status = 'Restarted'
+        }
+        return id
+      })
+    )
+
+    const success: string[] = []
+    const failed: string[] = []
+
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        success.push(ids[index])
+      } else {
+        failed.push(ids[index])
+      }
+    })
+
+    return { success, failed }
+  }
+
+  async function removeContainers(ids: string[], force: boolean = false): Promise<{ success: string[]; failed: string[] }> {
+    const results = await Promise.allSettled(
+      ids.map(async (id) => {
+        await containersApi.remove(id, force)
+        return id
+      })
+    )
+
+    const success: string[] = []
+    const failed: string[] = []
+
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        success.push(ids[index])
+      } else {
+        failed.push(ids[index])
+      }
+    })
+
+    // Remove successful deletions from local state
+    containers.value = containers.value.filter(c => !success.includes(c.id))
+
+    return { success, failed }
+  }
+
   function $reset(): void {
     containers.value = []
     loading.value = false
@@ -161,6 +271,11 @@ export const useContainersStore = defineStore('containers', () => {
     restartContainer,
     removeContainer,
     getContainerLogs,
+    // Batch actions
+    startContainers,
+    stopContainers,
+    restartContainers,
+    removeContainers,
     $reset,
   }
 })

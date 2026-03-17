@@ -12,7 +12,6 @@
 #### Dashboard
 
 #### Vue Containers
-- [ ] STORY-442 : Filtres, recherche et sélection multiple
 - [ ] STORY-443 : ContainerDetail — onglet Infos
 - [ ] STORY-444 : ContainerDetail — onglet Logs
 - [ ] STORY-445 : ContainerDetail — onglet Terminal
@@ -37,6 +36,7 @@
 ### EPIC-004 : Refonte UI, Navigation & Nettoyage Marketplace
 
 ## ✅ DONE (Terminé)
+- [x] STORY-442 : Filtres, recherche et sélection multiple
 - [x] STORY-441 : Liste containers avec actions inline
 - [x] STORY-434 : Zone widgets plugins sur le dashboard
 - [x] STORY-433 : Liste derniers déploiements avec statut

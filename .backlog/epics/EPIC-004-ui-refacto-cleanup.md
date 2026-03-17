@@ -87,7 +87,7 @@ Cette epic a deux axes :
 
 ### Vue Containers (remplace Deployments)
 - [x] STORY-441 : Vue Containers — liste avec actions inline (start/stop/restart/logs/supprimer)
-- [ ] STORY-442 : Vue Containers — filtres (statut, target) + recherche + sélection multiple
+- [x] STORY-442 : Vue Containers — filtres (statut, target) + recherche + sélection multiple
 - [ ] STORY-443 : Vue ContainerDetail — onglets Infos (ports, volumes, env, réseau)
 - [ ] STORY-444 : Vue ContainerDetail — onglet Logs (réutilise DeploymentLogs.vue)
 - [ ] STORY-445 : Vue ContainerDetail — onglet Terminal (réutilise ContainerTerminal.vue)

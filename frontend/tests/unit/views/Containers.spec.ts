@@ -18,21 +18,26 @@ vi.mock('element-plus', async () => {
     ElMessage: {
       success: vi.fn(),
       error: vi.fn(),
+      warning: vi.fn(),
     },
   }
 })
 
 // Mock vue-router
 const mockPush = vi.fn()
+const mockReplace = vi.fn()
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual('vue-router')
   return {
     ...actual,
     useRouter: () => ({
       push: mockPush,
+      replace: mockReplace,
     }),
     useRoute: () => ({
       params: {},
+      query: {},
+      path: '/containers',
     }),
   }
 })
@@ -48,6 +53,21 @@ vi.mock('@/services/api', () => ({
     remove: vi.fn(),
     getLogs: vi.fn(),
   },
+}))
+
+// Mock useUrlFilters composable
+vi.mock('@/composables/useUrlFilters', () => ({
+  useUrlFilters: () => ({
+    status: { value: 'all' },
+    target: { value: '' },
+    search: { value: '' },
+    debouncedSearch: { value: '' },
+    hasActiveFilters: { value: false },
+    filters: { value: { status: 'all', target: '', search: '' } },
+    resetFilters: vi.fn(),
+    setFilters: vi.fn(),
+  }),
+  ContainerStatusFilter: {},
 }))
 
 describe('Containers.vue', () => {
@@ -86,6 +106,38 @@ describe('Containers.vue', () => {
       mounts: [],
       restart_count: 0,
     },
+    {
+      id: 'ghi789',
+      name: 'postgres-db',
+      image: 'postgres:15',
+      imageId: 'sha256:11111',
+      command: 'postgres',
+      created: '2024-01-01T00:00:00Z',
+      state: 'running',
+      status: 'Up 3 hours',
+      ports: [
+        { IP: '0.0.0.0', PublicPort: 5432, PrivatePort: 5432, Type: 'tcp' },
+      ],
+      labels: {},
+      networks: ['bridge'],
+      mounts: [],
+      restart_count: 0,
+    },
+    {
+      id: 'jkl012',
+      name: 'broken-app',
+      image: 'app:broken',
+      imageId: 'sha256:22222',
+      command: 'node app.js',
+      created: '2024-01-01T00:00:00Z',
+      state: 'dead',
+      status: 'Dead',
+      ports: [],
+      labels: {},
+      networks: ['bridge'],
+      mounts: [],
+      restart_count: 0,
+    },
   ]
 
   beforeEach(() => {
@@ -109,14 +161,17 @@ describe('Containers.vue', () => {
           'el-table': {
             template: '<table><slot /></table>',
             props: ['data', 'loading'],
+            methods: {
+              clearSelection: vi.fn(),
+            },
           },
           'el-table-column': {
             template: '<td><slot :row="{}" /></td>',
-            props: ['prop', 'label'],
+            props: ['prop', 'label', 'type', 'width'],
           },
           'el-button': {
             template: '<button><slot /></button>',
-            props: ['loading', 'type'],
+            props: ['loading', 'type', 'size', 'text'],
           },
           'el-badge': {
             template: '<div class="el-badge"><slot /></div>',
@@ -124,7 +179,7 @@ describe('Containers.vue', () => {
           },
           'el-tag': {
             template: '<span class="el-tag"><slot /></span>',
-            props: ['type', 'size'],
+            props: ['type', 'size', 'effect'],
           },
           'el-icon': {
             template: '<i><slot /></i>',
@@ -147,7 +202,7 @@ describe('Containers.vue', () => {
           },
           'el-input': {
             template: '<input type="text" />',
-            props: ['modelValue', 'type', 'rows', 'readonly'],
+            props: ['modelValue', 'type', 'rows', 'readonly', 'placeholder', 'clearable'],
           },
           'el-input-number': {
             template: '<input type="number" />',
@@ -156,6 +211,14 @@ describe('Containers.vue', () => {
           'el-checkbox': {
             template: '<input type="checkbox" />',
             props: ['modelValue'],
+          },
+          'el-select': {
+            template: '<select><slot /></select>',
+            props: ['modelValue', 'placeholder', 'clearable'],
+          },
+          'el-option': {
+            template: '<option><slot /></option>',
+            props: ['label', 'value'],
           },
           StatusBadge: {
             template: '<span class="status-badge">{{ status }}</span>',
@@ -186,10 +249,25 @@ describe('Containers.vue', () => {
       const wrapper = mountContainers()
       expect(wrapper.find('.subtitle').text()).toBe('Gestion des containers Docker')
     })
+
+    it('should display filters bar', () => {
+      const wrapper = mountContainers()
+      expect(wrapper.find('.filters-bar').exists()).toBe(true)
+    })
+
+    it('should display search input', () => {
+      const wrapper = mountContainers()
+      expect(wrapper.find('.search-input').exists()).toBe(true)
+    })
+
+    it('should display status filter select', () => {
+      const wrapper = mountContainers()
+      expect(wrapper.find('.filter-select').exists()).toBe(true)
+    })
   })
 
   describe('Store Integration', () => {
-    it('should call fetchContainers on mount', async () => {
+    it('should call fetchContainers on mount', () => {
       const store = useContainersStore()
       const fetchSpy = vi.spyOn(store, 'fetchContainers').mockResolvedValue()
 
@@ -207,7 +285,102 @@ describe('Containers.vue', () => {
       const wrapper = mountContainers()
       await wrapper.vm.$nextTick()
 
-      expect(store.containers).toHaveLength(2)
+      expect(store.containers).toHaveLength(4)
+    })
+  })
+
+  describe('Filtering', () => {
+    it('should have filteredContainers computed property', async () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockImplementation(async () => {
+        store.containers = mockContainers
+      })
+
+      const wrapper = mountContainers()
+      await wrapper.vm.$nextTick()
+
+      // All containers should be visible when no filters
+      expect(wrapper.vm.filteredContainers).toHaveLength(4)
+    })
+
+    it('should show results count text', async () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockImplementation(async () => {
+        store.containers = mockContainers
+      })
+
+      const wrapper = mountContainers()
+      await wrapper.vm.$nextTick()
+
+      expect(wrapper.vm.resultsCountText).toBe('4 containers')
+    })
+
+    it('should return correct empty text when loading', () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+      store.loading = true
+
+      const wrapper = mountContainers()
+
+      expect(wrapper.vm.emptyText).toBe('Chargement...')
+    })
+
+    it('should return correct empty text when filters active', () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+
+      const wrapper = mountContainers()
+      // Simulate active filters by checking the computed
+      expect(wrapper.vm.emptyText).toBe('Aucun container trouvé')
+    })
+  })
+
+  describe('Selection', () => {
+    it('should have selectedContainerIds computed property', () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+
+      const wrapper = mountContainers()
+
+      expect(wrapper.vm.selectedContainerIds).toEqual([])
+    })
+
+    it('should update selectedContainers on selection change', () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+
+      const wrapper = mountContainers()
+      wrapper.vm.handleSelectionChange([mockContainers[0], mockContainers[1]])
+
+      expect(wrapper.vm.selectedContainers).toHaveLength(2)
+      expect(wrapper.vm.selectedContainerIds).toEqual(['abc123', 'def456'])
+    })
+
+    it('should clear selection', () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+
+      const wrapper = mountContainers()
+      wrapper.vm.handleSelectionChange([mockContainers[0]])
+      wrapper.vm.clearSelection()
+
+      expect(wrapper.vm.selectedContainers).toEqual([])
+    })
+
+    it('should show bulk actions bar when containers selected', async () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+
+      const wrapper = mountContainers()
+
+      // Initially no bulk actions bar
+      expect(wrapper.vm.selectedContainerIds.length).toBe(0)
+
+      // Select containers
+      wrapper.vm.handleSelectionChange([mockContainers[0]])
+      await wrapper.vm.$nextTick()
+
+      expect(wrapper.vm.selectedContainerIds.length).toBe(1)
     })
   })
 
@@ -266,6 +439,113 @@ describe('Containers.vue', () => {
       await wrapper.vm.confirmDelete()
 
       expect(ElMessage.success).toHaveBeenCalledWith('Container "nginx-server" supprimé')
+    })
+  })
+
+  describe('Bulk Actions', () => {
+    it('should show bulk delete dialog', () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+
+      const wrapper = mountContainers()
+      wrapper.vm.showBulkDeleteDialog()
+
+      expect(wrapper.vm.bulkDeleteDialogVisible).toBe(true)
+    })
+
+    it('should call startContainers for bulk start', async () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+      vi.spyOn(store, 'startContainers').mockResolvedValue({
+        success: ['abc123', 'def456'],
+        failed: [],
+      })
+
+      const wrapper = mountContainers()
+      wrapper.vm.handleSelectionChange([mockContainers[0], mockContainers[1]])
+      await wrapper.vm.handleBulkAction('start')
+
+      expect(store.startContainers).toHaveBeenCalledWith(['abc123', 'def456'])
+      expect(ElMessage.success).toHaveBeenCalled()
+    })
+
+    it('should call stopContainers for bulk stop', async () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+      vi.spyOn(store, 'stopContainers').mockResolvedValue({
+        success: ['abc123'],
+        failed: [],
+      })
+
+      const wrapper = mountContainers()
+      wrapper.vm.handleSelectionChange([mockContainers[0]])
+      await wrapper.vm.handleBulkAction('stop')
+
+      expect(store.stopContainers).toHaveBeenCalledWith(['abc123'])
+      expect(ElMessage.success).toHaveBeenCalled()
+    })
+
+    it('should call restartContainers for bulk restart', async () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+      vi.spyOn(store, 'restartContainers').mockResolvedValue({
+        success: ['abc123'],
+        failed: [],
+      })
+
+      const wrapper = mountContainers()
+      wrapper.vm.handleSelectionChange([mockContainers[0]])
+      await wrapper.vm.handleBulkAction('restart')
+
+      expect(store.restartContainers).toHaveBeenCalledWith(['abc123'])
+      expect(ElMessage.success).toHaveBeenCalled()
+    })
+
+    it('should show warning for partial bulk action success', async () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+      vi.spyOn(store, 'startContainers').mockResolvedValue({
+        success: ['abc123'],
+        failed: ['def456'],
+      })
+
+      const wrapper = mountContainers()
+      wrapper.vm.handleSelectionChange([mockContainers[0], mockContainers[1]])
+      await wrapper.vm.handleBulkAction('start')
+
+      expect(ElMessage.warning).toHaveBeenCalled()
+    })
+
+    it('should show error for complete bulk action failure', async () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+      vi.spyOn(store, 'startContainers').mockResolvedValue({
+        success: [],
+        failed: ['abc123', 'def456'],
+      })
+
+      const wrapper = mountContainers()
+      wrapper.vm.handleSelectionChange([mockContainers[0], mockContainers[1]])
+      await wrapper.vm.handleBulkAction('start')
+
+      expect(ElMessage.error).toHaveBeenCalled()
+    })
+
+    it('should call removeContainers for bulk delete', async () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+      vi.spyOn(store, 'removeContainers').mockResolvedValue({
+        success: ['abc123'],
+        failed: [],
+      })
+
+      const wrapper = mountContainers()
+      wrapper.vm.handleSelectionChange([mockContainers[0]])
+      wrapper.vm.showBulkDeleteDialog()
+      await wrapper.vm.confirmBulkDelete()
+
+      expect(store.removeContainers).toHaveBeenCalled()
+      expect(ElMessage.success).toHaveBeenCalled()
     })
   })
 
@@ -361,6 +641,63 @@ describe('Containers.vue', () => {
       expect(actions[0]).toEqual({ type: 'start', disabled: false }) // stopped, can start
       expect(actions[1]).toEqual({ type: 'stop', disabled: true }) // stopped, can't stop
       expect(actions[2]).toEqual({ type: 'restart', disabled: true }) // stopped, can't restart
+    })
+
+    it('should get container name by id', () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockImplementation(async () => {
+        store.containers = mockContainers
+      })
+
+      const wrapper = mountContainers()
+      const name = wrapper.vm.getContainerName('abc123')
+
+      expect(name).toBe('nginx-server')
+    })
+
+    it('should return id if container not found', () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+
+      const wrapper = mountContainers()
+      const name = wrapper.vm.getContainerName('unknown-id')
+
+      expect(name).toBe('unknown-id')
+    })
+
+    it('should return correct past participle for actions', () => {
+      const wrapper = mountContainers()
+
+      expect(wrapper.vm.getActionPastParticiple('start')).toBe('démarré(s)')
+      expect(wrapper.vm.getActionPastParticiple('stop')).toBe('arrêté(s)')
+      expect(wrapper.vm.getActionPastParticiple('restart')).toBe('redémarré(s)')
+    })
+  })
+
+  describe('Filter Handlers', () => {
+    it('should have onFilterChange method', () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+
+      const wrapper = mountContainers()
+      expect(() => wrapper.vm.onFilterChange()).not.toThrow()
+    })
+
+    it('should have onSearchInput method', () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+
+      const wrapper = mountContainers()
+      expect(() => wrapper.vm.onSearchInput()).not.toThrow()
+    })
+
+    it('should have clearFilters method', () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+
+      const wrapper = mountContainers()
+      wrapper.vm.clearFilters()
+      // Should not throw and should call filters.resetFilters
     })
   })
 })

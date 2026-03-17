@@ -51,14 +51,146 @@
         @close="containersStore.error = null"
       />
 
+      <!-- Filters Bar -->
+      <div class="filters-bar">
+        <div class="filters-left">
+          <el-select
+            v-model="filters.status.value"
+            placeholder="Statut"
+            clearable
+            class="filter-select"
+            @change="onFilterChange"
+          >
+            <el-option
+              label="Tous"
+              value="all"
+            />
+            <el-option
+              label="Running"
+              value="running"
+            />
+            <el-option
+              label="Stopped"
+              value="stopped"
+            />
+            <el-option
+              label="Error"
+              value="error"
+            />
+          </el-select>
+
+          <el-input
+            v-model="filters.search.value"
+            placeholder="Rechercher par nom..."
+            clearable
+            class="search-input"
+            @input="onSearchInput"
+          >
+            <template #prefix>
+              <el-icon>
+                <Search />
+              </el-icon>
+            </template>
+          </el-input>
+
+          <el-button
+            v-if="filters.hasActiveFilters.value"
+            text
+            @click="clearFilters"
+          >
+            Effacer les filtres
+          </el-button>
+        </div>
+
+        <div class="filters-right">
+          <span class="results-count">
+            {{ resultsCountText }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Bulk Actions Bar -->
+      <transition name="slide-down">
+        <div
+          v-if="selectedContainerIds.length > 0"
+          class="bulk-actions-bar"
+        >
+          <div class="bulk-actions-left">
+            <el-tag
+              type="primary"
+              effect="dark"
+            >
+              {{ selectedContainerIds.length }} sélectionné{{ selectedContainerIds.length > 1 ? 's' : '' }}
+            </el-tag>
+            <el-button
+              text
+              size="small"
+              @click="clearSelection"
+            >
+              Annuler la sélection
+            </el-button>
+          </div>
+          <div class="bulk-actions-right">
+            <el-button
+              size="small"
+              :loading="bulkActionLoading === 'start'"
+              @click="handleBulkAction('start')"
+            >
+              <el-icon class="el-icon--left">
+                <VideoPlay />
+              </el-icon>
+              Démarrer
+            </el-button>
+            <el-button
+              size="small"
+              :loading="bulkActionLoading === 'stop'"
+              @click="handleBulkAction('stop')"
+            >
+              <el-icon class="el-icon--left">
+                <VideoPause />
+              </el-icon>
+              Arrêter
+            </el-button>
+            <el-button
+              size="small"
+              :loading="bulkActionLoading === 'restart'"
+              @click="handleBulkAction('restart')"
+            >
+              <el-icon class="el-icon--left">
+                <RefreshRight />
+              </el-icon>
+              Redémarrer
+            </el-button>
+            <el-button
+              type="danger"
+              size="small"
+              :loading="bulkActionLoading === 'delete'"
+              @click="showBulkDeleteDialog"
+            >
+              <el-icon class="el-icon--left">
+                <Delete />
+              </el-icon>
+              Supprimer
+            </el-button>
+          </div>
+        </div>
+      </transition>
+
       <!-- Containers Table -->
       <el-table
+        ref="tableRef"
         v-loading="containersStore.loading"
-        :data="containersStore.containers"
+        :data="filteredContainers"
         :empty-text="emptyText"
         stripe
         class="containers-table"
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column
+          type="selection"
+          width="55"
+        />
+
         <el-table-column
           prop="name"
           label="Nom"
@@ -194,7 +326,7 @@
       </div>
     </el-drawer>
 
-    <!-- Delete Confirmation Dialog -->
+    <!-- Delete Confirmation Dialog (single) -->
     <el-dialog
       v-model="deleteDialogVisible"
       title="Confirmer la suppression"
@@ -217,6 +349,56 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- Bulk Delete Confirmation Dialog -->
+    <el-dialog
+      v-model="bulkDeleteDialogVisible"
+      title="Confirmer la suppression groupée"
+      width="500px"
+    >
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        class="bulk-delete-alert"
+      >
+        <template #title>
+          Vous êtes sur le point de supprimer <strong>{{ selectedContainerIds.length }}</strong> container{{ selectedContainerIds.length > 1 ? 's' : '' }}.
+        </template>
+      </el-alert>
+      <div class="bulk-delete-list">
+        <p>Containers concernés :</p>
+        <ul>
+          <li
+            v-for="id in selectedContainerIds.slice(0, 5)"
+            :key="id"
+          >
+            {{ getContainerName(id) }}
+          </li>
+          <li
+            v-if="selectedContainerIds.length > 5"
+            class="more-items"
+          >
+            ... et {{ selectedContainerIds.length - 5 }} autre{{ selectedContainerIds.length - 5 > 1 ? 's' : '' }}
+          </li>
+        </ul>
+      </div>
+      <el-checkbox v-model="bulkForceDelete">
+        Forcer la suppression
+      </el-checkbox>
+      <template #footer>
+        <el-button @click="bulkDeleteDialogVisible = false">
+          Annuler
+        </el-button>
+        <el-button
+          type="danger"
+          :loading="bulkDeleting"
+          @click="confirmBulkDelete"
+        >
+          Supprimer {{ selectedContainerIds.length }} container{{ selectedContainerIds.length > 1 ? 's' : '' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -224,8 +406,16 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
+import {
+  Refresh,
+  Search,
+  VideoPlay,
+  VideoPause,
+  RefreshRight,
+  Delete,
+} from '@element-plus/icons-vue'
 import { useContainersStore } from '@/stores'
+import { useUrlFilters, type ContainerStatusFilter } from '@/composables/useUrlFilters'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import ActionButtons, { type ActionType } from '@/components/ui/ActionButtons.vue'
 import type { Container, ContainerPort, StatusType } from '@/types/api'
@@ -233,22 +423,83 @@ import type { Container, ContainerPort, StatusType } from '@/types/api'
 const router = useRouter()
 const containersStore = useContainersStore()
 
+// URL Filters
+const filters = useUrlFilters(300)
+
+// Table ref for selection
+const tableRef = ref()
+
+// Selection state
+const selectedContainers = ref<Container[]>([])
+const selectedContainerIds = computed(() => selectedContainers.value.map(c => c.id))
+
+// Bulk action state
+const bulkActionLoading = ref<string | null>(null)
+const bulkDeleteDialogVisible = ref(false)
+const bulkForceDelete = ref(false)
+const bulkDeleting = ref(false)
+
 // Logs drawer state
 const logsDrawerVisible = ref(false)
 const selectedContainer = ref<Container | null>(null)
 const logsContent = ref('')
 const logsTail = ref(100)
 
-// Delete dialog state
+// Delete dialog state (single)
 const deleteDialogVisible = ref(false)
 const containerToDelete = ref<Container | null>(null)
 const forceDelete = ref(false)
 const deleting = ref(false)
 
+// Filtered containers
+const filteredContainers = computed(() => {
+  let result = containersStore.containers
+
+  // Filter by status
+  const statusFilter = filters.status.value
+  if (statusFilter !== 'all') {
+    result = result.filter(container => {
+      if (statusFilter === 'running') {
+        return container.state === 'running'
+      }
+      if (statusFilter === 'stopped') {
+        return ['exited', 'created', 'dead'].includes(container.state)
+      }
+      if (statusFilter === 'error') {
+        return container.state === 'dead'
+      }
+      return true
+    })
+  }
+
+  // Filter by search
+  const searchTerm = filters.debouncedSearch.value.toLowerCase().trim()
+  if (searchTerm) {
+    result = result.filter(container =>
+      container.name.toLowerCase().includes(searchTerm) ||
+      container.image.toLowerCase().includes(searchTerm)
+    )
+  }
+
+  return result
+})
+
+// Results count text
+const resultsCountText = computed(() => {
+  const total = containersStore.containers.length
+  const filtered = filteredContainers.value.length
+
+  if (filters.hasActiveFilters.value && filtered !== total) {
+    return `${filtered} containers (sur ${total})`
+  }
+  return `${total} containers`
+})
+
 // Computed
 const emptyText = computed(() => {
   if (containersStore.loading) return 'Chargement...'
   if (containersStore.error) return 'Erreur lors du chargement'
+  if (filters.hasActiveFilters.value) return 'Aucun container ne correspond aux filtres'
   return 'Aucun container trouvé'
 })
 
@@ -288,6 +539,35 @@ function getContainerActions(container: Container) {
   ]
 }
 
+function getContainerName(id: string): string {
+  const container = containersStore.containers.find(c => c.id === id)
+  return container?.name || id
+}
+
+// Filter handlers
+function onFilterChange(): void {
+  // Filters are automatically synced via useUrlFilters
+}
+
+function onSearchInput(): void {
+  // Search is debounced via useUrlFilters
+}
+
+function clearFilters(): void {
+  filters.resetFilters()
+}
+
+// Selection handlers
+function handleSelectionChange(selection: Container[]): void {
+  selectedContainers.value = selection
+}
+
+function clearSelection(): void {
+  tableRef.value?.clearSelection()
+  selectedContainers.value = []
+}
+
+// Single container actions
 async function handleAction(action: ActionType, container: Container) {
   switch (action) {
     case 'start':
@@ -379,6 +659,89 @@ async function confirmDelete() {
   }
 }
 
+// Bulk actions
+async function handleBulkAction(action: 'start' | 'stop' | 'restart' | 'delete') {
+  if (action === 'delete') {
+    showBulkDeleteDialog()
+    return
+  }
+
+  bulkActionLoading.value = action
+
+  try {
+    const ids = selectedContainerIds.value
+    let result: { success: string[]; failed: string[] }
+
+    switch (action) {
+      case 'start':
+        result = await containersStore.startContainers(ids)
+        break
+      case 'stop':
+        result = await containersStore.stopContainers(ids)
+        break
+      case 'restart':
+        result = await containersStore.restartContainers(ids)
+        break
+      default:
+        return
+    }
+
+    // Show result message
+    if (result.failed.length === 0) {
+      ElMessage.success(`${result.success.length} container${result.success.length > 1 ? 's' : ''} ${getActionPastParticiple(action)}`)
+    } else if (result.success.length === 0) {
+      ElMessage.error(`Échec de l'action sur ${result.failed.length} container${result.failed.length > 1 ? 's' : ''}`)
+    } else {
+      ElMessage.warning(`${result.success.length} réussi${result.success.length > 1 ? 's' : ''}, ${result.failed.length} échoué${result.failed.length > 1 ? 's' : ''}`)
+    }
+
+    clearSelection()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur lors de l\'action groupée'
+    ElMessage.error(message)
+  } finally {
+    bulkActionLoading.value = null
+  }
+}
+
+function getActionPastParticiple(action: 'start' | 'stop' | 'restart'): string {
+  const map: Record<string, string> = {
+    start: 'démarré(s)',
+    stop: 'arrêté(s)',
+    restart: 'redémarré(s)',
+  }
+  return map[action] || action
+}
+
+function showBulkDeleteDialog(): void {
+  bulkForceDelete.value = false
+  bulkDeleteDialogVisible.value = true
+}
+
+async function confirmBulkDelete(): Promise<void> {
+  bulkDeleting.value = true
+
+  try {
+    const result = await containersStore.removeContainers(selectedContainerIds.value, bulkForceDelete.value)
+
+    if (result.failed.length === 0) {
+      ElMessage.success(`${result.success.length} container${result.success.length > 1 ? 's' : ''} supprimé${result.success.length > 1 ? 's' : ''}`)
+    } else if (result.success.length === 0) {
+      ElMessage.error(`Échec de la suppression de ${result.failed.length} container${result.failed.length > 1 ? 's' : ''}`)
+    } else {
+      ElMessage.warning(`${result.success.length} supprimé${result.success.length > 1 ? 's' : ''}, ${result.failed.length} échoué${result.failed.length > 1 ? 's' : ''}`)
+    }
+
+    bulkDeleteDialogVisible.value = false
+    clearSelection()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur lors de la suppression groupée'
+    ElMessage.error(message)
+  } finally {
+    bulkDeleting.value = false
+  }
+}
+
 async function refreshContainers() {
   try {
     await containersStore.fetchContainers()
@@ -386,8 +749,6 @@ async function refreshContainers() {
     // Error is already handled in the store
   }
 }
-
-// Navigate to container detail (handled by router-link in template)
 
 // Lifecycle
 onMounted(() => {
@@ -441,6 +802,79 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+/* Filters Bar */
+.filters-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background-color: var(--el-fill-color-light);
+  border-radius: 8px;
+}
+
+.filters-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.filter-select {
+  width: 140px;
+}
+
+.search-input {
+  width: 250px;
+}
+
+.filters-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.results-count {
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
+}
+
+/* Bulk Actions Bar */
+.bulk-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background-color: var(--el-color-primary-light-9);
+  border: 1px solid var(--el-color-primary-light-5);
+  border-radius: 8px;
+}
+
+.bulk-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bulk-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Slide down transition */
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-down-enter-from,
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* Table */
 .containers-table {
   width: 100%;
 }
@@ -509,5 +943,35 @@ onMounted(() => {
   line-height: 1.5;
   background-color: #1e1e1e;
   color: #d4d4d4;
+}
+
+/* Bulk Delete Dialog */
+.bulk-delete-alert {
+  margin-bottom: 16px;
+}
+
+.bulk-delete-list {
+  margin-bottom: 16px;
+}
+
+.bulk-delete-list p {
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.bulk-delete-list ul {
+  margin: 0;
+  padding-left: 20px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.bulk-delete-list li {
+  margin-bottom: 4px;
+}
+
+.bulk-delete-list .more-items {
+  font-style: italic;
+  color: var(--el-text-color-secondary);
 }
 </style>
