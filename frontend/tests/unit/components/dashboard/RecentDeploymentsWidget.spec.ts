@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { ref, nextTick } from 'vue'
 import RecentDeploymentsWidget from '@/components/dashboard/RecentDeploymentsWidget.vue'
@@ -38,14 +38,24 @@ vi.mock('@/composables/useRelativeTime', () => ({
   },
 }))
 
-// Mock window timers
+// Mock window timers - must be set before component import
 const mockSetInterval = vi.fn(() => 1)
 const mockClearInterval = vi.fn()
-vi.stubGlobal('setInterval', mockSetInterval)
-vi.stubGlobal('clearInterval', mockClearInterval)
-// Also set on window object for direct access
-window.setInterval = mockSetInterval
-window.clearInterval = mockClearInterval
+
+// Store original timers
+const originalSetInterval = window.setInterval
+const originalClearInterval = window.clearInterval
+
+// Set up mocks before tests
+beforeAll(() => {
+  window.setInterval = mockSetInterval
+  window.clearInterval = mockClearInterval
+})
+
+afterAll(() => {
+  window.setInterval = originalSetInterval
+  window.clearInterval = originalClearInterval
+})
 
 const createDeployment = (overrides?: Partial<Deployment>): Deployment => ({
   id: 'test-deployment-id',
@@ -374,10 +384,13 @@ describe('RecentDeploymentsWidget', () => {
         },
       })
 
-      expect(vi.stubGlobal('setInterval')).toBeDefined()
+      expect(mockSetInterval).toHaveBeenCalled()
     })
 
     it('should clear polling on unmount', async () => {
+      // Clear previous calls
+      mockClearInterval.mockClear()
+
       const wrapper = mount(RecentDeploymentsWidget, {
         global: {
           stubs: {
@@ -388,7 +401,7 @@ describe('RecentDeploymentsWidget', () => {
       })
 
       wrapper.unmount()
-      expect(vi.stubGlobal('clearInterval')).toBeDefined()
+      expect(mockClearInterval).toHaveBeenCalled()
     })
   })
 })
