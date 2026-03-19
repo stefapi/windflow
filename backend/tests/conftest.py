@@ -10,25 +10,20 @@ Fournit les fixtures pour:
 
 import asyncio
 from typing import AsyncGenerator, Generator
-import pytest
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import (
-    create_async_engine,
-    AsyncSession,
-    async_sessionmaker,
-)
 
+import pytest
 from app.database import Base, get_db
 from app.main import app
-from app.models.user import User
 from app.models.organization import Organization
 from app.models.stack import Stack
-from app.models.target import Target, TargetType, TargetStatus
+from app.models.target import Target, TargetStatus, TargetType
+from app.models.user import User
 from app.services.user_service import UserService
-
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Configuration pytest-asyncio
-pytest_plugins = ('pytest_asyncio',)
+pytest_plugins = ("pytest_asyncio",)
 
 
 @pytest.fixture(scope="session")
@@ -126,7 +121,7 @@ async def test_organization(db_session: AsyncSession) -> Organization:
     org = Organization(
         name="Test Organization",
         slug="test-org",
-        description="Organization for testing"
+        description="Organization for testing",
     )
     db_session.add(org)
     await db_session.commit()
@@ -154,7 +149,7 @@ async def test_user(db_session: AsyncSession, test_organization: Organization) -
         full_name="Test User",
         password="testpassword123",
         organization_id=test_organization.id,
-        is_superuser=False
+        is_superuser=False,
     )
 
     user = await UserService.create(db_session, user_data)
@@ -162,7 +157,9 @@ async def test_user(db_session: AsyncSession, test_organization: Organization) -
 
 
 @pytest.fixture(scope="function")
-async def test_superuser(db_session: AsyncSession, test_organization: Organization) -> User:
+async def test_superuser(
+    db_session: AsyncSession, test_organization: Organization
+) -> User:
     """
     Crée un super-utilisateur de test.
 
@@ -181,7 +178,7 @@ async def test_superuser(db_session: AsyncSession, test_organization: Organizati
         full_name="Admin User",
         password="adminpassword123",
         organization_id=test_organization.id,
-        is_superuser=True
+        is_superuser=True,
     )
 
     user = await UserService.create(db_session, user_data)
@@ -199,6 +196,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     Yields:
         AsyncClient: Client HTTP async pour tester l'API
     """
+
     # Override de la dépendance get_db pour utiliser la session de test
     async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
@@ -206,8 +204,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_db] = override_get_db
 
     async with AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test"
+        transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:
         yield ac
 
@@ -217,8 +214,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
 @pytest.fixture(scope="function")
 async def authenticated_client(
-    client: AsyncClient,
-    test_user: User
+    client: AsyncClient, test_user: User
 ) -> AsyncGenerator[AsyncClient, None]:
     """
     Crée un client authentifié avec token JWT.
@@ -233,10 +229,7 @@ async def authenticated_client(
     # Login pour obtenir le token
     response = await client.post(
         "/api/v1/auth/login",
-        data={
-            "username": test_user.username,
-            "password": "testpassword123"
-        }
+        data={"username": test_user.username, "password": "testpassword123"},
     )
 
     assert response.status_code == 200
@@ -254,8 +247,7 @@ async def authenticated_client(
 
 @pytest.fixture(scope="function")
 async def admin_client(
-    client: AsyncClient,
-    test_superuser: User
+    client: AsyncClient, test_superuser: User
 ) -> AsyncGenerator[AsyncClient, None]:
     """
     Crée un client authentifié avec un super-utilisateur.
@@ -270,10 +262,7 @@ async def admin_client(
     # Login admin pour obtenir le token
     response = await client.post(
         "/api/v1/auth/login",
-        data={
-            "username": test_superuser.username,
-            "password": "adminpassword123"
-        }
+        data={"username": test_superuser.username, "password": "adminpassword123"},
     )
 
     assert response.status_code == 200
@@ -289,9 +278,10 @@ async def admin_client(
     client.headers.pop("Authorization", None)
 
 
-
 @pytest.fixture(scope="function")
-async def test_target(db_session: AsyncSession, test_organization: Organization) -> Target:
+async def test_target(
+    db_session: AsyncSession, test_organization: Organization
+) -> Target:
     """
     Crée une cible de déploiement de test.
 
@@ -309,7 +299,7 @@ async def test_target(db_session: AsyncSession, test_organization: Organization)
         type=TargetType.DOCKER,
         status=TargetStatus.ONLINE,
         credentials={},
-        organization_id=test_organization.id
+        organization_id=test_organization.id,
     )
     db_session.add(target)
     await db_session.commit()
@@ -318,7 +308,9 @@ async def test_target(db_session: AsyncSession, test_organization: Organization)
 
 
 @pytest.fixture(scope="function")
-async def test_stack(db_session: AsyncSession, test_organization: Organization) -> Stack:
+async def test_stack(
+    db_session: AsyncSession, test_organization: Organization
+) -> Stack:
     """
     Crée un stack de test.
 
@@ -334,17 +326,10 @@ async def test_stack(db_session: AsyncSession, test_organization: Organization) 
         description="A test stack for unit testing",
         template={
             "version": "3.8",
-            "services": {
-                "web": {
-                    "image": "nginx:latest",
-                    "ports": ["80:80"]
-                }
-            }
+            "services": {"web": {"image": "nginx:latest", "ports": ["80:80"]}},
         },
-        variables={
-            "port": {"type": "integer", "default": 80}
-        },
-        organization_id=test_organization.id
+        variables={"port": {"type": "integer", "default": 80}},
+        organization_id=test_organization.id,
     )
     db_session.add(stack)
     await db_session.commit()

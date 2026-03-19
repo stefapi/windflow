@@ -29,7 +29,7 @@ from .config import settings
 from .database import db
 from .api.v1 import api_router
 from .middleware import (
-    SecurityHeadersMiddleware,
+    security_headers_middleware,
     correlation_middleware,
     timing_middleware,
     logging_middleware,
@@ -237,7 +237,7 @@ if settings.cors_enabled:
 
 # 2. Security Headers
 if settings.csp_enabled:
-    app.add_middleware(SecurityHeadersMiddleware)
+    app.middleware("http")(security_headers_middleware)
     logger.info("✓ Security headers middleware enabled")
 
 # 3. Timing (must be early to wrap entire request)

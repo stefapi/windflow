@@ -295,35 +295,14 @@
       :title="`Logs - ${selectedContainer?.name || ''}`"
       direction="rtl"
       size="50%"
+      class="logs-drawer"
     >
-      <div class="logs-container">
-        <div class="logs-actions">
-          <el-button
-            size="small"
-            @click="refreshLogs"
-          >
-            <el-icon class="el-icon--left">
-              <Refresh />
-            </el-icon>
-            Rafraîchir
-          </el-button>
-          <el-input-number
-            v-model="logsTail"
-            :min="10"
-            :max="10000"
-            size="small"
-            class="logs-tail-input"
-          />
-          <span class="logs-tail-label">lignes</span>
-        </div>
-        <el-input
-          v-model="logsContent"
-          type="textarea"
-          :rows="25"
-          readonly
-          class="logs-textarea"
-        />
-      </div>
+      <ContainerLogs
+        v-if="logsDrawerVisible && selectedContainer"
+        :key="selectedContainer.id"
+        :container-id="selectedContainer.id"
+        :container-name="selectedContainer.name"
+      />
     </el-drawer>
 
     <!-- Delete Confirmation Dialog (single) -->
@@ -404,7 +383,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   Refresh,
@@ -415,12 +393,11 @@ import {
   Delete,
 } from '@element-plus/icons-vue'
 import { useContainersStore } from '@/stores'
-import { useUrlFilters, type ContainerStatusFilter } from '@/composables/useUrlFilters'
-import StatusBadge from '@/components/ui/StatusBadge.vue'
+import { useUrlFilters } from '@/composables/useUrlFilters'
+import StatusBadge, { type StatusType } from '@/components/ui/StatusBadge.vue'
 import ActionButtons, { type ActionType } from '@/components/ui/ActionButtons.vue'
-import type { Container, ContainerPort, StatusType } from '@/types/api'
-
-const router = useRouter()
+import ContainerLogs from '@/components/ContainerLogs.vue'
+import type { Container, ContainerPort } from '@/types/api'
 const containersStore = useContainersStore()
 
 // URL Filters
@@ -442,8 +419,6 @@ const bulkDeleting = ref(false)
 // Logs drawer state
 const logsDrawerVisible = ref(false)
 const selectedContainer = ref<Container | null>(null)
-const logsContent = ref('')
-const logsTail = ref(100)
 
 // Delete dialog state (single)
 const deleteDialogVisible = ref(false)
@@ -580,7 +555,7 @@ async function handleAction(action: ActionType, container: Container) {
       await restartContainer(container)
       break
     case 'logs':
-      await showLogs(container)
+      showLogs(container)
       break
     case 'delete':
       showDeleteDialog(container)
@@ -618,22 +593,9 @@ async function restartContainer(container: Container) {
   }
 }
 
-async function showLogs(container: Container) {
+function showLogs(container: Container) {
   selectedContainer.value = container
   logsDrawerVisible.value = true
-  await refreshLogs()
-}
-
-async function refreshLogs() {
-  if (!selectedContainer.value) return
-
-  try {
-    logsContent.value = await containersStore.getContainerLogs(selectedContainer.value.id, logsTail.value)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erreur lors du chargement des logs'
-    ElMessage.error(message)
-    logsContent.value = ''
-  }
 }
 
 function showDeleteDialog(container: Container) {
@@ -915,34 +877,11 @@ onMounted(() => {
 }
 
 /* Logs Drawer */
-.logs-container {
-  height: 100%;
+.logs-drawer :deep(.el-drawer__body) {
+  padding: 0;
   display: flex;
   flex-direction: column;
-}
-
-.logs-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.logs-tail-input {
-  width: 100px;
-}
-
-.logs-tail-label {
-  font-size: 14px;
-  color: var(--el-text-color-secondary);
-}
-
-.logs-textarea :deep(textarea) {
-  font-family: monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  background-color: #1e1e1e;
-  color: #d4d4d4;
+  overflow: hidden;
 }
 
 /* Bulk Delete Dialog */

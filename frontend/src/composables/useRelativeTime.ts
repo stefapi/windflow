@@ -5,7 +5,7 @@
  * Used for displaying timestamps in a user-friendly way.
  */
 
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, type Ref } from 'vue'
 
 /**
  * Format a date as relative time string
@@ -78,6 +78,3 @@ export function useRelativeTime(dateRef: Ref<string | Date | null | undefined>) 
     return formatRelativeTime(dateRef.value)
   })
 }
-
-// Type for Vue Ref
-type Ref<T> = import('vue').Ref<T>

@@ -196,9 +196,7 @@ export default defineConfig({
         followRedirects: true,
         // Preserve the full path including query params during redirect
         rewrite: (path) => path,
-      },
-      '/ws': {
-        target: process.env.VITE_WS_URL || 'ws://localhost:8010',
+        // Enable WebSocket proxying for /api/v1/ws/* endpoints
         ws: true,
       },
     },

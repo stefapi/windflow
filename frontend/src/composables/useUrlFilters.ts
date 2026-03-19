@@ -36,9 +36,9 @@ export function useUrlFilters(debounceMs: number = 300) {
   const router = useRouter()
 
   // Filter state initialized from URL
-  const status = ref<ContainerStatusFilter>(parseStatus(route.query.status as string))
-  const target = ref<string>((route.query.target as string) || '')
-  const search = ref<string>((route.query.search as string) || '')
+  const status = ref<ContainerStatusFilter>(parseStatus(route.query['status'] as string))
+  const target = ref<string>((route.query['target'] as string) || '')
+  const search = ref<string>((route.query['search'] as string) || '')
 
   // Debounce tracking
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -61,13 +61,13 @@ export function useUrlFilters(debounceMs: number = 300) {
     const query: Record<string, string> = {}
 
     if (status.value !== 'all') {
-      query.status = status.value
+      query['status'] = status.value
     }
     if (target.value) {
-      query.target = target.value
+      query['target'] = target.value
     }
     if (search.value) {
-      query.search = search.value
+      query['search'] = search.value
     }
 
     router.replace({

@@ -77,7 +77,7 @@ export interface PlaceholderWidgetProps {
   version?: string
 }
 
-const props = withDefaults(defineProps<PlaceholderWidgetProps>(), {
+withDefaults(defineProps<PlaceholderWidgetProps>(), {
   pluginName: 'demo-plugin',
   version: '1.0.0',
 })

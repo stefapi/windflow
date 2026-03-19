@@ -24,7 +24,7 @@ passlib = {version = "^1.7.4", extras = ["argon2"]}
 argon2-cffi = "^23.0.0"
 psycopg2-binary = "^2.9.0"
 litellm = "^1.79.0"
-httpx = "^0.28.0"
+aiohttp = "^3.11.0"
 pyyaml = "^6.0.0"
 rich = "^14.2.0"
 scalar-fastapi = "^1.0.3"
@@ -48,7 +48,7 @@ pytest-clarity = "^1.0.1"
 faker = "^22.0.0"
 factory-boy = "^3.3.0"
 freezegun = "^1.4.0"
-respx = "^0.20.0"
+aioresponses = "^0.7.6"
 
 [tool.poetry.scripts]
 windflow = "cli.__main__:main"

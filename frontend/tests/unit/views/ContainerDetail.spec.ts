@@ -28,17 +28,36 @@ vi.mock('@/composables/useSecretMasker', () => ({
 const mockInspectContainer = vi.fn()
 const mockStopContainer = vi.fn()
 const mockRestartContainer = vi.fn()
-const mockGetContainerLogs = vi.fn()
-
 vi.mock('@/stores', () => ({
   useContainersStore: () => ({
     inspectContainer: mockInspectContainer,
     stopContainer: mockStopContainer,
     restartContainer: mockRestartContainer,
-    getContainerLogs: mockGetContainerLogs,
     containerDetail: null,
     detailLoading: false,
     error: null,
+  }),
+  useAuthStore: () => ({
+    token: 'mock-jwt-token',
+    isAuthenticated: true,
+    user: null,
+    login: vi.fn(),
+    logout: vi.fn(),
+  }),
+}))
+
+// Mock useContainerLogs composable
+vi.mock('@/composables/useContainerLogs', () => ({
+  useContainerLogs: () => ({
+    logs: { value: '' },
+    status: { value: 'disconnected' },
+    error: { value: null },
+    isStreaming: { value: false },
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    reconnect: vi.fn(),
+    clearLogs: vi.fn(),
+    downloadLogs: vi.fn(),
   }),
 }))
 
@@ -297,7 +316,6 @@ describe('ContainerDetail.vue', () => {
 
       const html = wrapper.html()
       expect(html).toContain('Retour')
-      expect(html).toContain('Logs')
       expect(html).toContain('Terminal')
       expect(html).toContain('Inspect')
     })
@@ -344,22 +362,6 @@ describe('ContainerDetail.vue', () => {
   })
 
   describe('Drawer functionality', () => {
-    it('should have logs drawer controlled by logsDrawerVisible', async () => {
-      mockInspectContainer.mockResolvedValue(mockContainerDetail)
-
-      const wrapper = await mountComponent()
-
-      const vm = wrapper.vm as unknown as {
-        logsDrawerVisible: boolean
-        showLogsDrawer: () => void
-      }
-
-      expect(vm.logsDrawerVisible).toBe(false)
-
-      vm.showLogsDrawer()
-      expect(vm.logsDrawerVisible).toBe(true)
-    })
-
     it('should have inspect drawer controlled by inspectDrawerVisible', async () => {
       mockInspectContainer.mockResolvedValue(mockContainerDetail)
 
@@ -413,20 +415,5 @@ describe('ContainerDetail.vue', () => {
       expect(mockRestartContainer).toHaveBeenCalledWith('container-456')
     })
 
-    it('should call getContainerLogs when refreshLogs is called', async () => {
-      mockGetContainerLogs.mockResolvedValue('log content')
-
-      const wrapper = await mountComponent('container-789')
-
-      const vm = wrapper.vm as unknown as {
-        refreshLogs: () => Promise<void>
-        logsContent: string
-        logsTail: { value: number }
-      }
-
-      await vm.refreshLogs()
-
-      expect(mockGetContainerLogs).toHaveBeenCalledWith('container-789', 100)
-    })
   })
 })

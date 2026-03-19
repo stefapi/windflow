@@ -46,15 +46,6 @@
               Redémarrer
             </el-button>
             <el-button
-              type="info"
-              @click="showLogsDrawer"
-            >
-              <el-icon class="el-icon--left">
-                <Document />
-              </el-icon>
-              Logs
-            </el-button>
-            <el-button
               type="primary"
               @click="goToTerminal"
             >
@@ -264,6 +255,15 @@
           </div>
         </el-tab-pane>
 
+        <!-- Logs Tab -->
+        <el-tab-pane label="Logs" name="logs">
+          <ContainerLogs
+            v-if="containerId"
+            :container-id="containerId"
+            :container-name="containerDetail?.name"
+          />
+        </el-tab-pane>
+
         <!-- Placeholder tabs for future features -->
         <el-tab-pane label="Stats" name="stats" disabled>
           <div class="placeholder-content">
@@ -277,38 +277,6 @@
         </el-tab-pane>
       </el-tabs>
     </el-card>
-
-    <!-- Logs Drawer -->
-    <el-drawer
-      v-model="logsDrawerVisible"
-      :title="`Logs - ${containerDetail?.name || ''}`"
-      direction="rtl"
-      size="50%"
-    >
-      <div class="logs-container">
-        <div class="logs-actions">
-          <el-button size="small" @click="refreshLogs">
-            <el-icon class="el-icon--left"><Refresh /></el-icon>
-            Rafraîchir
-          </el-button>
-          <el-input-number
-            v-model="logsTail"
-            :min="10"
-            :max="10000"
-            size="small"
-            class="logs-tail-input"
-          />
-          <span class="logs-tail-label">lignes</span>
-        </div>
-        <el-input
-          v-model="logsContent"
-          type="textarea"
-          :rows="25"
-          readonly
-          class="logs-textarea"
-        />
-      </div>
-    </el-drawer>
 
     <!-- Inspect Drawer -->
     <el-drawer
@@ -339,18 +307,17 @@ import {
   CopyDocument,
   VideoPause,
   RefreshRight,
-  Document,
   Monitor,
   Search,
   View,
   Hide,
   Loading,
   FolderOpened,
-  Refresh,
   ZoomIn,
 } from '@element-plus/icons-vue'
 import { useContainersStore } from '@/stores'
 import { isSecretKey, maskValue, useSecretMasker } from '@/composables/useSecretMasker'
+import ContainerLogs from '@/components/ContainerLogs.vue'
 import type { ContainerDetail, ContainerEnvVar, ContainerPortMapping, ContainerMount, ContainerNetworkInfo } from '@/types/api'
 
 const route = useRoute()
@@ -360,9 +327,6 @@ const containersStore = useContainersStore()
 // State
 const containerDetail = ref<ContainerDetail | null>(null)
 const activeTab = ref('infos')
-const logsDrawerVisible = ref(false)
-const logsContent = ref('')
-const logsTail = ref(100)
 const envSearch = ref('')
 const inspectDrawerVisible = ref(false)
 const inspectContent = ref('')
@@ -559,26 +523,6 @@ async function handleAction(action: string): Promise<void> {
   }
 }
 
-function showLogsDrawer(): void {
-  logsDrawerVisible.value = true
-  refreshLogs()
-}
-
-async function refreshLogs(): Promise<void> {
-  const id = containerId.value
-  if (!id) {
-    logsContent.value = ''
-    return
-  }
-
-  try {
-    logsContent.value = await containersStore.getContainerLogs(id, logsTail.value)
-  } catch {
-    ElMessage.error('Erreur lors du chargement des logs')
-    logsContent.value = ''
-  }
-}
-
 function goBack(): void {
   router.push({ name: 'Containers' })
 }
@@ -748,37 +692,6 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   min-height: 200px;
-}
-
-/* Logs Drawer */
-.logs-container {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.logs-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.logs-tail-input {
-  width: 100px;
-}
-
-.logs-tail-label {
-  font-size: 14px;
-  color: var(--el-text-color-secondary);
-}
-
-.logs-textarea :deep(textarea) {
-  font-family: monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  background-color: #1e1e1e;
-  color: #d4d4d4;
 }
 
 /* Inspect Drawer */

@@ -16,9 +16,13 @@ logger = logging.getLogger(__name__)
 async def error_handler_middleware(request: Request, call_next):
     """
     Middleware de gestion globale des erreurs.
-    
+
     Capture les exceptions non gérées et retourne des réponses JSON formatées.
     """
+    # Skip WebSocket connections - they handle their own errors
+    if request.scope.get("type") == "websocket":
+        return await call_next(request)
+
     try:
         response = await call_next(request)
         return response

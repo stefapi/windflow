@@ -70,6 +70,21 @@ vi.mock('@/composables/useUrlFilters', () => ({
   ContainerStatusFilter: {},
 }))
 
+// Mock useContainerLogs composable (used by ContainerLogs component)
+vi.mock('@/composables/useContainerLogs', () => ({
+  useContainerLogs: () => ({
+    logs: { value: '' },
+    status: { value: 'disconnected' },
+    error: { value: null },
+    isStreaming: { value: false },
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    reconnect: vi.fn(),
+    clearLogs: vi.fn(),
+    downloadLogs: vi.fn(),
+  }),
+}))
+
 describe('Containers.vue', () => {
   let pinia: ReturnType<typeof createPinia>
 
@@ -550,28 +565,39 @@ describe('Containers.vue', () => {
   })
 
   describe('Logs Drawer', () => {
-    it('should open logs drawer when logs action is triggered', async () => {
+    it('should open logs drawer when logs action is triggered', () => {
       const store = useContainersStore()
       vi.spyOn(store, 'fetchContainers').mockResolvedValue()
-      vi.spyOn(store, 'getContainerLogs').mockResolvedValue('log content')
 
       const wrapper = mountContainers()
-      await wrapper.vm.showLogs(mockContainers[0])
+      wrapper.vm.showLogs(mockContainers[0])
 
       expect(wrapper.vm.logsDrawerVisible).toBe(true)
       expect(wrapper.vm.selectedContainer).toEqual(mockContainers[0])
     })
 
-    it('should fetch logs when showing logs drawer', async () => {
+    it('should set selected container when showing logs', () => {
       const store = useContainersStore()
       vi.spyOn(store, 'fetchContainers').mockResolvedValue()
-      vi.spyOn(store, 'getContainerLogs').mockResolvedValue('log line 1\nlog line 2')
 
       const wrapper = mountContainers()
-      await wrapper.vm.showLogs(mockContainers[0])
+      wrapper.vm.showLogs(mockContainers[1])
 
-      expect(store.getContainerLogs).toHaveBeenCalledWith('abc123', 100)
-      expect(wrapper.vm.logsContent).toBe('log line 1\nlog line 2')
+      expect(wrapper.vm.selectedContainer).toEqual(mockContainers[1])
+      expect(wrapper.vm.logsDrawerVisible).toBe(true)
+    })
+
+    it('should use ContainerLogs component with WebSocket (no REST API call)', () => {
+      const store = useContainersStore()
+      vi.spyOn(store, 'fetchContainers').mockResolvedValue()
+      const getLogsSpy = vi.spyOn(store, 'getContainerLogs').mockResolvedValue('')
+
+      const wrapper = mountContainers()
+      wrapper.vm.showLogs(mockContainers[0])
+
+      // The new implementation uses the ContainerLogs component with WebSocket
+      // instead of calling getContainerLogs REST API
+      expect(getLogsSpy).not.toHaveBeenCalled()
     })
   })
 

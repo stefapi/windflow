@@ -14,11 +14,15 @@ logger = logging.getLogger(__name__)
 async def logging_middleware(request: Request, call_next):
     """
     Middleware de logging structuré pour toutes les requêtes.
-    
+
     Log les informations de requête/réponse avec timing.
     """
+    # Skip WebSocket connections to avoid interference
+    if request.scope.get("type") == "websocket":
+        return await call_next(request)
+
     start_time = time.time()
-    
+
     # Log de la requête entrante
     logger.info(
         "Incoming request",
@@ -29,13 +33,13 @@ async def logging_middleware(request: Request, call_next):
             "client_ip": request.client.host if request.client else None,
         }
     )
-    
+
     # Traitement de la requête
     response = await call_next(request)
-    
+
     # Calcul du temps de traitement
     process_time = time.time() - start_time
-    
+
     # Log de la réponse
     logger.info(
         "Request processed",
@@ -46,8 +50,8 @@ async def logging_middleware(request: Request, call_next):
             "process_time": f"{process_time:.3f}s",
         }
     )
-    
+
     # Ajouter le header de timing
     response.headers["X-Process-Time"] = str(process_time)
-    
+
     return response

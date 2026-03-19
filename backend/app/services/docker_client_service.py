@@ -1,18 +1,17 @@
 """
 Client Docker via API REST Engine v1.41+.
 
-Connexion via Unix socket local (/var/run/docker.sock) avec httpx.
+Connexion via Unix socket local (/var/run/docker.sock) avec aiohttp.
 Toutes les opérations sont asynchrones et n'ont pas de dépendance externe.
 """
 
-import asyncio
 import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, AsyncIterator, Optional
 
-import httpx
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +31,7 @@ STREAMING_TIMEOUT = 300.0  # 5 minutes pour les streams longs
 @dataclass
 class ContainerInfo:
     """Informations de base sur un container (GET /containers/json)."""
+
     id: str
     name: str
     image: str
@@ -81,6 +81,7 @@ class ContainerInfo:
 @dataclass
 class ContainerDetail:
     """Détails complets d'un container (GET /containers/{id}/json)."""
+
     id: str
     name: str
     created: datetime
@@ -97,7 +98,11 @@ class ContainerDetail:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ContainerDetail":
         created_str = data.get("Created", "")
-        created = datetime.fromisoformat(created_str.replace("Z", "+00:00")) if created_str else datetime.now()
+        created = (
+            datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+            if created_str
+            else datetime.now()
+        )
 
         return cls(
             id=data.get("Id", "")[:12],
@@ -117,6 +122,7 @@ class ContainerDetail:
 @dataclass
 class ImageInfo:
     """Informations sur une image (GET /images/json)."""
+
     id: str
     repo_tags: list[str]
     repo_digests: list[str]
@@ -153,6 +159,7 @@ class ImageInfo:
 @dataclass
 class VolumeInfo:
     """Informations sur un volume (GET /volumes)."""
+
     name: str
     driver: str
     mountpoint: str
@@ -181,6 +188,7 @@ class VolumeInfo:
 @dataclass
 class NetworkInfo:
     """Informations sur un réseau (GET /networks)."""
+
     id: str
     name: str
     driver: str
@@ -222,6 +230,7 @@ class NetworkInfo:
 @dataclass
 class SystemInfo:
     """Informations système Docker (GET /info)."""
+
     id: str
     name: str
     server_version: str
@@ -264,6 +273,7 @@ class SystemInfo:
 @dataclass
 class PullProgressEvent:
     """Événement de progression d'un pull d'image."""
+
     status: str  # "Pulling from library/nginx", "Downloading", "Download complete"
     progress: Optional[str] = None
     progress_detail: Optional[dict[str, Any]] = None
@@ -284,6 +294,7 @@ class PullProgressEvent:
 @dataclass
 class ExecResult:
     """Résultat d'une commande exec dans un container."""
+
     exit_code: int
     output: str
     error: str
@@ -321,24 +332,57 @@ class DockerClientService:
         """
         self.socket_path = socket_path
         self.timeout = timeout
-        self._client: Optional[httpx.AsyncClient] = None
+        self._session: Optional[aiohttp.ClientSession] = None
 
-    async def _get_client(self) -> httpx.AsyncClient:
-        """Récupère ou crée le client HTTP avec transport Unix socket."""
-        if self._client is None:
-            transport = httpx.AsyncHTTPTransport(uds=self.socket_path)
-            self._client = httpx.AsyncClient(
-                transport=transport,
-                base_url="http://localhost",
-                timeout=httpx.Timeout(self.timeout),
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Récupère ou crée la session HTTP avec connector Unix socket."""
+        if self._session is None or self._session.closed:
+            connector = aiohttp.UnixConnector(path=self.socket_path)
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            self._session = aiohttp.ClientSession(
+                connector=connector,
+                timeout=timeout,
             )
-        return self._client
+        return self._session
 
     async def close(self):
-        """Ferme le client HTTP."""
-        if self._client is not None:
-            await self._client.aclose()
-            self._client = None
+        """Ferme la session HTTP."""
+        if self._session is not None and not self._session.closed:
+            await self._session.close()
+            self._session = None
+
+    def _sanitize_params(
+        self, params: Optional[dict[str, Any]]
+    ) -> Optional[dict[str, Any]]:
+        """
+        Convertit les valeurs de paramètres en types acceptés par aiohttp.
+
+        aiohttp accepte uniquement str, int, float pour les valeurs de params.
+        Les booléens doivent être convertis en strings.
+
+        Args:
+            params: Paramètres bruts
+
+        Returns:
+            Paramètres sanitizés
+        """
+        if params is None:
+            return None
+
+        sanitized = {}
+        for key, value in params.items():
+            if isinstance(value, bool):
+                sanitized[key] = str(value).lower()  # True -> "true", False -> "false"
+            elif isinstance(value, (str, int, float)):
+                sanitized[key] = value
+            elif isinstance(value, list):
+                # Pour les listes (ex: filters), on les passe en JSON
+                sanitized[key] = json.dumps(value)
+            else:
+                # Pour les autres types, on convertit en string
+                sanitized[key] = str(value)
+
+        return sanitized
 
     async def _request(
         self,
@@ -349,7 +393,7 @@ class DockerClientService:
         headers: Optional[dict[str, str]] = None,
         timeout: Optional[float] = None,
         stream: bool = False,
-    ) -> httpx.Response:
+    ) -> aiohttp.ClientResponse:
         """
         Effectue une requête vers l'API Docker.
 
@@ -366,33 +410,43 @@ class DockerClientService:
             Réponse HTTP
 
         Raises:
-            httpx.HTTPStatusError: En cas d'erreur HTTP
+            aiohttp.ClientResponseError: En cas d'erreur HTTP
         """
-        client = await self._get_client()
-        req_timeout = timeout or self.timeout
+        session = await self._get_session()
+        req_timeout = aiohttp.ClientTimeout(total=timeout or self.timeout)
 
         req_headers = {"Content-Type": "application/json"}
         if headers:
             req_headers.update(headers)
 
-        request = client.build_request(
-            method=method,
-            url=path,
-            params=params,
-            json=body if body else None,
-            headers=req_headers,
-            timeout=req_timeout,
-        )
+        url = f"http://localhost{path}"
 
         logger.debug(f"Docker API: {method} {path}")
 
+        # Sanitize params pour éviter les erreurs de type
+        sanitized_params = self._sanitize_params(params)
+
         if stream:
-            # Pour le streaming, on n'attend pas la réponse complète
-            response = await client.send(request, stream=True)
+            # Pour le streaming, on retourne la réponse directement
+            response = await session.request(
+                method=method,
+                url=url,
+                params=sanitized_params,
+                json=body if body else None,
+                headers=req_headers,
+                timeout=req_timeout,
+            )
             response.raise_for_status()
             return response
         else:
-            response = await client.send(request)
+            response = await session.request(
+                method=method,
+                url=url,
+                params=sanitized_params,
+                json=body if body else None,
+                headers=req_headers,
+                timeout=req_timeout,
+            )
             response.raise_for_status()
             return response
 
@@ -432,11 +486,10 @@ class DockerClientService:
         if limit:
             params["limit"] = limit
         if filters:
-            import json
             params["filters"] = json.dumps(filters)
 
         response = await self._request("GET", "/containers/json", params=params)
-        data = response.json()
+        data = await response.json()
 
         return [ContainerInfo.from_dict(c) for c in data]
 
@@ -453,7 +506,7 @@ class DockerClientService:
             ContainerDetail
         """
         response = await self._request("GET", f"/containers/{container_id}/json")
-        data = response.json()
+        data = await response.json()
         return ContainerDetail.from_dict(data)
 
     async def create_container(
@@ -522,7 +575,7 @@ class DockerClientService:
             body=config,
             timeout=60.0,
         )
-        data = response.json()
+        data = await response.json()
         return data.get("Id", "")
 
     async def start_container(self, container_id: str) -> None:
@@ -632,6 +685,7 @@ class DockerClientService:
             "stderr": True,
             "tail": tail,
             "timestamps": timestamps,
+            "follow": follow,
         }
         if since:
             params["since"] = since
@@ -648,14 +702,15 @@ class DockerClientService:
             timeout=timeout,
         )
 
-        async for chunk in response.aiter_bytes():
-            # Démultiplexer le stream Docker
-            lines = self._demux_docker_stream(chunk)
-            for line in lines:
-                yield line
-
-        # Fermer la réponse proprement
-        response.close()
+        try:
+            async for chunk in response.content.iter_any():
+                # Démultiplexer le stream Docker
+                lines = self._demux_docker_stream(chunk)
+                for line in lines:
+                    yield line
+        finally:
+            # Fermer la réponse proprement
+            response.close()
 
     def _demux_docker_stream(self, chunk: bytes) -> list[str]:
         """
@@ -670,7 +725,7 @@ class DockerClientService:
             chunk: Données brutes du stream
 
         Returns:
-            Liste de lignes (stdout uniquement)
+            Liste de lignes (stdout et stderr avec préfixe [ERR] pour stderr)
         """
         lines = []
         offset = 0
@@ -690,11 +745,13 @@ class DockerClientService:
                     lines.extend(remaining.split("\n"))
                 break
 
-            # Extraire le payload (stdout seulement, ignorer stderr)
-            if stream_type == 1:  # stdout
-                payload = chunk[offset + 8 : offset + 8 + frame_size]
-                line = payload.decode("utf-8", errors="replace").rstrip("\n")
-                if line:
+            # Extraire le payload (stdout et stderr)
+            payload = chunk[offset + 8 : offset + 8 + frame_size]
+            line = payload.decode("utf-8", errors="replace").rstrip("\n")
+            if line:
+                if stream_type == 2:  # stderr
+                    lines.append(f"[ERR] {line}")
+                else:  # stdout (stream_type == 1)
                     lines.append(line)
 
             offset += 8 + frame_size
@@ -714,7 +771,7 @@ class DockerClientService:
             Détails complets du container
         """
         response = await self._request("GET", f"/containers/{container_id}/json")
-        return response.json()
+        return await response.json()
 
     async def container_stats(
         self,
@@ -743,14 +800,15 @@ class DockerClientService:
             timeout=STREAMING_TIMEOUT if stream else self.timeout,
         )
 
-        async for line in response.aiter_lines():
-            if line:
-                try:
-                    yield json.loads(line)
-                except json.JSONDecodeError:
-                    pass
-
-        response.close()
+        try:
+            async for line in response.content:
+                if line:
+                    try:
+                        yield json.loads(line)
+                    except json.JSONDecodeError:
+                        pass
+        finally:
+            response.close()
 
     # =========================================================================
     # Images
@@ -775,12 +833,10 @@ class DockerClientService:
         """
         params: dict[str, Any] = {"all": all}
         if filters:
-            import json
-
             params["filters"] = json.dumps(filters)
 
         response = await self._request("GET", "/images/json", params=params)
-        data = response.json()
+        data = await response.json()
 
         return [ImageInfo.from_dict(img) for img in data]
 
@@ -816,27 +872,29 @@ class DockerClientService:
         # Parser le stream JSON ligne par ligne
         full_status = ""
 
-        async for line in response.aiter_lines():
-            if line:
-                try:
-                    event_data = json.loads(line)
-                    event = PullProgressEvent.from_dict(event_data)
+        try:
+            async for line in response.content:
+                if line:
+                    try:
+                        event_data = json.loads(line)
+                        event = PullProgressEvent.from_dict(event_data)
 
-                    if on_progress:
-                        on_progress(event)
+                        if on_progress:
+                            on_progress(event)
 
-                    # Garder le dernier status
-                    if event.status:
-                        full_status = event.status
+                        # Garder le dernier status
+                        if event.status:
+                            full_status = event.status
 
-                    # Vérifier les erreurs
-                    if event.error:
-                        raise Exception(f"Pull failed: {event.error}")
+                        # Vérifier les erreurs
+                        if event.error:
+                            raise Exception(f"Pull failed: {event.error}")
 
-                except json.JSONDecodeError:
-                    pass
+                    except json.JSONDecodeError:
+                        pass
+        finally:
+            response.close()
 
-        response.close()
         return full_status or "Pull complete"
 
     async def remove_image(
@@ -867,7 +925,7 @@ class DockerClientService:
             timeout=60.0,
         )
 
-        return response.json()
+        return await response.json()
 
     async def inspect_image(self, image_id: str) -> dict[str, Any]:
         """
@@ -882,7 +940,7 @@ class DockerClientService:
             Détails de l'image
         """
         response = await self._request("GET", f"/images/{image_id}/json")
-        return response.json()
+        return await response.json()
 
     # =========================================================================
     # Volumes
@@ -905,12 +963,10 @@ class DockerClientService:
         """
         params = {}
         if filters:
-            import json
-
             params["filters"] = json.dumps(filters)
 
         response = await self._request("GET", "/volumes", params=params)
-        data = response.json()
+        data = await response.json()
 
         volumes = data.get("Volumes", [])
         return [VolumeInfo.from_dict(v) for v in volumes]
@@ -937,7 +993,7 @@ class DockerClientService:
         body = {"Name": name, "Driver": driver, "Labels": labels or {}}
 
         response = await self._request("POST", "/volumes/create", body=body)
-        data = response.json()
+        data = await response.json()
 
         return VolumeInfo.from_dict(data)
 
@@ -979,12 +1035,10 @@ class DockerClientService:
         """
         params = {}
         if filters:
-            import json
-
             params["filters"] = json.dumps(filters)
 
         response = await self._request("GET", "/networks", params=params)
-        data = response.json()
+        data = await response.json()
 
         return [NetworkInfo.from_dict(n) for n in data]
 
@@ -1001,7 +1055,7 @@ class DockerClientService:
             Détails du réseau
         """
         response = await self._request("GET", f"/networks/{network_id}")
-        return response.json()
+        return await response.json()
 
     # =========================================================================
     # System
@@ -1018,7 +1072,7 @@ class DockerClientService:
         """
         try:
             response = await self._request("GET", "/_ping")
-            return response.status_code == 200
+            return response.status == 200
         except Exception:
             return False
 
@@ -1032,7 +1086,7 @@ class DockerClientService:
             SystemInfo
         """
         response = await self._request("GET", "/info")
-        data = response.json()
+        data = await response.json()
 
         return SystemInfo.from_dict(data)
 
@@ -1046,7 +1100,7 @@ class DockerClientService:
             Version et informations API
         """
         response = await self._request("GET", "/version")
-        return response.json()
+        return await response.json()
 
     # =========================================================================
     # Exec
@@ -1093,7 +1147,7 @@ class DockerClientService:
             body=body,
         )
 
-        data = response.json()
+        data = await response.json()
         return data.get("Id", "")
 
     async def exec_start(
@@ -1124,10 +1178,11 @@ class DockerClientService:
         )
 
         output = b""
-        async for chunk in response.aiter_bytes():
-            output += chunk
-
-        response.close()
+        try:
+            async for chunk in response.content.iter_any():
+                output += chunk
+        finally:
+            response.close()
 
         # Démultiplexer le stream
         stdout = ""
@@ -1156,7 +1211,7 @@ class DockerClientService:
 
         # Récupérer le code de sortie
         inspect_response = await self._request("GET", f"/exec/{exec_id}/json")
-        inspect_data = inspect_response.json()
+        inspect_data = await inspect_response.json()
         exit_code = inspect_data.get("ExitCode", 0)
 
         return ExecResult(exit_code=exit_code, output=stdout, error=stderr)

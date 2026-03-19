@@ -17,6 +17,10 @@ async def timing_middleware(request: Request, call_next) -> Response:
     - Logs slow requests (>1s) as warnings
     - Useful for performance monitoring and optimization
     """
+    # Skip WebSocket connections
+    if request.scope.get("type") == "websocket":
+        return await call_next(request)
+
     start_time = time.time()
 
     # Process request

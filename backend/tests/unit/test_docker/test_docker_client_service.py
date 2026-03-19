@@ -1,25 +1,26 @@
 """
 Unit tests for DockerClientService.
 
-These tests mock httpx to avoid real Docker connections.
+These tests mock aiohttp to avoid real Docker connections.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+import json
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
+import pytest
 from app.services.docker_client_service import (
-    DockerClientService,
-    ContainerInfo,
-    ContainerDetail,
-    ImageInfo,
-    VolumeInfo,
-    NetworkInfo,
-    SystemInfo,
-    PullProgressEvent,
-    ExecResult,
     DEFAULT_DOCKER_SOCKET,
     DEFAULT_TIMEOUT,
+    ContainerDetail,
+    ContainerInfo,
+    DockerClientService,
+    ExecResult,
+    ImageInfo,
+    NetworkInfo,
+    PullProgressEvent,
+    SystemInfo,
+    VolumeInfo,
 )
 
 
@@ -34,10 +35,7 @@ class TestDockerClientServiceInit:
 
     def test_custom_init(self):
         """Test custom initialization parameters."""
-        client = DockerClientService(
-            socket_path="/custom/socket.sock",
-            timeout=60.0
-        )
+        client = DockerClientService(socket_path="/custom/socket.sock", timeout=60.0)
         assert client.socket_path == "/custom/socket.sock"
         assert client.timeout == 60.0
 
@@ -52,9 +50,9 @@ class TestDockerClientServicePing:
 
         # Mock _request to return a successful response
         mock_response = MagicMock()
-        mock_response.status_code = 200
+        mock_response.status = 200
 
-        with patch.object(client, '_request', new_callable=AsyncMock) as mock_request:
+        with patch.object(client, "_request", new_callable=AsyncMock) as mock_request:
             mock_request.return_value = mock_response
             result = await client.ping()
 
@@ -65,7 +63,7 @@ class TestDockerClientServicePing:
         """Test failed ping."""
         client = DockerClientService()
 
-        with patch.object(client, '_request', new_callable=AsyncMock) as mock_request:
+        with patch.object(client, "_request", new_callable=AsyncMock) as mock_request:
             mock_request.side_effect = Exception("Connection failed")
             result = await client.ping()
 
@@ -241,12 +239,7 @@ class TestNetworkInfoFromDict:
             "Attachable": False,
             "Ingress": False,
             "Created": "2024-01-01T12:00:00Z",
-            "IPAM": {
-                "Config": [{
-                    "Subnet": "172.17.0.0/16",
-                    "Gateway": "172.17.0.1"
-                }]
-            },
+            "IPAM": {"Config": [{"Subnet": "172.17.0.0/16", "Gateway": "172.17.0.1"}]},
         }
 
         network = NetworkInfo.from_dict(data)
@@ -347,8 +340,8 @@ class TestDockerStreamDemux:
 
         assert lines == ["line1", "line2"]
 
-    def test_demux_ignores_stderr(self):
-        """Test that stderr is ignored."""
+    def test_demux_stderr_prefixed(self):
+        """Test that stderr is prefixed with [ERR]."""
         client = DockerClientService()
 
         # Frame with stderr (stream_type = 2)
@@ -356,7 +349,7 @@ class TestDockerStreamDemux:
 
         lines = client._demux_docker_stream(frame)
 
-        assert lines == []  # stderr is ignored
+        assert lines == ["[ERR] error"]  # stderr is prefixed with [ERR]
 
     def test_demux_invalid_frame(self):
         """Test demultiplexing with invalid frame (too short)."""
@@ -379,25 +372,27 @@ class TestDockerClientServiceListContainers:
         client = DockerClientService()
 
         mock_response = MagicMock()
-        mock_response.json.return_value = [
-            {
-                "Id": "abc123",
-                "Names": ["/container1"],
-                "Image": "nginx:latest",
-                "ImageID": "sha256:abc",
-                "Command": "/bin/sh",
-                "Created": 1700000000,
-                "State": "running",
-                "Status": "Up 2 hours",
-                "Ports": [],
-                "Labels": {},
-                "NetworkSettings": {"Networks": {}},
-                "Mounts": [],
-                "RestartCount": 0,
-            }
-        ]
+        mock_response.json = AsyncMock(
+            return_value=[
+                {
+                    "Id": "abc123",
+                    "Names": ["/container1"],
+                    "Image": "nginx:latest",
+                    "ImageID": "sha256:abc",
+                    "Command": "/bin/sh",
+                    "Created": 1700000000,
+                    "State": "running",
+                    "Status": "Up 2 hours",
+                    "Ports": [],
+                    "Labels": {},
+                    "NetworkSettings": {"Networks": {}},
+                    "Mounts": [],
+                    "RestartCount": 0,
+                }
+            ]
+        )
 
-        with patch.object(client, '_request', new_callable=AsyncMock) as mock_request:
+        with patch.object(client, "_request", new_callable=AsyncMock) as mock_request:
             mock_request.return_value = mock_response
             containers = await client.list_containers()
 
@@ -411,9 +406,9 @@ class TestDockerClientServiceListContainers:
         client = DockerClientService()
 
         mock_response = MagicMock()
-        mock_response.json.return_value = []
+        mock_response.json = AsyncMock(return_value=[])
 
-        with patch.object(client, '_request', new_callable=AsyncMock) as mock_request:
+        with patch.object(client, "_request", new_callable=AsyncMock) as mock_request:
             mock_request.return_value = mock_response
             await client.list_containers(filters={"status": ["running"]})
 
@@ -432,19 +427,21 @@ class TestDockerClientServiceListImages:
         client = DockerClientService()
 
         mock_response = MagicMock()
-        mock_response.json.return_value = [
-            {
-                "Id": "sha256:abc123",
-                "RepoTags": ["nginx:latest"],
-                "RepoDigests": [],
-                "Created": 1700000000,
-                "Size": 1024000,
-                "VirtualSize": 1024000,
-                "Labels": {},
-            }
-        ]
+        mock_response.json = AsyncMock(
+            return_value=[
+                {
+                    "Id": "sha256:abc123",
+                    "RepoTags": ["nginx:latest"],
+                    "RepoDigests": [],
+                    "Created": 1700000000,
+                    "Size": 1024000,
+                    "VirtualSize": 1024000,
+                    "Labels": {},
+                }
+            ]
+        )
 
-        with patch.object(client, '_request', new_callable=AsyncMock) as mock_request:
+        with patch.object(client, "_request", new_callable=AsyncMock) as mock_request:
             mock_request.return_value = mock_response
             images = await client.list_images()
 
@@ -461,20 +458,22 @@ class TestDockerClientServiceListVolumes:
         client = DockerClientService()
 
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "Volumes": [
-                {
-                    "Name": "volume1",
-                    "Driver": "local",
-                    "Mountpoint": "/path",
-                    "CreatedAt": "2024-01-01T12:00:00Z",
-                    "Labels": {},
-                    "Scope": "local",
-                }
-            ]
-        }
+        mock_response.json = AsyncMock(
+            return_value={
+                "Volumes": [
+                    {
+                        "Name": "volume1",
+                        "Driver": "local",
+                        "Mountpoint": "/path",
+                        "CreatedAt": "2024-01-01T12:00:00Z",
+                        "Labels": {},
+                        "Scope": "local",
+                    }
+                ]
+            }
+        )
 
-        with patch.object(client, '_request', new_callable=AsyncMock) as mock_request:
+        with patch.object(client, "_request", new_callable=AsyncMock) as mock_request:
             mock_request.return_value = mock_response
             volumes = await client.list_volumes()
 
@@ -491,21 +490,25 @@ class TestDockerClientServiceListNetworks:
         client = DockerClientService()
 
         mock_response = MagicMock()
-        mock_response.json.return_value = [
-            {
-                "Id": "net123",
-                "Name": "bridge",
-                "Driver": "bridge",
-                "Scope": "local",
-                "Internal": False,
-                "Attachable": False,
-                "Ingress": False,
-                "Created": "2024-01-01T12:00:00Z",
-                "IPAM": {"Config": [{"Subnet": "172.17.0.0/16", "Gateway": "172.17.0.1"}]},
-            }
-        ]
+        mock_response.json = AsyncMock(
+            return_value=[
+                {
+                    "Id": "net123",
+                    "Name": "bridge",
+                    "Driver": "bridge",
+                    "Scope": "local",
+                    "Internal": False,
+                    "Attachable": False,
+                    "Ingress": False,
+                    "Created": "2024-01-01T12:00:00Z",
+                    "IPAM": {
+                        "Config": [{"Subnet": "172.17.0.0/16", "Gateway": "172.17.0.1"}]
+                    },
+                }
+            ]
+        )
 
-        with patch.object(client, '_request', new_callable=AsyncMock) as mock_request:
+        with patch.object(client, "_request", new_callable=AsyncMock) as mock_request:
             mock_request.return_value = mock_response
             networks = await client.list_networks()
 

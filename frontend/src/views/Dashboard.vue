@@ -174,9 +174,10 @@ let metricsInterval: number | null = null
 const metricsError = ref<string | null>(null)
 
 // Dev-only: register placeholder widget
-function registerDevPlaceholderWidget(): void {
+async function registerDevPlaceholderWidget(): Promise<void> {
   if (PlaceholderWidget) {
-    PlaceholderWidget().then((module) => {
+    try {
+      const module = await PlaceholderWidget()
       pluginWidgetStore.registerWidget({
         pluginId: 'dev-placeholder',
         widget: {
@@ -190,7 +191,9 @@ function registerDevPlaceholderWidget(): void {
           },
         },
       })
-    })
+    } catch (error) {
+      console.error('Failed to load placeholder widget:', error)
+    }
   }
 }
 

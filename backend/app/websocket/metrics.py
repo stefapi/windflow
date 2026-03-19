@@ -47,7 +47,7 @@ WEBSOCKET_MESSAGES_RECEIVED = Counter(
 # Broadcasts
 WEBSOCKET_BROADCAST_DURATION = Histogram(
     'windflow_websocket_broadcast_duration_seconds',
-    'Durée d'un broadcast WebSocket',
+    "Durée d'un broadcast WebSocket",
     ['broadcast_type'],  # 'deployment', 'user', 'event'
     buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0)
 )

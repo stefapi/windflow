@@ -8,7 +8,7 @@ Connexion via Unix socket /var/run/docker.sock.
 import logging
 from typing import List, Optional
 
-import httpx
+import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
@@ -130,8 +130,8 @@ async def get_container(
             mounts=container.mounts,
         )
 
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Container {container_id} non trouvé",
@@ -200,8 +200,8 @@ async def create_container(
             mounts=container.mounts,
         )
 
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 409:
+    except aiohttp.ClientResponseError as e:
+        if e.status == 409:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Container {container_data.name} existe déjà",
@@ -239,11 +239,11 @@ async def start_container(
         await client.start_container(container_id)
         await client.close()
 
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 304:
+    except aiohttp.ClientResponseError as e:
+        if e.status == 304:
             # Container déjà démarré
             pass
-        elif e.response.status_code == 404:
+        elif e.status == 404:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Container {container_id} non trouvé",
@@ -283,11 +283,11 @@ async def stop_container(
         await client.stop_container(container_id, timeout=timeout)
         await client.close()
 
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 304:
+    except aiohttp.ClientResponseError as e:
+        if e.status == 304:
             # Container déjà arrêté
             pass
-        elif e.response.status_code == 404:
+        elif e.status == 404:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Container {container_id} non trouvé",
@@ -327,8 +327,8 @@ async def restart_container(
         await client.restart_container(container_id, timeout=timeout)
         await client.close()
 
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Container {container_id} non trouvé",
@@ -367,8 +367,8 @@ async def remove_container(
         await client.remove_container(container_id, force=force)
         await client.close()
 
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Container {container_id} non trouvé",
@@ -421,8 +421,8 @@ async def get_container_shells(
             for shell in shells
         ]
 
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Container {container_id} non trouvé",
@@ -477,8 +477,8 @@ async def get_container_logs(
             container_id=container_id,
         )
 
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Container {container_id} non trouvé",
@@ -611,8 +611,8 @@ async def remove_image(
 
         return result
 
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Image {image_id} non trouvée",
@@ -707,8 +707,8 @@ async def create_volume(
             scope=volume.scope,
         )
 
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 409:
+    except aiohttp.ClientResponseError as e:
+        if e.status == 409:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Volume {volume_data.name} existe déjà",
@@ -747,8 +747,8 @@ async def remove_volume(
         await client.remove_volume(volume_name, force=force)
         await client.close()
 
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Volume {volume_name} non trouvé",

@@ -19,6 +19,10 @@ async def correlation_middleware(request: Request, call_next) -> Response:
 
     This allows tracking requests across multiple services and log aggregation.
     """
+    # Skip WebSocket connections
+    if request.scope.get("type") == "websocket":
+        return await call_next(request)
+
     # Get existing correlation ID or generate new one
     correlation_id = request.headers.get("X-Correlation-ID")
     if not correlation_id:

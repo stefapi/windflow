@@ -12,7 +12,6 @@
 #### Dashboard
 
 #### Vue Containers
-- [ ] STORY-444 : ContainerDetail — onglet Logs
 - [ ] STORY-445 : ContainerDetail — onglet Terminal
 - [ ] STORY-446 : ContainerDetail — onglet Stats
 
@@ -34,13 +33,14 @@
 
 ## 🏗️ IN PROGRESS (En cours)
 
-### EPIC-004 : Refonte UI, Navigation & Nettoyage Marketplace
+*(aucune story en cours)*
 
 ## 🚧 REVIEW (En attente de validation)
 
-### EPIC-004 : Refonte UI, Navigation & Nettoyage Marketplace
+*(aucune story en attente de validation)*
 
 ## ✅ DONE (Terminé)
+- [x] STORY-444 : ContainerDetail — onglet Logs
 - [x] STORY-443 : ContainerDetail — onglet Infos
 - [x] STORY-442 : Filtres, recherche et sélection multiple
 - [x] STORY-441 : Liste containers avec actions inline
