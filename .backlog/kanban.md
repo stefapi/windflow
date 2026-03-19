@@ -12,7 +12,6 @@
 #### Dashboard
 
 #### Vue Containers
-- [ ] STORY-446 : ContainerDetail — onglet Stats
 
 #### Settings & Stubs
 - [ ] STORY-451 : Page Settings — Organisations, Environnements, Utilisateurs
@@ -39,6 +38,7 @@
 *(aucune story en attente de validation)*
 
 ## ✅ DONE (Terminé)
+- [x] STORY-446 : ContainerDetail — onglet Stats temps réel
 - [x] STORY-445 : ContainerDetail — onglet Terminal
 - [x] STORY-444 : ContainerDetail — onglet Logs
 - [x] STORY-443 : ContainerDetail — onglet Infos

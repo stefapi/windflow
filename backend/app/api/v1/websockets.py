@@ -9,6 +9,7 @@ meilleure organisation et maintenabilité.
 from fastapi import APIRouter, WebSocket
 
 from ...websocket.container_logs import container_logs_websocket_endpoint
+from ...websocket.container_stats import container_stats_websocket_endpoint
 from ...websocket.deployment_logs import deployment_logs_websocket_endpoint
 
 # Import des endpoints WebSocket depuis le package websocket
@@ -162,3 +163,38 @@ async def docker_container_logs_websocket(
     - Heartbeat: Send "ping" to keep connection alive
     """
     await container_logs_websocket_endpoint(websocket, container_id, tail)
+
+
+@router.websocket(
+    "/docker/containers/{container_id}/stats", name="docker_container_stats_websocket"
+)
+async def docker_container_stats_websocket(
+    websocket: WebSocket, container_id: str
+):
+    """
+    Stream Docker container stats in real-time.
+
+    Connect to stream stats from a specific Docker container.
+
+    Authentication:
+    Authentication is performed via query parameter: ?token=JWT_TOKEN
+
+    Query Parameters:
+    - token: JWT token for authentication
+
+    Connection Flow:
+    1. Client connects with container ID and token in query string
+    2. Server validates token and user permissions
+    3. Server sends initial container info
+    4. Client receives real-time stats updates every ~1 second
+
+    Message Types Sent:
+    - initial: Initial container state
+    - stats: Real-time stats (CPU %, Memory %, Network I/O, Block I/O)
+    - error: Error notifications
+    - stream_status: Streaming status updates (started, stopped, container_stopped)
+
+    Client Messages:
+    - Heartbeat: Send "ping" to keep connection alive
+    """
+    await container_stats_websocket_endpoint(websocket, container_id)

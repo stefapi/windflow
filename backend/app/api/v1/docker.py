@@ -18,6 +18,7 @@ from ...schemas.docker import (
     ContainerLogsRequest,
     ContainerLogsResponse,
     ContainerResponse,
+    ContainerStatsResponse,
     DockerErrorResponse,
     ImagePullRequest,
     ImagePullResponse,
@@ -436,6 +437,52 @@ async def get_container_shells(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la détection des shells: {str(e)}",
+        )
+
+
+@router.get(
+    "/containers/{container_id}/stats",
+    response_model=ContainerStatsResponse,
+    summary="Get container stats snapshot",
+    description="Get a single snapshot of container resource usage statistics.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(100, 60))],
+)
+async def get_container_stats(
+    request: Request,
+    container_id: str,
+):
+    """Récupère un snapshot des statistiques d'un container."""
+    from ...websocket.container_stats import format_stats_response
+
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(f"Getting stats snapshot for container {container_id}", extra={"correlation_id": correlation_id})
+
+    try:
+        client = await get_docker_client()
+
+        # Get single stats snapshot (stream=False)
+        stats_data = await client.container_stats(container_id, stream=False)
+        await client.close()
+
+        # Format the response using existing helper
+        return format_stats_response(container_id, stats_data)
+
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Container {container_id} non trouvé",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error getting container stats: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la récupération des stats: {str(e)}",
         )
 
 

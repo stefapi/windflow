@@ -271,10 +271,18 @@
           </div>
         </el-tab-pane>
 
-        <!-- Placeholder tabs for future features -->
-        <el-tab-pane label="Stats" name="stats" disabled>
-          <div class="placeholder-content">
-            <el-empty description="Statistiques disponibles prochainement" />
+        <el-tab-pane
+          label="Stats"
+          name="stats"
+          :disabled="containerState !== 'running'"
+        >
+          <ContainerStats
+            v-if="containerState === 'running' && containerId"
+            :container-id="containerId"
+            :container-name="containerDetail?.name"
+          />
+          <div v-else class="placeholder-content">
+            <el-empty description="L'onglet Stats n'est disponible que lorsque le container est en cours d'exécution (running)" />
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -320,6 +328,7 @@ import { useContainersStore } from '@/stores'
 import { isSecretKey, maskValue, useSecretMasker } from '@/composables/useSecretMasker'
 import ContainerLogs from '@/components/ContainerLogs.vue'
 import ContainerTerminal from '@/components/ContainerTerminal.vue'
+import ContainerStats from '@/components/ContainerStats.vue'
 import type { ContainerDetail, ContainerEnvVar, ContainerPortMapping, ContainerMount, ContainerNetworkInfo } from '@/types/api'
 
 const route = useRoute()
