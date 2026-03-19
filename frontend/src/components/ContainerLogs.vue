@@ -162,7 +162,8 @@ const logFilter = ref<'all' | 'stdout' | 'stderr'>('all')
 const tailLines = ref(100)
 const autoScroll = ref(true)
 const isScrolledToBottom = ref(true)
-const logsContainerRef = ref<HTMLElement | null>(null)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any, no-undef
+const logsContainerRef = ref<any>(null)
 
 // Use the composable for WebSocket connection
 // Pass tailLines as a ref so that handleTailChange can use the updated value
@@ -336,7 +337,7 @@ onUnmounted(() => {
 .container-logs {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: calc(100vh - 350px);
   min-height: 400px;
 }
 
@@ -384,7 +385,6 @@ onUnmounted(() => {
   background-color: #1e1e1e;
   border-radius: 4px;
   position: relative;
-  max-height: calc(100vh - 300px);
   min-height: 200px;
 }
 

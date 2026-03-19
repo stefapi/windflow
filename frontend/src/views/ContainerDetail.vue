@@ -701,4 +701,42 @@ onMounted(() => {
   background-color: #1e1e1e;
   color: #d4d4d4;
 }
+
+/* Responsive adjustments for mobile */
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .header-left {
+    flex-wrap: wrap;
+  }
+
+  .container-title {
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .header-actions .el-button {
+    flex: 1;
+    min-width: 100px;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .env-search {
+    width: 100%;
+  }
+}
 </style>
