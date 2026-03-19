@@ -46,15 +46,6 @@
               Redémarrer
             </el-button>
             <el-button
-              type="primary"
-              @click="goToTerminal"
-            >
-              <el-icon class="el-icon--left">
-                <Monitor />
-              </el-icon>
-              Terminal
-            </el-button>
-            <el-button
               type="default"
               @click="showInspectDrawer"
             >
@@ -264,15 +255,26 @@
           />
         </el-tab-pane>
 
+        <!-- Terminal Tab -->
+        <el-tab-pane
+          label="Terminal"
+          name="terminal"
+          :disabled="containerState !== 'running'"
+        >
+          <ContainerTerminal
+            v-if="containerState === 'running' && containerId"
+            :container-id="containerId"
+            :container-name="containerDetail?.name"
+          />
+          <div v-else class="placeholder-content">
+            <el-empty description="Le terminal n'est disponible que lorsque le container est en cours d'exécution (running)" />
+          </div>
+        </el-tab-pane>
+
         <!-- Placeholder tabs for future features -->
         <el-tab-pane label="Stats" name="stats" disabled>
           <div class="placeholder-content">
             <el-empty description="Statistiques disponibles prochainement" />
-          </div>
-        </el-tab-pane>
-        <el-tab-pane label="Console" name="console" disabled>
-          <div class="placeholder-content">
-            <el-empty description="Console disponible prochainement" />
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -307,7 +309,6 @@ import {
   CopyDocument,
   VideoPause,
   RefreshRight,
-  Monitor,
   Search,
   View,
   Hide,
@@ -318,6 +319,7 @@ import {
 import { useContainersStore } from '@/stores'
 import { isSecretKey, maskValue, useSecretMasker } from '@/composables/useSecretMasker'
 import ContainerLogs from '@/components/ContainerLogs.vue'
+import ContainerTerminal from '@/components/ContainerTerminal.vue'
 import type { ContainerDetail, ContainerEnvVar, ContainerPortMapping, ContainerMount, ContainerNetworkInfo } from '@/types/api'
 
 const route = useRoute()
@@ -525,15 +527,6 @@ async function handleAction(action: string): Promise<void> {
 
 function goBack(): void {
   router.push({ name: 'Containers' })
-}
-
-function goToTerminal(): void {
-  const id = containerId.value
-  if (!id) return
-  router.push({
-    name: 'Terminal',
-    params: { containerId: id },
-  })
 }
 
 function showInspectDrawer(): void {

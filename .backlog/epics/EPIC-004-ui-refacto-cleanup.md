@@ -90,7 +90,7 @@ Cette epic a deux axes :
 - [x] STORY-442 : Vue Containers — filtres (statut, target) + recherche + sélection multiple
 - [x] STORY-443 : Vue ContainerDetail — onglets Infos (ports, volumes, env, réseau)
 - [x] STORY-444 : Vue ContainerDetail — onglet Logs (nouveau composant ContainerLogs.vue avec WebSocket temps réel)
-- [ ] STORY-445 : Vue ContainerDetail — onglet Terminal (réutilise ContainerTerminal.vue)
+- [x] STORY-445 : Vue ContainerDetail — onglet Terminal (réutilise ContainerTerminal.vue)
 - [ ] STORY-446 : Vue ContainerDetail — onglet Stats (CPU, RAM, network I/O temps réel)
 
 ### Vue Settings

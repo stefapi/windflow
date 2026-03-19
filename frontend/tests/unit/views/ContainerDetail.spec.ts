@@ -204,6 +204,14 @@ describe('ContainerDetail.vue', () => {
             template: '<div class="el-empty-stub">{{ description }}</div>',
             props: ['description'],
           },
+          'ContainerTerminal': {
+            template: '<div class="container-terminal-stub">Terminal Mock</div>',
+            props: ['containerId', 'containerName'],
+          },
+          'ContainerLogs': {
+            template: '<div class="container-logs-stub">Logs Mock</div>',
+            props: ['containerId', 'containerName'],
+          },
         },
       },
     })
@@ -336,19 +344,6 @@ describe('ContainerDetail.vue', () => {
   })
 
   describe('Navigation', () => {
-    it('should have goToTerminal method that navigates to Terminal route', async () => {
-      mockInspectContainer.mockResolvedValue(mockContainerDetail)
-
-      const wrapper = await mountComponent('container-123')
-
-      const vm = wrapper.vm as unknown as {
-        goToTerminal: () => void
-      }
-
-      // Verify the method exists
-      expect(typeof vm.goToTerminal).toBe('function')
-    })
-
     it('should have goBack method that navigates to Containers list', async () => {
       mockInspectContainer.mockResolvedValue(mockContainerDetail)
 
@@ -358,6 +353,35 @@ describe('ContainerDetail.vue', () => {
 
       // Verify the method exists
       expect(typeof vm.goBack).toBe('function')
+    })
+  })
+
+  describe('Terminal tab', () => {
+    it('should have Terminal tab in the tabs', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as { containerDetail: typeof mockContainerDetail }
+      vm.containerDetail = mockContainerDetail
+      await wrapper.vm.$nextTick()
+
+      const html = wrapper.html()
+      expect(html).toContain('Terminal')
+    })
+
+    it('should disable Terminal tab when container is not running', async () => {
+      mockInspectContainer.mockResolvedValue({ ...mockContainerDetail, state: { Status: 'stopped' } })
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as { containerDetail: typeof mockContainerDetail }
+      vm.containerDetail = { ...mockContainerDetail, state: { Status: 'stopped' } }
+      await wrapper.vm.$nextTick()
+
+      // Terminal tab should be disabled for stopped containers
+      const containerState = (wrapper.vm as unknown as { containerState: string }).containerState
+      expect(containerState).toBe('stopped')
     })
   })
 

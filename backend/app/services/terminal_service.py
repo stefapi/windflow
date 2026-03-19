@@ -2,13 +2,16 @@
 Service de terminal interactif pour conteneurs Docker.
 
 Gère les sessions exec interactives via docker CLI (approche CLI-first de WindFlow).
-Permet le streaming bidirectionnel stdin/stdout/stderr et le redimensionnement TTY.
+Utilise un pseudo-terminal (PTY) pour le support complet TTY (couleurs, readline, resize).
 """
 
 import asyncio
+import fcntl
 import logging
 import os
-import signal
+import pty
+import struct
+import termios
 from dataclasses import dataclass
 from typing import AsyncIterator, Optional
 
@@ -40,6 +43,7 @@ class ExecSession:
     cols: int
     rows: int
     process: Optional[asyncio.subprocess.Process] = None
+    master_fd: int = -1
 
 
 # =============================================================================
@@ -149,19 +153,23 @@ class TerminalService:
         logger.info(f"Creating terminal session {exec_id} for container {container_id}")
 
         try:
-            # Créer le processus avec pipes pour stdin/stdout/stderr
+            # Créer un pseudo-terminal (PTY) pour fournir un vrai TTY à docker exec
+            master_fd, slave_fd = pty.openpty()
+
+            # Configurer la taille initiale du PTY
+            winsize = struct.pack("HHHH", rows, cols, 0, 0)
+            fcntl.ioctl(master_fd, termios.TIOCSWINSZ, winsize)
+
+            # Créer le processus avec le slave PTY comme stdin/stdout/stderr
             process = await asyncio.create_subprocess_exec(
                 *cmd,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
             )
 
-            # Envoyer les dimensions TTY initiales via stdin (SIOCSWINSZ)
-            # On utilise une commande shell pour设置 la taille
-            resize_cmd = f"\x1b[8;{rows};{cols}t"
-            process.stdin.write(resize_cmd.encode())
-            await process.stdin.flush()
+            # Fermer le slave fd côté parent (le processus enfant l'utilise)
+            os.close(slave_fd)
 
             session = ExecSession(
                 exec_id=exec_id,
@@ -171,6 +179,7 @@ class TerminalService:
                 cols=cols,
                 rows=rows,
                 process=process,
+                master_fd=master_fd,
             )
 
             self._sessions[exec_id] = session
@@ -184,120 +193,115 @@ class TerminalService:
 
     async def stream_output(self, session: ExecSession) -> AsyncIterator[tuple[bytes, bool]]:
         """
-        Stream la sortie stdout/stderr du terminal.
+        Stream la sortie du terminal via le master PTY fd.
+
+        Utilise loop.add_reader() pour un I/O non-bloquant sans thread executor,
+        évitant ainsi la perte de caractères et la latence.
+
+        Avec PTY, stdout et stderr sont combinés dans un seul flux.
 
         Args:
             session: Session exec active
 
         Yields:
-            Tuple (data, is_stderr)
+            Tuple (data, is_stderr) — is_stderr est toujours False avec PTY
         """
-        if session.process is None or session.process.stdout is None:
+        if session.process is None or session.master_fd < 0:
             return
+
+        loop = asyncio.get_event_loop()
+
+        # Passer le fd en mode non-bloquant pour lecture asynchrone
+        flags = fcntl.fcntl(session.master_fd, fcntl.F_GETFL)
+        fcntl.fcntl(session.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+        # Event signalé quand des données sont disponibles sur le fd
+        data_ready = asyncio.Event()
+
+        def _on_readable() -> None:
+            data_ready.set()
+
+        loop.add_reader(session.master_fd, _on_readable)
 
         try:
             while True:
-                # Lire depuis stdout
-                if session.process.stdout:
-                    try:
-                        data = await asyncio.wait_for(
-                            session.process.stdout.read(4096),
-                            timeout=0.1
-                        )
-                        if data:
-                            yield (data, False)
-                        else:
-                            # EOF atteint, le processus a peut-être terminé
-                            break
-                    except asyncio.TimeoutError:
-                        # Pas de données, continuer
-                        pass
-
-                # Lire depuis stderr
-                if session.process.stderr:
-                    try:
-                        data = await asyncio.wait_for(
-                            session.process.stderr.read(4096),
-                            timeout=0.1
-                        )
-                        if data:
-                            yield (data, True)
-                    except asyncio.TimeoutError:
-                        pass
-
                 # Vérifier si le processus est terminé
                 if session.process.returncode is not None:
-                    # Lire les dernières données
-                    if session.process.stdout:
-                        try:
-                            data = await asyncio.wait_for(
-                                session.process.stdout.read(),
-                                timeout=1.0
-                            )
-                            if data:
-                                yield (data, False)
-                        except asyncio.TimeoutError:
-                            pass
-
-                    if session.process.stderr:
-                        try:
-                            data = await asyncio.wait_for(
-                                session.process.stderr.read(),
-                                timeout=1.0
-                            )
-                            if data:
-                                yield (data, True)
-                        except asyncio.TimeoutError:
-                            pass
-
+                    # Drainer les données restantes dans le buffer PTY
+                    try:
+                        while True:
+                            chunk = os.read(session.master_fd, 4096)
+                            if not chunk:
+                                break
+                            yield (chunk, False)
+                    except (OSError, IOError):
+                        pass
                     break
 
-                # Petit délai pour éviter de monopoliser le CPU
-                await asyncio.sleep(0.01)
+                # Attendre que des données soient disponibles (timeout pour vérifier le processus)
+                data_ready.clear()
+                try:
+                    await asyncio.wait_for(data_ready.wait(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    # Pas de données, revérifier si le processus est toujours vivant
+                    continue
+
+                # Lire toutes les données disponibles d'un coup
+                try:
+                    data = os.read(session.master_fd, 4096)
+                    if data:
+                        yield (data, False)
+                    else:
+                        # EOF — le processus s'est terminé
+                        break
+                except BlockingIOError:
+                    # Réveil intempestif, pas de données réellement disponibles
+                    continue
+                except OSError:
+                    # PTY fermé
+                    break
 
         except Exception as e:
             logger.error(f"Error streaming output: {e}")
             raise
+        finally:
+            try:
+                loop.remove_reader(session.master_fd)
+            except Exception:
+                pass
 
     async def send_input(self, session: ExecSession, data: str) -> None:
         """
-        Envoie des données d'entrée au terminal.
+        Envoie des données d'entrée au terminal via le master PTY fd.
 
         Args:
             session: Session exec active
             data: Données à envoyer (commandes, keystrokes)
         """
-        if session.process is None or session.process.stdin is None:
+        if session.master_fd < 0:
             raise RuntimeError("Session not initialized")
 
         try:
-            session.process.stdin.write(data.encode())
-            await session.process.stdin.flush()
+            os.write(session.master_fd, data.encode())
         except Exception as e:
             logger.error(f"Error sending input: {e}")
             raise
 
     async def resize_tty(self, session: ExecSession, cols: int, rows: int) -> None:
         """
-        Redimensionne le TTY du terminal.
-
-        Utilise la séquence d'échappement xterm pour redimensionner.
+        Redimensionne le TTY du terminal via ioctl TIOCSWINSZ.
 
         Args:
             session: Session exec active
             cols: Nouveau nombre de colonnes
             rows: Nouveau nombre de lignes
         """
-        if session.process is None or session.process.stdin is None:
+        if session.master_fd < 0:
             raise RuntimeError("Session not initialized")
 
-        # Séquence d'échappement xterm pour resize
-        # \x1b[8;rows;colst
-        resize_seq = f"\x1b[8;{rows};{cols}t"
-
         try:
-            session.process.stdin.write(resize_seq.encode())
-            await session.process.stdin.flush()
+            winsize = struct.pack("HHHH", rows, cols, 0, 0)
+            fcntl.ioctl(session.master_fd, termios.TIOCSWINSZ, winsize)
             session.cols = cols
             session.rows = rows
             logger.debug(f"Terminal {session.exec_id} resized to {cols}x{rows}")
@@ -307,7 +311,7 @@ class TerminalService:
 
     async def cleanup_session(self, session: ExecSession) -> None:
         """
-        Nettoie une session terminal (termine le processus).
+        Nettoie une session terminal (termine le processus et ferme le PTY).
 
         Args:
             session: Session à nettoyer
@@ -317,7 +321,7 @@ class TerminalService:
 
         if session.process:
             try:
-                # Envoyer SIGHUP pour terminates proprement
+                # Envoyer SIGHUP pour terminer proprement
                 if session.process.returncode is None:
                     session.process.terminate()
                     try:
@@ -326,21 +330,18 @@ class TerminalService:
                             timeout=5.0
                         )
                     except asyncio.TimeoutError:
-                        # Forcer la termination si nécessaire
+                        # Forcer la terminaison si nécessaire
                         session.process.kill()
                         await session.process.wait()
             except Exception as e:
                 logger.warning(f"Error cleaning up process: {e}")
 
-            # Fermer les pipes
+        # Fermer le master PTY fd
+        if session.master_fd >= 0:
             try:
-                if session.process.stdin:
-                    session.process.stdin.close()
-                if session.process.stdout:
-                    await session.process.stdout.close()
-                if session.process.stderr:
-                    await session.process.stderr.close()
-            except Exception:
+                os.close(session.master_fd)
+                session.master_fd = -1
+            except OSError:
                 pass
 
         logger.info(f"Terminal session {session.exec_id} cleaned up")

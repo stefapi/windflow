@@ -16,13 +16,20 @@ export interface UseTerminalOptions {
   onError?: (error: string) => void
 }
 
+export interface ConnectOptions {
+  shell?: string
+  user?: string
+}
+
 export interface UseTerminalReturn {
   terminal: Ref<Terminal | null>
   connected: Ref<boolean>
   connecting: Ref<boolean>
   error: Ref<string | null>
   execId: Ref<string | null>
-  connect: (token: string) => Promise<void>
+  activeShell: Ref<string>
+  activeUser: Ref<string>
+  connect: (token: string, options?: ConnectOptions) => Promise<void>
   disconnect: () => void
   sendInput: (data: string) => void
   resize: (cols: number, rows: number) => void
@@ -57,6 +64,8 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
   const connecting = ref(false)
   const error = ref<string | null>(null)
   const execId = ref<string | null>(null)
+  const activeShell = ref(shell)
+  const activeUser = ref(user)
 
   // WebSocket connection
   let ws: WebSocket | null = null
@@ -65,12 +74,24 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
    * Établit la connexion WebSocket au terminal
    *
    * @param token - JWT token pour l'authentification
+   * @param connectOpts - Options de connexion (shell, user) qui surchargent les défauts
    */
-  async function connect(token: string): Promise<void> {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      console.warn('Already connected')
+  async function connect(token: string, connectOpts?: ConnectOptions): Promise<void> {
+    // Nettoyer un WebSocket stale (fermé ou en cours de fermeture)
+    if (ws && (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING)) {
+      ws = null
+    }
+
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      console.warn('Already connected or connecting')
       return
     }
+
+    // Utiliser les options de connexion ou les défauts
+    const connectShell = connectOpts?.shell || shell
+    const connectUser = connectOpts?.user || user
+    activeShell.value = connectShell
+    activeUser.value = connectUser
 
     connecting.value = true
     error.value = null
@@ -78,7 +99,7 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
     // Construire l'URL WebSocket
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    const wsUrl = `${protocol}//${host}/api/v1/ws/terminal/${containerId}?shell=${encodeURIComponent(shell)}&user=${encodeURIComponent(user)}`
+    const wsUrl = `${protocol}//${host}/api/v1/ws/terminal/${containerId}?shell=${encodeURIComponent(connectShell)}&user=${encodeURIComponent(connectUser)}`
 
     try {
       ws = new WebSocket(wsUrl)
@@ -104,13 +125,16 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
 
       ws.onerror = (event) => {
         console.error('WebSocket error:', event)
+        connecting.value = false
         error.value = 'Connection error'
         onError?.('Connection error')
       }
 
       ws.onclose = (event) => {
         console.log('WebSocket closed:', event.reason)
+        ws = null
         connected.value = false
+        connecting.value = false
         execId.value = null
 
         if (!event.wasClean && error.value) {
@@ -121,10 +145,9 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
       }
 
     } catch (e) {
+      connecting.value = false
       error.value = e instanceof Error ? e.message : 'Failed to connect'
       onError?.(error.value)
-    } finally {
-      connecting.value = false
     }
   }
 
@@ -156,6 +179,7 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
       case 'error':
         // Erreur du serveur
         error.value = message['message'] as string
+        connecting.value = false
         onError?.(message['message'] as string)
 
         if (terminal.value) {
@@ -164,13 +188,19 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
         break
 
       case 'exit': {
-        // Session terminée
+        // Session terminée — fermer proprement le WebSocket
         const code = message['code'] as number
         if (terminal.value) {
           terminal.value.writeln(`\r\n\x1b[90mSession ended with code ${code}\x1b[0m`)
         }
         connected.value = false
         execId.value = null
+
+        // Fermer le WebSocket (onclose mettra ws = null)
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close(1000, `Session ended with code ${code}`)
+        }
+
         onDisconnected?.(`Session ended with code ${code}`)
         break
       }
@@ -214,8 +244,10 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
    */
   function resize(cols: number, rows: number): void {
     if (terminal.value) {
-      terminal.value.resize(cols, rows)
-      sendResize(cols, rows)
+      const intCols = Math.max(1, Math.floor(cols))
+      const intRows = Math.max(1, Math.floor(rows))
+      terminal.value.resize(intCols, intRows)
+      sendResize(intCols, intRows)
     }
   }
 
@@ -228,6 +260,7 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
       ws = null
     }
     connected.value = false
+    connecting.value = false
     execId.value = null
   }
 
@@ -246,23 +279,30 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
   async function copyOutput(): Promise<string> {
     if (!terminal.value) return ''
 
-    const buffer = terminal.value.buffer.active
     let text = ''
 
-    for (let i = 0; i < buffer.length; i++) {
-      const line = buffer.getLine(i)
-      if (line) {
-        text += line.translateToString(true) + '\n'
+    // Si une sélection est active, copier uniquement la sélection
+    if (terminal.value.hasSelection()) {
+      text = terminal.value.getSelection()
+    } else {
+      // Sinon, copier l'intégralité du buffer
+      const buffer = terminal.value.buffer.active
+      for (let i = 0; i < buffer.length; i++) {
+        const line = buffer.getLine(i)
+        if (line) {
+          text += line.translateToString(true) + '\n'
+        }
       }
+      text = text.trim()
     }
 
     try {
-      await navigator.clipboard.writeText(text.trim())
+      await navigator.clipboard.writeText(text)
     } catch (e) {
       console.error('Failed to copy:', e)
     }
 
-    return text.trim()
+    return text
   }
 
   // Cleanup on unmount
@@ -276,6 +316,8 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
     connecting,
     error,
     execId,
+    activeShell,
+    activeUser,
     connect,
     disconnect,
     sendInput,
