@@ -11,9 +11,6 @@
 
 #### Dashboard
 
-#### Vue Containers
-- [ ] STORY-447 : Vue ContainerDetail — onglet Processus (liste des processus running)
-
 #### Settings & Stubs
 - [ ] STORY-451 : Page Settings — Organisations, Environnements, Utilisateurs
 - [ ] STORY-452 : Gestion RBAC depuis la page Settings
@@ -39,6 +36,7 @@
 *(aucune story en attente de validation)*
 
 ## ✅ DONE (Terminé)
+- [x] STORY-447 : ContainerDetail — onglet Processus (liste des processus running)
 - [x] STORY-446 : ContainerDetail — onglet Stats temps réel
 - [x] STORY-445 : ContainerDetail — onglet Terminal
 - [x] STORY-444 : ContainerDetail — onglet Logs

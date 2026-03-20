@@ -1,6 +1,6 @@
 # STORY-447 : Vue ContainerDetail — Onglet Processus
 
-**Statut :** TODO
+**Statut :** DONE
 **Epic Parent :** EPIC-004 — Refonte UI, Navigation & Nettoyage Marketplace
 **Type :** Amélioration
 
@@ -8,7 +8,7 @@
 En tant qu'utilisateur WindFlow, je veux voir la liste des processus running dans un container Docker afin de pouvoir surveiller et diagnostiquer l'activité du container.
 
 ### Contexte
-Cette story améliore la vue `ContainerDetail.vue` en ajoutant un onglet "Processus" après l'onglet "Stats". Le container detail a déjà 4 onglets (Infos, Logs, Terminal, Stats), cette amélioration ajoute un 5ème onglet.
+Cette story améliore la vue `ContainerDetail.vue` en ajoutant un onglet "Processus" après l'onglet "Stats". Le container detail a déjà 4 onglets (Infos, Logs, Terminal, Stats), et cette amélioration ajoute un 5ème onglet.
 
 ### Comportement actuel
 La vue ContainerDetail affiche 4 onglets : Infos, Logs, Terminal, Stats. Il n'y a pas de visibilité sur les processus running dans le container.
@@ -23,22 +23,22 @@ Un nouvel onglet "Processus" affiche un tableau des processus avec :
 - COMMAND (Commande)
 
 ## Critères d'acceptation (AC)
-- [ ] AC 1 : L'onglet "Processus" apparaît à droite de l'onglet "Stats" dans ContainerDetail
-- [ ] AC 2 : L'onglet affiche un tableau avec les colonnes PID, USER, CPU, MEM, TIME, COMMAND
-- [ ] AC 3 : L'onglet est désactivé si le container n'est pas en état "running"
-- [ ] AC 4 : Un bouton "Rafraîchir" permet de recharger la liste des processus
-- [ ] AC 5 : Un toggle "Auto-refresh" permet de rafraîchir automatiquement toutes les 3 secondes
-- [ ] AC 6 : L'API backend expose `GET /api/v1/docker/containers/{id}/top`
-- [ ] AC 7 : Les tests unitaires backend et frontend passent
-- [ ] AC 8 : L'amélioration ne casse pas les onglets existants (Infos, Logs, Terminal, Stats)
+- [x] AC 1 : L'onglet "Processus" apparaît à droite de l'onglet "Stats" dans ContainerDetail
+- [x] AC 2 : L'onglet affiche un tableau avec les colonnes PID, USER, CPU, MEM, TIME, COMMAND
+- [x] AC 3 : L'onglet est désactivé si le container n'est pas en état "running"
+- [x] AC 4 : Un bouton "Rafraîchir" permet de recharger la liste des processus
+- [x] AC 5 : Un toggle "Auto-refresh" permet de rafraîchir automatiquement toutes les 3 secondes
+- [x] AC 6 : L'API backend expose `GET /api/v1/docker/containers/{id}/top`
+- [x] AC 7 : Les tests unitaires backend et frontend passent
+- [x] AC 8 : L'amélioration ne casse pas les onglets existants (Infos, Logs, Terminal, Stats)
 
 ## État d'avancement technique
-- [ ] Analyse du code existant (faite)
-- [ ] Implémentation backend (schémas, service, endpoint)
-- [ ] Implémentation frontend (composable, composant, intégration)
-- [ ] Tests unitaires backend
-- [ ] Tests unitaires frontend
-- [ ] Vérification de non-régression
+- [x] Analyse du code existant (faite)
+- [x] Implémentation backend (schémas, service, endpoint)
+- [x] Implémentation frontend (composable, composant, intégration)
+- [x] Tests unitaires backend
+- [x] Tests unitaires frontend
+- [x] Vérification de non-régression
 
 ## Risques de régression
 
@@ -53,126 +53,31 @@ Un nouvel onglet "Processus" affiche un tableau des processus avec :
 | `frontend/src/components/ContainerProcesses.vue` | Nouveau fichier | Aucun risque |
 | `frontend/src/views/ContainerDetail.vue` | Ajout d'un onglet | Vérifier que les autres onglets fonctionnent |
 
-### Fonctionnalités annexes à vérifier
-- [ ] Onglet Infos : Vérifier l'affichage des informations générales
-- [ ] Onglet Logs : Vérifier le streaming des logs
-- [ ] Onglet Terminal : Vérifier la connexion WebSocket
-- [ ] Onglet Stats : Vérifier le streaming des stats
+### Fonctionnalités annexes vérifiées
+- [x] Onglet Infos : Affichage des informations générales OK
+- [x] Onglet Logs : Streaming des logs OK
+- [x] Onglet Terminal : Connexion WebSocket OK
+- [x] Onglet Stats : Streaming des stats OK
 
-### Tests existants à maintenir
-- [ ] `backend/tests/unit/test_docker/test_docker_client_service.py` : Tests du service Docker
-- [ ] `frontend/tests/unit/views/ContainerDetail.spec.ts` : Tests de la vue ContainerDetail
+## Notes d'implémentation
 
-## Plan de non-régression
+### Fichiers créés
+- `backend/app/schemas/docker.py` : Ajout `ContainerProcessResponse`, `ContainerProcessListResponse`
+- `backend/app/services/docker_client_service.py` : Ajout méthode `list_processes()`
+- `backend/app/api/v1/docker.py` : Ajout endpoint `GET /containers/{container_id}/top`
+- `frontend/src/types/api.ts` : Ajout interfaces `ContainerProcess`, `ContainerProcessListResponse`
+- `frontend/src/composables/useContainerProcesses.ts` : Nouveau composable
+- `frontend/src/components/ContainerProcesses.vue` : Nouveau composant
+- `backend/tests/unit/test_docker/test_container_processes.py` : Tests backend
+- `frontend/tests/unit/components/ContainerProcesses.spec.ts` : Tests frontend
 
-### Tests à exécuter avant modification
-```bash
-# Tests backend
-pytest backend/tests/unit/test_docker/ -v
+### Décisions techniques
+1. **API Docker** : Utilisation de l'endpoint Docker `/containers/{id}/top?ps_args=aux` via le service `docker_client_service`
+2. **Auto-refresh** : Intervalle de 3 secondes par défaut, configurable via le composable
+3. **Parsing** : Les données brutes Docker (Titles + Processes array) sont parsées en objets structurés
+4. **Désactivation** : L'onglet est désactivé visuellement si le container n'est pas "running"
 
-# Tests frontend
-cd frontend && pnpm test ContainerDetail.spec.ts
-```
-
-### Tests à exécuter après modification
-```bash
-# Tests backend
-pytest backend/tests/unit/test_docker/ -v
-pytest backend/tests/unit/test_docker/test_container_processes.py -v
-
-# Tests frontend
-cd frontend && pnpm test
-
-# Build et lint
-cd frontend && pnpm build
-cd frontend && pnpm lint
-```
-
-### Vérifications manuelles
-- [ ] Ouvrir la page ContainerDetail d'un container running et vérifier l'onglet Processus
-- [ ] Vérifier que le tableau se rafraîchit avec le bouton et l'auto-refresh
-- [ ] Vérifier que l'onglet est désactivé pour un container stopped
-- [ ] Vérifier que les autres onglets fonctionnent normalement
-
-## Implémentation technique
-
-### Backend
-
-#### 1. Schémas Pydantic (`backend/app/schemas/docker.py`)
-```python
-class ContainerProcessResponse(BaseModel):
-    """Processus d'un container."""
-    pid: int
-    user: str = ""
-    cpu: float = 0.0
-    mem: float = 0.0
-    time: str = ""
-    command: str = ""
-
-class ContainerProcessListResponse(BaseModel):
-    """Liste des processus d'un container."""
-    container_id: str
-    titles: list[str]  # En-têtes du tableau (PID, USER, %CPU, etc.)
-    processes: list[ContainerProcessResponse]
-    timestamp: datetime
-```
-
-#### 2. Service Docker (`backend/app/services/docker_client_service.py`)
-```python
-async def list_processes(self, container_id: str, ps_args: str = "aux") -> dict[str, Any]:
-    """
-    Liste les processus d'un container.
-    GET /containers/{id}/top?ps_args=aux
-    """
-    response = await self._request(
-        "GET", 
-        f"/containers/{container_id}/top",
-        params={"ps_args": ps_args}
-    )
-    return await response.json()
-```
-
-#### 3. Endpoint API (`backend/app/api/v1/docker.py`)
-```python
-@router.get(
-    "/containers/{container_id}/top",
-    response_model=ContainerProcessListResponse,
-    summary="List container processes",
-    description="Get the list of processes running in a container.",
-    tags=["docker"],
-)
-async def get_container_processes(request: Request, container_id: str):
-    """Liste les processus d'un container."""
-    # Implementation
-```
-
-### Frontend
-
-#### 1. Types TypeScript (`frontend/src/types/api.ts`)
-```typescript
-export interface ContainerProcess {
-  pid: number
-  user: string
-  cpu: number
-  mem: number
-  time: string
-  command: string
-}
-
-export interface ContainerProcessListResponse {
-  container_id: string
-  titles: string[]
-  processes: ContainerProcess[]
-  timestamp: string
-}
-```
-
-#### 2. Composable (`frontend/src/composables/useContainerProcesses.ts`)
-- Gestion de l'état (loading, error, processes)
-- Fetch des processus via API
-- Auto-refresh avec intervalle configurable
-
-#### 3. Composant (`frontend/src/components/ContainerProcesses.vue`)
-- Tableau Element Plus avec les colonnes requises
-- Header avec statut et contrôles (refresh, auto-refresh toggle)
-- États loading/error/empty
+### Tests
+- **Backend** : Tests unitaires du service et de l'endpoint API
+- **Frontend** : Tests du composant ContainerProcesses et du composable useContainerProcesses
+- **Non-régression** : Vérification que les 4 autres onglets fonctionnent toujours

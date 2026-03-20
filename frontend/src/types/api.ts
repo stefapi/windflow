@@ -468,3 +468,20 @@ export interface ContainerNetworkInfo {
   macAddress: string
   gateway: string
 }
+
+// Container Process types
+export interface ContainerProcess {
+  pid: number
+  user: string
+  cpu: number
+  mem: number
+  time: string
+  command: string
+}
+
+export interface ContainerProcessListResponse {
+  container_id: string
+  titles: string[]
+  processes: ContainerProcess[]
+  timestamp: string
+}

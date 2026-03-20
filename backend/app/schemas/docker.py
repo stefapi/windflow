@@ -234,6 +234,29 @@ class DockerErrorResponse(BaseModel):
 
 
 # =============================================================================
+# Processes (container top)
+# =============================================================================
+
+
+class ContainerProcess(BaseModel):
+    """Un processus dans un container."""
+    pid: int = Field(..., description="Process ID")
+    user: str = Field("", description="Utilisateur")
+    cpu: float = Field(0.0, description="Utilisation CPU (%)")
+    mem: float = Field(0.0, description="Utilisation mémoire (%)")
+    time: str = Field("", description="Temps CPU")
+    command: str = Field("", description="Commande")
+
+
+class ContainerProcessListResponse(BaseModel):
+    """Réponse API pour la liste des processus d'un container."""
+    container_id: str = Field(..., description="Container ID")
+    titles: list[str] = Field(default_factory=list, description="En-têtes du tableau")
+    processes: list[ContainerProcess] = Field(default_factory=list, description="Liste des processus")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# =============================================================================
 # Stats
 # =============================================================================
 

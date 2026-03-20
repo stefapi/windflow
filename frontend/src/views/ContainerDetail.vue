@@ -285,6 +285,21 @@
             <el-empty description="L'onglet Stats n'est disponible que lorsque le container est en cours d'exécution (running)" />
           </div>
         </el-tab-pane>
+
+        <el-tab-pane
+          label="Processus"
+          name="processes"
+          :disabled="containerState !== 'running'"
+        >
+          <ContainerProcesses
+            v-if="containerState === 'running' && containerId"
+            :container-id="containerId"
+            :container-name="containerDetail?.name"
+          />
+          <div v-else class="placeholder-content">
+            <el-empty description="L'onglet Processus n'est disponible que lorsque le container est en cours d'exécution (running)" />
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </el-card>
 
@@ -329,6 +344,7 @@ import { isSecretKey, maskValue, useSecretMasker } from '@/composables/useSecret
 import ContainerLogs from '@/components/ContainerLogs.vue'
 import ContainerTerminal from '@/components/ContainerTerminal.vue'
 import ContainerStats from '@/components/ContainerStats.vue'
+import ContainerProcesses from '@/components/ContainerProcesses.vue'
 import type { ContainerDetail, ContainerEnvVar, ContainerPortMapping, ContainerMount, ContainerNetworkInfo } from '@/types/api'
 
 const route = useRoute()

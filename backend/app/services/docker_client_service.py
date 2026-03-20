@@ -773,6 +773,34 @@ class DockerClientService:
         response = await self._request("GET", f"/containers/{container_id}/json")
         return await response.json()
 
+    async def list_processes(
+        self,
+        container_id: str,
+        ps_args: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """
+        Liste les processus d'un container.
+
+        GET /containers/{id}/top
+
+        Args:
+            container_id: ID ou nom du container
+            ps_args: Arguments pour ps (ex: "aux")
+
+        Returns:
+            Dict avec 'Titles' et 'Processes'
+        """
+        params = {}
+        if ps_args:
+            params["ps_args"] = ps_args
+
+        response = await self._request(
+            "GET",
+            f"/containers/{container_id}/top",
+            params=params,
+        )
+        return await response.json()
+
     async def container_stats(
         self,
         container_id: str,

@@ -17,6 +17,8 @@ from ...schemas.docker import (
     ContainerDetailResponse,
     ContainerLogsRequest,
     ContainerLogsResponse,
+    ContainerProcessListResponse,
+    ContainerProcess,
     ContainerResponse,
     ContainerStatsResponse,
     DockerErrorResponse,
@@ -483,6 +485,101 @@ async def get_container_stats(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la récupération des stats: {str(e)}",
+        )
+
+
+@router.get(
+    "/containers/{container_id}/top",
+    response_model=ContainerProcessListResponse,
+    summary="List container processes",
+    description="Get the list of processes running in a container.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(100, 60))],
+)
+async def get_container_processes(
+    request: Request,
+    container_id: str,
+    ps_args: Optional[str] = None,
+):
+    """Liste les processus d'un container."""
+    from datetime import datetime, timezone
+
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(f"Getting processes for container {container_id}", extra={"correlation_id": correlation_id})
+
+    try:
+        client = await get_docker_client()
+        data = await client.list_processes(container_id, ps_args=ps_args)
+        await client.close()
+
+        # Parser la réponse Docker
+        titles = data.get("Titles", [])
+        processes_raw = data.get("Processes", [])
+
+        # Mapping des titres vers nos champs
+        def find_index(possible_names: List[str]) -> int:
+            for name in possible_names:
+                if name in titles:
+                    return titles.index(name)
+            return -1
+
+        pid_idx = find_index(["PID", "pid"])
+        user_idx = find_index(["USER", "user"])
+        cpu_idx = find_index(["%CPU", "%Cpu", "cpu"])
+        mem_idx = find_index(["%MEM", "%Mem", "mem"])
+        time_idx = find_index(["TIME", "time"])
+        cmd_idx = find_index(["COMMAND", "CMD", "command", "cmd"])
+
+        processes = []
+        for proc in processes_raw:
+            def get_val(idx: int, default: str = "") -> str:
+                if 0 <= idx < len(proc):
+                    return proc[idx]
+                return default
+
+            def parse_float(val: str) -> float:
+                try:
+                    return float(val)
+                except (ValueError, TypeError):
+                    return 0.0
+
+            def parse_int(val: str) -> int:
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    return 0
+
+            processes.append(ContainerProcess(
+                pid=parse_int(get_val(pid_idx, "0")),
+                user=get_val(user_idx),
+                cpu=parse_float(get_val(cpu_idx, "0")),
+                mem=parse_float(get_val(mem_idx, "0")),
+                time=get_val(time_idx),
+                command=get_val(cmd_idx),
+            ))
+
+        return ContainerProcessListResponse(
+            container_id=container_id,
+            titles=titles,
+            processes=processes,
+            timestamp=datetime.now(timezone.utc),
+        )
+
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Container {container_id} non trouvé",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error getting container processes: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la récupération des processus: {str(e)}",
         )
 
 
