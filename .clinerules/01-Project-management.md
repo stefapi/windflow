@@ -46,6 +46,7 @@ Réutilise les numéros libres si besoin
 
 **Definition of Done (DoD) pour une Story :**
 - [ ] Tous les critères d'acceptation (AC) sont validés
+- [ ] Toutes les tâches d'implémentation sont cochées dans "État d'avancement technique"
 - [ ] Code revu et approuvé
 - [ ] Tests unitaires écrits et passants (couverture ≥ 80%)
 - [ ] Pas de régression sur les tests existants
@@ -143,23 +144,51 @@ Avant de clôturer une session de travail, vérifier :
 
 ## 5. Protocole d'Exécution
 
-Avant de commencer toute tâche de développement :
+### 5.1 Pipeline de Skills
+
+Le traitement d'une story suit un pipeline en 3 étapes, chacune gérée par une skill dédiée :
+
+```
+create-*        →  analyse-story    →  treat-story
+(Description+AC)   (Tâches détaillées)  (Implémentation)
+```
+
+| Étape | Skill | Produit | Statut story |
+|-------|-------|---------|--------------|
+| 1. Création | `create-stories`, `create-improvement`, `create-refactoring` | Fichier story avec description + AC | `TODO` |
+| 2. Analyse | `analyse-story` | Tâches d'implémentation détaillées, tests à écrire | `TODO` |
+| 3. Implémentation | `treat-story` | Code, tests, documentation | `TODO` → `IN_PROGRESS` → `REVIEW` → `DONE` |
+
+**Règles du pipeline :**
+- Les skills de création (étape 1) ne génèrent **que** la description et les AC — pas de tâches techniques
+- L'analyse (étape 2) explore le code, identifie les patterns et écrit les tâches détaillées dans la story — **sans coder**
+- L'implémentation (étape 3) exécute les tâches **dans l'ordre**, fichier par fichier, en suivant exactement les instructions de l'analyse
+
+### 5.2 Avant le développement
+
 1. **Lecture :** Analyse le fichier STORY ou BUG correspondant pour comprendre les critères d'acceptation (AC).
-2. **Planification :** Si la story est trop complexe, décompose-la en sous-tâches dans le fichier Markdown.
+2. **Vérification :** Vérifie que la section `## Tâches d'implémentation détaillées` est présente (remplie par `analyse-story`). Si absente, lancer `analyse-story` d'abord.
 3. **Mise à jour Kanban :** Déplace la story de "BACKLOG" à "IN PROGRESS" dans `.backlog/kanban.md`.
 4. **Mise à jour Statut :** Change le statut de la story de `TODO` à `IN_PROGRESS` dans son fichier.
 
-Pendant le développement :
-1. **Cochage :** Coche les cases `- [x]` des critères d'acceptation au fur et à mesure de ta progression.
-2. **Blocage :** Si bloqué, mets à jour le statut à `BLOCKED` et ajoute une note explicative.
+### 5.3 Pendant le développement
 
-Après le développement :
-1. **Review :** Change le statut à `REVIEW` et déplace dans la colonne correspondante du kanban.
-2. **Validation :** Une fois les tests validés, change le statut à `DONE`.
-3. **Clôture Kanban :** Déplace la story dans "DONE" dans le kanban.
-4. **Notes :** Ajoute une section "Notes d'implémentation" à la fin du fichier story avec :
+1. **Exécution séquentielle :** Implémente chaque tâche dans l'ordre défini dans `## Tâches d'implémentation détaillées`.
+2. **Cochage tâches :** Coche les cases dans `## État d'avancement technique` après chaque tâche terminée.
+3. **Cochage AC :** Coche les AC correspondants au fur et à mesure de la progression.
+4. **Divergence :** Si une tâche s'avère incorrecte, signaler la divergence à l'utilisateur avant d'improviser.
+5. **Blocage :** Si bloqué, mets à jour le statut à `BLOCKED` et ajoute une note explicative.
+
+### 5.4 Après le développement
+
+1. **Tests :** Implémente les tests décrits dans `## Tests à écrire` et lance les commandes de validation.
+2. **Review :** Change le statut à `REVIEW` et déplace dans la colonne correspondante du kanban.
+3. **Validation :** Une fois les tests validés, change le statut à `DONE`.
+4. **Clôture Kanban :** Déplace la story dans "DONE" dans le kanban.
+5. **Notes :** Ajoute une section "Notes d'implémentation" à la fin du fichier story avec :
    - Fichiers modifiés/créés
    - Décisions techniques prises
+   - Divergences par rapport à l'analyse (si applicable)
    - Difficultés rencontrées (le cas échéant)
 
 ## 6. Format des Fichiers
@@ -183,8 +212,12 @@ Après le développement :
 - Epic Parent
 - Description (format "En tant que...")
 - Critères d'acceptation (AC)
-- État d'avancement technique
-- Notes d'implémentation (ajoutées à la clôture)
+- Contexte technique (rempli par `analyse-story` : patterns existants, fichiers de référence)
+- Dépendances (rempli par `analyse-story` : stories pré-requises, services externes)
+- Tâches d'implémentation détaillées (rempli par `analyse-story` : liste ordonnée des tâches avec fichiers et objectifs)
+- Tests à écrire (rempli par `analyse-story` : tests unitaires, intégration, E2E à implémenter)
+- État d'avancement technique (cochage progressif pendant `treat-story`)
+- Notes d'implémentation (ajoutées à la clôture par `treat-story`)
 
 **Bug :**
 - Statut (NEW/CONFIRMED/IN_PROGRESS/REVIEW/DONE/WONT_FIX/ABANDONED)

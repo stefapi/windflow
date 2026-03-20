@@ -5,7 +5,7 @@ description: Effectue l'implémentation complète d'une story du backlog
 
 # treat-story
 
-Cette skill guide l'implémentation **complète** d'une story : de l'analyse initiale jusqu'à la validation finale et la mise à jour du backlog. Elle assure le respect des critères d'acceptation, des standards de code et de la Definition of Done.
+Cette skill guide l'implémentation **complète** d'une story : de la lecture des tâches pré-analysées jusqu'à la validation finale et la mise à jour du backlog. Elle exploite le travail de `analyse-story` pour une exécution **ciblée, séquentielle et mécanique**, minimisant les tokens IA et les hallucinations.
 
 ## Usage
 
@@ -23,7 +23,7 @@ Avant d'exécuter cette skill, vérifier :
 
 ---
 
-## Phase 1 : Réflexion et Analyse
+## Phase 1 : Lecture de la story et détection du plan
 
 ### 1.1 Sélection et lecture de la story
 
@@ -43,88 +43,78 @@ Une fois la story identifiée, lire le fichier `.backlog/stories/STORY-XXX-*.md`
 - **Epic parent**
 - **Description** (format "En tant que...")
 - **Critères d'acceptation (AC)**
-- **État d'avancement technique** (tâches)
-- **Dépendances** éventuelles
+- **État d'avancement technique** (tâches et leur état)
 
-### 1.2 Lecture de l'epic parent
+### 1.2 Détection du plan d'implémentation
 
-Lire le fichier epic dans `.backlog/epics/EPIC-XXX-*.md` pour comprendre :
-- La vision globale et la valeur business
-- Les notes de conception
-- Les risques identifiés
-- Les critères de succès de l'epic
-- Le contexte technique plus large
+**Vérifier si la story a été analysée par `analyse-story`** en cherchant la section `## Tâches d'implémentation détaillées`.
 
-### 1.3 Exploration du codebase
+#### Cas A : Story analysée (section présente) ✅ — Mode nominal
 
-Avant de planifier, **explorer le code existant** :
+La story contient déjà :
+- `## Tâches d'implémentation détaillées` avec des `### Tâche N` ordonnées
+- `## Tests à écrire` avec fichiers et cas de test
+- `## État d'avancement technique` aligné avec les tâches
 
-**Pour une story frontend :**
-- Lister `frontend/src/views/` pour identifier les vues existantes
-- Lister `frontend/src/components/` pour les composants réutilisables
-- Lire `frontend/src/router/index.ts` pour les routes
-- Lire `frontend/src/stores/` pour les stores Pinia liés
-- Vérifier `frontend/src/types/` pour les types TypeScript
-- Consulter `doc/general_specs/11-UI-mockups.md` pour les specs UI
-
-**Pour une story backend :**
-- Lister `backend/app/api/v1/` pour les endpoints existants
-- Lister `backend/app/models/` pour les modèles SQLAlchemy
-- Lister `backend/app/schemas/` pour les schémas Pydantic
-- Lister `backend/app/services/` pour les services
-- Vérifier `backend/tests/` pour les patterns de test existants
-- Consulter `doc/general_specs/07-api-design.md` pour les conventions API
-
-**Pour une story de cleanup/suppression :**
-- Faire un `grep` global pour identifier toutes les références
-- Lister les imports dans les fichiers dépendants
-- Identifier les routes, stores, services liés
-
-### 1.4 Analyse des dépendances et impacts
-
-Identifier :
-- **Dépendances amont** : Stories qui doivent être terminées avant celle-ci
-- **Dépendances aval** : Stories qui dépendent de celle-ci
-- **Fichiers impactés** : Liste estimée des fichiers à modifier/créer/supprimer
-- **Risques techniques** : Complexité, points d'attention
-
-### 1.5 Planification détaillée
-
-Présenter un résumé de la planification :
+**Action :** Lire toutes les tâches et présenter un résumé express :
 
 ```
-## Plan d'implémentation : STORY-XXX
+## STORY-XXX : [Titre] — Prête à implémenter
 
-### Contexte
-- **Epic :** EPIC-XXX — [Titre]
-- **Description :** En tant que [Rôle], je veux [Action] afin de [Bénéfice]
-
-### Analyse technique
-**Fichiers existants à modifier :**
-- [Fichier 1] : [Modification prévue]
-- [Fichier 2] : [Modification prévue]
-
-**Fichiers à créer :**
-- [Nouveau fichier 1] : [Description]
-
-**Fichiers à supprimer :**
-- [Fichier 1]
-
-### Risques identifiés
-- [Risque 1] → Mitigation : [Action]
-
-### Ordre d'implémentation proposé
-1. [Étape 1]
-2. [Étape 2]
-3. [Étape 3]
+**Tâches pré-analysées :** N tâches
+1. [x/○] Tâche 1 : [Titre] — [N fichiers]
+2. [x/○] Tâche 2 : [Titre] — [N fichiers]
 ...
 
-Confirmez-vous ce plan ? (oui/non/modifications)
+**Tests prévus :**
+- Backend : [N fichiers de test]
+- Frontend : [N fichiers de test]
+
+**Tâches déjà complétées :** X/N
+**Prochaine tâche :** Tâche Y — [Titre]
+
+On lance l'implémentation ? (oui/non)
 ```
+
+**Pas d'exploration du codebase supplémentaire.** Tout est déjà décrit dans les tâches. Passer directement à la Phase 2.
+
+#### Cas B : Story non analysée (section absente) ⚠️ — Mode dégradé
+
+La story n'a pas été pré-analysée.
+
+**Action :** Proposer à l'utilisateur :
+
+```
+⚠️ Cette story n'a pas été analysée par `analyse-story`.
+
+Options :
+1. **Recommandé** : Lancer d'abord `analyse-story` pour préparer les tâches détaillées
+2. Continuer quand même (analyse rapide à la volée — moins précis, plus de tokens)
+
+Que préférez-vous ?
+```
+
+**Si l'utilisateur choisit l'option 2** (mode dégradé), effectuer une analyse légère :
+- Lire l'epic parent pour le contexte
+- Explorer rapidement le code concerné
+- Identifier les fichiers à modifier/créer
+- Planifier l'ordre d'implémentation
+- Présenter le plan pour confirmation
+
+**Note :** En mode dégradé, l'analyse est moins détaillée et plus sujette aux erreurs.
+
+### 1.3 Lecture de l'epic parent (rapide)
+
+Lire le fichier epic dans `.backlog/epics/EPIC-XXX-*.md` pour comprendre :
+- La vision globale (en survol rapide)
+- Les stories déjà terminées (contexte)
+- Les contraintes mentionnées
+
+**Si la story est analysée (Cas A)**, cette lecture est optionnelle — juste un survol pour le contexte.
 
 ---
 
-## Phase 2 : Implémentation
+## Phase 2 : Implémentation séquentielle des tâches
 
 ### 2.1 Mise à jour du statut → IN_PROGRESS
 
@@ -142,14 +132,38 @@ Confirmez-vous ce plan ? (oui/non/modifications)
 3. **Dans l'epic parent** (si première story en cours) :
    - Mettre à jour le statut de l'epic à `IN_PROGRESS`
 
-### 2.2 Développement itératif
+### 2.2 Exécution séquentielle des tâches
 
-Implémenter la solution en suivant l'ordre planifié. Pour chaque étape :
+**Principe fondamental :** Exécuter chaque tâche **dans l'ordre**, en suivant **exactement** les instructions détaillées dans la story. Ne pas freelance ni réinventer.
 
-1. **Coder** la fonctionnalité/modification
-2. **Tester manuellement** si applicable
-3. **Cocher** la tâche correspondante dans "État d'avancement technique"
-4. **Cocher** l'AC correspondant si validé
+Pour chaque `### Tâche N` dans `## Tâches d'implémentation détaillées` :
+
+#### A. Lire la tâche
+- Lire l'**Objectif** pour comprendre le but
+- Lire la liste des **Fichiers** avec les actions précises décrites
+- Vérifier les **Dépendances** (la tâche précédente doit être terminée si dépendance)
+
+#### B. Implémenter fichier par fichier
+Pour chaque fichier listé dans la tâche :
+- **Créer** : Créer le fichier avec exactement les classes/méthodes/types décrits. Si un fichier de référence (pattern) est mentionné, le lire d'abord et s'en inspirer.
+- **Modifier** : Effectuer exactement les modifications décrites (ajout de méthode, modification de paramètre, ajout d'import, etc.)
+- **Supprimer** : Supprimer le fichier et nettoyer les références cassées
+
+**Règle stricte :** S'en tenir à ce qui est décrit. Si pendant l'implémentation une tâche supplémentaire semble nécessaire, la **noter** mais ne pas la faire spontanément — informer l'utilisateur.
+
+#### C. Cocher la tâche
+Après implémentation de tous les fichiers d'une tâche :
+1. Cocher dans `## État d'avancement technique` :
+   ```markdown
+   - [x] Tâche N : [Titre]
+   ```
+2. Cocher les AC correspondants si cette tâche les valide :
+   ```markdown
+   - [x] AC X : ...
+   ```
+
+#### D. Passer à la tâche suivante
+Répéter pour chaque tâche restante, dans l'ordre.
 
 **Standards de code à respecter** (référence `.clinerules/30-code-standards.md`) :
 - Python : type hints complets, fonctions courtes (~30 lignes), snake_case
@@ -161,7 +175,20 @@ Implémenter la solution en suivant l'ordre planifié. Pour chaque étape :
 - Utiliser des schémas Pydantic
 - Pagination pour les listes > 20 éléments
 
-### 2.3 Gestion des blocages
+### 2.3 Implémentation des tests
+
+Après toutes les tâches d'implémentation, passer à la section `## Tests à écrire` de la story.
+
+Pour chaque fichier de test listé :
+1. Lire les **cas de test** décrits
+2. Créer le fichier de test en suivant les patterns de test existants du projet
+3. Lancer les commandes de validation listées dans la story
+
+Si la section `## Tests à écrire` n'existe pas (mode dégradé), créer les tests appropriés selon les conventions :
+- Backend : `pytest` dans `backend/tests/unit/`
+- Frontend : Vitest dans `frontend/tests/unit/`
+
+### 2.4 Gestion des blocages
 
 Si un blocage survient pendant le développement :
 
@@ -170,6 +197,7 @@ Si un blocage survient pendant le développement :
    ```markdown
    ## Blocage
    **Date :** [Date]
+   **Tâche bloquée :** Tâche N — [Titre]
    **Raison :** [Description du blocage]
    **Action requise :** [Ce qu'il faut pour débloquer]
    ```
@@ -178,11 +206,29 @@ Si un blocage survient pendant le développement :
 
 Une fois débloqué, remettre le statut à `IN_PROGRESS`.
 
+### 2.5 Gestion des divergences
+
+Si pendant l'implémentation, les instructions d'une tâche s'avèrent **incorrectes ou impossibles** :
+
+1. **Ne pas improviser silencieusement**
+2. **Informer l'utilisateur** avec :
+   ```
+   ⚠️ Divergence détectée sur Tâche N :
+   - **Prévu :** [Ce que la tâche décrit]
+   - **Réalité :** [Ce qui se passe réellement]
+   - **Proposition :** [Une solution alternative]
+   
+   Voulez-vous que je continue avec la proposition, ou ajuster le plan ?
+   ```
+3. Après décision, mettre à jour la tâche dans la story avec une note de divergence si nécessaire
+
 ---
 
 ## Phase 3 : Validation et Critères de Succès
 
 ### 3.1 Tests
+
+**Lancer les commandes de la section `## Tests à écrire`** de la story si elles existent. Sinon, utiliser les commandes standards :
 
 **Tests unitaires (obligatoire)** :
 - Backend : `pytest backend/tests/unit/` avec couverture ≥ 80%
@@ -212,7 +258,7 @@ pnpm test:coverage           # Avec couverture
 - Chemins critiques : 95% si raisonnable
 
 Si la couverture est insuffisante :
-1. Identifier les lignes/manquantes
+1. Identifier les lignes manquantes
 2. Ajouter les tests manquants
 3. Re-vérifier
 
@@ -232,7 +278,7 @@ pnpm lint                    # ESLint
 pnpm typecheck               # TypeScript strict
 ```
 
-Tous les commandes doivent passer sans erreur.
+Toutes les commandes doivent passer sans erreur.
 
 ### 3.4 Mise à jour de la documentation
 
@@ -252,7 +298,6 @@ Si la story implique des changements impactant la documentation :
 ## Notes d'implémentation
 
 **Date :** [Date de fin]
-**Durée estimée :** [X heures/jours]
 
 ### Fichiers modifiés/créés
 - `path/to/file1.py` : [Description de la modification]
@@ -262,13 +307,15 @@ Si la story implique des changements impactant la documentation :
 - [Décision 1] : [Raison]
 - [Décision 2] : [Raison]
 
+### Divergences par rapport à l'analyse
+- [Tâche N] : [Ce qui a changé et pourquoi] (si applicable)
+
 ### Difficultés rencontrées
 - [Difficulté 1] : [Solution apportée]
-- [Difficulté 2] : [Solution apportée]
 
 ### Tests ajoutés
 - `tests/unit/test_xxx.py` : [Couverture]
-- `tests/yyy.test.ts` : [Couverture]
+- `tests/yyy.spec.ts` : [Couverture]
 ```
 
 ### 3.6 Vérification de la Definition of Done (DoD)
@@ -277,8 +324,8 @@ Avant de passer à REVIEW, vérifier la **DoD complète** :
 
 ```markdown
 ## Definition of Done (DoD) Checklist
-- [ ] Tous les critères d'acceptation (AC) sont validés
-- [ ] Code revu et approuvé (self-review minimalement)
+- [ ] Tous les critères d'acceptation (AC) sont cochés
+- [ ] Toutes les tâches d'implémentation sont cochées dans "État d'avancement technique"
 - [ ] Tests unitaires écrits et passants (couverture ≥ 80%)
 - [ ] Pas de régression sur les tests existants
 - [ ] Documentation technique mise à jour si nécessaire
@@ -304,9 +351,10 @@ Avant de passer à REVIEW, vérifier la **DoD complète** :
    ```
    ## STORY-XXX prête pour review
    
-   ### Résumé des changements
-   - [Changement 1]
-   - [Changement 2]
+   ### Tâches complétées
+   - [x] Tâche 1 : [Titre]
+   - [x] Tâche 2 : [Titre]
+   ...
    
    ### AC validés
    - [x] AC 1 : ...
@@ -319,6 +367,9 @@ Avant de passer à REVIEW, vérifier la **DoD complète** :
    ### Build/Lint
    - Build : ✅
    - Lint : ✅
+   
+   ### Divergences (si applicable)
+   - [Tâche N] : [Changement]
    
    Voulez-vous valider cette story ? (oui/non)
    ```
@@ -378,8 +429,10 @@ Respecter strictement les règles définies dans `.clinerules/01-Project-managem
 | Erreur | Action |
 |--------|--------|
 | Story non trouvée | Demander un numéro valide |
+| Story pas analysée | Proposer de lancer `analyse-story` d'abord |
 | Story déjà DONE | Informer l'utilisateur, demander confirmation pour modification |
 | Story BLOCKED | Proposer de résoudre le blocage ou de changer de story |
+| Divergence tâche/réalité | Informer l'utilisateur, proposer une alternative |
 | Échec de build | Corriger les erreurs avant de continuer |
 | Échec de tests | Corriger les tests ou le code, ne pas passer à REVIEW |
 | Couverture insuffisante | Ajouter des tests jusqu'à atteindre 80% |
@@ -391,13 +444,14 @@ Respecter strictement les règles définies dans `.clinerules/01-Project-managem
 
 Avant de conclure l'exécution de cette skill, vérifier :
 
+- [ ] Toutes les tâches d'implémentation sont cochées dans "État d'avancement technique"
 - [ ] Le code est implémenté et fonctionnel
 - [ ] Tous les AC sont cochés dans le fichier story
 - [ ] Les tests sont écrits et passent (≥ 80% couverture)
 - [ ] `pnpm build` / `poetry build` passent
 - [ ] `pnpm lint` / lint Python passent
 - [ ] La documentation est mise à jour si nécessaire
-- [ ] Les notes d'implémentation sont ajoutées
+- [ ] Les notes d'implémentation sont ajoutées (avec divergences si applicable)
 - [ ] Le statut de la story est à `DONE` (ou `REVIEW` si attente validation)
 - [ ] Le Kanban est à jour
 - [ ] L'epic parent est à jour (case cochée, statut si applicable)
@@ -406,34 +460,47 @@ Avant de conclure l'exécution de cette skill, vérifier :
 
 ## Exemple d'utilisation
 
-**Utilisateur :** "Implémente STORY-401"
+### Exemple 1 : Story pré-analysée (mode nominal) ✅
+
+**Utilisateur :** "Implémente STORY-446"
 
 **Actions de la skill :**
 
-1. **Phase 1 - Analyse :**
-   - Lire `STORY-401-cleanup-marketplace-frontend.md`
-   - Lire `EPIC-004-ui-refacto-cleanup.md`
-   - Explorer `frontend/src/views/Marketplace.vue`
-   - Explorer `frontend/src/components/marketplace/`
-   - Faire un grep pour les références marketplace
-   - Présenter le plan d'implémentation
+1. **Phase 1 - Lecture :**
+   - Lire `STORY-446-container-detail-stats.md`
+   - Détecter : `## Tâches d'implémentation détaillées` présente ✅
+   - 4 tâches identifiées, 0 complétées
+   - "4 tâches à implémenter. On y va ?"
 
-2. **Phase 2 - Implémentation :**
-   - Mettre à jour statut → IN_PROGRESS
-   - Supprimer les composants marketplace
-   - Supprimer la vue Marketplace.vue
-   - Nettoyer le router
-   - Nettoyer les stores, services, types
-   - Cocher les AC au fur et à mesure
+2. **Phase 2 - Implémentation séquentielle :**
+   - **Tâche 1 :** Lire objectif → Créer `container_stats.py`, modifier `websockets.py`, modifier `docker.py` → ✅ Cocher
+   - **Tâche 2 :** Lire objectif → Créer `useContainerStats.ts`, modifier `api.ts` → ✅ Cocher
+   - **Tâche 3 :** Lire objectif → Créer `ContainerStats.vue` → ✅ Cocher
+   - **Tâche 4 :** Lire objectif → Modifier `ContainerDetail.vue` → ✅ Cocher
+   - **Tests :** Créer `test_container_stats.py`, `ContainerStats.spec.ts` → ✅ Cocher
 
 3. **Phase 3 - Validation :**
-   - Lancer `pnpm build` → OK
-   - Lancer `pnpm lint` → OK
-   - Vérifier les tests existants → OK
-   - Ajouter les notes d'implémentation
-   - Passer à REVIEW
-   - Après validation utilisateur → DONE
-   - Mettre à jour Kanban et Epic
+   - Lancer commandes de test de la story → OK
+   - `pnpm build` → OK
+   - `pnpm lint` → OK
+   - Notes d'implémentation → ajoutées
+   - REVIEW → DONE
+
+### Exemple 2 : Story non analysée (mode dégradé) ⚠️
+
+**Utilisateur :** "Implémente STORY-500"
+
+**Actions de la skill :**
+
+1. **Phase 1 - Lecture :**
+   - Lire `STORY-500-xxx.md`
+   - Détecter : Pas de section `## Tâches d'implémentation détaillées` ⚠️
+   - "Story non analysée. Recommandation : lancer `analyse-story` d'abord. Continuer quand même ?"
+
+2. **Si l'utilisateur insiste :**
+   - Analyse rapide (exploration légère du codebase)
+   - Planification à la volée
+   - Implémentation (moins ciblée, plus de risque d'erreur)
 
 ---
 
@@ -441,9 +508,9 @@ Avant de conclure l'exécution de cette skill, vérifier :
 
 | Fichier | Action |
 |---------|--------|
-| `.backlog/stories/STORY-XXX-*.md` | Lecture + Mise à jour (statut, AC, notes) |
+| `.backlog/stories/STORY-XXX-*.md` | Lecture + Mise à jour (statut, AC, tâches cochées, notes) |
 | `.backlog/epics/EPIC-XXX-*.md` | Lecture + Mise à jour (case story, statut) |
 | `.backlog/kanban.md` | Mise à jour (déplacement selon statut) |
-| Fichiers de code | Création/Modification/Suppression |
-| Fichiers de tests | Création/Modification |
+| Fichiers de code | Création/Modification/Suppression (selon tâches) |
+| Fichiers de tests | Création/Modification (selon section Tests) |
 | Documentation | Mise à jour si nécessaire |
