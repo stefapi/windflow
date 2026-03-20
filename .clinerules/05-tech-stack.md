@@ -1,4 +1,4 @@
-# Stack & contraintes techniques (WindFlow)
+# Stack & contraintes techniques
 
 Backend :
 - Python 3.12+

@@ -1,4 +1,4 @@
-# Contexte Projet — WindFlow
+# Contexte Projet
 
 WindFlow est un outil web intelligent de déploiement de conteneurs Docker vers des machines cibles, avec support multi-cibles (Docker, K8s, VMs, physiques), UI moderne et intégration IA (LiteLLM).
 
