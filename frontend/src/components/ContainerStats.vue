@@ -20,10 +20,10 @@
         />
         <el-button
           size="small"
-          @click="handleReconnect"
+          @click="handleRefresh"
         >
           <el-icon><RefreshRight /></el-icon>
-          Reconnect
+          {{ autoRefresh ? 'Reconnect' : 'Refresh' }}
         </el-button>
       </div>
     </div>
@@ -47,19 +47,31 @@
       <span>Connexion en cours...</span>
     </div>
 
-    <!-- Not running state -->
+    <!-- Not running state (no stats available) -->
     <div
-      v-else-if="!isStreaming"
+      v-else-if="!isStreaming && !stats"
       class="stats-not-running"
     >
       <el-empty description="Les statistiques ne sont disponibles que lorsque le container est en cours d'exécution" />
     </div>
 
-    <!-- Stats content -->
+    <!-- Stats content (streaming or manual mode with cached stats) -->
     <div
       v-else
       class="stats-content"
     >
+      <!-- Manual mode indicator -->
+      <el-alert
+        v-if="!autoRefresh && !isStreaming"
+        type="info"
+        :closable="false"
+        show-icon
+      >
+        <template #title>
+          Mode manuel - Cliquez sur "Refresh" pour mettre à jour les statistiques
+        </template>
+      </el-alert>
+
       <!-- CPU Section -->
       <div class="stat-section">
         <div class="stat-header">
@@ -165,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   Loading,
   RefreshRight,
@@ -204,75 +216,108 @@ const {
   error,
   isStreaming,
   history,
+  connect,
+  disconnect,
   reconnect,
+  fetchOnce,
 } = useContainerStats({
   containerId: props.containerId,
   autoConnect: true,
 })
 
-// Auto-refresh state (for manual reconnect)
+// Auto-refresh state
 const autoRefresh = ref(true)
 
-// ECharts options for CPU chart
-const cpuChartOptions = computed(() => ({
-  grid: {
-    left: 40,
-    right: 10,
-    top: 10,
-    bottom: 20,
-  },
-  xAxis: {
-    type: 'category',
-    show: false,
-    data: history.value.slice(-60).map((_, i) => i),
-  },
-  yAxis: {
-    type: 'value',
-    min: 0,
-    max: 100,
-    splitLine: {
-      lineStyle: {
-        color: 'var(--el-border-color-lighter)',
-      },
+// Watch autoRefresh to control WebSocket connection
+watch(autoRefresh, (newValue) => {
+  if (newValue) {
+    // Auto mode: continuous streaming
+    connect()
+  } else {
+    // Manual mode: disconnect and keep last stats displayed
+    disconnect()
+  }
+})
+
+// Helper to get optimal CPU scale (autoscale with padding)
+function getCpuScale(maxPercent: number): { niceMax: number } {
+  // Minimum 1% to avoid flat chart, 15% padding
+  const paddedMax = Math.max(maxPercent * 1.15, 1)
+  // Round up to nearest nice value
+  const niceValues = [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 80, 100]
+  const niceMax = niceValues.find(v => v >= paddedMax) ?? Math.ceil(paddedMax / 10) * 10
+  return { niceMax }
+}
+
+// ECharts options for CPU chart with autoscale
+const cpuChartOptions = computed(() => {
+  const data = history.value.slice(-60).map((entry) => entry.cpu_percent)
+
+  // Calculate dynamic max with padding
+  const maxValue = data.length > 0 ? Math.max(...data) : 0
+  const scale = getCpuScale(maxValue)
+
+  return {
+    grid: {
+      left: 40,
+      right: 10,
+      top: 10,
+      bottom: 20,
     },
-    axisLabel: {
-      color: 'var(--el-text-color-secondary)',
-      fontSize: 10,
+    xAxis: {
+      type: 'category',
+      show: false,
+      data: data.map((_, i) => i),
     },
-  },
-  tooltip: {
-    trigger: 'axis',
-    formatter: (params: Array<{ value: number }>) => {
-      const value = params[0]?.value ?? 0
-      return `CPU: ${value.toFixed(1)}%`
-    },
-  },
-  series: [
-    {
-      type: 'line',
-      data: history.value.slice(-60).map((entry) => entry.cpu_percent),
-      smooth: true,
-      symbol: 'none',
-      areaStyle: {
-        color: {
-          type: 'linear',
-          x: 0,
-          y: 0,
-          x2: 0,
-          y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(64, 158, 255, 0.4)' },
-            { offset: 1, color: 'rgba(64, 158, 255, 0.05)' },
-          ],
+    yAxis: {
+      type: 'value',
+      min: 0,
+      max: scale.niceMax,
+      splitLine: {
+        lineStyle: {
+          color: 'var(--el-border-color-lighter)',
         },
       },
-      lineStyle: {
-        color: 'var(--el-color-primary)',
-        width: 2,
+      axisLabel: {
+        color: 'var(--el-text-color-secondary)',
+        fontSize: 10,
+        formatter: (value: number) => `${value}%`,
       },
     },
-  ],
-}))
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: Array<{ value: number }>) => {
+        const value = params[0]?.value ?? 0
+        return `CPU: ${value.toFixed(1)}%`
+      },
+    },
+    series: [
+      {
+        type: 'line',
+        data: data,
+        smooth: true,
+        symbol: 'none',
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(64, 158, 255, 0.4)' },
+              { offset: 1, color: 'rgba(64, 158, 255, 0.05)' },
+            ],
+          },
+        },
+        lineStyle: {
+          color: 'var(--el-color-primary)',
+          width: 2,
+        },
+      },
+    ],
+  }
+})
 
 // Helper to format bytes for chart axis
 function formatBytesAxis(value: number): string {
@@ -406,8 +451,14 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024 * 1024)).toFixed(2)} TB`
 }
 
-function handleReconnect(): void {
-  reconnect()
+function handleRefresh(): void {
+  if (autoRefresh.value) {
+    // Auto mode: reconnect
+    reconnect()
+  } else {
+    // Manual mode: fetch stats once
+    fetchOnce()
+  }
 }
 
 function clearError(): void {

@@ -34,6 +34,7 @@ export interface UseContainerStatsReturn {
   connect: () => void
   disconnect: () => void
   reconnect: () => void
+  fetchOnce: () => void
   clearHistory: () => void
 }
 
@@ -73,6 +74,9 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
 
   // Heartbeat interval
   let heartbeatInterval: ReturnType<typeof setInterval> | null = null
+
+  // Manual mode flag - when true, disconnect after receiving stats
+  let manualMode = false
 
   // Auth token
   const token = computed(() => useAuthStore().token)
@@ -143,6 +147,12 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
 
               // Add to history for sparklines
               addStatsToHistory(newStats)
+
+              // In manual mode, disconnect after receiving stats
+              if (manualMode) {
+                manualMode = false
+                disconnect()
+              }
               break
             }
 
@@ -207,6 +217,16 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
    */
   function reconnect(): void {
     disconnect()
+    reconnectAttempts = 0
+    connect()
+  }
+
+  /**
+   * Fetch stats once (manual mode)
+   * Connects, waits for one stats update, then disconnects
+   */
+  function fetchOnce(): void {
+    manualMode = true
     reconnectAttempts = 0
     connect()
   }
@@ -285,6 +305,7 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
     connect,
     disconnect,
     reconnect,
+    fetchOnce,
     clearHistory,
   }
 }
