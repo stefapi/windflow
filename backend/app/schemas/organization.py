@@ -21,12 +21,12 @@ class OrganizationBase(BaseModel):
         description="Nom de l'organisation",
         json_schema_extra={"example": "Acme Corp"}
     )
-    slug: str = Field(
-        ...,
+    slug: Optional[str] = Field(
+        None,
         min_length=1,
         max_length=100,
         pattern=r"^[a-z0-9-]+$",
-        description="Slug unique (minuscules, chiffres et tirets uniquement)",
+        description="Slug unique (minuscules, chiffres et tirets uniquement). Généré automatiquement depuis le nom si non fourni.",
         json_schema_extra={"example": "acme-corp"}
     )
     domain: Optional[str] = Field(
@@ -57,13 +57,7 @@ class OrganizationCreate(OrganizationBase):
             "examples": [
                 {
                     "name": "Acme Corp",
-                    "slug": "acme-corp",
-                    "domain": "acme.com",
-                    "description": "Leading cloud deployment company",
-                    "settings": {
-                        "max_deployments": 100,
-                        "allowed_targets": ["docker", "kubernetes"]
-                    }
+                    "description": "Leading cloud deployment company"
                 },
                 {
                     "name": "Startup Labs",
@@ -149,7 +143,7 @@ class OrganizationUpdate(BaseModel):
     )
 
 
-class OrganizationResponse(OrganizationBase):
+class OrganizationResponse(BaseModel):
     """
     Schema pour réponse Organization.
 
@@ -177,6 +171,32 @@ class OrganizationResponse(OrganizationBase):
         ...,
         description="ID unique de l'organisation",
         json_schema_extra={"example": "org-550e8400"}
+    )
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Nom de l'organisation",
+        json_schema_extra={"example": "Acme Corp"}
+    )
+    slug: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        pattern=r"^[a-z0-9-]+$",
+        description="Slug unique de l'organisation",
+        json_schema_extra={"example": "acme-corp"}
+    )
+    domain: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Domaine de l'organisation",
+        json_schema_extra={"example": "acme.com"}
+    )
+    description: Optional[str] = Field(
+        None,
+        description="Description de l'organisation",
+        json_schema_extra={"example": "Leading cloud deployment company"}
     )
     settings: Dict[str, Any] = Field(
         default_factory=dict,

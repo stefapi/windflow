@@ -2,10 +2,11 @@
 Routes de gestion des organisations.
 """
 
-from typing import List
+from typing import List, Tuple
 from uuid import UUID
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_db
@@ -17,6 +18,19 @@ from ...core.rate_limit import conditional_rate_limiter
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+# Schema for bulk operations
+class BulkDeleteOrgRequest(BaseModel):
+    """Request schema for bulk organization deletion."""
+    organization_ids: List[str]
+
+
+class BulkOperationResponse(BaseModel):
+    """Response schema for bulk operations."""
+    success: List[str]
+    failed: List[str]
+    message: str
 
 
 @router.get(
@@ -845,3 +859,117 @@ async def delete_organization(
         )
 
     await OrganizationService.delete(session, organization_id)
+
+
+@router.post(
+    "/bulk/delete",
+    response_model=BulkOperationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Bulk delete organizations",
+    description="""
+Delete multiple organizations in a single operation.
+
+## Access Control
+- **Superusers only**: This endpoint requires superuser privileges
+
+## Safety Features
+- **Maximum 100 organizations per request**: Prevents accidental mass deletions
+
+## Request Body
+- `organization_ids`: List of organization UUIDs to delete (max 100)
+
+## Response
+- `success`: List of organization IDs that were successfully deleted
+- `failed`: List of organization IDs that could not be deleted
+- `message`: Summary of the operation
+
+**Authentication Required - Superuser Only**
+""",
+    dependencies=[Depends(conditional_rate_limiter(5, 60))],
+    responses={
+        200: {
+            "description": "Bulk delete operation completed",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": ["550e8400-e29b-41d4-a716-446655440000"],
+                        "failed": [],
+                        "message": "1 organisation(s) supprimée(s), 0 échec(s)"
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid request - too many organizations or empty list",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Maximum 100 organisations par requête"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Not authenticated"
+        },
+        403: {
+            "description": "Not a superuser"
+        }
+    }
+)
+async def bulk_delete_organizations(
+    request: Request,
+    bulk_data: BulkDeleteOrgRequest,
+    current_user: User = Depends(require_superuser),
+    session: AsyncSession = Depends(get_db)
+):
+    """Delete multiple organizations in bulk."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        "Bulk deleting organizations",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "org_count": len(bulk_data.organization_ids)
+        }
+    )
+
+    # Validate request
+    if not bulk_data.organization_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La liste des organisations ne peut pas être vide"
+        )
+
+    if len(bulk_data.organization_ids) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 100 organisations par requête"
+        )
+
+    # Perform bulk delete
+    success: List[str] = []
+    failed: List[str] = []
+
+    for org_id in bulk_data.organization_ids:
+        try:
+            # Check if organization exists
+            org = await OrganizationService.get_by_id(session, UUID(org_id))
+            if not org:
+                failed.append(org_id)
+                continue
+
+            await OrganizationService.delete(session, UUID(org_id))
+            success.append(org_id)
+        except Exception as e:
+            logger.error(
+                f"Failed to delete organization {org_id}: {str(e)}",
+                extra={"correlation_id": correlation_id, "org_id": org_id}
+            )
+            failed.append(org_id)
+
+    return BulkOperationResponse(
+        success=success,
+        failed=failed,
+        message=f"{len(success)} organisation(s) supprimée(s), {len(failed)} échec(s)"
+    )

@@ -5,7 +5,7 @@ Implémente le pattern Repository avec SQLAlchemy 2.0 async.
 """
 
 from typing import Optional, List, Tuple
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
 
@@ -227,6 +227,23 @@ class UserService:
         return list(result.scalars().all())
 
     @staticmethod
+    async def count_by_organization(db: AsyncSession, organization_id: str) -> int:
+        """
+        Compte le nombre d'utilisateurs dans une organisation.
+
+        Args:
+            db: Session de base de données async
+            organization_id: ID de l'organisation
+
+        Returns:
+            Nombre d'utilisateurs
+        """
+        result = await db.execute(
+            select(func.count()).select_from(User).where(User.organization_id == organization_id)
+        )
+        return result.scalar_one()
+
+    @staticmethod
     async def create(db: AsyncSession, user_data: UserCreate) -> User:
         """
         Crée un nouvel utilisateur.
@@ -302,3 +319,70 @@ class UserService:
         """
         await db.delete(user)
         await db.commit()
+
+    @staticmethod
+    async def delete_many(
+        db: AsyncSession,
+        user_ids: List[str],
+        current_user_id: str
+    ) -> Tuple[List[str], List[str]]:
+        """
+        Supprime plusieurs utilisateurs en masse.
+
+        Args:
+            db: Session de base de données async
+            user_ids: Liste des IDs d'utilisateurs à supprimer
+            current_user_id: ID de l'utilisateur effectuant la suppression (pour empêcher l'auto-suppression)
+
+        Returns:
+            Tuple[List[str], List[str]]: (IDs supprimés avec succès, IDs en échec)
+        """
+        success = []
+        failed = []
+
+        for user_id in user_ids:
+            # Empêcher l'auto-suppression
+            if user_id == current_user_id:
+                failed.append(user_id)
+                continue
+
+            user = await UserService.get_by_id(db, user_id)
+            if user:
+                await db.delete(user)
+                success.append(user_id)
+            else:
+                failed.append(user_id)
+
+        await db.commit()
+        return success, failed
+
+    @staticmethod
+    async def update_organization_many(
+        db: AsyncSession,
+        user_ids: List[str],
+        organization_id: str
+    ) -> Tuple[List[str], List[str]]:
+        """
+        Met à jour l'organisation de plusieurs utilisateurs en masse.
+
+        Args:
+            db: Session de base de données async
+            user_ids: Liste des IDs d'utilisateurs à mettre à jour
+            organization_id: ID de la nouvelle organisation
+
+        Returns:
+            Tuple[List[str], List[str]]: (IDs mis à jour avec succès, IDs en échec)
+        """
+        success = []
+        failed = []
+
+        for user_id in user_ids:
+            user = await UserService.get_by_id(db, user_id)
+            if user:
+                user.organization_id = organization_id
+                success.append(user_id)
+            else:
+                failed.append(user_id)
+
+        await db.commit()
+        return success, failed

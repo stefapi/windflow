@@ -12,7 +12,6 @@
 #### Dashboard
 
 #### Settings & Stubs
-- [ ] STORY-451 : Page Settings — Organisations, Environnements, Utilisateurs
 - [ ] STORY-452 : Gestion RBAC depuis la page Settings
 - [ ] STORY-461 : Vues stubs Volumes, Networks, Images
 - [ ] STORY-462 : Vue stub Plugins installés
@@ -36,6 +35,7 @@
 *(aucune story en attente de validation)*
 
 ## ✅ DONE (Terminé)
+- [x] STORY-451 : Page Settings — Organisations, Environments, Users
 - [x] STORY-447 : ContainerDetail — onglet Processus (liste des processus running)
 - [x] STORY-446 : ContainerDetail — onglet Stats temps réel
 - [x] STORY-445 : ContainerDetail — onglet Terminal

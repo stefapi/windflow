@@ -152,6 +152,11 @@ class UserUpdate(BaseModel):
         description="Statut superutilisateur",
         json_schema_extra={"example": False}
     )
+    organization_id: Optional[str] = Field(
+        None,
+        description="ID de l'organisation (superuser uniquement)",
+        json_schema_extra={"example": "org-001"}
+    )
 
 
 class UserResponse(UserBase):

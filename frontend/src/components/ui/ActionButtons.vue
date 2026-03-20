@@ -16,7 +16,7 @@
           :size="size"
           :disabled="action.disabled"
           circle
-          @click="handleAction(action.type)"
+          @click.stop="handleAction(action.type)"
         >
           <el-icon>
             <component :is="getActionIcon(action.type)" />
@@ -50,10 +50,11 @@ import {
   Edit,
   Upload,
   Check,
+  Key,
 } from '@element-plus/icons-vue'
 
 /** Predefined action types */
-export type ActionType = 'start' | 'stop' | 'restart' | 'logs' | 'delete' | 'edit' | 'deploy' | 'scan' | 'select'
+export type ActionType = 'start' | 'stop' | 'restart' | 'logs' | 'delete' | 'edit' | 'deploy' | 'scan' | 'select' | 'password'
 
 /** Action configuration (simplified for string usage) */
 export type ActionConfig = ActionType | ActionConfigObject
@@ -123,6 +124,10 @@ const defaultActionConfig: Record<ActionType, { icon: typeof VideoPlay; tooltip:
   select: {
     icon: Check,
     tooltip: 'Sélectionner',
+  },
+  password: {
+    icon: Key,
+    tooltip: 'Changer le mot de passe',
   },
 }
 
@@ -218,5 +223,10 @@ function handleAction(type: ActionType): void {
 .action-buttons__btn--select:hover:not(:disabled) {
   color: var(--color-success);
   border-color: var(--color-success);
+}
+
+.action-buttons__btn--password:hover:not(:disabled) {
+  color: var(--color-warning);
+  border-color: var(--color-warning);
 }
 </style>

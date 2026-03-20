@@ -18,6 +18,7 @@ export interface User extends BaseModel {
   is_active: boolean
   is_superuser: boolean
   organization_id: string | null
+  last_login: string | null
 }
 
 export interface UserCreate {
@@ -34,22 +35,31 @@ export interface UserUpdate {
   full_name?: string
   password?: string
   is_active?: boolean
+  is_superuser?: boolean
+  organization_id?: string
 }
 
 // Organization types
 export interface Organization extends BaseModel {
   name: string
+  slug: string
+  domain: string | null
   description: string | null
   owner_id: string
+  settings: Record<string, unknown>
 }
 
 export interface OrganizationCreate {
   name: string
+  slug?: string
+  domain?: string
   description?: string
 }
 
 export interface OrganizationUpdate {
   name?: string
+  slug?: string
+  domain?: string
   description?: string
 }
 

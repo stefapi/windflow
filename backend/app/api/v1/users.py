@@ -6,6 +6,7 @@ from typing import List
 from uuid import UUID
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_db
@@ -15,6 +16,25 @@ from ...auth.dependencies import get_current_active_user, require_superuser
 from ...models.user import User
 from ...services.organization_service import OrganizationService
 from ...core.rate_limit import conditional_rate_limiter
+
+
+# Schema for bulk operations
+class BulkDeleteRequest(BaseModel):
+    """Request schema for bulk user deletion."""
+    user_ids: List[str]
+
+
+class BulkAssignOrganizationRequest(BaseModel):
+    """Request schema for bulk organization assignment."""
+    user_ids: List[str]
+    organization_id: str
+
+
+class BulkOperationResponse(BaseModel):
+    """Response schema for bulk operations."""
+    success: List[str]
+    failed: List[str]
+    message: str
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -986,3 +1006,209 @@ async def delete_user(
         )
 
     await UserService.delete(session, user_id)
+
+
+@router.post(
+    "/bulk/delete",
+    response_model=BulkOperationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Bulk delete users",
+    description="""
+Delete multiple users in a single operation.
+
+## Access Control
+- **Superusers only**: This endpoint requires superuser privileges
+- Users from any organization can be deleted
+
+## Safety Features
+- **Self-deletion prevention**: Cannot delete your own account
+- **Maximum 100 users per request**: Prevents accidental mass deletions
+
+## Request Body
+- `user_ids`: List of user UUIDs to delete (max 100)
+
+## Response
+- `success`: List of user IDs that were successfully deleted
+- `failed`: List of user IDs that could not be deleted
+- `message`: Summary of the operation
+
+**Authentication Required - Superuser Only**
+""",
+    dependencies=[Depends(conditional_rate_limiter(5, 60))],
+    responses={
+        200: {
+            "description": "Bulk delete operation completed",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": ["550e8400-e29b-41d4-a716-446655440000"],
+                        "failed": [],
+                        "message": "1 utilisateur(s) supprimé(s), 0 échec(s)"
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid request - too many users or empty list",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Maximum 100 utilisateurs par requête"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Not authenticated"
+        },
+        403: {
+            "description": "Not a superuser"
+        }
+    }
+)
+async def bulk_delete_users(
+    request: Request,
+    bulk_data: BulkDeleteRequest,
+    current_user: User = Depends(require_superuser),
+    session: AsyncSession = Depends(get_db)
+):
+    """Delete multiple users in bulk."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        "Bulk deleting users",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "user_count": len(bulk_data.user_ids)
+        }
+    )
+
+    # Validate request
+    if not bulk_data.user_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La liste des utilisateurs ne peut pas être vide"
+        )
+
+    if len(bulk_data.user_ids) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 100 utilisateurs par requête"
+        )
+
+    # Perform bulk delete
+    success, failed = await UserService.delete_many(
+        session,
+        bulk_data.user_ids,
+        str(current_user.id)
+    )
+
+    return BulkOperationResponse(
+        success=success,
+        failed=failed,
+        message=f"{len(success)} utilisateur(s) supprimé(s), {len(failed)} échec(s)"
+    )
+
+
+@router.post(
+    "/bulk/assign-organization",
+    response_model=BulkOperationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Bulk assign users to organization",
+    description="""
+Assign multiple users to a different organization in a single operation.
+
+## Access Control
+- **Superusers only**: This endpoint requires superuser privileges
+- Target organization must exist
+
+## Request Body
+- `user_ids`: List of user UUIDs to reassign (max 100)
+- `organization_id`: UUID of the target organization
+
+## Response
+- `success`: List of user IDs that were successfully reassigned
+- `failed`: List of user IDs that could not be reassigned
+- `message`: Summary of the operation
+
+**Authentication Required - Superuser Only**
+""",
+    dependencies=[Depends(conditional_rate_limiter(5, 60))],
+    responses={
+        200: {
+            "description": "Bulk assign operation completed",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": ["550e8400-e29b-41d4-a716-446655440000"],
+                        "failed": [],
+                        "message": "1 utilisateur(s) réassigné(s), 0 échec(s)"
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid request - too many users or empty list"
+        },
+        401: {
+            "description": "Not authenticated"
+        },
+        403: {
+            "description": "Not a superuser"
+        },
+        404: {
+            "description": "Organization not found"
+        }
+    }
+)
+async def bulk_assign_organization(
+    request: Request,
+    bulk_data: BulkAssignOrganizationRequest,
+    current_user: User = Depends(require_superuser),
+    session: AsyncSession = Depends(get_db)
+):
+    """Assign multiple users to an organization in bulk."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        "Bulk assigning users to organization",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "user_count": len(bulk_data.user_ids),
+            "target_organization": bulk_data.organization_id
+        }
+    )
+
+    # Validate request
+    if not bulk_data.user_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La liste des utilisateurs ne peut pas être vide"
+        )
+
+    if len(bulk_data.user_ids) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 100 utilisateurs par requête"
+        )
+
+    # Verify target organization exists
+    target_org = await OrganizationService.get_by_id(session, bulk_data.organization_id)
+    if not target_org:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Organisation '{bulk_data.organization_id}' non trouvée"
+        )
+
+    # Perform bulk assignment
+    success, failed = await UserService.update_organization_many(
+        session,
+        bulk_data.user_ids,
+        bulk_data.organization_id
+    )
+
+    return BulkOperationResponse(
+        success=success,
+        failed=failed,
+        message=f"{len(success)} utilisateur(s) réassigné(s), {len(failed)} échec(s)"
+    )

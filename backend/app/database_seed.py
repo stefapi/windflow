@@ -33,7 +33,7 @@ async def seed_database(session: AsyncSession) -> None:
     """
     try:
         # Vérifier si des organisations existent déjà
-        result = await session.execute(select(Organization))
+        result = await session.execute(select(Organization).limit(1))
         existing_org = result.scalar_one_or_none()
 
         if existing_org:

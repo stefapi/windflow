@@ -95,7 +95,7 @@ Cette epic a deux axes :
 - [x] STORY-447 : Vue ContainerDetail — onglet Processus (liste des processus running)
 
 ### Vue Settings
-- [ ] STORY-451 : Page Settings avec onglets : Organisations, Environnements, Utilisateurs
+- [x] STORY-451 : Page Settings avec onglets : Organisations, Environnements, Utilisateurs
 - [ ] STORY-452 : Gestion RBAC depuis la page Settings (rôles, permissions par user)
 
 ### Vues Stubs (prêtes pour EPIC-001/002/003)

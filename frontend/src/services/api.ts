@@ -80,6 +80,15 @@ export const usersApi = {
 
   delete: (id: string) =>
     http.delete(`/users/${id}`),
+
+  bulkDelete: (userIds: string[]) =>
+    http.post<{ success: string[]; failed: string[]; message: string }>('/users/bulk/delete', { user_ids: userIds }),
+
+  bulkAssignOrganization: (userIds: string[], organizationId: string) =>
+    http.post<{ success: string[]; failed: string[]; message: string }>('/users/bulk/assign-organization', {
+      user_ids: userIds,
+      organization_id: organizationId,
+    }),
 }
 
 // Organizations API
@@ -98,6 +107,9 @@ export const organizationsApi = {
 
   delete: (id: string) =>
     http.delete(`/organizations/${id}`),
+
+  bulkDelete: (organizationIds: string[]) =>
+    http.post<{ success: string[]; failed: string[]; message: string }>('/organizations/bulk/delete', { organization_ids: organizationIds }),
 }
 
 // Targets API
