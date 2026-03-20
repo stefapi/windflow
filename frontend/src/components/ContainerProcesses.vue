@@ -150,10 +150,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { RefreshRight, Loading, Clock } from '@element-plus/icons-vue'
 import { useContainerProcesses } from '@/composables/useContainerProcesses'
-import type { ContainerProcess } from '@/types/api'
 
 // Props
 const props = defineProps<{

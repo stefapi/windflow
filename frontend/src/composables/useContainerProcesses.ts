@@ -4,7 +4,7 @@
  */
 
 import { ref, onUnmounted, type Ref } from 'vue'
-import api from '@/services/api'
+import http from '@/services/http'
 import type { ContainerProcessListResponse, ContainerProcess } from '@/types/api'
 
 export interface UseContainerProcessesOptions {
@@ -57,7 +57,7 @@ export function useContainerProcesses(options: UseContainerProcessesOptions): Us
     error.value = null
 
     try {
-      const response = await api.get<ContainerProcessListResponse>(
+      const response = await http.get<ContainerProcessListResponse>(
         `/api/v1/docker/containers/${containerId}/top`
       )
 
