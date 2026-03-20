@@ -5,7 +5,7 @@ description: Crée une epic à partir d'un item de la roadmap doc/general_specs/
 
 # create-epic
 
-Cette skill permet de créer **une et une seule epic** à partir d'un item sélectionné dans la roadmap du projet WindFlow (`doc/general_specs/18-roadmap.md`).
+Cette skill permet de créer **une et une seule epic** à partir d'un item sélectionné dans la roadmap du projet(`doc/general_specs/18-roadmap.md`).
 
 ## Usage
 

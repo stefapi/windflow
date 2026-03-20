@@ -5,7 +5,7 @@ description: Crée une story de refactoring technique avec description, motivati
 
 # create-refactoring
 
-Cette skill guide la création d'une story de **refactoring technique** dans WindFlow. Elle crée une story **légère** avec description, motivation et critères d'acceptation. L'analyse profonde de l'architecture, l'identification des impacts et le plan de non-régression seront réalisés par `analyse-story`.
+Cette skill guide la création d'une story de **refactoring technique**. Elle crée une story **légère** avec description, motivation et critères d'acceptation. L'analyse profonde de l'architecture, l'identification des impacts et le plan de non-régression seront réalisés par `analyse-story`.
 
 **Principe : rester léger.** Ne pas explorer le code en profondeur, ne pas choisir la méthode de refactoring en détail, ni détailler les tâches techniques. Juste cadrer la story pour qu'elle soit prête à analyser.
 

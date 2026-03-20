@@ -5,7 +5,7 @@ description: Crée une story d'amélioration d'une fonctionnalité existante ave
 
 # create-improvement
 
-Cette skill guide la création d'une story d'**amélioration** d'une fonctionnalité existante dans WindFlow. Elle crée une story **légère** avec description, contexte et critères d'acceptation. L'analyse profonde du code, des impacts et le plan de non-régression seront réalisés par `analyse-story`.
+Cette skill guide la création d'une story d'**amélioration** d'une fonctionnalité existante. Elle crée une story **légère** avec description, contexte et critères d'acceptation. L'analyse profonde du code, des impacts et le plan de non-régression seront réalisés par `analyse-story`.
 
 **Principe : rester léger.** Ne pas explorer le code en profondeur ni détailler les tâches techniques. Juste cadrer la story pour qu'elle soit prête à analyser.
 
