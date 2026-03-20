@@ -64,6 +64,10 @@ def calculate_memory_percent(stats_data: dict) -> tuple[float, int, int]:
     """
     Calcule le pourcentage mémoire et les valeurs utilisées/limites.
 
+    Supporte cgroups v1 ET cgroups v2 :
+    - cgroups v1 : cache dans memory_stats.cache ou memory_stats.stats.cache
+    - cgroups v2 : cache dans memory_stats.stats.inactive_file
+
     Args:
         stats_data: Données de stats Docker brutes
 
@@ -71,11 +75,20 @@ def calculate_memory_percent(stats_data: dict) -> tuple[float, int, int]:
         Tuple (pourcentage, mémoire utilisée, limite mémoire)
     """
     memory_stats = stats_data.get("memory_stats", {})
+    memory_sub_stats = memory_stats.get("stats", {})
 
     # Memory usage (cache-inclusive)
     usage = memory_stats.get("usage", 0)
+
     # Cache/buffer memory (not counted as "real" usage)
-    cache = memory_stats.get("cache", 0) or memory_stats.get("stats", {}).get("cache", 0)
+    # cgroups v1: memory_stats.cache or memory_stats.stats.cache
+    # cgroups v2: memory_stats.stats.inactive_file (cache n'existe plus)
+    cache = (
+        memory_stats.get("cache", 0)
+        or memory_sub_stats.get("cache", 0)
+        or memory_sub_stats.get("inactive_file", 0)
+    )
+
     # Actual used memory
     used_memory = usage - cache if usage > cache else usage
     # Memory limit
@@ -110,9 +123,47 @@ def calculate_network_io(stats_data: dict) -> tuple[int, int]:
     return total_rx, total_tx
 
 
+def _sum_blkio_entries(entries: list | None) -> tuple[int, int]:
+    """
+    Additionne les entrées read/write d'une liste blkio_stats.
+
+    Args:
+        entries: Liste d'entrées blkio (format [{"op": "read", "value": N}, ...])
+
+    Returns:
+        Tuple (total_read, total_write) en bytes
+    """
+    if not entries:
+        return 0, 0
+
+    total_read = 0
+    total_write = 0
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        op = entry.get("op", "")
+        if isinstance(op, str):
+            op_lower = op.lower()
+            if op_lower == "read":
+                total_read += entry.get("value", 0) or 0
+            elif op_lower == "write":
+                total_write += entry.get("value", 0) or 0
+
+    return total_read, total_write
+
+
 def calculate_block_io(stats_data: dict) -> tuple[int, int]:
     """
     Calcule les I/O disque (read/write bytes).
+
+    Supporte cgroups v1 ET cgroups v2 :
+    - cgroups v1 : io_service_bytes_recursive (principal)
+    - cgroups v2 : io_service_bytes_recursive (Docker 25+) ou
+                   throttle_io_service_bytes_recursive (fallback en bytes)
+
+    Note: throttle_io_serviced_recursive (sans "bytes") mesure le nombre
+    d'opérations I/O (IOPS), PAS les bytes — ne pas l'utiliser ici.
 
     Args:
         stats_data: Données de stats Docker brutes
@@ -121,17 +172,24 @@ def calculate_block_io(stats_data: dict) -> tuple[int, int]:
         Tuple (bytes lus, bytes écrits)
     """
     blkio_stats = stats_data.get("blkio_stats", {})
-    io_service_bytes = blkio_stats.get("io_service_bytes_recursive", [])
 
-    total_read = 0
-    total_write = 0
+    # 1) io_service_bytes_recursive — cgroups v1 et Docker 25+ cgroups v2
+    total_read, total_write = _sum_blkio_entries(
+        blkio_stats.get("io_service_bytes_recursive")
+    )
 
-    if io_service_bytes:
-        for entry in io_service_bytes:
-            if entry.get("op", "").lower() == "read":
-                total_read += entry.get("value", 0)
-            elif entry.get("op", "").lower() == "write":
-                total_write += entry.get("value", 0)
+    # 2) Fallback : throttle_io_service_bytes_recursive (bytes throttled, cgroups v1/v2)
+    #    ATTENTION : ne pas confondre avec throttle_io_serviced_recursive (IOPS, pas bytes)
+    if total_read == 0 and total_write == 0:
+        total_read, total_write = _sum_blkio_entries(
+            blkio_stats.get("throttle_io_service_bytes_recursive")
+        )
+
+    if total_read == 0 and total_write == 0:
+        logger.debug(
+            "[ContainerStats] No block I/O data available (all blkio fields are null/empty, "
+            "possibly cgroups v2 with older Docker version)"
+        )
 
     return total_read, total_write
 

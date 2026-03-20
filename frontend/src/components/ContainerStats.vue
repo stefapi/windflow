@@ -164,6 +164,22 @@
               autoresize
             />
           </div>
+          <div class="history-chart">
+            <div class="chart-title">Réseau</div>
+            <v-chart
+              :option="networkChartOptions"
+              class="chart"
+              autoresize
+            />
+          </div>
+          <div class="history-chart">
+            <div class="chart-title">I/O Disque</div>
+            <v-chart
+              :option="ioChartOptions"
+              class="chart"
+              autoresize
+            />
+          </div>
         </div>
         <div
           v-else
@@ -408,6 +424,237 @@ const memoryChartOptions = computed(() => {
         lineStyle: {
           color: 'var(--el-color-success)',
           width: 2,
+        },
+      },
+    ],
+  }
+})
+
+// ECharts options for Network chart with autoscale (RX + TX on same chart)
+const networkChartOptions = computed(() => {
+  const historySlice = history.value.slice(-60)
+  const rxData = historySlice.map((entry) => entry.network_rx_bytes)
+  const txData = historySlice.map((entry) => entry.network_tx_bytes)
+
+  // Calculate dynamic max with padding (max of both RX and TX)
+  const maxRx = rxData.length > 0 ? Math.max(...rxData) : 0
+  const maxTx = txData.length > 0 ? Math.max(...txData) : 0
+  const maxValue = Math.max(maxRx, maxTx)
+  const paddedMax = Math.max(maxValue * 1.15, 1024) // 15% padding, minimum 1KB
+
+  // Get optimal scale
+  const scale = getOptimalScale(paddedMax)
+  const scaledRxData = rxData.map(v => v / scale.divisor)
+  const scaledTxData = txData.map(v => v / scale.divisor)
+
+  return {
+    grid: {
+      left: 50,
+      right: 10,
+      top: 30,
+      bottom: 20,
+    },
+    legend: {
+      data: ['RX', 'TX'],
+      top: 0,
+      right: 0,
+      textStyle: {
+        color: 'var(--el-text-color-secondary)',
+        fontSize: 10,
+      },
+    },
+    xAxis: {
+      type: 'category',
+      show: false,
+      data: rxData.map((_, i) => i),
+    },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      max: scale.niceMax,
+      splitLine: {
+        lineStyle: {
+          color: 'var(--el-border-color-lighter)',
+        },
+      },
+      axisLabel: {
+        color: 'var(--el-text-color-secondary)',
+        fontSize: 10,
+        formatter: (value: number) => `${value} ${scale.unit}`,
+      },
+    },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: Array<{ seriesName: string; value: number }>) => {
+        const parts = params.map((p) => {
+          const bytes = p.value * scale.divisor
+          return `${p.seriesName}: ${formatBytesAxis(bytes)}`
+        })
+        return parts.join('<br/>')
+      },
+    },
+    series: [
+      {
+        name: 'RX',
+        type: 'line',
+        data: scaledRxData,
+        smooth: true,
+        symbol: 'none',
+        lineStyle: {
+          color: 'var(--el-color-info)',
+          width: 2,
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(144, 147, 153, 0.3)' },
+              { offset: 1, color: 'rgba(144, 147, 153, 0.05)' },
+            ],
+          },
+        },
+      },
+      {
+        name: 'TX',
+        type: 'line',
+        data: scaledTxData,
+        smooth: true,
+        symbol: 'none',
+        lineStyle: {
+          color: 'var(--el-color-warning)',
+          width: 2,
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(230, 162, 60, 0.3)' },
+              { offset: 1, color: 'rgba(230, 162, 60, 0.05)' },
+            ],
+          },
+        },
+      },
+    ],
+  }
+})
+
+// ECharts options for Block I/O chart with autoscale (Read + Write on same chart)
+const ioChartOptions = computed(() => {
+  const historySlice = history.value.slice(-60)
+  const readData = historySlice.map((entry) => entry.block_read_bytes)
+  const writeData = historySlice.map((entry) => entry.block_write_bytes)
+  // Calculate dynamic max with padding (max of both Read and Write)
+  const maxRead = readData.length > 0 ? Math.max(...readData) : 0
+  const maxWrite = writeData.length > 0 ? Math.max(...writeData) : 0
+  const maxValue = Math.max(maxRead, maxWrite)
+  const paddedMax = Math.max(maxValue * 1.15, 1024) // 15% padding, minimum 1KB
+
+  // Get optimal scale
+  const scale = getOptimalScale(paddedMax)
+  const scaledReadData = readData.map(v => v / scale.divisor)
+  const scaledWriteData = writeData.map(v => v / scale.divisor)
+
+  return {
+    grid: {
+      left: 50,
+      right: 10,
+      top: 30,
+      bottom: 20,
+    },
+    legend: {
+      data: ['Lecture', 'Écriture'],
+      top: 0,
+      right: 0,
+      textStyle: {
+        color: 'var(--el-text-color-secondary)',
+        fontSize: 10,
+      },
+    },
+    xAxis: {
+      type: 'category',
+      show: false,
+      data: readData.map((_, i) => i),
+    },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      max: scale.niceMax,
+      splitLine: {
+        lineStyle: {
+          color: 'var(--el-border-color-lighter)',
+        },
+      },
+      axisLabel: {
+        color: 'var(--el-text-color-secondary)',
+        fontSize: 10,
+        formatter: (value: number) => `${value} ${scale.unit}`,
+      },
+    },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: Array<{ seriesName: string; value: number }>) => {
+        const parts = params.map((p) => {
+          const bytes = p.value * scale.divisor
+          return `${p.seriesName}: ${formatBytesAxis(bytes)}`
+        })
+        return parts.join('<br/>')
+      },
+    },
+    series: [
+      {
+        name: 'Lecture',
+        type: 'line',
+        data: scaledReadData,
+        smooth: true,
+        symbol: 'none',
+        lineStyle: {
+          color: 'var(--el-color-primary)',
+          width: 2,
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(64, 158, 255, 0.3)' },
+              { offset: 1, color: 'rgba(64, 158, 255, 0.05)' },
+            ],
+          },
+        },
+      },
+      {
+        name: 'Écriture',
+        type: 'line',
+        data: scaledWriteData,
+        smooth: true,
+        symbol: 'none',
+        lineStyle: {
+          color: 'var(--el-color-danger)',
+          width: 2,
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(245, 108, 108, 0.3)' },
+              { offset: 1, color: 'rgba(245, 108, 108, 0.05)' },
+            ],
+          },
         },
       },
     ],

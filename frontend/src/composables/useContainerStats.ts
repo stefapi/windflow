@@ -43,6 +43,10 @@ export interface StatsHistoryEntry {
   cpu_percent: number
   memory_percent: number
   memory_used: number
+  network_rx_bytes: number
+  network_tx_bytes: number
+  block_read_bytes: number
+  block_write_bytes: number
   timestamp: number
 }
 
@@ -246,6 +250,10 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
       cpu_percent: newStats.cpu_percent,
       memory_percent: newStats.memory_percent,
       memory_used: newStats.memory_used,
+      network_rx_bytes: newStats.network_rx_bytes,
+      network_tx_bytes: newStats.network_tx_bytes,
+      block_read_bytes: newStats.block_read_bytes,
+      block_write_bytes: newStats.block_write_bytes,
       timestamp: Date.now(),
     })
 

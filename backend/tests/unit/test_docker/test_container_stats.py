@@ -14,6 +14,7 @@ from app.websocket.container_stats import (
     calculate_memory_percent,
     calculate_network_io,
     calculate_block_io,
+    _sum_blkio_entries,
     format_stats_response,
 )
 
@@ -164,6 +165,78 @@ class TestCalculateMemoryPercent:
         assert used == 0
         assert limit == 0
 
+    def test_calculate_memory_percent_cgroups_v1_stats_cache(self):
+        """Test cgroups v1 avec cache dans memory_stats.stats.cache."""
+        stats = {
+            "memory_stats": {
+                "usage": 536870912,  # 512 MB
+                "limit": 1073741824,  # 1 GB
+                "stats": {
+                    "cache": 134217728  # 128 MB
+                }
+            }
+        }
+
+        percent, used, limit = calculate_memory_percent(stats)
+        # used = 512 MB - 128 MB = 384 MB
+        # percent = 384 MB / 1024 MB = 37.5%
+        assert used == 536870912 - 134217728
+        assert percent == 37.5
+        assert limit == 1073741824
+
+    def test_calculate_memory_percent_cgroups_v2_inactive_file(self):
+        """Test cgroups v2 avec inactive_file au lieu de cache."""
+        stats = {
+            "memory_stats": {
+                "usage": 536870912,  # 512 MB
+                "limit": 1073741824,  # 1 GB
+                "stats": {
+                    # Pas de champ "cache" sous cgroups v2
+                    "inactive_file": 134217728  # 128 MB
+                }
+            }
+        }
+
+        percent, used, limit = calculate_memory_percent(stats)
+        # used = 512 MB - 128 MB = 384 MB
+        # percent = 384 MB / 1024 MB = 37.5%
+        assert used == 536870912 - 134217728
+        assert percent == 37.5
+        assert limit == 1073741824
+
+    def test_calculate_memory_percent_cgroups_v2_no_cache_no_inactive_file(self):
+        """Test cgroups v2 sans cache ni inactive_file (fallback usage brut)."""
+        stats = {
+            "memory_stats": {
+                "usage": 536870912,
+                "limit": 1073741824,
+                "stats": {
+                    # Ni cache ni inactive_file
+                    "pgfault": 12345
+                }
+            }
+        }
+
+        percent, used, limit = calculate_memory_percent(stats)
+        # cache = 0, used = usage brut
+        assert used == 536870912
+        assert percent == 50.0
+
+    def test_calculate_memory_percent_cgroups_v1_top_level_cache(self):
+        """Test cgroups v1 avec cache au niveau supérieur de memory_stats."""
+        stats = {
+            "memory_stats": {
+                "usage": 536870912,  # 512 MB
+                "cache": 268435456,  # 256 MB
+                "limit": 1073741824  # 1 GB
+            }
+        }
+
+        percent, used, limit = calculate_memory_percent(stats)
+        # used = 512 MB - 256 MB = 256 MB
+        assert used == 536870912 - 268435456
+        assert percent == 25.0
+
 
 class TestCalculateNetworkIo:
     """Tests pour la fonction calculate_network_io."""
@@ -265,6 +338,107 @@ class TestCalculateBlockIo:
         read_bytes, write_bytes = calculate_block_io(stats)
         assert read_bytes == 0
         assert write_bytes == 0
+
+    def test_calculate_block_io_cgroups_v2_all_null(self):
+        """Test cgroups v2 avec tous les champs blkio à None."""
+        stats = {
+            "blkio_stats": {
+                "io_service_bytes_recursive": None,
+                "io_serviced_recursive": None,
+                "io_queue_recursive": None,
+                "io_service_time_recursive": None,
+                "io_wait_time_recursive": None,
+                "io_merged_recursive": None,
+                "io_time_recursive": None,
+                "sectors_recursive": None,
+            }
+        }
+        read_bytes, write_bytes = calculate_block_io(stats)
+        assert read_bytes == 0
+        assert write_bytes == 0
+
+    def test_calculate_block_io_throttle_service_bytes_fallback(self):
+        """Test fallback vers throttle_io_service_bytes_recursive (en bytes)."""
+        stats = {
+            "blkio_stats": {
+                "io_service_bytes_recursive": None,
+                "throttle_io_service_bytes_recursive": [
+                    {"op": "read", "value": 4096},
+                    {"op": "write", "value": 8192},
+                ]
+            }
+        }
+        read_bytes, write_bytes = calculate_block_io(stats)
+        assert read_bytes == 4096
+        assert write_bytes == 8192
+
+    def test_calculate_block_io_primary_takes_precedence_over_fallback(self):
+        """Test que io_service_bytes_recursive a priorité sur le fallback."""
+        stats = {
+            "blkio_stats": {
+                "io_service_bytes_recursive": [
+                    {"op": "read", "value": 1000},
+                    {"op": "write", "value": 2000},
+                ],
+                "throttle_io_service_bytes_recursive": [
+                    {"op": "read", "value": 9999},
+                    {"op": "write", "value": 9999},
+                ]
+            }
+        }
+        read_bytes, write_bytes = calculate_block_io(stats)
+        assert read_bytes == 1000
+        assert write_bytes == 2000
+
+    def test_calculate_block_io_uppercase_ops(self):
+        """Test avec les opérations en majuscules (format Docker variable)."""
+        stats = {
+            "blkio_stats": {
+                "io_service_bytes_recursive": [
+                    {"op": "Read", "value": 1024},
+                    {"op": "Write", "value": 2048},
+                    {"op": "Sync", "value": 512},
+                    {"op": "Async", "value": 256},
+                    {"op": "Total", "value": 3840},
+                ]
+            }
+        }
+        read_bytes, write_bytes = calculate_block_io(stats)
+        assert read_bytes == 1024
+        assert write_bytes == 2048
+
+
+class TestSumBlkioEntries:
+    """Tests pour la fonction helper _sum_blkio_entries."""
+
+    def test_sum_blkio_entries_none(self):
+        """Test avec None."""
+        assert _sum_blkio_entries(None) == (0, 0)
+
+    def test_sum_blkio_entries_empty(self):
+        """Test avec liste vide."""
+        assert _sum_blkio_entries([]) == (0, 0)
+
+    def test_sum_blkio_entries_basic(self):
+        """Test basique."""
+        entries = [
+            {"op": "read", "value": 100},
+            {"op": "write", "value": 200},
+        ]
+        assert _sum_blkio_entries(entries) == (100, 200)
+
+    def test_sum_blkio_entries_invalid_entries(self):
+        """Test avec des entrées invalides (non-dict)."""
+        entries = [None, "invalid", 42, {"op": "read", "value": 100}]
+        assert _sum_blkio_entries(entries) == (100, 0)
+
+    def test_sum_blkio_entries_missing_value(self):
+        """Test avec value manquante ou None."""
+        entries = [
+            {"op": "read"},
+            {"op": "write", "value": None},
+        ]
+        assert _sum_blkio_entries(entries) == (0, 0)
 
 
 class TestFormatStatsResponse:
