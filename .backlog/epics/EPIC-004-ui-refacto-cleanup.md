@@ -92,6 +92,7 @@ Cette epic a deux axes :
 - [x] STORY-444 : Vue ContainerDetail — onglet Logs (nouveau composant ContainerLogs.vue avec WebSocket temps réel)
 - [x] STORY-445 : Vue ContainerDetail — onglet Terminal (réutilise ContainerTerminal.vue)
 - [x] STORY-446 : Vue ContainerDetail — onglet Stats (CPU, RAM, network I/O temps réel)
+- [ ] STORY-447 : Vue ContainerDetail — onglet Processus (liste des processus running)
 
 ### Vue Settings
 - [ ] STORY-451 : Page Settings avec onglets : Organisations, Environnements, Utilisateurs

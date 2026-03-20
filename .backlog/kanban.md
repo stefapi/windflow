@@ -12,6 +12,7 @@
 #### Dashboard
 
 #### Vue Containers
+- [ ] STORY-447 : Vue ContainerDetail — onglet Processus (liste des processus running)
 
 #### Settings & Stubs
 - [ ] STORY-451 : Page Settings — Organisations, Environnements, Utilisateurs
