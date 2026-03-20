@@ -6,7 +6,7 @@ Implémente le pattern Repository avec SQLAlchemy 2.0 async.
 
 import re
 import unicodedata
-from typing import Optional, List
+from typing import Optional, List, Union
 from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,10 +54,12 @@ class OrganizationService:
     """Service de gestion des organisations (multi-tenant)."""
 
     @staticmethod
-    async def get_by_id(db: AsyncSession, org_id: UUID) -> Optional[Organization]:
+    async def get_by_id(db: AsyncSession, org_id: Union[UUID, str]) -> Optional[Organization]:
         """Récupère une organisation par son ID."""
+        # Convertir UUID en string car le modèle stocke l'ID comme String(36)
+        org_id_str = str(org_id) if isinstance(org_id, UUID) else org_id
         result = await db.execute(
-            select(Organization).where(Organization.id == org_id)
+            select(Organization).where(Organization.id == org_id_str)
         )
         return result.scalar_one_or_none()
 
@@ -153,7 +155,7 @@ class OrganizationService:
     @staticmethod
     async def update(
         db: AsyncSession,
-        org_id: UUID,
+        org_id: Union[UUID, str],
         org_data: OrganizationUpdate
     ) -> Optional[Organization]:
         """
@@ -167,7 +169,9 @@ class OrganizationService:
         Returns:
             Organisation mise à jour ou None si non trouvée
         """
-        org = await OrganizationService.get_by_id(db, org_id)
+        # Convertir UUID en string car le modèle stocke l'ID comme String(36)
+        org_id_str = str(org_id) if isinstance(org_id, UUID) else org_id
+        org = await OrganizationService.get_by_id(db, org_id_str)
         if not org:
             return None
 
@@ -183,7 +187,7 @@ class OrganizationService:
         return org
 
     @staticmethod
-    async def delete(db: AsyncSession, org_id: UUID) -> bool:
+    async def delete(db: AsyncSession, org_id: Union[UUID, str]) -> bool:
         """
         Supprime une organisation.
 
@@ -194,7 +198,9 @@ class OrganizationService:
         Returns:
             True si supprimée, False si non trouvée
         """
-        org = await OrganizationService.get_by_id(db, org_id)
+        # Convertir UUID en string car le modèle stocke l'ID comme String(36)
+        org_id_str = str(org_id) if isinstance(org_id, UUID) else org_id
+        org = await OrganizationService.get_by_id(db, org_id_str)
         if not org:
             return False
 

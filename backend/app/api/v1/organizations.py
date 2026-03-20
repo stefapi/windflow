@@ -286,7 +286,8 @@ async def get_organization(
         extra={"correlation_id": correlation_id, "organization_id": str(organization_id)}
     )
     # Vérifier que l'utilisateur appartient à l'organisation ou est superuser
-    if not current_user.is_superuser and current_user.organization_id != organization_id:
+    # Comparer en convertissant les deux côtés en string (organization_id en base est String(36))
+    if not current_user.is_superuser and current_user.organization_id != str(organization_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Accès refusé à cette organisation"
