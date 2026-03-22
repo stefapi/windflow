@@ -176,8 +176,8 @@ const badgeClasses = computed(() => [
 }
 
 .status-badge--neutral {
-  background-color: var(--color-bg-elevated, #f5f5f5);
-  color: var(--color-text-secondary, #666);
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
 }
 
 /* Icon styling */

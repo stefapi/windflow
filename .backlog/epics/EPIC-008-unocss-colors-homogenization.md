@@ -40,7 +40,7 @@ Le projet dispose déjà d'une configuration UnoCSS (`uno.config.ts`) et de vari
 - [ ] STORY-504 : Refactoriser ContainerTerminal.vue → variables CSS thémées (palette VS Code)
 
 ### Phase 3 : Composants UI réutilisables
-- [ ] STORY-505 : Refactoriser WindFlowLogo.vue + StatusBadge.vue + CounterCard.vue
+- [x] STORY-505 : Refactoriser WindFlowLogo.vue + StatusBadge.vue + CounterCard.vue
 - [ ] STORY-506 : Refactoriser DynamicFormField.vue + composants settings UI
 
 ### Phase 4 : Views principales et secondaires

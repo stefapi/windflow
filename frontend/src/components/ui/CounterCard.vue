@@ -141,7 +141,7 @@ const hasRunningStopped = computed(() => {
   background-color: var(--color-bg-hover);
   border-color: var(--color-accent);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.4));
+  box-shadow: var(--shadow-md);
 }
 
 /* Size variants */
@@ -276,10 +276,10 @@ const hasRunningStopped = computed(() => {
 }
 
 .counter-card__status-item--running .counter-card__status-count {
-  color: var(--color-success, #22c55e);
+  color: var(--color-success);
 }
 
 .counter-card__status-item--stopped .counter-card__status-count {
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
 }
 </style>

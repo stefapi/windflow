@@ -237,7 +237,7 @@ const getOptionLabel = (option: any): string => {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #909399;
+  color: var(--color-text-muted);
   font-size: 13px;
   margin-top: 4px;
 }

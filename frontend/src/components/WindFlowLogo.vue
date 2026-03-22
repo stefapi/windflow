@@ -73,12 +73,13 @@ const svgInnerContent = computed(() => {
 
 /**
  * Color applied via CSS `color` property, which feeds `currentColor` in the SVG paths.
+ * Uses theme CSS variables for consistent theming.
  */
 const strokeColor = computed(() => {
-  if (props.variant === 'light') return '#3b82f6'
-  if (props.variant === 'dark') return '#60a5fa'
-  // 'auto' — uses CSS custom property, falls back to blue
-  return 'var(--windflow-logo-color, #3b82f6)'
+  if (props.variant === 'light') return 'var(--color-accent)'
+  if (props.variant === 'dark') return 'var(--color-accent-hover)'
+  // 'auto' — uses CSS custom property, falls back to theme accent
+  return 'var(--windflow-logo-color, var(--color-accent))'
 })
 </script>
 
@@ -113,14 +114,14 @@ const strokeColor = computed(() => {
 /* Texte - utilise les variables CSS globales du thème */
 .windflow-logo__text {
   font-weight: 500;
-  color: var(--color-text-primary, #e1e4eb);
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   letter-spacing: 0.01em;
 }
 
 .windflow-logo__text-accent {
-  color: var(--color-accent, #3b82f6);
+  color: var(--color-accent);
 }
 
 .windflow-logo--small .windflow-logo__text {
@@ -135,20 +136,20 @@ const strokeColor = computed(() => {
   font-size: 28px;
 }
 
-/* Explicit variant overrides (take priority over CSS variables) */
+/* Variant overrides using theme CSS variables */
 .windflow-logo--dark .windflow-logo__text {
-  color: #ffffff;
+  color: var(--color-text-primary);
 }
 
 .windflow-logo--dark .windflow-logo__text-accent {
-  color: #60a5fa;
+  color: var(--color-accent-hover);
 }
 
 .windflow-logo--light .windflow-logo__text {
-  color: #1e293b;
+  color: var(--color-text-primary);
 }
 
 .windflow-logo--light .windflow-logo__text-accent {
-  color: #2563eb;
+  color: var(--color-accent);
 }
 </style>
