@@ -129,6 +129,18 @@ export default defineConfig({
     'logs-footer': 'bg-bg-elevated border-t border-border px-4 py-3',
     'logs-content': 'bg-bg-primary p-4 overflow-auto',
 
+    // Log level text colors
+    'log-error': 'text-[var(--color-log-error)]',
+    'log-warning': 'text-[var(--color-log-warning)]',
+    'log-info': 'text-[var(--color-log-info)]',
+    'log-debug': 'text-[var(--color-log-debug)] italic',
+    'log-line-number': 'text-[var(--color-log-line-number)] select-none pr-3 text-right',
+
+    // Code blocks styling
+    'code-block': 'bg-[var(--color-code-bg)] text-[var(--color-code-fg)] font-mono p-4 rounded-lg',
+    'code-console': 'bg-[var(--color-terminal-bg)] text-[var(--color-terminal-fg)] font-mono p-4 rounded-lg',
+    'code-inline': 'bg-[var(--color-code-bg)] text-[var(--color-code-fg)] font-mono px-1.5 py-0.5 rounded text-sm',
+
     // Table styles
     'table-container': 'bg-bg-card rounded-lg border border-border overflow-hidden',
     'table-header': 'bg-bg-elevated',

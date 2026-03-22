@@ -121,6 +121,38 @@
   --color-info: #6b7280;
   --color-info-light: rgba(107, 114, 128, 0.15);
 
+  /* Terminal colors - VS Code Dark style */
+  --color-terminal-bg: #0c0c0c;
+  --color-terminal-fg: #cccccc;
+  --color-terminal-cursor: #ffffff;
+  --color-terminal-selection: #264f78;
+  --color-terminal-red: #cd3131;
+  --color-terminal-green: #0dbc79;
+  --color-terminal-yellow: #e5e510;
+  --color-terminal-blue: #2472c8;
+  --color-terminal-magenta: #bc3fbc;
+  --color-terminal-cyan: #11a8cd;
+  --color-terminal-white: #e5e5e5;
+  --color-terminal-bright-black: #666666;
+  --color-terminal-bright-red: #f14c4c;
+  --color-terminal-bright-green: #23d18b;
+  --color-terminal-bright-yellow: #f5f543;
+  --color-terminal-bright-blue: #3b8eea;
+  --color-terminal-bright-magenta: #d670d6;
+  --color-terminal-bright-cyan: #29b8db;
+  --color-terminal-bright-white: #ffffff;
+
+  /* Log colors */
+  --color-log-error: #f48771;
+  --color-log-warning: #dcdcaa;
+  --color-log-info: #4ec9b0;
+  --color-log-debug: #858585;
+  --color-log-line-number: #858585;
+
+  /* Code blocks */
+  --color-code-bg: #1e1e1e;
+  --color-code-fg: #d4d4d4;
+
   /* Element Plus overrides - Dark mode */
   --el-bg-color: var(--color-bg-primary);
   --el-bg-color-page: var(--color-bg-primary);
@@ -217,6 +249,38 @@
   --color-warning-light: rgba(217, 119, 6, 0.1);
   --color-info: #6b7280;
   --color-info-light: rgba(107, 114, 128, 0.1);
+
+  /* Terminal colors - Light theme adapted */
+  --color-terminal-bg: #ffffff;
+  --color-terminal-fg: #333333;
+  --color-terminal-cursor: #000000;
+  --color-terminal-selection: #add6ff;
+  --color-terminal-red: #cd3131;
+  --color-terminal-green: #008000;
+  --color-terminal-yellow: #795e26;
+  --color-terminal-blue: #0000ff;
+  --color-terminal-magenta: #af00db;
+  --color-terminal-cyan: #0598bc;
+  --color-terminal-white: #666666;
+  --color-terminal-bright-black: #666666;
+  --color-terminal-bright-red: #cd3131;
+  --color-terminal-bright-green: #008000;
+  --color-terminal-bright-yellow: #795e26;
+  --color-terminal-bright-blue: #0000ff;
+  --color-terminal-bright-magenta: #af00db;
+  --color-terminal-bright-cyan: #0598bc;
+  --color-terminal-bright-white: #333333;
+
+  /* Log colors */
+  --color-log-error: #cd3131;
+  --color-log-warning: #795e26;
+  --color-log-info: #0598bc;
+  --color-log-debug: #6b7280;
+  --color-log-line-number: #6b7280;
+
+  /* Code blocks */
+  --color-code-bg: #f5f5f5;
+  --color-code-fg: #333333;
 
   /* Element Plus overrides - Light mode */
   --el-bg-color: var(--color-bg-primary);

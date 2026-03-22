@@ -1,6 +1,6 @@
 # EPIC-008 : Homogénéisation des couleurs UnoCSS
 
-**Statut :** TODO
+**Statut :** IN_PROGRESS
 **Priorité :** Haute
 
 ## Vision
@@ -32,7 +32,7 @@ Le projet dispose déjà d'une configuration UnoCSS (`uno.config.ts`) et de vari
 ## Liste des Stories liées
 
 ### Phase 1 : Infrastructure UnoCSS
-- [ ] STORY-501 : Enrichir UnoCSS + theme.css avec variables terminal/logs/code blocks
+- [x] STORY-501 : Enrichir UnoCSS + theme.css avec variables terminal/logs/code blocks
 
 ### Phase 2 : Composants critiques (haute visibilité)
 - [ ] STORY-502 : Refactoriser Login.vue + SplashScreen.vue → variables CSS thémées
