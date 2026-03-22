@@ -325,7 +325,21 @@ body {
 /* Fix el-card in dark mode */
 .el-card {
   --el-card-bg-color: var(--color-bg-card);
+  background-color: var(--color-bg-card) !important;
   border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.el-card__header {
+  background-color: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  padding: 16px 20px;
+}
+
+.el-card__body {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
 }
 
 /* Fix el-dialog in dark mode */

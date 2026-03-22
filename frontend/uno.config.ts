@@ -84,9 +84,15 @@ export default defineConfig({
     'flex-between': 'flex items-center justify-between',
     'flex-col-center': 'flex flex-col items-center justify-center',
 
-    // Card styles
-    'card': 'bg-bg-card rounded-lg shadow-md p-4 border border-border',
-    'card-elevated': 'bg-bg-elevated rounded-lg shadow-lg p-4 border border-border',
+    // Card styles - Dark mode compatible
+    'card': 'bg-[var(--color-bg-card)] rounded-lg shadow-md p-4 border border-[var(--color-border)] text-[var(--color-text-primary)]',
+    'card-elevated': 'bg-[var(--color-bg-elevated)] rounded-lg shadow-lg p-4 border border-[var(--color-border)] text-[var(--color-text-primary)]',
+    'card-interactive': 'bg-[var(--color-bg-card)] rounded-lg shadow-md p-4 border border-[var(--color-border)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)] cursor-pointer transition-all duration-200',
+    'card-header': 'bg-[var(--color-bg-elevated)] text-[var(--color-text-primary)] border-b border-[var(--color-border)]',
+
+    // Panel styles (for sections like capabilities, logs, etc.) - Dark mode compatible
+    'panel': 'bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border)] text-[var(--color-text-primary)]',
+    'panel-elevated': 'bg-[var(--color-bg-elevated)] rounded-lg border border-[var(--color-border)] text-[var(--color-text-primary)]',
 
     // Button base
     'btn': 'px-4 py-2 rounded cursor-pointer transition-all duration-200',
@@ -116,5 +122,17 @@ export default defineConfig({
     // Dividers
     'divider': 'border-t border-border',
     'divider-vertical': 'border-l border-border h-full',
+
+    // Logs console styles
+    'logs-container': 'bg-bg-primary rounded-lg border border-border font-mono text-sm',
+    'logs-header': 'bg-bg-elevated border-b border-border px-4 py-3',
+    'logs-footer': 'bg-bg-elevated border-t border-border px-4 py-3',
+    'logs-content': 'bg-bg-primary p-4 overflow-auto',
+
+    // Table styles
+    'table-container': 'bg-bg-card rounded-lg border border-border overflow-hidden',
+    'table-header': 'bg-bg-elevated',
+    'table-row': 'hover:bg-bg-hover transition-colors',
+    'table-row-alternate': 'bg-bg-secondary',
   },
 })

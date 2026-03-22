@@ -99,7 +99,7 @@ Cette epic a deux axes :
 - [ ] STORY-452 : Gestion RBAC depuis la page Settings (rôles, permissions par user)
 
 ### Vues Stubs (prêtes pour EPIC-001/002/003)
-- [ ] STORY-461 : Vue stub Volumes + Networks + Images (placeholder "Bientôt disponible" + lien vers EPIC-002)
+- [x] STORY-461 : Vue stub Volumes + Networks + Images (placeholder "Bientôt disponible" + lien vers EPIC-002)
 - [ ] STORY-462 : Vue stub Plugins installés (placeholder "Aucun plugin installé" + lien marketplace futur)
 
 ## Notes de conception

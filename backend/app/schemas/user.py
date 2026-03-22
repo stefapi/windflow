@@ -7,7 +7,7 @@ pour une documentation OpenAPI complète.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
@@ -438,4 +438,64 @@ class TokenData(BaseModel):
         default=False,
         description="Superutilisateur",
         json_schema_extra={"example": False}
+    )
+
+
+class UserListResponse(BaseModel):
+    """
+    Schema pour réponse paginée de liste d'utilisateurs.
+
+    Retourné par le endpoint de liste des utilisateurs avec
+    métadonnées de pagination complètes.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "items": [
+                    {
+                        "id": "user-990e8400",
+                        "email": "john.doe@company.com",
+                        "username": "johndoe",
+                        "full_name": "John Doe",
+                        "is_active": True,
+                        "is_superuser": False,
+                        "organization_id": "org-001",
+                        "keycloak_id": None,
+                        "created_at": "2026-01-02T10:00:00Z",
+                        "updated_at": "2026-01-02T10:00:00Z",
+                        "last_login": "2026-01-02T22:30:00Z"
+                    }
+                ],
+                "total": 25,
+                "page": 1,
+                "size": 100,
+                "pages": 1
+            }
+        }
+    )
+
+    items: List[UserResponse] = Field(
+        ...,
+        description="Liste des utilisateurs"
+    )
+    total: int = Field(
+        ...,
+        description="Nombre total d'utilisateurs",
+        json_schema_extra={"example": 25}
+    )
+    page: int = Field(
+        ...,
+        description="Numéro de page actuel (commence à 1)",
+        json_schema_extra={"example": 1}
+    )
+    size: int = Field(
+        ...,
+        description="Taille de page (nombre d'éléments par page)",
+        json_schema_extra={"example": 100}
+    )
+    pages: int = Field(
+        ...,
+        description="Nombre total de pages",
+        json_schema_extra={"example": 1}
     )

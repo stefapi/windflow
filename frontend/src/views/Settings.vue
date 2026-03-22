@@ -397,7 +397,7 @@ onMounted(() => {
 }
 
 .settings-tabs {
-  background: white;
+  background-color: var(--color-bg-card);
   border-radius: 8px;
   padding: 16px;
 }

@@ -47,19 +47,19 @@
   </el-dialog>
 </template>
 
-<script setup lang="ts">
+<script setup lang="ts" generic="T">
 import { computed } from 'vue'
 
 interface Props {
   visible: boolean
-  items: unknown[]
+  items: T[]
   itemLabel: string
   pluralSuffix?: string
   listLabel?: string
   maxDisplayed?: number
   loading?: boolean
-  getItemLabel: (item: unknown) => string
-  getItemKey?: (item: unknown, index: number) => string | number
+  getItemLabel: (item: T) => string
+  getItemKey?: (item: T, index: number) => string | number
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -67,7 +67,7 @@ const props = withDefaults(defineProps<Props>(), {
   listLabel: 'Éléments concernés',
   maxDisplayed: 5,
   loading: false,
-  getItemKey: (_item: unknown, index: number) => index,
+  getItemKey: (_item: T, index: number) => index,
 })
 
 const emit = defineEmits<{

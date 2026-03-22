@@ -214,8 +214,8 @@ const getOptionLabel = (option: any): string => {
 .group-header {
   margin: 20px 0 12px 0;
   padding: 12px 16px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
-  border-left: 4px solid #409eff;
+  background: linear-gradient(135deg, var(--color-bg-secondary) 0%, var(--color-bg-elevated) 100%);
+  border-left: 4px solid var(--el-color-primary);
   border-radius: 4px;
 }
 
@@ -223,13 +223,13 @@ const getOptionLabel = (option: any): string => {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .group-description {
   margin: 6px 0 0 0;
   font-size: 13px;
-  color: #606266;
+  color: var(--color-text-secondary);
   line-height: 1.5;
 }
 

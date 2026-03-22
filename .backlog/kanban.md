@@ -13,7 +13,6 @@
 
 #### Settings & Stubs
 - [ ] STORY-452 : Gestion RBAC depuis la page Settings
-- [ ] STORY-461 : Vues stubs Volumes, Networks, Images
 - [ ] STORY-462 : Vue stub Plugins installés
 
 ### EPIC-005 : Tests d'Intégration Backend (Qualité — Q1 2026)
@@ -21,6 +20,8 @@
 ### EPIC-006 : Tests d'Intégration Frontend (Qualité — Q1 2026)
 
 ### EPIC-007 : Infrastructure de Mocks pour Tests (Qualité — Phase 1)
+
+### EPIC-008 : Homogénéisation des couleurs UnoCSS (Refactoring Design System)
 
 ### EPIC-001 : Système de Plugins & Marketplace (Phase 2 — Q2 2026)
 ### EPIC-002 : Gestion des Machines Virtuelles — KVM & Proxmox (Phase 2 — Q2 2026)
@@ -32,9 +33,10 @@
 
 ## 🚧 REVIEW (En attente de validation)
 
-*(aucune story en attente de validation)*
+*(aucune story en attente)*
 
 ## ✅ DONE (Terminé)
+- [x] STORY-461 : Vues stubs Volumes, Networks, Images
 - [x] STORY-451 : Page Settings — Organisations, Environments, Users
 - [x] STORY-447 : ContainerDetail — onglet Processus (liste des processus running)
 - [x] STORY-446 : ContainerDetail — onglet Stats temps réel

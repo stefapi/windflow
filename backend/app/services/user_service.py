@@ -200,14 +200,47 @@ class UserService:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def list_all(
+        db: AsyncSession,
+        skip: int = 0,
+        limit: int = 100
+    ) -> Tuple[List[User], int]:
+        """
+        Liste tous les utilisateurs de toutes les organisations (pour superusers).
+
+        Args:
+            db: Session de base de données async
+            skip: Nombre d'éléments à sauter (pagination)
+            limit: Nombre max d'éléments à retourner
+
+        Returns:
+            Tuple[List[User], int]: Liste d'utilisateurs et nombre total
+        """
+        # Requête pour les utilisateurs paginés
+        result = await db.execute(
+            select(User)
+            .offset(skip)
+            .limit(limit)
+        )
+        users = list(result.scalars().all())
+
+        # Requête pour le count total
+        count_result = await db.execute(
+            select(func.count()).select_from(User)
+        )
+        total = count_result.scalar_one()
+
+        return users, total
+
+    @staticmethod
     async def list_by_organization(
         db: AsyncSession,
         organization_id: str,
         skip: int = 0,
         limit: int = 100
-    ) -> List[User]:
+    ) -> Tuple[List[User], int]:
         """
-        Liste les utilisateurs d'une organisation.
+        Liste les utilisateurs d'une organisation avec le nombre total.
 
         Args:
             db: Session de base de données async
@@ -216,15 +249,24 @@ class UserService:
             limit: Nombre max d'éléments à retourner
 
         Returns:
-            Liste d'utilisateurs
+            Tuple[List[User], int]: Liste d'utilisateurs et nombre total
         """
+        # Requête pour les utilisateurs paginés
         result = await db.execute(
             select(User)
             .where(User.organization_id == organization_id)
             .offset(skip)
             .limit(limit)
         )
-        return list(result.scalars().all())
+        users = list(result.scalars().all())
+
+        # Requête pour le count total
+        count_result = await db.execute(
+            select(func.count()).select_from(User).where(User.organization_id == organization_id)
+        )
+        total = count_result.scalar_one()
+
+        return users, total
 
     @staticmethod
     async def count_by_organization(db: AsyncSession, organization_id: str) -> int:

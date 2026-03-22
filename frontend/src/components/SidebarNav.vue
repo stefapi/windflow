@@ -80,6 +80,10 @@
                   <component :is="item.icon" />
                 </el-icon>
                 <span class="nav-label">{{ item.label }}</span>
+                <span
+                  v-if="item.badge"
+                  class="nav-badge"
+                >{{ item.badge }}</span>
               </div>
             </el-tooltip>
           </li>
@@ -113,6 +117,10 @@
                   <component :is="item.icon" />
                 </el-icon>
                 <span class="nav-label">{{ item.label }}</span>
+                <span
+                  v-if="item.badge"
+                  class="nav-badge"
+                >{{ item.badge }}</span>
               </div>
             </el-tooltip>
           </li>
@@ -228,6 +236,10 @@
                   <component :is="item.icon" />
                 </el-icon>
                 <span class="nav-label">{{ item.label }}</span>
+                <span
+                  v-if="item.badge"
+                  class="nav-badge"
+                >{{ item.badge }}</span>
               </div>
             </el-tooltip>
           </li>
@@ -343,28 +355,28 @@ const dashboardItems: NavItem[] = [
 // Infrastructure section items
 const infrastructureItems: NavItem[] = [
   { icon: Box, label: 'Containers', path: '/containers' },
-  { icon: Monitor, label: 'VMs', path: '/vms' },
+  { icon: Monitor, label: 'VMs', path: '/vms', badge: 'Bientôt' },
   { icon: Connection, label: 'Stacks', path: '/stacks' },
   { icon: Upload, label: 'Targets', path: '/targets' },
 ]
 
 // Storage & Network section items
 const storageNetworkItems: NavItem[] = [
-  { icon: FolderOpened, label: 'Volumes', path: '/volumes' },
-  { icon: Link, label: 'Networks', path: '/networks' },
-  { icon: PictureFilled, label: 'Images', path: '/images' },
+  { icon: FolderOpened, label: 'Volumes', path: '/volumes', badge: 'Bientôt' },
+  { icon: Link, label: 'Networks', path: '/networks', badge: 'Bientôt' },
+  { icon: PictureFilled, label: 'Images', path: '/images', badge: 'Bientôt' },
 ]
 
 // Marketplace section items
 const marketplaceItems: NavItem[] = [
-  { icon: ShoppingCart, label: 'Marketplace', path: '/marketplace' },
-  { icon: Grid, label: 'Plugins', path: '/plugins' },
+  { icon: ShoppingCart, label: 'Marketplace', path: '/marketplace', badge: 'Bientôt' },
+  { icon: Grid, label: 'Plugins', path: '/plugins', badge: 'Bientôt' },
 ]
 
 // Administration section items
 const administrationItems: NavItem[] = [
   { icon: Setting, label: 'Settings', path: '/settings' },
-  { icon: DocumentChecked, label: 'Audit', path: '/audit' },
+  { icon: DocumentChecked, label: 'Audit', path: '/audit', badge: 'Bientôt' },
 ]
 
 // Plugin items from dynamic store

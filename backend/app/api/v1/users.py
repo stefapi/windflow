@@ -5,12 +5,13 @@ Routes de gestion des utilisateurs.
 from typing import List
 from uuid import UUID
 import logging
+import math
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_db
-from ...schemas.user import UserResponse, UserCreate, UserUpdate
+from ...schemas.user import UserResponse, UserCreate, UserUpdate, UserListResponse
 from ...services.user_service import UserService
 from ...auth.dependencies import get_current_active_user, require_superuser
 from ...models.user import User
@@ -42,15 +43,15 @@ logger = logging.getLogger(__name__)
 
 @router.get(
     "/",
-    response_model=List[UserResponse],
+    response_model=UserListResponse,
     status_code=status.HTTP_200_OK,
-    summary="List organization users",
+    summary="List users",
     description="""
-List all users within the current user's organization.
+List users with role-based visibility.
 
 ## Access Control
 - **Regular Users**: Can only see users from their own organization
-- **Superusers**: Can see users from their organization (cross-org access requires specific endpoint)
+- **Superusers**: Can see ALL users from ALL organizations
 
 ## Pagination
 Use `skip` and `limit` parameters for pagination:
@@ -62,86 +63,46 @@ Use `skip` and `limit` parameters for pagination:
 - User selection for role assignment
 - Team member management
 - Organization user audit
+- Global user administration (superusers)
 
 **Authentication Required**
 """,
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
-    openapi_extra={
-        "parameters": [
-            {
-                "name": "skip",
-                "in": "query",
-                "description": "Number of users to skip for pagination",
-                "required": False,
-                "schema": {
-                    "type": "integer",
-                    "default": 0,
-                    "minimum": 0
-                },
-                "examples": {
-                    "first_page": {
-                        "summary": "First page",
-                        "value": 0
-                    },
-                    "second_page": {
-                        "summary": "Second page (skip 100)",
-                        "value": 100
-                    }
-                }
-            },
-            {
-                "name": "limit",
-                "in": "query",
-                "description": "Maximum number of users to return",
-                "required": False,
-                "schema": {
-                    "type": "integer",
-                    "default": 100,
-                    "minimum": 1,
-                    "maximum": 100
-                },
-                "examples": {
-                    "default": {
-                        "summary": "Default (100 users)",
-                        "value": 100
-                    },
-                    "small_page": {
-                        "summary": "Small page (10 users)",
-                        "value": 10
-                    }
-                }
-            }
-        ]
-    },
     responses={
         200: {
             "description": "List of users retrieved successfully",
             "content": {
                 "application/json": {
-                    "example": [
-                        {
-                            "id": "550e8400-e29b-41d4-a716-446655440000",
-                            "username": "admin",
-                            "email": "admin@windflow.io",
-                            "full_name": "Administrator",
-                            "is_active": True,
-                            "is_superuser": True,
-                            "organization_id": "660e8400-e29b-41d4-a716-446655440001",
-                            "created_at": "2026-01-01T10:00:00Z",
-                            "updated_at": "2026-01-15T14:30:00Z"
-                        },
-                        {
-                            "id": "770e8400-e29b-41d4-a716-446655440002",
-                            "username": "john_doe",
-                            "email": "john@windflow.io",
-                            "full_name": "John Doe",
-                            "is_active": True,
-                            "is_superuser": False,
-                            "organization_id": "660e8400-e29b-41d4-a716-446655440001",
-                            "created_at": "2026-01-10T09:15:00Z",
-                            "updated_at": "2026-01-20T11:45:00Z"
-                        }
-                    ]
+                    "example": {
+                        "items": [
+                            {
+                                "id": "550e8400-e29b-41d4-a716-446655440000",
+                                "username": "admin",
+                                "email": "admin@windflow.io",
+                                "full_name": "Administrator",
+                                "is_active": True,
+                                "is_superuser": True,
+                                "organization_id": "660e8400-e29b-41d4-a716-446655440001",
+                                "created_at": "2026-01-01T10:00:00Z",
+                                "updated_at": "2026-01-15T14:30:00Z"
+                            },
+                            {
+                                "id": "770e8400-e29b-41d4-a716-446655440002",
+                                "username": "john_doe",
+                                "email": "john@windflow.io",
+                                "full_name": "John Doe",
+                                "is_active": True,
+                                "is_superuser": False,
+                                "organization_id": "660e8400-e29b-41d4-a716-446655440001",
+                                "created_at": "2026-01-10T09:15:00Z",
+                                "updated_at": "2026-01-20T11:45:00Z"
+                            }
+                        ],
+                        "total": 2,
+                        "page": 1,
+                        "size": 100,
+                        "pages": 1
+                    }
                 }
             }
         },
@@ -177,23 +138,40 @@ async def list_users(
     """List all users within the current user's organization."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
-        "Listing users for organization",
+        "Listing users",
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
             "organization_id": str(current_user.organization_id),
+            "is_superuser": current_user.is_superuser,
             "skip": skip,
             "limit": limit
         }
     )
 
-    users = await UserService.list_by_organization(
-        session,
-        current_user.organization_id,
-        skip,
-        limit
+    # Superusers voient tous les utilisateurs de toutes les organisations
+    if current_user.is_superuser:
+        users, total = await UserService.list_all(session, skip, limit)
+    else:
+        # Les utilisateurs normaux voient uniquement ceux de leur organisation
+        users, total = await UserService.list_by_organization(
+            session,
+            current_user.organization_id,
+            skip,
+            limit
+        )
+
+    # Calculer les métadonnées de pagination
+    page = (skip // limit) + 1 if limit > 0 else 1
+    pages = math.ceil(total / limit) if limit > 0 else 1
+
+    return UserListResponse(
+        items=users,
+        total=total,
+        page=page,
+        size=limit,
+        pages=pages
     )
-    return users
 
 
 @router.get(
@@ -852,7 +830,7 @@ async def update_user(
                 detail=f"Utilisateur avec l'email '{user_data.email}' existe déjà"
             )
 
-    user = await UserService.update(session, user_id, user_data)
+    user = await UserService.update(session, existing_user, user_data)
     return user
 
 
@@ -1005,7 +983,7 @@ async def delete_user(
             detail="Accès refusé à cet utilisateur"
         )
 
-    await UserService.delete(session, user_id)
+    await UserService.delete(session, user)
 
 
 @router.post(

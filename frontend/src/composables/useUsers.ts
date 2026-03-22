@@ -62,10 +62,9 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersReturn {
 
     try {
       const response = await usersApi.list({ skip, limit })
-      // Backend returns a simple array, not a paginated response
-      const data = Array.isArray(response.data) ? response.data : response.data.items || []
-      users.value = data
-      total.value = Array.isArray(response.data) ? data.length : (response.data.total || data.length)
+      // Backend returns paginated response
+      users.value = response.data.items
+      total.value = response.data.total
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la récupération des utilisateurs'
       error.value = errorMessage

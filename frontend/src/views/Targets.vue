@@ -308,7 +308,7 @@ onMounted(() => {
 
 .capabilities-section {
   padding: 20px;
-  background-color: #f5f7fa;
+  background-color: var(--color-bg-secondary);
   border-radius: 4px;
   margin: 10px 0;
 }
@@ -317,11 +317,11 @@ onMounted(() => {
   margin: 0 0 15px 0;
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 
 .capabilities-table {
-  background-color: white;
+  background-color: var(--color-bg-card);
   border-radius: 4px;
 }
 

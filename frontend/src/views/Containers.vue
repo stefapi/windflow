@@ -1,18 +1,17 @@
 <template>
-  <div class="containers-page">
+  <div class="p-0">
     <!-- Header -->
-    <el-card class="page-header">
+    <el-card class="mb-5">
       <template #header>
-        <div class="header-content">
-          <div class="header-title">
-            <span class="title">Containers</span>
-            <span class="subtitle">Gestion des containers Docker</span>
+        <div class="flex justify-between items-center">
+          <div class="flex flex-col gap-1">
+            <span class="text-xl font-semibold text-[var(--color-text-primary)]">Containers</span>
+            <span class="text-sm text-[var(--color-text-secondary)]">Gestion des containers Docker</span>
           </div>
-          <div class="header-actions">
+          <div class="flex items-center gap-3">
             <el-badge
               :value="containersStore.runningContainers.length"
               type="success"
-              class="counter-badge"
             >
               <el-tag type="success">
                 Running
@@ -21,7 +20,6 @@
             <el-badge
               :value="containersStore.stoppedContainers.length"
               type="info"
-              class="counter-badge"
             >
               <el-tag type="info">
                 Stopped
@@ -47,18 +45,18 @@
         type="error"
         show-icon
         closable
-        class="error-alert"
+        class="mb-4"
         @close="containersStore.error = null"
       />
 
       <!-- Filters Bar -->
-      <div class="filters-bar">
-        <div class="filters-left">
+      <div class="flex justify-between items-center mb-4 px-4 py-3 bg-[var(--color-bg-secondary)] rounded-lg">
+        <div class="flex items-center gap-3">
           <el-select
             v-model="filters.status.value"
             placeholder="Statut"
             clearable
-            class="filter-select"
+            class="w-35"
             @change="onFilterChange"
           >
             <el-option
@@ -83,7 +81,7 @@
             v-model="filters.search.value"
             placeholder="Rechercher par nom..."
             clearable
-            class="search-input"
+            class="w-62"
             @input="onSearchInput"
           >
             <template #prefix>
@@ -102,8 +100,8 @@
           </el-button>
         </div>
 
-        <div class="filters-right">
-          <span class="results-count">
+        <div class="flex items-center gap-3">
+          <span class="text-sm text-[var(--color-text-secondary)]">
             {{ resultsCountText }}
           </span>
         </div>
@@ -113,9 +111,9 @@
       <transition name="slide-down">
         <div
           v-if="selectedContainerIds.length > 0"
-          class="bulk-actions-bar"
+          class="flex justify-between items-center px-4 py-3 mb-4 bg-[var(--color-accent-light)] border border-[var(--color-accent)] rounded-lg"
         >
-          <div class="bulk-actions-left">
+          <div class="flex items-center gap-3">
             <el-tag
               type="primary"
               effect="dark"
@@ -130,7 +128,7 @@
               Annuler la sélection
             </el-button>
           </div>
-          <div class="bulk-actions-right">
+          <div class="flex items-center gap-2">
             <el-button
               size="small"
               :loading="bulkActionLoading === 'start'"
@@ -183,7 +181,7 @@
         :data="filteredContainers"
         :empty-text="emptyText"
         stripe
-        class="containers-table"
+        class="w-full"
         @selection-change="handleSelectionChange"
       >
         <el-table-column
@@ -199,7 +197,7 @@
           <template #default="{ row }">
             <router-link
               :to="`/containers/${row.id}`"
-              class="container-name-link"
+              class="text-[var(--color-accent)] no-underline font-medium hover:underline"
             >
               {{ row.name }}
             </router-link>
@@ -216,7 +214,7 @@
               :content="row.imageId"
               placement="top"
             >
-              <span class="image-name">{{ row.image }}</span>
+              <span class="font-mono text-xs">{{ row.image }}</span>
             </el-tooltip>
           </template>
         </el-table-column>
@@ -237,7 +235,7 @@
           min-width="140"
         >
           <template #default="{ row }">
-            <span class="status-text">{{ row.status }}</span>
+            <span class="text-xs text-[var(--color-text-secondary)]">{{ row.status }}</span>
           </template>
         </el-table-column>
 
@@ -249,13 +247,13 @@
           <template #default="{ row }">
             <div
               v-if="row.ports && row.ports.length > 0"
-              class="ports-list"
+              class="flex flex-wrap gap-1"
             >
               <el-tag
                 v-for="(port, index) in row.ports.slice(0, 3)"
                 :key="index"
                 size="small"
-                class="port-tag"
+                class="font-mono text-[11px]"
               >
                 {{ formatPort(port) }}
               </el-tag>
@@ -269,7 +267,7 @@
             </div>
             <span
               v-else
-              class="no-ports"
+              class="text-[var(--color-text-muted)]"
             >-</span>
           </template>
         </el-table-column>
@@ -719,111 +717,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.containers-page {
-  padding: 0;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.header-title {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-
-.subtitle {
-  font-size: 14px;
-  color: var(--el-text-color-secondary);
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.counter-badge {
-  margin-right: 8px;
-}
-
-.error-alert {
-  margin-bottom: 16px;
-}
-
-/* Filters Bar */
-.filters-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding: 12px 16px;
-  background-color: var(--el-fill-color-light);
-  border-radius: 8px;
-}
-
-.filters-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.filter-select {
-  width: 140px;
-}
-
-.search-input {
-  width: 250px;
-}
-
-.filters-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.results-count {
-  font-size: 14px;
-  color: var(--el-text-color-secondary);
-}
-
-/* Bulk Actions Bar */
-.bulk-actions-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  margin-bottom: 16px;
-  background-color: var(--el-color-primary-light-9);
-  border: 1px solid var(--el-color-primary-light-5);
-  border-radius: 8px;
-}
-
-.bulk-actions-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.bulk-actions-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 /* Slide down transition */
 .slide-down-enter-active,
 .slide-down-leave-active {
@@ -834,46 +727,6 @@ onMounted(() => {
 .slide-down-leave-to {
   opacity: 0;
   transform: translateY(-10px);
-}
-
-/* Table */
-.containers-table {
-  width: 100%;
-}
-
-.container-name-link {
-  color: var(--el-color-primary);
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.container-name-link:hover {
-  text-decoration: underline;
-}
-
-.image-name {
-  font-family: monospace;
-  font-size: 13px;
-}
-
-.status-text {
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-}
-
-.ports-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.port-tag {
-  font-family: monospace;
-  font-size: 11px;
-}
-
-.no-ports {
-  color: var(--el-text-color-placeholder);
 }
 
 /* Logs Drawer */
@@ -896,6 +749,7 @@ onMounted(() => {
 .bulk-delete-list p {
   font-weight: 500;
   margin-bottom: 8px;
+  color: var(--color-text-primary);
 }
 
 .bulk-delete-list ul {
@@ -907,10 +761,11 @@ onMounted(() => {
 
 .bulk-delete-list li {
   margin-bottom: 4px;
+  color: var(--color-text-primary);
 }
 
 .bulk-delete-list .more-items {
   font-style: italic;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
 }
 </style>

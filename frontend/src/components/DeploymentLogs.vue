@@ -341,7 +341,7 @@ watch(logs, () => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #f5f5f5;
+  background-color: var(--color-bg-secondary);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -351,8 +351,8 @@ watch(logs, () => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
+  background-color: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .logs-title {
@@ -377,8 +377,8 @@ watch(logs, () => {
 
 .logs-progress {
   padding: 12px 16px;
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
+  background-color: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .logs-content {
@@ -457,14 +457,14 @@ watch(logs, () => {
 
 .logs-error {
   padding: 12px 16px;
-  background: white;
-  border-top: 1px solid #e0e0e0;
+  background-color: var(--color-bg-card);
+  border-top: 1px solid var(--color-border);
 }
 
 .logs-footer {
   padding: 8px 16px;
-  background: white;
-  border-top: 1px solid #e0e0e0;
+  background-color: var(--color-bg-card);
+  border-top: 1px solid var(--color-border);
   text-align: right;
 }
 </style>
