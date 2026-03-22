@@ -41,7 +41,7 @@ Le projet dispose déjà d'une configuration UnoCSS (`uno.config.ts`) et de vari
 
 ### Phase 3 : Composants UI réutilisables
 - [x] STORY-505 : Refactoriser WindFlowLogo.vue + StatusBadge.vue + CounterCard.vue
-- [ ] STORY-506 : Refactoriser DynamicFormField.vue + composants settings UI
+- [x] STORY-506 : Refactoriser DynamicFormField.vue + composants settings UI
 
 ### Phase 4 : Views principales et secondaires
 - [ ] STORY-507 : Refactoriser Stacks.vue + ContainerDetail.vue (code blocks)
