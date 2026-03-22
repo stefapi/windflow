@@ -7,87 +7,45 @@
 Uniformiser l'ensemble des composants Vue pour utiliser exclusivement les variables CSS de thème et les classes utilitaires UnoCSS, garantissant une cohérence visuelle parfaite et un support complet du dark/light theme.
 
 ## Contexte
-Le projet dispose déjà d'une configuration UnoCSS (`uno.config.ts`) et de variables CSS de thème (`theme.css`) complètes. Cependant, **200+ occurrences de couleurs statiques** (hex, rgb, rgba) subsistent dans les composants Vue, créant :
+Le projet dispose déjà d'une configuration UnoCSS (`uno.config.ts`) et de variables CSS de thème (`theme.css`) complètes. Cependant, **152 occurrences de couleurs statiques** (hex, rgb, rgba) subsistent dans ~25 composants Vue, créant :
 - Incohérences visuelles entre écrans
 - Difficultés de maintenance
 - Support partiel du dark/light theme
 - Duplication de code
 
+### Répartition des occurrences
+| Catégorie | Fichiers | Occurrences |
+|-----------|----------|-------------|
+| Logs/Terminal | ContainerLogs.vue, DeploymentLogs.vue, ContainerTerminal.vue | ~50 |
+| Login/Splash | Login.vue, SplashScreen.vue | ~30 |
+| Composants UI | WindFlowLogo.vue, StatusBadge.vue, CounterCard.vue, DynamicFormField.vue | ~25 |
+| Views avec code | Stacks.vue, ContainerDetail.vue | ~20 |
+| Autres | Divers (Settings, Targets, etc.) | ~27 |
+
 ## Objectifs
 1. Éliminer toutes les couleurs statiques des composants Vue
-2. Enrichir UnoCSS avec les shortcuts manquants
-3. Garantir le support dark/light theme sur tous les composants
-4. Améliorer la maintenabilité du design system
+2. Enrichir UnoCSS avec les shortcuts manquants (logs, terminal, code blocks)
+3. Ajouter les variables CSS pour terminal thémé (VS Code style)
+4. Garantir le support dark/light theme sur tous les composants
+5. Améliorer la maintenabilité du design system
 
 ## Liste des Stories liées
 
 ### Phase 1 : Infrastructure UnoCSS
-- [ ] STORY-XXX : Enrichir UnoCSS avec shortcuts pour logs/terminal/status
+- [ ] STORY-501 : Enrichir UnoCSS + theme.css avec variables terminal/logs/code blocks
 
 ### Phase 2 : Composants critiques (haute visibilité)
-- [ ] STORY-XXX : Refactoriser Login.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser ContainerLogs.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser DeploymentLogs.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser ContainerTerminal.vue - palette de couleurs thémée
+- [ ] STORY-502 : Refactoriser Login.vue + SplashScreen.vue → variables CSS thémées
+- [ ] STORY-503 : Refactoriser ContainerLogs.vue + DeploymentLogs.vue → classes UnoCSS
+- [ ] STORY-504 : Refactoriser ContainerTerminal.vue → variables CSS thémées (palette VS Code)
 
 ### Phase 3 : Composants UI réutilisables
-- [ ] STORY-XXX : Refactoriser SplashScreen.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser WindFlowLogo.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser CounterCard.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser StatusBadge.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser DynamicFormField.vue - couleurs statiques → UnoCSS
+- [ ] STORY-505 : Refactoriser WindFlowLogo.vue + StatusBadge.vue + CounterCard.vue
+- [ ] STORY-506 : Refactoriser DynamicFormField.vue + composants settings UI
 
-### Phase 4 : Views principales
-- [ ] STORY-XXX : Refactoriser Dashboard.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser Containers.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser ContainerDetail.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser Stacks.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser Deployments.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser Targets.vue - couleurs statiques → UnoCSS
-
-### Phase 5 : Views secondaires
-- [ ] STORY-XXX : Refactoriser Settings.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser Images.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser Networks.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser Volumes.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser Audit.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser Schedules.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser VMs.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser Plugins.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser Marketplace.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser Workflows.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser WorkflowEditor.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser DeploymentDetail.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser DeploymentHistory.vue - couleurs statiques → UnoCSS
-
-### Phase 6 : Composants dashboard/widgets
-- [ ] STORY-XXX : Refactoriser ResourceMetricsWidget.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser ActivityFeedWidget.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser AlertsNotificationsWidget.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser DeploymentMetricsWidget.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser RecentDeploymentsWidget.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser TargetHealthWidget.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser PlaceholderWidget.vue - couleurs statiques → UnoCSS
-
-### Phase 7 : Composants settings
-- [ ] STORY-XXX : Refactoriser OrganizationsTab.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser UsersTab.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser OrganizationDialog.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser UserDialog.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser PasswordDialog.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser UserDetailsDrawer.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser BulkDeleteDialog.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser BulkAssignDialog.vue - couleurs statiques → UnoCSS
-
-### Phase 8 : Autres composants
-- [ ] STORY-XXX : Refactoriser ContainerStats.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser ContainerProcesses.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser SidebarNav.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser MainLayout.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser ThemeToggle.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser Breadcrumb.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser ActionButtons.vue - couleurs statiques → UnoCSS
-- [ ] STORY-XXX : Refactoriser ResourceBar.vue - couleurs statiques → UnoCSS
+### Phase 4 : Views principales et secondaires
+- [ ] STORY-507 : Refactoriser Stacks.vue + ContainerDetail.vue (code blocks)
+- [ ] STORY-508 : Refactoriser toutes les autres views (batch audit - ~15 fichiers)
 
 ## Critères de succès (Definition of Done)
 - [ ] Aucune couleur statique (hex, rgb, rgba) dans les `<style>` des composants Vue
@@ -99,10 +57,57 @@ Le projet dispose déjà d'une configuration UnoCSS (`uno.config.ts`) et de vari
 ## Notes de conception
 
 ### Règles de migration
-1. **Backgrounds** : `#0c0e14` → `bg-primary`, `#1e1e1e` → `bg-primary`, etc.
-2. **Textes** : `#d4d4d4` → `text-primary`, `#7c8098` → `text-secondary`
+1. **Backgrounds** : `#0c0e14` → `var(--color-bg-primary)`, `#1e1e1e` → `var(--color-bg-secondary)`
+2. **Textes** : `#d4d4d4` → `var(--color-text-primary)`, `#7c8098` → `var(--color-text-secondary)`
 3. **Status** : Utiliser les variables `--color-success`, `--color-error`, etc.
-4. **Borders** : `#252838` → `border`, `#3a3f54` → `border-focus`
+4. **Borders** : `#252838` → `var(--color-border)`, `#3a3f54` → `var(--color-border-focus)`
+5. **Terminal** : Utiliser les nouvelles variables `--color-terminal-*` (palette VS Code thémée)
+
+### Variables CSS à ajouter (theme.css)
+```css
+/* Terminal colors - VS Code style */
+--color-terminal-bg: #0c0c0c;
+--color-terminal-fg: #cccccc;
+--color-terminal-cursor: #ffffff;
+--color-terminal-selection: #264f78;
+--color-terminal-red: #cd3131;
+--color-terminal-green: #0dbc79;
+--color-terminal-yellow: #e5e510;
+--color-terminal-blue: #2472c8;
+--color-terminal-magenta: #bc3fbc;
+--color-terminal-cyan: #11a8cd;
+--color-terminal-white: #e5e5e5;
+--color-terminal-bright-black: #666666;
+--color-terminal-bright-red: #f14c4c;
+--color-terminal-bright-green: #23d18b;
+--color-terminal-bright-yellow: #f5f543;
+--color-terminal-bright-blue: #3b8eea;
+--color-terminal-bright-magenta: #d670d6;
+--color-terminal-bright-cyan: #29b8db;
+--color-terminal-bright-white: #ffffff;
+
+/* Log colors */
+--color-log-error: #f48771;
+--color-log-warning: #cca700;
+--color-log-info: #4fc3f7;
+--color-log-debug: #858585;
+--color-log-line-number: #858585;
+
+/* Code blocks */
+--color-code-bg: #1e1e1e;
+--color-code-fg: #d4d4d4;
+```
+
+### Shortcuts UnoCSS à ajouter
+```typescript
+'log-error': 'text-[var(--color-log-error)]',
+'log-warning': 'text-[var(--color-log-warning)]',
+'log-info': 'text-[var(--color-log-info)]',
+'log-debug': 'text-[var(--color-log-debug)] italic',
+'log-line-number': 'text-[var(--color-log-line-number)] select-none pr-3',
+'code-block': 'bg-[var(--color-code-bg)] text-[var(--color-code-fg)] font-mono',
+'code-console': 'bg-[var(--color-terminal-bg)] text-[var(--color-terminal-fg)] font-mono',
+```
 
 ### Patterns à suivre
 ```vue
@@ -120,10 +125,6 @@ Le projet dispose déjà d'une configuration UnoCSS (`uno.config.ts`) et de vari
 </template>
 ```
 
-### Exceptions autorisées
-- **Terminal** : Palette de couleurs spécifique (VS Code style) mais thémée via variables
-- **Graphiques ECharts** : Couleurs dynamiques injectées via JS
-
 ## Risques
 - Régressions visuelles possibles lors de la migration
 - Temps de validation important pour chaque composant
@@ -131,5 +132,5 @@ Le projet dispose déjà d'une configuration UnoCSS (`uno.config.ts`) et de vari
 
 ## Estimation
 - **Phase 1** : 1 story (infrastructure)
-- **Phases 2-8** : ~45 stories (composants)
-- **Total** : ~46 stories
+- **Phases 2-4** : 7 stories (composants groupés)
+- **Total** : 8 stories
