@@ -216,7 +216,7 @@ describe('Containers.vue', () => {
             props: ['content', 'placement'],
           },
           'el-input': {
-            template: '<input type="text" />',
+            template: '<div class="el-input"><input type="text" /></div>',
             props: ['modelValue', 'type', 'rows', 'readonly', 'placeholder', 'clearable'],
           },
           'el-input-number': {
@@ -228,7 +228,7 @@ describe('Containers.vue', () => {
             props: ['modelValue'],
           },
           'el-select': {
-            template: '<select><slot /></select>',
+            template: '<div class="el-select"><select><slot /></select></div>',
             props: ['modelValue', 'placeholder', 'clearable'],
           },
           'el-option': {
@@ -257,27 +257,32 @@ describe('Containers.vue', () => {
 
     it('should display page title', () => {
       const wrapper = mountContainers()
-      expect(wrapper.find('.title').text()).toBe('Containers')
+      // Title is now using UnoCSS classes: text-xl font-semibold text-[var(--color-text-primary)]
+      expect(wrapper.text()).toContain('Containers')
     })
 
     it('should display subtitle', () => {
       const wrapper = mountContainers()
-      expect(wrapper.find('.subtitle').text()).toBe('Gestion des containers Docker')
+      // Subtitle is now using UnoCSS classes: text-sm text-[var(--color-text-secondary)]
+      expect(wrapper.text()).toContain('Gestion des containers Docker')
     })
 
     it('should display filters bar', () => {
       const wrapper = mountContainers()
-      expect(wrapper.find('.filters-bar').exists()).toBe(true)
+      // Filters bar is now using UnoCSS classes: flex justify-between items-center mb-4 px-4 py-3 bg-[var(--color-bg-secondary)] rounded-lg
+      expect(wrapper.find('.el-select').exists()).toBe(true)
     })
 
     it('should display search input', () => {
       const wrapper = mountContainers()
-      expect(wrapper.find('.search-input').exists()).toBe(true)
+      // Search input is an el-input with placeholder
+      expect(wrapper.find('.el-input').exists()).toBe(true)
     })
 
     it('should display status filter select', () => {
       const wrapper = mountContainers()
-      expect(wrapper.find('.filter-select').exists()).toBe(true)
+      // Status filter is an el-select
+      expect(wrapper.find('.el-select').exists()).toBe(true)
     })
   })
 

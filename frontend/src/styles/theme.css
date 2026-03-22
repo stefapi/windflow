@@ -91,6 +91,7 @@
   --color-bg-primary: #0f1117;
   --color-bg-secondary: #151821;
   --color-bg-card: #1a1d27;
+  --color-bg-card-alpha: rgba(26, 29, 39, 0.85);
   --color-bg-elevated: #1c1f2b;
   --color-bg-hover: #252838;
   --color-bg-input: #1c1f2b;
@@ -220,6 +221,7 @@
   --color-bg-primary: #ffffff;
   --color-bg-secondary: #f8fafc;
   --color-bg-card: #ffffff;
+  --color-bg-card-alpha: rgba(255, 255, 255, 0.85);
   --color-bg-elevated: #f1f5f9;
   --color-bg-hover: #e2e8f0;
   --color-bg-input: #ffffff;

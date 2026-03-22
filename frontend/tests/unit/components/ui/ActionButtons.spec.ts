@@ -9,7 +9,7 @@ const ElTooltip = {
 }
 
 const ElButton = {
-  template: '<button class="el-button" :data-size="size" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+  template: '<button class="el-button" :data-size="size" :disabled="disabled"><slot /></button>',
   props: ['size', 'disabled', 'circle'],
 }
 

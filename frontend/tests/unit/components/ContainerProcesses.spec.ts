@@ -4,12 +4,12 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { ElTable, ElButton, ElSwitch, ElTag, ElAlert, ElEmpty, ElIcon } from 'element-plus'
+import { ElEmpty } from 'element-plus'
 import ContainerProcesses from '@/components/ContainerProcesses.vue'
-import * as api from '@/services/api'
+import http from '@/services/http'
 
-// Mock du module API
-vi.mock('@/services/api', () => ({
+// Mock du module HTTP
+vi.mock('@/services/http', () => ({
   default: {
     get: vi.fn(),
   },
@@ -46,7 +46,7 @@ describe('ContainerProcesses.vue', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(api.default.get).mockResolvedValue(mockResponse)
+    vi.mocked(http.get).mockResolvedValue(mockResponse)
   })
 
   afterEach(() => {
@@ -95,7 +95,7 @@ describe('ContainerProcesses.vue', () => {
     })
 
     await flushPromises()
-    expect(api.default.get).toHaveBeenCalledWith('/api/v1/docker/containers/abc123/top')
+    expect(http.get).toHaveBeenCalledWith('/api/v1/docker/containers/abc123/top')
   })
 
   it('should display process count', async () => {
@@ -123,7 +123,7 @@ describe('ContainerProcesses.vue', () => {
   })
 
   it('should display empty state when no processes', async () => {
-    vi.mocked(api.default.get).mockResolvedValue({
+    vi.mocked(http.get).mockResolvedValue({
       data: {
         container_id: 'abc123',
         titles: [],
@@ -155,7 +155,7 @@ describe('ContainerProcesses.vue', () => {
 
   it('should handle API errors', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.mocked(api.default.get).mockRejectedValue(new Error('Network error'))
+    vi.mocked(http.get).mockRejectedValue(new Error('Network error'))
 
     const wrapper = mount(ContainerProcesses, {
       props: {
@@ -208,37 +208,37 @@ describe('ContainerProcesses.vue', () => {
     if (refreshButton) {
       await refreshButton.trigger('click')
       await flushPromises()
-      expect(api.default.get).toHaveBeenCalled()
+      expect(http.get).toHaveBeenCalled()
     }
   })
 
   describe('Helper functions', () => {
     it('should return correct CPU tag type', async () => {
-    const wrapper = mount(ContainerProcesses, {
-      props: {
-        containerId: 'abc123',
-      },
-      global: {
-        stubs: {
-          'el-table': true,
-          'el-button': true,
-          'el-switch': true,
-          'el-tag': true,
-          'el-alert': true,
-          'el-empty': true,
-          'el-icon': true,
+      const wrapper = mount(ContainerProcesses, {
+        props: {
+          containerId: 'abc123',
         },
-      },
+        global: {
+          stubs: {
+            'el-table': true,
+            'el-button': true,
+            'el-switch': true,
+            'el-tag': true,
+            'el-alert': true,
+            'el-empty': true,
+            'el-icon': true,
+          },
+        },
+      })
+
+      await flushPromises()
+      const vm = wrapper.vm as any
+
+      expect(vm.getCpuTagType(85)).toBe('danger')
+      expect(vm.getCpuTagType(60)).toBe('warning')
+      expect(vm.getCpuTagType(30)).toBe('success')
+      expect(vm.getCpuTagType(10)).toBe('info')
     })
-
-    await flushPromises()
-    const vm = wrapper.vm as any
-
-    expect(vm.getCpuTagType(85)).toBe('danger')
-    expect(vm.getCpuTagType(60)).toBe('warning')
-    expect(vm.getCpuTagType(30)).toBe('success')
-    expect(vm.getCpuTagType(10)).toBe('info')
-  })
 
     it('should return correct MEM tag type', async () => {
       const wrapper = mount(ContainerProcesses, {

@@ -38,14 +38,14 @@ withDefaults(defineProps<Props>(), {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #0c0e14;
-  background-image: radial-gradient(ellipse at 50% 40%, rgba(79, 143, 247, 0.1) 0%, transparent 60%);
+  background-color: var(--color-bg-primary);
+  background-image: radial-gradient(ellipse at 50% 40%, var(--color-accent-light) 0%, transparent 60%);
   z-index: 9999;
 }
 
 .splash-content {
   text-align: center;
-  color: white;
+  color: var(--color-text-primary);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -56,7 +56,7 @@ withDefaults(defineProps<Props>(), {
   font-weight: 700;
   margin: 16px 0 2rem;
   letter-spacing: 0.05em;
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .loading-container {
@@ -69,8 +69,8 @@ withDefaults(defineProps<Props>(), {
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid rgba(79, 143, 247, 0.2);
-  border-top-color: #4f8ff7;
+  border: 3px solid var(--color-accent-light);
+  border-top-color: var(--color-border-focus);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -85,6 +85,6 @@ withDefaults(defineProps<Props>(), {
   font-size: 0.95rem;
   opacity: 0.7;
   margin: 0;
-  color: #7c8098;
+  color: var(--color-text-secondary);
 }
 </style>

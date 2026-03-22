@@ -93,7 +93,7 @@
             :type="getCpuTagType(row.cpu)"
             size="small"
           >
-            {{ row.cpu.toFixed(1) }}%
+            {{ (row.cpu ?? 0).toFixed(1) }}%
           </el-tag>
         </template>
       </el-table-column>
@@ -108,7 +108,7 @@
             :type="getMemTagType(row.mem)"
             size="small"
           >
-            {{ row.mem.toFixed(1) }}%
+            {{ (row.mem ?? 0).toFixed(1) }}%
           </el-tag>
         </template>
       </el-table-column>

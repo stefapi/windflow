@@ -61,6 +61,22 @@ vi.mock('@/composables/useContainerLogs', () => ({
   }),
 }))
 
+// Mock useContainerProcesses composable
+vi.mock('@/composables/useContainerProcesses', () => ({
+  useContainerProcesses: () => ({
+    processes: { value: [] },
+    titles: { value: [] },
+    loading: { value: false },
+    error: { value: null },
+    timestamp: { value: null },
+    autoRefresh: { value: false },
+    fetchProcesses: vi.fn(),
+    startAutoRefresh: vi.fn(),
+    stopAutoRefresh: vi.fn(),
+    toggleAutoRefresh: vi.fn(),
+  }),
+}))
+
 describe('ContainerDetail.vue', () => {
   let router: ReturnType<typeof createRouter>
 

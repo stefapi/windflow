@@ -35,7 +35,7 @@ Le projet dispose déjà d'une configuration UnoCSS (`uno.config.ts`) et de vari
 - [x] STORY-501 : Enrichir UnoCSS + theme.css avec variables terminal/logs/code blocks
 
 ### Phase 2 : Composants critiques (haute visibilité)
-- [ ] STORY-502 : Refactoriser Login.vue + SplashScreen.vue → variables CSS thémées
+- [x] STORY-502 : Refactoriser Login.vue + SplashScreen.vue → variables CSS thémées
 - [ ] STORY-503 : Refactoriser ContainerLogs.vue + DeploymentLogs.vue → classes UnoCSS
 - [ ] STORY-504 : Refactoriser ContainerTerminal.vue → variables CSS thémées (palette VS Code)
 

@@ -1,24 +1,27 @@
 <template>
   <div class="login-page">
+    <!-- Background gradient -->
+    <div class="absolute inset-0 bg-gradient-to-br from-accent-light/30 via-transparent to-accent-light/20" />
+
     <!-- Background particles effect -->
-    <div class="login-page__bg">
-      <div class="login-page__particle login-page__particle--1" />
-      <div class="login-page__particle login-page__particle--2" />
-      <div class="login-page__particle login-page__particle--3" />
+    <div class="absolute inset-0 pointer-events-none overflow-hidden">
+      <div class="login-particle w-300px h-300px -top-80px -left-60px animate-pulse animate-float-1" />
+      <div class="login-particle w-200px h-200px -bottom-40px -right-40px animate-pulse animate-float-2" />
+      <div class="login-particle w-150px h-150px top-50% right-20% animate-pulse animate-float-3" />
     </div>
 
     <!-- Login card -->
-    <div class="login-card">
+    <div class="login-card animate-fade-in">
       <!-- Logo section -->
-      <div class="login-card__header">
+      <div class="login-card-header">
         <WindFlowLogo
           size="large"
           :animate="true"
         />
-        <h1 class="login-card__title">
+        <h1 class="login-card-title">
           WindFlow
         </h1>
-        <p class="login-card__subtitle">
+        <p class="login-card-subtitle">
           Container Deployment Platform
         </p>
       </div>
@@ -28,7 +31,7 @@
         ref="formRef"
         :model="loginForm"
         :rules="loginRules"
-        class="login-card__form"
+        class="login-card-form"
         @submit.prevent="handleLogin"
       >
         <el-form-item prop="username">
@@ -57,16 +60,16 @@
         <el-form-item>
           <button
             type="submit"
-            class="login-card__btn"
-            :class="{ 'login-card__btn--loading': authStore.loading }"
+            class="login-btn"
+            :class="authStore.loading ? 'login-btn-loading' : 'login-btn-hover'"
             :disabled="authStore.loading"
           >
             <span v-if="!authStore.loading">Sign In</span>
             <span
               v-else
-              class="login-card__btn-loading"
+              class="flex items-center justify-center gap-2"
             >
-              <span class="login-card__spinner" />
+              <span class="login-spinner" />
               Connecting...
             </span>
           </button>
@@ -74,8 +77,8 @@
       </el-form>
 
       <!-- Footer -->
-      <div class="login-card__footer">
-        <span class="login-card__version">v1.0</span>
+      <div class="login-card-footer">
+        <span class="login-card-version">v1.0</span>
       </div>
     </div>
   </div>
@@ -125,84 +128,8 @@ const handleLogin = async () => {
 </script>
 
 <style scoped>
-/* ============================================
-   Login Page — Dark theme aligned with app
-   ============================================ */
-.login-page {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  background-color: #0c0e14;
-  background-image: radial-gradient(ellipse at 30% 20%, rgba(79, 143, 247, 0.08) 0%, transparent 50%),
-                    radial-gradient(ellipse at 70% 80%, rgba(56, 189, 248, 0.05) 0%, transparent 50%);
-  position: relative;
-  overflow: hidden;
-}
-
-/* ---- Background particles ---- */
-.login-page__bg {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.login-page__particle {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(79, 143, 247, 0.15);
-  filter: blur(40px);
-}
-
-.login-page__particle--1 {
-  width: 300px;
-  height: 300px;
-  top: -80px;
-  left: -60px;
-  animation: particle-float 12s ease-in-out infinite;
-}
-
-.login-page__particle--2 {
-  width: 200px;
-  height: 200px;
-  bottom: -40px;
-  right: -40px;
-  background: rgba(56, 189, 248, 0.1);
-  animation: particle-float 16s ease-in-out infinite reverse;
-}
-
-.login-page__particle--3 {
-  width: 150px;
-  height: 150px;
-  top: 50%;
-  right: 20%;
-  background: rgba(96, 165, 250, 0.08);
-  animation: particle-float 10s ease-in-out infinite 2s;
-}
-
-@keyframes particle-float {
-  0%, 100% { transform: translate(0, 0); }
-  25% { transform: translate(20px, -30px); }
-  50% { transform: translate(-10px, 20px); }
-  75% { transform: translate(15px, 10px); }
-}
-
-/* ---- Login Card ---- */
-.login-card {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 420px;
-  padding: 48px 40px 36px;
-  background-color: rgba(21, 24, 33, 0.85);
-  border: 1px solid #252838;
-  border-radius: 16px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 80px rgba(79, 143, 247, 0.06);
-  animation: card-enter 0.6s ease-out;
-}
-
-@keyframes card-enter {
+/* Custom animations not supported by UnoCSS utilities */
+@keyframes fade-in {
   from {
     opacity: 0;
     transform: translateY(24px) scale(0.97);
@@ -213,179 +140,130 @@ const handleLogin = async () => {
   }
 }
 
-/* ---- Header / Logo section ---- */
-.login-card__header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 36px;
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out;
 }
 
-.login-card__title {
-  margin: 16px 0 4px;
-  font-size: 28px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 0.04em;
+/* Floating animations for particles */
+@keyframes float-1 {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(30px, 20px);
+  }
+  50% {
+    transform: translate(20px, 40px);
+  }
+  75% {
+    transform: translate(-10px, 25px);
+  }
 }
 
-.login-card__subtitle {
-  margin: 0;
-  font-size: 13px;
-  color: #7c8098;
-  letter-spacing: 0.02em;
+@keyframes float-2 {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-25px, -15px);
+  }
+  50% {
+    transform: translate(-40px, 10px);
+  }
+  75% {
+    transform: translate(-15px, 30px);
+  }
 }
 
-/* ---- Form ---- */
-.login-card__form {
-  width: 100%;
+@keyframes float-3 {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(15px, -30px);
+  }
+  50% {
+    transform: translate(-20px, -20px);
+  }
+  75% {
+    transform: translate(25px, 10px);
+  }
 }
 
-/* Override Element Plus input styles for dark theme */
-.login-card__form :deep(.el-input__wrapper) {
-  background-color: #1c1f2b;
-  border: 1px solid #252838;
+.animate-float-1 {
+  animation: float-1 16s ease-in-out infinite;
+}
+
+.animate-float-2 {
+  animation: float-2 14s ease-in-out infinite;
+  animation-delay: 1s;
+}
+
+.animate-float-3 {
+  animation: float-3 18s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
+/* Login form Element Plus overrides for theme support */
+.login-card-form :deep(.el-input__wrapper) {
+  background-color: var(--color-bg-input);
+  border: 1px solid var(--color-border-light);
   border-radius: 10px !important;
   box-shadow: none !important;
   transition: all 0.25s ease;
   overflow: hidden;
 }
 
-.login-card__form :deep(.el-input__wrapper:hover) {
-  border-color: #3a3f54;
+.login-card-form :deep(.el-input__wrapper:hover) {
+  border-color: var(--color-border);
   box-shadow: none !important;
 }
 
-.login-card__form :deep(.el-input__wrapper.is-focus) {
-  border-color: #4f8ff7;
-  box-shadow: 0 0 0 3px rgba(79, 143, 247, 0.15) !important;
+.login-card-form :deep(.el-input__wrapper.is-focus) {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 3px var(--color-accent-light) !important;
 }
 
-.login-card__form :deep(.el-input__inner) {
-  color: #e2e5f0;
+.login-card-form :deep(.el-input__inner) {
+  color: var(--color-text-primary);
   font-size: 14px;
   border-radius: 10px !important;
   background-color: transparent !important;
 }
 
-.login-card__form :deep(.el-input__inner::placeholder) {
-  color: #5a5f78;
+.login-card-form :deep(.el-input__inner::placeholder) {
+  color: var(--color-text-placeholder);
 }
 
 /* Handle browser autofill styles */
-.login-card__form :deep(.el-input__inner:-webkit-autofill),
-.login-card__form :deep(.el-input__inner:-webkit-autofill:hover),
-.login-card__form :deep(.el-input__inner:-webkit-autofill:focus),
-.login-card__form :deep(.el-input__inner:-webkit-autofill:active) {
-  -webkit-box-shadow: 0 0 0 30px #1c1f2b inset !important;
-  -webkit-text-fill-color: #e2e5f0 !important;
+.login-card-form :deep(.el-input__inner:-webkit-autofill),
+.login-card-form :deep(.el-input__inner:-webkit-autofill:hover),
+.login-card-form :deep(.el-input__inner:-webkit-autofill:focus),
+.login-card-form :deep(.el-input__inner:-webkit-autofill:active) {
+  -webkit-box-shadow: 0 0 0 30px var(--color-bg-input) inset !important;
+  -webkit-text-fill-color: var(--color-text-primary) !important;
   border-radius: 10px !important;
   transition: background-color 5000s ease-in-out 0s;
 }
 
-.login-card__form :deep(.el-input__prefix .el-icon) {
-  color: #7c8098;
+.login-card-form :deep(.el-input__prefix .el-icon) {
+  color: var(--color-text-secondary);
 }
 
-.login-card__form :deep(.el-input__suffix .el-icon) {
-  color: #7c8098;
+.login-card-form :deep(.el-input__suffix .el-icon) {
+  color: var(--color-text-secondary);
 }
 
-.login-card__form :deep(.el-form-item) {
+.login-card-form :deep(.el-form-item) {
   margin-bottom: 20px;
 }
 
-.login-card__form :deep(.el-form-item__error) {
-  color: #f56c6c;
+.login-card-form :deep(.el-form-item__error) {
+  color: var(--color-error);
   font-size: 12px;
 }
 
-/* ---- Submit Button ---- */
-.login-card__btn {
-  width: 100%;
-  padding: 14px 24px;
-  border: none;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #4f8ff7 0%, #3b82f6 50%, #2563eb 100%);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.login-card__btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.login-card__btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 20px rgba(79, 143, 247, 0.4);
-}
-
-.login-card__btn:hover:not(:disabled)::before {
-  opacity: 1;
-}
-
-.login-card__btn:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(79, 143, 247, 0.3);
-}
-
-.login-card__btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.login-card__btn--loading {
-  background: linear-gradient(135deg, #3b73d4 0%, #2d6bc7 100%);
-}
-
-.login-card__btn-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.login-card__spinner {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* ---- Footer ---- */
-.login-card__footer {
-  display: flex;
-  justify-content: center;
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid #252838;
-}
-
-.login-card__version {
-  font-size: 11px;
-  color: #5a5f78;
-  letter-spacing: 0.02em;
-}
-
-/* ---- Responsive ---- */
+/* Responsive adjustments */
 @media (max-width: 767px) {
   .login-page {
     padding: 16px;
@@ -397,13 +275,8 @@ const handleLogin = async () => {
     max-width: 100%;
   }
 
-  .login-card__title {
+  .login-card-title {
     font-size: 24px;
-  }
-
-  .login-card__particle--1,
-  .login-card__particle--3 {
-    display: none;
   }
 }
 

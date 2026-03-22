@@ -146,5 +146,20 @@ export default defineConfig({
     'table-header': 'bg-bg-elevated',
     'table-row': 'hover:bg-bg-hover transition-colors',
     'table-row-alternate': 'bg-bg-secondary',
+
+    // Login page styles
+    'login-page': 'min-h-screen flex-center relative overflow-hidden bg-bg-primary',
+    'login-card': 'relative z-1 w-full max-w-420px px-10 pt-12 pb-9 rounded-2xl backdrop-blur-xl border border-border-light bg-[var(--color-bg-card-alpha)] shadow-lg',
+    'login-card-header': 'flex flex-col items-center mb-9',
+    'login-card-title': 'my-4 text-28px font-bold text-text-primary tracking-wide',
+    'login-card-subtitle': 'm-0 text-13px text-text-secondary tracking-wide',
+    'login-card-form': 'w-full',
+    'login-card-footer': 'flex justify-center mt-6 pt-4 border-t border-border-light',
+    'login-card-version': 'text-11px text-text-muted tracking-wide',
+    'login-btn': 'w-full py-14px rounded-10px text-white font-semibold text-15px tracking-wide cursor-pointer transition-all duration-300 bg-gradient-to-br from-border-focus via-accent to-accent-hover',
+    'login-btn-hover': 'hover:-translate-y-0.5 hover:shadow-[0_4px_20px_var(--color-accent-light)]',
+    'login-btn-loading': 'bg-gradient-to-br from-accent to-accent-hover opacity-70 cursor-not-allowed',
+    'login-spinner': 'inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin',
+    'login-particle': 'absolute rounded-full bg-accent-light blur-40px',
   },
 })
