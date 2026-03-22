@@ -7,8 +7,12 @@
             <component :is="rawIcon" />
           </el-icon>
         </div>
-        <h1 class="stub-title">{{ title }}</h1>
-        <p class="stub-description">{{ description }}</p>
+        <h1 class="stub-title">
+          {{ title }}
+        </h1>
+        <p class="stub-description">
+          {{ description }}
+        </p>
         <el-tag
           class="stub-badge"
           type="info"

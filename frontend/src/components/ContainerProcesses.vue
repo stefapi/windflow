@@ -45,7 +45,9 @@
       v-if="loading && processes.length === 0"
       class="processes-loading"
     >
-      <el-icon class="is-loading"><Loading /></el-icon>
+      <el-icon class="is-loading">
+        <Loading />
+      </el-icon>
       <span>Chargement des processus...</span>
     </div>
 

@@ -89,7 +89,9 @@
             <el-icon><RefreshRight /></el-icon>
             Redéployer
           </el-button>
-          <el-icon class="deployment-row__arrow"><ArrowRight /></el-icon>
+          <el-icon class="deployment-row__arrow">
+            <ArrowRight />
+          </el-icon>
         </div>
       </div>
     </div>

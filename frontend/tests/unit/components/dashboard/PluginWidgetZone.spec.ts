@@ -8,13 +8,13 @@ import { defineComponent } from 'vue'
 // Create a dummy widget component for testing
 const DummyWidget = defineComponent({
   name: 'DummyWidget',
-  template: '<div class="dummy-widget">Dummy Widget Content</div>',
   props: {
     message: {
       type: String,
       default: '',
     },
   },
+  template: '<div class="dummy-widget">Dummy Widget Content</div>',
 })
 
 describe('PluginWidgetZone', () => {

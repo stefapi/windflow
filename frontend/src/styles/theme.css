@@ -127,6 +127,7 @@
   --color-terminal-fg: #cccccc;
   --color-terminal-cursor: #ffffff;
   --color-terminal-selection: #264f78;
+  --color-terminal-black: #000000;
   --color-terminal-red: #cd3131;
   --color-terminal-green: #0dbc79;
   --color-terminal-yellow: #e5e510;
@@ -262,6 +263,7 @@
   --color-terminal-fg: #333333;
   --color-terminal-cursor: #000000;
   --color-terminal-selection: #add6ff;
+  --color-terminal-black: #000000;
   --color-terminal-red: #cd3131;
   --color-terminal-green: #008000;
   --color-terminal-yellow: #795e26;

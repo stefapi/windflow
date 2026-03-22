@@ -43,7 +43,9 @@
       v-if="status === 'connecting'"
       class="stats-loading"
     >
-      <el-icon class="is-loading"><Loading /></el-icon>
+      <el-icon class="is-loading">
+        <Loading />
+      </el-icon>
       <span>Connexion en cours...</span>
     </div>
 
@@ -149,7 +151,9 @@
           class="history-charts"
         >
           <div class="history-chart">
-            <div class="chart-title">CPU %</div>
+            <div class="chart-title">
+              CPU %
+            </div>
             <v-chart
               :option="cpuChartOptions"
               class="chart"
@@ -157,7 +161,9 @@
             />
           </div>
           <div class="history-chart">
-            <div class="chart-title">RAM</div>
+            <div class="chart-title">
+              RAM
+            </div>
             <v-chart
               :option="memoryChartOptions"
               class="chart"
@@ -165,7 +171,9 @@
             />
           </div>
           <div class="history-chart">
-            <div class="chart-title">Réseau</div>
+            <div class="chart-title">
+              Réseau
+            </div>
             <v-chart
               :option="networkChartOptions"
               class="chart"
@@ -173,7 +181,9 @@
             />
           </div>
           <div class="history-chart">
-            <div class="chart-title">I/O Disque</div>
+            <div class="chart-title">
+              I/O Disque
+            </div>
             <v-chart
               :option="ioChartOptions"
               class="chart"

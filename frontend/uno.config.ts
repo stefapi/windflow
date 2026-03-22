@@ -147,6 +147,15 @@ export default defineConfig({
     'table-row': 'hover:bg-bg-hover transition-colors',
     'table-row-alternate': 'bg-bg-secondary',
 
+    // Terminal styles
+    'terminal-container': 'bg-[var(--color-terminal-bg)] flex-1 p-2 overflow-hidden',
+    'terminal-wrapper': 'flex flex-col h-full min-h-400px bg-[var(--el-bg-color)] rounded overflow-hidden',
+    'terminal-toolbar': 'flex justify-between items-center p-2 bg-[var(--el-bg-color-overlay)] border-b border-[var(--el-border-color-lighter)] flex-shrink-0 flex-wrap gap-2',
+    'terminal-status-dot': 'w-2 h-2 rounded-full',
+    'terminal-status-connected': 'terminal-status-dot bg-[var(--color-success)] animate-pulse',
+    'terminal-status-connecting': 'terminal-status-dot bg-[var(--color-warning)]',
+    'terminal-status-disconnected': 'terminal-status-dot bg-[var(--color-info)]',
+
     // Login page styles
     'login-page': 'min-h-screen flex-center relative overflow-hidden bg-bg-primary',
     'login-card': 'relative z-1 w-full max-w-420px px-10 pt-12 pb-9 rounded-2xl backdrop-blur-xl border border-border-light bg-[var(--color-bg-card-alpha)] shadow-lg',

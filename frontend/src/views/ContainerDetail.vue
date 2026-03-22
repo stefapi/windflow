@@ -82,12 +82,18 @@
 
       <!-- Tabs -->
       <el-tabs v-model="activeTab">
-        <el-tab-pane label="Infos" name="infos">
+        <el-tab-pane
+          label="Infos"
+          name="infos"
+        >
           <div class="info-sections">
             <!-- General Info -->
             <div class="info-section">
               <h3>Informations générales</h3>
-              <el-descriptions :column="2" border>
+              <el-descriptions
+                :column="2"
+                border
+              >
                 <el-descriptions-item label="ID">
                   <template #default>
                     <div class="id-with-copy">
@@ -119,10 +125,16 @@
                 </el-descriptions-item>
                 <el-descriptions-item label="Stack parente">
                   <template #default>
-                    <el-tag v-if="parentStack" size="small">
+                    <el-tag
+                      v-if="parentStack"
+                      size="small"
+                    >
                       {{ parentStack }}
                     </el-tag>
-                    <span v-else class="text-muted">-</span>
+                    <span
+                      v-else
+                      class="text-muted"
+                    >-</span>
                   </template>
                 </el-descriptions-item>
               </el-descriptions>
@@ -137,10 +149,26 @@
                 stripe
                 size="small"
               >
-                <el-table-column prop="hostIp" label="Host IP" width="140" />
-                <el-table-column prop="hostPort" label="Host Port" width="120" />
-                <el-table-column prop="containerPort" label="Container Port" width="140" />
-                <el-table-column prop="protocol" label="Protocole" width="100" />
+                <el-table-column
+                  prop="hostIp"
+                  label="Host IP"
+                  width="140"
+                />
+                <el-table-column
+                  prop="hostPort"
+                  label="Host Port"
+                  width="120"
+                />
+                <el-table-column
+                  prop="containerPort"
+                  label="Container Port"
+                  width="140"
+                />
+                <el-table-column
+                  prop="protocol"
+                  label="Protocole"
+                  width="100"
+                />
               </el-table>
             </div>
 
@@ -153,14 +181,31 @@
                 stripe
                 size="small"
               >
-                <el-table-column prop="type" label="Type" width="100">
+                <el-table-column
+                  prop="type"
+                  label="Type"
+                  width="100"
+                >
                   <template #default="{ row }">
-                    <el-tag size="small">{{ row.type }}</el-tag>
+                    <el-tag size="small">
+                      {{ row.type }}
+                    </el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column prop="source" label="Source" min-width="200" />
-                <el-table-column prop="destination" label="Destination" min-width="200" />
-                <el-table-column label="Actions" width="120">
+                <el-table-column
+                  prop="source"
+                  label="Source"
+                  min-width="200"
+                />
+                <el-table-column
+                  prop="destination"
+                  label="Destination"
+                  min-width="200"
+                />
+                <el-table-column
+                  label="Actions"
+                  width="120"
+                >
                   <template #default>
                     <el-button
                       link
@@ -184,10 +229,26 @@
                 stripe
                 size="small"
               >
-                <el-table-column prop="networkName" label="Réseau" width="150" />
-                <el-table-column prop="ipAddress" label="Adresse IP" width="150" />
-                <el-table-column prop="macAddress" label="Adresse MAC" width="180" />
-                <el-table-column prop="gateway" label="Passerelle" width="150" />
+                <el-table-column
+                  prop="networkName"
+                  label="Réseau"
+                  width="150"
+                />
+                <el-table-column
+                  prop="ipAddress"
+                  label="Adresse IP"
+                  width="150"
+                />
+                <el-table-column
+                  prop="macAddress"
+                  label="Adresse MAC"
+                  width="180"
+                />
+                <el-table-column
+                  prop="gateway"
+                  label="Passerelle"
+                  width="150"
+                />
               </el-table>
             </div>
 
@@ -214,19 +275,34 @@
                 size="small"
                 max-height="400"
               >
-                <el-table-column prop="key" label="Variable" min-width="200">
+                <el-table-column
+                  prop="key"
+                  label="Variable"
+                  min-width="200"
+                >
                   <template #default="{ row }">
                     <code>{{ row.key }}</code>
-                    <el-tag v-if="row.isSecret" type="warning" size="small" class="secret-tag">
+                    <el-tag
+                      v-if="row.isSecret"
+                      type="warning"
+                      size="small"
+                      class="secret-tag"
+                    >
                       Secret
                     </el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="Valeur" min-width="300">
+                <el-table-column
+                  label="Valeur"
+                  min-width="300"
+                >
                   <template #default="{ row }">
                     <div class="value-cell">
                       <code v-if="!row.isSecret || isRevealed(row.key)">{{ row.value }}</code>
-                      <code v-else class="masked-value">{{ maskValue(row.value) }}</code>
+                      <code
+                        v-else
+                        class="masked-value"
+                      >{{ maskValue(row.value) }}</code>
                       <el-button
                         v-if="row.isSecret"
                         link
@@ -247,7 +323,10 @@
         </el-tab-pane>
 
         <!-- Logs Tab -->
-        <el-tab-pane label="Logs" name="logs">
+        <el-tab-pane
+          label="Logs"
+          name="logs"
+        >
           <ContainerLogs
             v-if="containerId"
             :container-id="containerId"
@@ -266,7 +345,10 @@
             :container-id="containerId"
             :container-name="containerDetail?.name"
           />
-          <div v-else class="placeholder-content">
+          <div
+            v-else
+            class="placeholder-content"
+          >
             <el-empty description="Le terminal n'est disponible que lorsque le container est en cours d'exécution (running)" />
           </div>
         </el-tab-pane>
@@ -281,7 +363,10 @@
             :container-id="containerId"
             :container-name="containerDetail?.name"
           />
-          <div v-else class="placeholder-content">
+          <div
+            v-else
+            class="placeholder-content"
+          >
             <el-empty description="L'onglet Stats n'est disponible que lorsque le container est en cours d'exécution (running)" />
           </div>
         </el-tab-pane>
@@ -296,7 +381,10 @@
             :container-id="containerId"
             :container-name="containerDetail?.name"
           />
-          <div v-else class="placeholder-content">
+          <div
+            v-else
+            class="placeholder-content"
+          >
             <el-empty description="L'onglet Processus n'est disponible que lorsque le container est en cours d'exécution (running)" />
           </div>
         </el-tab-pane>

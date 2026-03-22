@@ -1,6 +1,31 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { Terminal } from '@xterm/xterm'
+
+// Type pour le thème xterm.js
+interface XtermTheme {
+  background?: string
+  foreground?: string
+  cursor?: string
+  cursorAccent?: string
+  selectionBackground?: string
+  black?: string
+  red?: string
+  green?: string
+  yellow?: string
+  blue?: string
+  magenta?: string
+  cyan?: string
+  white?: string
+  brightBlack?: string
+  brightRed?: string
+  brightGreen?: string
+  brightYellow?: string
+  brightBlue?: string
+  brightMagenta?: string
+  brightCyan?: string
+  brightWhite?: string
+}
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
@@ -91,6 +116,39 @@ let fitAddon: FitAddon | null = null
 let webLinksAddon: WebLinksAddon | null = null
 
 /**
+ * Lit les variables CSS du thème terminal et retourne un objet theme compatible xterm.js
+ * xterm.js ne supporte pas les variables CSS directement, donc on les lit via getComputedStyle
+ */
+function getTerminalThemeFromCSS(): XtermTheme {
+  const style = getComputedStyle(document.documentElement)
+  const getVar = (name: string) => style.getPropertyValue(name).trim()
+
+  return {
+    background: getVar('--color-terminal-bg'),
+    foreground: getVar('--color-terminal-fg'),
+    cursor: getVar('--color-terminal-cursor'),
+    cursorAccent: getVar('--color-terminal-bg'),
+    selectionBackground: getVar('--color-terminal-selection'),
+    black: getVar('--color-terminal-black'),
+    red: getVar('--color-terminal-red'),
+    green: getVar('--color-terminal-green'),
+    yellow: getVar('--color-terminal-yellow'),
+    blue: getVar('--color-terminal-blue'),
+    magenta: getVar('--color-terminal-magenta'),
+    cyan: getVar('--color-terminal-cyan'),
+    white: getVar('--color-terminal-white'),
+    brightBlack: getVar('--color-terminal-bright-black'),
+    brightRed: getVar('--color-terminal-bright-red'),
+    brightGreen: getVar('--color-terminal-bright-green'),
+    brightYellow: getVar('--color-terminal-bright-yellow'),
+    brightBlue: getVar('--color-terminal-bright-blue'),
+    brightMagenta: getVar('--color-terminal-bright-magenta'),
+    brightCyan: getVar('--color-terminal-bright-cyan'),
+    brightWhite: getVar('--color-terminal-bright-white'),
+  }
+}
+
+/**
  * Connexion avec les paramètres choisis par l'utilisateur
  */
 function connectWithOptions() {
@@ -117,35 +175,7 @@ function initTerminal() {
     cursorBlink: true,
     fontFamily: fontMono,
     fontSize: fontSize.value,
-    theme: props.theme === 'dark' ? {
-      background: '#0c0c0c',
-      foreground: '#cccccc',
-      cursor: '#ffffff',
-      cursorAccent: '#000000',
-      selectionBackground: '#264f78',
-      black: '#000000',
-      red: '#cd3131',
-      green: '#0dbc79',
-      yellow: '#e5e510',
-      blue: '#2472c8',
-      magenta: '#bc3fbc',
-      cyan: '#11a8cd',
-      white: '#e5e5e5',
-      brightBlack: '#666666',
-      brightRed: '#f14c4c',
-      brightGreen: '#23d18b',
-      brightYellow: '#f5f543',
-      brightBlue: '#3b8eea',
-      brightMagenta: '#d670d6',
-      brightCyan: '#29b8db',
-      brightWhite: '#ffffff',
-    } : {
-      background: '#ffffff',
-      foreground: '#000000',
-      cursor: '#000000',
-      cursorAccent: '#ffffff',
-      selectionBackground: '#add6ff',
-    },
+    theme: getTerminalThemeFromCSS(),
     scrollback: 1000,
     cursorInactiveStyle: 'none',
     allowProposedApi: true,
@@ -437,7 +467,6 @@ defineExpose({
     <div
       ref="terminalRef"
       class="terminal-container"
-      :class="{ 'theme-dark': theme === 'dark', 'theme-light': theme === 'light' }"
     />
 
     <!-- Message d'erreur -->
@@ -540,16 +569,16 @@ defineExpose({
 }
 
 .status-dot.connected {
-  background-color: #67c23a;
+  background-color: var(--color-success);
   animation: pulse 2s infinite;
 }
 
 .status-dot.connecting {
-  background-color: #e6a23c;
+  background-color: var(--color-warning);
 }
 
 .status-dot.disconnected {
-  background-color: #909399;
+  background-color: var(--color-info);
 }
 
 @keyframes pulse {
@@ -601,15 +630,9 @@ defineExpose({
   flex: 1;
   padding: 8px;
   overflow: hidden;
+  background-color: var(--color-terminal-bg);
 }
 
-.terminal-container.theme-dark {
-  background-color: #0c0c0c;
-}
-
-.terminal-container.theme-light {
-  background-color: #ffffff;
-}
 
 .terminal-container :deep(.xterm) {
   height: 100%;

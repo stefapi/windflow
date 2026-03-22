@@ -20,9 +20,18 @@
           clearable
           class="w-120px"
         >
-          <el-option label="Tous" value="all" />
-          <el-option label="stdout" value="stdout" />
-          <el-option label="stderr" value="stderr" />
+          <el-option
+            label="Tous"
+            value="all"
+          />
+          <el-option
+            label="stdout"
+            value="stdout"
+          />
+          <el-option
+            label="stderr"
+            value="stderr"
+          />
         </el-select>
 
         <!-- Tail selector -->
@@ -96,7 +105,9 @@
         v-if="status === 'connecting'"
         class="flex-center gap-2 h-200px text-text-secondary"
       >
-        <el-icon class="is-loading"><Loading /></el-icon>
+        <el-icon class="is-loading">
+          <Loading />
+        </el-icon>
         <span>Connexion en cours...</span>
       </div>
 
@@ -162,7 +173,7 @@ const logFilter = ref<'all' | 'stdout' | 'stderr'>('all')
 const tailLines = ref(100)
 const autoScroll = ref(true)
 const isScrolledToBottom = ref(true)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any, no-undef
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const logsContainerRef = ref<any>(null)
 
 // Use the composable for WebSocket connection
