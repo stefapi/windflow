@@ -1,8 +1,8 @@
 <template>
-  <div class="deployment-logs">
+  <div class="flex flex-col h-full bg-bg-secondary rounded-lg overflow-hidden">
     <!-- En-tête avec actions -->
-    <div class="logs-header">
-      <div class="logs-title">
+    <div class="logs-header flex-between">
+      <div class="flex items-center font-semibold text-sm">
         <span class="i-carbon-document-blank mr-2" />
         <span>Logs de déploiement</span>
         <el-tag
@@ -24,9 +24,9 @@
         </el-tag>
       </div>
 
-      <div class="logs-actions">
+      <div class="flex items-center gap-2">
         <!-- Nombre de lignes -->
-        <span class="text-sm text-gray-500 mr-4">
+        <span class="text-label mr-4">
           {{ logs.length }} ligne{{ logs.length > 1 ? 's' : '' }}
         </span>
 
@@ -96,11 +96,11 @@
     </div>
 
     <!-- Conteneur des logs avec barre de progression -->
-    <div class="logs-container">
+    <div class="flex-1 flex flex-col overflow-hidden">
       <!-- Barre de progression si disponible -->
       <div
         v-if="progress > 0"
-        class="logs-progress"
+        class="px-4 py-3 bg-bg-card border-b border-border"
       >
         <el-progress
           :percentage="progress"
@@ -116,21 +116,21 @@
       <!-- Logs avec auto-scroll -->
       <div
         ref="logsScrollContainer"
-        class="logs-content"
-        :class="{ 'auto-scroll': autoScroll }"
+        class="logs-content flex-1 overflow-y-auto"
+        :class="{ 'scroll-smooth': autoScroll }"
         @scroll="handleScroll"
       >
         <div
           v-if="logs.length === 0"
-          class="logs-empty"
+          class="flex flex-col items-center justify-center h-full text-text-muted"
         >
-          <span class="i-carbon-document-blank text-4xl text-gray-300 mb-2" />
-          <p class="text-gray-500">
+          <span class="i-carbon-document-blank text-4xl mb-2" />
+          <p class="text-text-secondary">
             Aucun log disponible
           </p>
           <p
             v-if="!isConnected"
-            class="text-sm text-gray-400 mt-2"
+            class="text-sm text-text-muted mt-2"
           >
             Connexion aux logs en temps réel...
           </p>
@@ -138,7 +138,7 @@
 
         <div
           v-else
-          class="logs-lines"
+          class="flex flex-col"
         >
           <div
             v-for="(line, index) in logs"
@@ -155,7 +155,7 @@
       <!-- Message d'erreur si présent -->
       <div
         v-if="errorMessage"
-        class="logs-error"
+        class="px-4 py-3 bg-bg-card border-t border-border"
       >
         <el-alert
           type="error"
@@ -175,7 +175,7 @@
       v-if="lastUpdate"
       class="logs-footer"
     >
-      <span class="text-xs text-gray-500">
+      <span class="text-xs text-text-muted">
         Dernière mise à jour : {{ formatDate(lastUpdate) }}
       </span>
     </div>
@@ -337,77 +337,19 @@ watch(logs, () => {
 </script>
 
 <style scoped>
-.deployment-logs {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background-color: var(--color-bg-secondary);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
 .logs-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background-color: var(--color-bg-card);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.logs-title {
-  display: flex;
-  align-items: center;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.logs-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.logs-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.logs-progress {
   padding: 12px 16px;
   background-color: var(--color-bg-card);
   border-bottom: 1px solid var(--color-border);
 }
 
 .logs-content {
-  flex: 1;
-  overflow-y: auto;
-  background: #1e1e1e;
+  background: var(--color-code-bg);
   padding: 12px;
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.6;
-  color: #d4d4d4;
-}
-
-.logs-content.auto-scroll {
-  scroll-behavior: smooth;
-}
-
-.logs-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: #6b6b6b;
-}
-
-.logs-lines {
-  display: flex;
-  flex-direction: column;
+  color: var(--color-code-fg);
 }
 
 .log-line {
@@ -417,7 +359,7 @@ watch(logs, () => {
 }
 
 .log-line:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--color-log-hover-bg);
 }
 
 .log-line-number {
@@ -425,7 +367,7 @@ watch(logs, () => {
   width: 50px;
   text-align: right;
   padding-right: 12px;
-  color: #858585;
+  color: var(--color-log-line-number);
   user-select: none;
   font-size: 12px;
 }
@@ -436,29 +378,14 @@ watch(logs, () => {
   white-space: pre-wrap;
 }
 
-/* Log levels styling */
+/* Log levels styling - colors use UnoCSS shortcuts via getLogLevel() */
+/* Only font styles remain here; colors are applied via log-error, log-warning, log-info, log-debug classes */
 .log-error .log-line-content {
-  color: #f48771;
   font-weight: 500;
 }
 
-.log-warning .log-line-content {
-  color: #dcdcaa;
-}
-
-.log-info .log-line-content {
-  color: #4ec9b0;
-}
-
 .log-debug .log-line-content {
-  color: #858585;
   font-style: italic;
-}
-
-.logs-error {
-  padding: 12px 16px;
-  background-color: var(--color-bg-card);
-  border-top: 1px solid var(--color-border);
 }
 
 .logs-footer {

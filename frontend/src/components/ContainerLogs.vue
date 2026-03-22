@@ -1,8 +1,8 @@
 <template>
-  <div class="container-logs">
+  <div class="flex flex-col h-[calc(100vh-350px)] min-h-400px">
     <!-- Header with controls -->
-    <div class="logs-header">
-      <div class="logs-status">
+    <div class="logs-header flex-between">
+      <div class="flex items-center gap-2">
         <el-tag
           :type="connectionTagType"
           size="small"
@@ -11,14 +11,14 @@
         </el-tag>
       </div>
 
-      <div class="logs-controls">
+      <div class="flex items-center gap-3">
         <!-- Log filter -->
         <el-select
           v-model="logFilter"
           size="small"
           placeholder="Filtrer par flux"
           clearable
-          class="filter-select"
+          class="w-120px"
         >
           <el-option label="Tous" value="all" />
           <el-option label="stdout" value="stdout" />
@@ -31,13 +31,13 @@
           :min="10"
           :max="10000"
           size="small"
-          class="tail-input"
+          class="w-100px"
           @change="handleTailChange"
         />
-        <span class="tail-label">lignes</span>
+        <span class="text-label">lignes</span>
 
         <!-- Action buttons -->
-        <el-button-group class="action-buttons">
+        <el-button-group class="ml-auto">
           <el-button
             size="small"
             @click="toggleAutoScroll"
@@ -88,13 +88,13 @@
     <!-- Logs content -->
     <div
       ref="logsContainerRef"
-      class="logs-container"
+      class="logs-container flex-1 overflow-auto rounded position-relative min-h-200px"
       @scroll="handleScroll"
     >
       <!-- Loading state -->
       <div
         v-if="status === 'connecting'"
-        class="logs-loading"
+        class="flex-center gap-2 h-200px text-text-secondary"
       >
         <el-icon class="is-loading"><Loading /></el-icon>
         <span>Connexion en cours...</span>
@@ -103,7 +103,7 @@
       <!-- Empty state -->
       <div
         v-else-if="!filteredLogs.length"
-        class="logs-empty"
+        class="flex-center h-200px"
       >
         <el-empty description="Aucun log disponible" />
       </div>
@@ -111,7 +111,7 @@
       <!-- Logs lines -->
       <div
         v-else
-        class="logs-content"
+        class="logs-content font-mono text-xs leading-relaxed"
       >
         <div
           v-for="(line, index) in filteredLogs"
@@ -126,7 +126,7 @@
     <!-- Scroll to bottom button (floating) -->
     <el-button
       v-show="!isScrolledToBottom && !autoScroll && filteredLogs.length > 10"
-      class="scroll-to-bottom-btn"
+      class="!absolute !bottom-5 !right-5 !z-10 shadow-md"
       circle
       type="primary"
       size="small"
@@ -334,109 +334,21 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.container-logs {
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 350px);
-  min-height: 400px;
-}
-
-.logs-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background-color: var(--el-bg-color);
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-
-.logs-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.logs-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.filter-select {
-  width: 120px;
-}
-
-.tail-input {
-  width: 100px;
-}
-
-.tail-label {
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-}
-
-.action-buttons {
-  margin-left: auto;
-}
-
-.logs-container {
-  flex: 1;
-  overflow: auto;
-  background-color: #1e1e1e;
-  border-radius: 4px;
-  position: relative;
-  min-height: 200px;
-}
-
-.logs-loading,
-.logs-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 200px;
-  color: var(--el-text-color-secondary);
-}
-
-.logs-loading {
-  flex-direction: row;
-  gap: 8px;
-}
-
-.logs-content {
-  padding: 8px 12px;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
+/* Log line styling - colors handled by UnoCSS shortcuts (log-error, log-warning, log-info) */
 .log-line {
   padding: 2px 4px;
   white-space: pre-wrap;
   word-break: break-all;
-  color: #d4d4d4;
+  color: var(--color-code-fg);
 }
 
+/* Log level backgrounds use CSS variables for theme support */
 .log-line.log-error {
-  color: #f48771;
-  background-color: rgba(244, 67, 54, 0.1);
+  background-color: var(--color-log-error-bg);
 }
 
 .log-line.log-warning {
-  color: #cca700;
-  background-color: rgba(204, 153, 0, 0.1);
-}
-
-.log-line.log-info {
-  color: #4fc3f7;
-}
-
-.scroll-to-bottom-btn {
-  position: absolute;
-  bottom: 20px;
-  right: 20px;
-  z-index: 10;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  background-color: var(--color-log-warning-bg);
 }
 
 /* Responsive adjustments */
@@ -445,10 +357,6 @@ onUnmounted(() => {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
-  }
-
-  .logs-controls {
-    flex-wrap: wrap;
   }
 }
 </style>

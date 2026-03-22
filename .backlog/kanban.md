@@ -9,7 +9,6 @@
 ### EPIC-007 : Infrastructure de Mocks pour Tests (Qualité — Phase 1)
 
 ### EPIC-008 : Homogénéisation des couleurs UnoCSS (Refactoring Design System)
-- [ ] STORY-503 : Refactoriser ContainerLogs.vue + DeploymentLogs.vue → classes UnoCSS
 - [ ] STORY-504 : Refactoriser ContainerTerminal.vue → variables CSS thémées (palette VS Code)
 - [ ] STORY-505 : Refactoriser WindFlowLogo.vue + StatusBadge.vue + CounterCard.vue
 - [ ] STORY-506 : Refactoriser DynamicFormField.vue + composants settings UI
@@ -33,3 +32,4 @@
 ### EPIC-008 : Homogénéisation des couleurs UnoCSS (Refactoring Design System)
 - [x] STORY-501 : Enrichir UnoCSS + theme.css avec variables terminal/logs/code blocks
 - [x] STORY-502 : Refactoriser Login.vue + SplashScreen.vue → variables CSS thémées
+- [x] STORY-503 : Refactoriser ContainerLogs.vue + DeploymentLogs.vue → classes UnoCSS

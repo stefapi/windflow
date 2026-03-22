@@ -36,7 +36,7 @@ Le projet dispose déjà d'une configuration UnoCSS (`uno.config.ts`) et de vari
 
 ### Phase 2 : Composants critiques (haute visibilité)
 - [x] STORY-502 : Refactoriser Login.vue + SplashScreen.vue → variables CSS thémées
-- [ ] STORY-503 : Refactoriser ContainerLogs.vue + DeploymentLogs.vue → classes UnoCSS
+- [x] STORY-503 : Refactoriser ContainerLogs.vue + DeploymentLogs.vue → classes UnoCSS
 - [ ] STORY-504 : Refactoriser ContainerTerminal.vue → variables CSS thémées (palette VS Code)
 
 ### Phase 3 : Composants UI réutilisables
