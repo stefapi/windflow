@@ -2,19 +2,6 @@
 
 ## 📋 BACKLOG (À faire)
 
-### EPIC-004 : Refonte UI, Navigation & Nettoyage Marketplace (Phase 2 — sprint front prioritaire)
-#### Nettoyage Marketplace
-
-#### Navigation & Layout
-
-#### Design System
-
-#### Dashboard
-
-#### Settings & Stubs
-- [ ] STORY-452 : Gestion RBAC depuis la page Settings
-- [ ] STORY-462 : Vue stub Plugins installés
-
 ### EPIC-005 : Tests d'Intégration Backend (Qualité — Q1 2026)
 
 ### EPIC-006 : Tests d'Intégration Frontend (Qualité — Q1 2026)
@@ -36,29 +23,3 @@
 *(aucune story en attente)*
 
 ## ✅ DONE (Terminé)
-- [x] STORY-461 : Vues stubs Volumes, Networks, Images
-- [x] STORY-451 : Page Settings — Organisations, Environments, Users
-- [x] STORY-447 : ContainerDetail — onglet Processus (liste des processus running)
-- [x] STORY-446 : ContainerDetail — onglet Stats temps réel
-- [x] STORY-445 : ContainerDetail — onglet Terminal
-- [x] STORY-444 : ContainerDetail — onglet Logs
-- [x] STORY-443 : ContainerDetail — onglet Infos
-- [x] STORY-442 : Filtres, recherche et sélection multiple
-- [x] STORY-441 : Liste containers avec actions inline
-- [x] STORY-434 : Zone widgets plugins sur le dashboard
-- [x] STORY-433 : Liste derniers déploiements avec statut
-- [x] STORY-432 : Tuiles compteurs Containers / VMs / Stacks
-- [x] STORY-431 : Barre métriques système
-- [x] STORY-423 : Composants de base harmonisés (badges, barres, icônes)
-- [x] STORY-481 : Intégration composants UI harmonisés dans Stacks
-- [x] STORY-422 : Typographie (Inter + JetBrains Mono)
-- [x] STORY-421 : Palette de couleurs thème sombre (tokens UnoCSS)
-- [x] STORY-471 : Refonte Page Login avec design unifié et nouveau logo
-- [x] STORY-413 : Responsive sidebar rétractable (tablette)
-- [x] STORY-412 : Règle des 2 clics — validation et ajustement navigation
-- [x] STORY-401 : Audit & suppression Marketplace frontend
-- [x] STORY-402 : Suppression API backend marketplace
-- [x] STORY-403 : Migration Alembic — suppression tables stack_review et user_favorite
-- [x] STORY-404 : Nettoyage imports, routes et références orphelines
-- [x] STORY-411 : Restructuration Sidebar selon les specs
-- [x] Phase 1 : Core Platform (v1.0 — Q1 2026) — API REST, Auth JWT, Docker, Stacks, UI Vue.js, CLI/TUI
