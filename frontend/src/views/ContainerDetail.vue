@@ -89,7 +89,9 @@
           <div class="info-sections">
             <!-- General Info -->
             <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">Informations générales</h3>
+              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
+                Informations générales
+              </h3>
               <el-descriptions
                 :column="2"
                 border
@@ -142,7 +144,9 @@
 
             <!-- Ports Section -->
             <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">Ports</h3>
+              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
+                Ports
+              </h3>
               <el-table
                 :data="parsedPorts"
                 empty-text="Aucun port exposé"
@@ -174,7 +178,9 @@
 
             <!-- Volumes Section -->
             <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">Volumes</h3>
+              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
+                Volumes
+              </h3>
               <el-table
                 :data="parsedMounts"
                 empty-text="Aucun volume monté"
@@ -222,7 +228,9 @@
 
             <!-- Network Section -->
             <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">Réseau</h3>
+              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
+                Réseau
+              </h3>
               <el-table
                 :data="parsedNetworks"
                 empty-text="Aucune information réseau"
@@ -255,7 +263,9 @@
             <!-- Environment Variables Section -->
             <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
               <div class="section-header">
-                <h3 class="m-0 text-base font-semibold text-[var(--color-text-primary)]">Variables d'environnement</h3>
+                <h3 class="m-0 text-base font-semibold text-[var(--color-text-primary)]">
+                  Variables d'environnement
+                </h3>
                 <el-input
                   v-model="envSearch"
                   placeholder="Rechercher..."

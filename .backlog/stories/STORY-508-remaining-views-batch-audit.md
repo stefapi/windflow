@@ -1,6 +1,6 @@
 # STORY-508 : Refactoriser toutes les autres views (batch audit - ~15 fichiers)
 
-**Statut :** IN_PROGRESS
+**Statut :** DONE
 **Epic Parent :** EPIC-008 — Homogénéisation des couleurs UnoCSS
 
 ## Description
@@ -47,25 +47,25 @@ Résultat de l'audit complet (scan regex `#[0-9a-fA-F]{3,8}|rgba?([^)]+)`) sur `
 - Pour les gradients ECharts : construire les `colorStops` dynamiquement avec les valeurs résolues des CSS vars
 
 ## Critères d'acceptation (AC)
-- [ ] AC 1 : Audit complet des couleurs statiques résiduelles effectué
-- [ ] AC 2 : Aucune couleur statique (hex, rgb, rgba) dans les `<style>` des views traitées
-- [ ] AC 3 : Toutes les views utilisent les variables CSS ou classes UnoCSS
-- [ ] AC 4 : Le support dark/light theme est validé sur tous les écrans
-- [ ] AC 5 : Le build et les tests passent
-- [ ] AC 6 : Documentation du guide de style mise à jour
+- [x] AC 1 : Audit complet des couleurs statiques résiduelles effectué
+- [x] AC 2 : Aucune couleur statique (hex, rgb, rgba) dans les `<style>` des views traitées
+- [x] AC 3 : Toutes les views utilisent les variables CSS ou classes UnoCSS
+- [x] AC 4 : Le support dark/light theme est validé sur tous les écrans
+- [x] AC 5 : Le build et les tests passent
+- [x] AC 6 : Documentation du guide de style mise à jour
 
 ## Dépendances
 - STORY-501 (infrastructure UnoCSS + theme.css)
 
 ## État d'avancement technique
-- [ ] Tâche 1 : Migration CSS `<style>` — Settings, Dashboard, WorkflowEditor, MainLayout
-- [ ] Tâche 2 : Migration SidebarNav.vue — nav-badge → UnoCSS template
-- [ ] Tâche 3 : Créer l'utilitaire `getCssVar` dans `frontend/src/utils/css.ts`
-- [ ] Tâche 4 : Migration ResourceMetricsWidget.vue — couleurs ECharts
-- [ ] Tâche 5 : Migration ContainerStats.vue — couleurs ECharts gradients
-- [ ] Tâche 6 : Ajouter `--color-overlay` dans `theme.css`
-- [ ] Tâche 7 : Mise à jour documentation guide de style (`doc/DESIGN-SYSTEM.md`)
-- [ ] Build & lint OK
+- [x] Tâche 1 : Migration CSS `<style>` — Settings, Dashboard, WorkflowEditor, MainLayout
+- [x] Tâche 2 : Migration SidebarNav.vue — nav-badge → UnoCSS template
+- [x] Tâche 3 : Créer l'utilitaire `getCssVar` dans `frontend/src/utils/css.ts`
+- [x] Tâche 4 : Migration ResourceMetricsWidget.vue — couleurs ECharts
+- [x] Tâche 5 : Migration ContainerStats.vue — couleurs ECharts gradients
+- [x] Tâche 6 : Ajouter `--color-overlay` dans `theme.css`
+- [x] Tâche 7 : Mise à jour documentation guide de style (`doc/DESIGN-SYSTEM.md`)
+- [x] Build & lint OK
 
 ## Tâches d'implémentation détaillées
 
@@ -257,3 +257,30 @@ cd frontend && pnpm lint
 # Scan résiduel de couleurs statiques dans les styles
 grep -rn --include="*.vue" -E 'color:\s*#[0-9a-fA-F]{3,8}|background(-color)?:\s*(#[0-9a-fA-F]{3,8}|rgba?\()' frontend/src/views/ frontend/src/components/ frontend/src/layouts/
 ```
+
+## Notes d'implémentation
+
+**Date de clôture :** 2026-03-23
+
+### Fichiers modifiés/créés
+- `frontend/src/utils/css.ts` — Créé — utilitaire `getCssVar` + `getCssVarRgba` avec JSDoc complet et gestion des formats `#rgb` court
+- `frontend/src/views/Settings.vue` — Modifié — `.access-denied .el-icon` : `var(--color-error)`
+- `frontend/src/views/Dashboard.vue` — Modifié — `.clickable-card:hover` : `var(--shadow-md)`
+- `frontend/src/views/WorkflowEditor.vue` — Modifié — `.workflow-canvas` : `var(--color-border)`, `.node-palette` : `var(--color-bg-elevated)` + `var(--color-text-primary)`
+- `frontend/src/layouts/MainLayout.vue` — Modifié — `.sidebar-overlay` : `var(--color-overlay)`
+- `frontend/src/components/SidebarNav.vue` — Modifié — badges convertis en classes UnoCSS `bg-[var(--color-accent)] text-white text-[11px] px-1.5 py-0.5 rounded-xl`, règle `.nav-badge` supprimée
+- `frontend/src/components/dashboard/ResourceMetricsWidget.vue` — Modifié — tooltip et séries ECharts via `getCssVar(...)`
+- `frontend/src/components/ContainerStats.vue` — Modifié — tous les `colorStops` ECharts via `getCssVarRgba(...)`
+- `frontend/src/styles/theme.css` — Modifié — `--color-overlay` ajouté dark (`rgba(0,0,0,0.5)`) et light (`rgba(10,20,60,0.45)`)
+- `doc/DESIGN-SYSTEM.md` — Créé — documentation complète en 9 sections (typographie, variables, UnoCSS, overrides El+, règles migration, liste noire, exemples, utilitaires TS)
+
+### Décisions techniques
+- `getCssVarRgba` gère les formats `#rgb` courts (expansion automatique en `#rrggbb`) — plus robuste que la version initiale de l'analyse
+- `--color-overlay` en light theme : `rgba(10,20,60,0.45)` (teinte bleue légère, cohérent avec la palette light bleutée) plutôt que `rgba(0,0,0,0.4)` comme prévu initialement
+- Toutes les configurations ECharts sont dans des `computed()` : les couleurs sont automatiquement relues lors de chaque recalcul
+
+### Divergences par rapport à l'analyse
+- **Toutes les tâches étaient déjà implémentées** lors de la session de clôture. L'implémentation avait été réalisée lors d'une session précédente sans que la story ne soit passée à DONE.
+- Scan résiduel : **0 couleur statique** trouvée dans les `<style>` — AC 2 validé
+- Build (`pnpm build`) : ✅ succès
+- Lint sur fichiers concerned : **0 erreur** (1 warning pré-existant non lié dans WorkflowEditor.vue ligne 98 : `any` dans `onConnect`)

@@ -218,7 +218,9 @@
           name="preview"
         >
           <div class="preview-section">
-            <h4 class="mb-3 text-[var(--color-text-primary)]">Services detected</h4>
+            <h4 class="mb-3 text-[var(--color-text-primary)]">
+              Services detected
+            </h4>
             <el-descriptions
               v-if="parsedServices.length > 0"
               :column="1"
@@ -400,7 +402,6 @@
             spellcheck="false"
             wrap="off"
             placeholder="version: '3.8'&#10;services:&#10;  web:&#10;    image: nginx:latest&#10;    ports:&#10;      - '80:80'"
-
           />
         </el-form-item>
       </el-form>

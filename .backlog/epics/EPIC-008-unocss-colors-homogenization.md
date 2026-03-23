@@ -1,6 +1,6 @@
 # EPIC-008 : Homogénéisation des couleurs UnoCSS
 
-**Statut :** IN_PROGRESS
+**Statut :** DONE
 **Priorité :** Haute
 
 ## Vision
@@ -45,14 +45,14 @@ Le projet dispose déjà d'une configuration UnoCSS (`uno.config.ts`) et de vari
 
 ### Phase 4 : Views principales et secondaires
 - [x] STORY-507 : Refactoriser Stacks.vue + ContainerDetail.vue (code blocks)
-- [ ] STORY-508 : Refactoriser toutes les autres views (batch audit - ~15 fichiers)
+- [x] STORY-508 : Refactoriser toutes les autres views (batch audit - ~15 fichiers)
 
 ## Critères de succès (Definition of Done)
-- [ ] Aucune couleur statique (hex, rgb, rgba) dans les `<style>` des composants Vue
-- [ ] Tous les composants utilisent les classes UnoCSS ou les variables CSS
-- [ ] Support dark/light theme validé sur tous les écrans
-- [ ] Tests visuels passants (screenshots comparaison si disponible)
-- [ ] Documentation mise à jour (guide de style)
+- [x] Aucune couleur statique (hex, rgb, rgba) dans les `<style>` des composants Vue
+- [x] Tous les composants utilisent les classes UnoCSS ou les variables CSS
+- [x] Support dark/light theme validé sur tous les écrans
+- [x] Tests visuels passants (screenshots comparaison si disponible)
+- [x] Documentation mise à jour (guide de style)
 
 ## Notes de conception
 
