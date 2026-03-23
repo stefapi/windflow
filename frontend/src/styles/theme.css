@@ -115,12 +115,17 @@
   /* Status colors */
   --color-success: #22c55e;
   --color-success-light: rgba(34, 197, 94, 0.15);
+  --color-success-border: rgba(34, 197, 94, 0.3);
   --color-error: #ef4444;
   --color-error-light: rgba(239, 68, 68, 0.15);
+  --color-error-border: rgba(239, 68, 68, 0.3);
   --color-warning: #f59e0b;
   --color-warning-light: rgba(245, 158, 11, 0.15);
-  --color-info: #6b7280;
+  --color-warning-border: rgba(245, 158, 11, 0.3);
+  --color-info: #9ca3af;
   --color-info-light: rgba(107, 114, 128, 0.15);
+  --color-info-border: rgba(107, 114, 128, 0.3);
+  --color-accent-border: rgba(59, 130, 246, 0.3);
 
   /* Terminal colors - VS Code Dark style */
   --color-terminal-bg: #0c0c0c;
@@ -226,40 +231,45 @@
 
 /* ===== Light Theme ===== */
 [data-theme='light'] {
-  /* Backgrounds */
-  --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f8fafc;
-  --color-bg-card: #ffffff;
-  --color-bg-card-alpha: rgba(255, 255, 255, 0.85);
-  --color-bg-elevated: #f1f5f9;
-  --color-bg-hover: #e2e8f0;
-  --color-bg-input: #ffffff;
+  /* Backgrounds — teintes bleutées cohérentes */
+  --color-bg-primary: #f0f4ff;
+  --color-bg-secondary: #e8eeff;
+  --color-bg-card: #f5f8ff;
+  --color-bg-card-alpha: rgba(245, 248, 255, 0.92);
+  --color-bg-elevated: #dce6fb;
+  --color-bg-hover: #c7d7f7;
+  --color-bg-input: #f8faff;
 
-  /* Borders */
-  --color-border: #e2e8f0;
-  --color-border-light: #f1f5f9;
-  --color-border-focus: #3b82f6;
+  /* Borders — plus visibles sur fond bleuté */
+  --color-border: #bfcef5;
+  --color-border-light: #d4e0fb;
+  --color-border-focus: #2563eb;
 
-  /* Text */
-  --color-text-primary: #1e293b;
-  --color-text-secondary: #64748b;
-  --color-text-muted: #94a3b8;
-  --color-text-placeholder: #94a3b8;
+  /* Text — contraste augmenté */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-muted: #4e6080;
+  --color-text-placeholder: #607898;
 
   /* Accent (Primary actions/links) */
-  --color-accent: #2563eb;
-  --color-accent-hover: #1d4ed8;
-  --color-accent-light: rgba(37, 99, 235, 0.1);
+  --color-accent: #1d4ed8;
+  --color-accent-hover: #1e40af;
+  --color-accent-light: rgba(29, 78, 216, 0.12);
 
   /* Status colors */
   --color-success: #16a34a;
   --color-success-light: rgba(22, 163, 74, 0.1);
+  --color-success-border: rgba(22, 163, 74, 0.3);
   --color-error: #dc2626;
   --color-error-light: rgba(220, 38, 38, 0.1);
+  --color-error-border: rgba(220, 38, 38, 0.3);
   --color-warning: #d97706;
   --color-warning-light: rgba(217, 119, 6, 0.1);
+  --color-warning-border: rgba(217, 119, 6, 0.3);
   --color-info: #6b7280;
   --color-info-light: rgba(107, 114, 128, 0.1);
+  --color-info-border: rgba(107, 114, 128, 0.2);
+  --color-accent-border: rgba(37, 99, 235, 0.3);
 
   /* Terminal colors - Light theme adapted */
   --color-terminal-bg: #ffffff;
@@ -354,13 +364,13 @@
   --el-tag-bg-color: var(--color-bg-elevated);
   --el-tag-text-color: var(--color-text-primary);
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.15);
+  /* Shadows — teinte bleue légère */
+  --shadow-sm: 0 1px 3px rgba(15, 40, 100, 0.08);
+  --shadow-md: 0 4px 8px rgba(15, 40, 100, 0.12);
+  --shadow-lg: 0 10px 20px rgba(15, 40, 100, 0.16);
 
   /* Overlay */
-  --color-overlay: rgba(0, 0, 0, 0.4);
+  --color-overlay: rgba(10, 20, 60, 0.45);
 }
 
 /* ===== Global Reset ===== */
@@ -628,29 +638,8 @@ body {
 /* Fix el-drawer in dark mode */
 .el-drawer {
   --el-drawer-bg-color: var(--color-bg-card);
-}
-
-/* Fix el-input in dark mode */
-.el-input__wrapper {
-  background-color: var(--el-input-bg-color) !important;
-  box-shadow: 0 0 0 1px var(--el-input-border-color) inset !important;
-}
-
-.el-input__wrapper:hover {
-  box-shadow: 0 0 0 1px var(--el-input-hover-border-color) inset !important;
-}
-
-.el-input__wrapper.is-focus {
-  box-shadow: 0 0 0 1px var(--el-input-focus-border-color) inset !important;
-}
-
-.el-input__inner {
-  color: var(--el-input-text-color) !important;
-  background-color: transparent !important;
-}
-
-.el-input__inner::placeholder {
-  color: var(--el-input-placeholder-color);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-card);
 }
 
 /* Fix el-button in dark mode
@@ -728,51 +717,51 @@ body {
 .el-tag--success {
   --el-tag-bg-color: var(--color-success-light);
   --el-tag-text-color: var(--color-success);
-  --el-tag-border-color: var(--color-success);
+  --el-tag-border-color: var(--color-success-border);
 
   color: var(--color-success) !important;
   background-color: var(--color-success-light) !important;
-  border-color: rgba(34, 197, 94, 0.3) !important;
+  border-color: var(--color-success-border) !important;
 }
 
 .el-tag--warning {
   --el-tag-bg-color: var(--color-warning-light);
   --el-tag-text-color: var(--color-warning);
-  --el-tag-border-color: var(--color-warning);
+  --el-tag-border-color: var(--color-warning-border);
 
   color: var(--color-warning) !important;
   background-color: var(--color-warning-light) !important;
-  border-color: rgba(245, 158, 11, 0.3) !important;
+  border-color: var(--color-warning-border) !important;
 }
 
 .el-tag--danger {
   --el-tag-bg-color: var(--color-error-light);
   --el-tag-text-color: var(--color-error);
-  --el-tag-border-color: var(--color-error);
+  --el-tag-border-color: var(--color-error-border);
 
   color: var(--color-error) !important;
   background-color: var(--color-error-light) !important;
-  border-color: rgba(239, 68, 68, 0.3) !important;
+  border-color: var(--color-error-border) !important;
 }
 
 .el-tag--info {
   --el-tag-bg-color: var(--color-info-light);
   --el-tag-text-color: var(--color-text-secondary);
-  --el-tag-border-color: var(--color-info);
+  --el-tag-border-color: var(--color-info-border);
 
   color: var(--color-text-secondary) !important;
   background-color: var(--color-info-light) !important;
-  border-color: rgba(107, 114, 128, 0.3) !important;
+  border-color: var(--color-info-border) !important;
 }
 
 .el-tag--primary {
   --el-tag-bg-color: var(--color-accent-light);
   --el-tag-text-color: var(--color-accent);
-  --el-tag-border-color: var(--color-accent);
+  --el-tag-border-color: var(--color-accent-border);
 
   color: var(--color-accent) !important;
   background-color: var(--color-accent-light) !important;
-  border-color: rgba(59, 130, 246, 0.3) !important;
+  border-color: var(--color-accent-border) !important;
 }
 
 /* el-tag dark variant (Element Plus uses this for contrast) */
@@ -833,24 +822,6 @@ body {
 .el-tag.el-tag--plain.el-tag--primary {
   color: var(--color-accent) !important;
   border-color: var(--color-accent) !important;
-}
-
-/* Fix el-select dropdown in dark mode */
-.el-select-dropdown {
-  background-color: var(--color-bg-card);
-  border-color: var(--color-border);
-}
-
-.el-select-dropdown__item {
-  color: var(--color-text-primary);
-}
-
-.el-select-dropdown__item:hover {
-  background-color: var(--color-bg-hover);
-}
-
-.el-select-dropdown__item.selected {
-  color: var(--color-accent);
 }
 
 /* Fix el-popover in dark mode */
@@ -919,37 +890,10 @@ body {
   background-color: var(--color-bg-card);
 }
 
-/* Fix el-switch in dark mode */
-.el-switch__core {
-  background-color: var(--color-bg-elevated);
-  border-color: var(--color-border);
-}
-
-/* Fix el-checkbox in dark mode */
-.el-checkbox__inner {
-  background-color: var(--color-bg-input);
-  border-color: var(--color-border);
-}
-
 /* Fix el-radio in dark mode */
 .el-radio__inner {
   background-color: var(--color-bg-input);
   border-color: var(--color-border);
-}
-
-/* Fix el-textarea in dark mode */
-.el-textarea__inner {
-  color: var(--color-text-primary);
-  background-color: var(--color-bg-input);
-  border-color: var(--color-border);
-}
-
-.el-textarea__inner:hover {
-  border-color: var(--color-border-focus);
-}
-
-.el-textarea__inner:focus {
-  border-color: var(--color-accent);
 }
 
 /* Fix el-tooltip in dark mode */
@@ -964,7 +908,7 @@ body {
 }
 
 [data-theme='light'] .el-loading-mask {
-  background-color: rgb(255, 255, 255, 0.9);
+  background-color: rgba(240, 244, 255, 0.92);
 }
 
 /* Fix el-empty in dark mode */
@@ -1488,37 +1432,6 @@ body {
   background-color: var(--color-accent) !important;
 }
 
-/* Light theme adjustments for these components */
-[data-theme='light'] .el-tag--success {
-  color: var(--color-success) !important;
-  background-color: var(--color-success-light) !important;
-  border-color: rgba(22, 163, 74, 0.3) !important;
-}
-
-[data-theme='light'] .el-tag--warning {
-  color: var(--color-warning) !important;
-  background-color: var(--color-warning-light) !important;
-  border-color: rgba(217, 119, 6, 0.3) !important;
-}
-
-[data-theme='light'] .el-tag--danger {
-  color: var(--color-error) !important;
-  background-color: var(--color-error-light) !important;
-  border-color: rgba(220, 38, 38, 0.3) !important;
-}
-
-[data-theme='light'] .el-tag--info {
-  color: var(--color-text-secondary) !important;
-  background-color: var(--color-info-light) !important;
-  border-color: rgba(107, 114, 128, 0.2) !important;
-}
-
-[data-theme='light'] .el-tag--primary {
-  color: var(--color-accent) !important;
-  background-color: var(--color-accent-light) !important;
-  border-color: rgba(37, 99, 235, 0.3) !important;
-}
-
 /* ===== el-progress Dark Mode Fixes ===== */
 /* Progress bar container */
 .el-progress {
@@ -1701,7 +1614,7 @@ body {
   animation: el-skeleton-loading 1.4s ease infinite;
 }
 
-/* Light theme adjustments for skeleton */
+/* Light theme adjustments for skeleton — teinte bleue */
 [data-theme='light'] .el-skeleton__item,
 [data-theme='light'] .el-skeleton__p,
 [data-theme='light'] .el-skeleton__text,
@@ -1710,20 +1623,20 @@ body {
 [data-theme='light'] .el-skeleton__image {
   background: linear-gradient(
     90deg,
-    #f0f0f0 25%,
-    #e0e0e0 37%,
-    #f0f0f0 63%
+    #dce6fb 25%,
+    #c7d7f7 37%,
+    #dce6fb 63%
   ) !important;
   background-size: 400% 100% !important;
 }
 
-/* Light theme progress bar */
+/* Light theme progress bar — teinte bleue */
 [data-theme='light'] .el-progress-bar__outer {
-  background-color: #e5e7eb !important;
+  background-color: #c7d7f7 !important;
 }
 
 [data-theme='light'] .el-progress-circle__track {
-  stroke: #e5e7eb !important;
+  stroke: #c7d7f7 !important;
 }
 
 /* ===== el-checkbox Dark Mode Comprehensive Fixes ===== */
@@ -1792,16 +1705,13 @@ body {
 }
 
 /* ===== el-alert Dark Mode Comprehensive Fixes ===== */
-/* Alert base */
+/* Alert base + container */
 .el-alert {
   --el-alert-bg-color: var(--color-bg-card);
   --el-alert-title-color: var(--color-text-primary);
   --el-alert-description-color: var(--color-text-secondary);
   --el-alert-border-color: var(--color-border);
-}
 
-/* Alert container */
-.el-alert {
   background-color: var(--color-bg-card) !important;
   border-color: var(--color-border) !important;
 }
@@ -1833,7 +1743,7 @@ body {
 /* Alert info type */
 .el-alert--info {
   background-color: var(--color-info-light) !important;
-  border-color: rgba(107, 114, 128, 0.3) !important;
+  border-color: var(--color-info-border) !important;
 }
 
 .el-alert--info .el-alert__title,
@@ -1844,7 +1754,7 @@ body {
 /* Alert success type */
 .el-alert--success {
   background-color: var(--color-success-light) !important;
-  border-color: rgba(34, 197, 94, 0.3) !important;
+  border-color: var(--color-success-border) !important;
 }
 
 .el-alert--success .el-alert__title,
@@ -1855,7 +1765,7 @@ body {
 /* Alert warning type */
 .el-alert--warning {
   background-color: var(--color-warning-light) !important;
-  border-color: rgba(245, 158, 11, 0.3) !important;
+  border-color: var(--color-warning-border) !important;
 }
 
 .el-alert--warning .el-alert__title,
@@ -1866,7 +1776,7 @@ body {
 /* Alert error type */
 .el-alert--error {
   background-color: var(--color-error-light) !important;
-  border-color: rgba(239, 68, 68, 0.3) !important;
+  border-color: var(--color-error-border) !important;
 }
 
 .el-alert--error .el-alert__title,
@@ -1933,12 +1843,12 @@ body {
 
 /* Light theme adjustments */
 [data-theme='light'] .el-checkbox__inner {
-  background-color: #ffffff !important;
+  background-color: var(--color-bg-input) !important;
   border-color: var(--color-border) !important;
 }
 
 [data-theme='light'] .el-alert {
-  background-color: #ffffff !important;
+  background-color: var(--color-bg-card) !important;
 }
 
 [data-theme='light'] .el-alert--info {
