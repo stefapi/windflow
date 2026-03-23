@@ -445,9 +445,184 @@ body {
   background-color: var(--color-bg-card);
 }
 
-/* Fix el-dialog in dark mode */
+/* Fix el-dialog in dark mode - complete styling */
 .el-dialog {
   --el-dialog-bg-color: var(--color-bg-card);
+  --el-dialog-title-font-size: var(--text-lg);
+
+  background-color: var(--color-bg-card) !important;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.el-dialog__header {
+  background-color: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border);
+  padding: 16px 20px;
+  margin: -20px -20px 20px -20px;
+  border-radius: 8px 8px 0 0;
+}
+
+.el-dialog__title {
+  color: var(--color-text-primary) !important;
+  font-weight: 600;
+}
+
+.el-dialog__body {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-card);
+}
+
+.el-dialog__footer {
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+}
+
+.el-overlay {
+  background-color: var(--color-overlay);
+}
+
+/* Dialog header close button */
+.el-dialog__headerbtn .el-dialog__close {
+  color: var(--color-text-secondary);
+}
+
+.el-dialog__headerbtn:hover .el-dialog__close {
+  color: var(--color-accent);
+}
+
+/* Fix form elements inside el-dialog - ensure dark mode applies */
+.el-dialog .el-input__wrapper {
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-input) !important;
+  box-shadow: 0 0 0 1px var(--color-border) inset !important;
+}
+
+.el-dialog .el-input__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--color-border-focus) inset !important;
+}
+
+.el-dialog .el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px var(--color-accent) inset !important;
+}
+
+.el-dialog .el-input__inner {
+  color: var(--color-text-primary) !important;
+  background-color: transparent !important;
+}
+
+.el-dialog .el-textarea__inner {
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-input) !important;
+  border-color: var(--color-border) !important;
+}
+
+.el-dialog .el-textarea__inner:hover {
+  border-color: var(--color-border-focus) !important;
+}
+
+.el-dialog .el-textarea__inner:focus {
+  border-color: var(--color-accent) !important;
+}
+
+.el-dialog .el-select__wrapper {
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-input) !important;
+  box-shadow: 0 0 0 1px var(--color-border) inset !important;
+}
+
+.el-dialog .el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--color-border-focus) inset !important;
+}
+
+.el-dialog .el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--color-accent) inset !important;
+}
+
+.el-dialog .el-input-number .el-input__wrapper {
+  background-color: var(--color-bg-input) !important;
+}
+
+.el-dialog .el-input-number__decrease,
+.el-dialog .el-input-number__increase {
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-elevated) !important;
+  border-color: var(--color-border) !important;
+}
+
+.el-dialog .el-form-item__label {
+  color: var(--color-text-secondary) !important;
+}
+
+/* Fix el-tag inside dialogs */
+.el-dialog .el-tag {
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-elevated) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* Fix el-icon inside dialogs */
+.el-dialog .el-icon {
+  color: var(--color-text-secondary);
+}
+
+.el-dialog .el-icon:hover {
+  color: var(--color-text-primary);
+}
+
+/* Fix el-switch inside dialogs */
+.el-dialog .el-switch__core {
+  background-color: var(--color-bg-elevated) !important;
+  border-color: var(--color-border) !important;
+}
+
+.el-dialog .el-switch.is-checked .el-switch__core {
+  background-color: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+}
+
+/* Fix el-option inside dialogs (dropdown items) */
+.el-dialog .el-option {
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-card) !important;
+}
+
+.el-dialog .el-option:hover {
+  background-color: var(--color-bg-hover) !important;
+}
+
+.el-dialog .el-option.selected {
+  color: var(--color-accent) !important;
+}
+
+/* Fix el-checkbox inside dialogs */
+.el-dialog .el-checkbox__inner {
+  background-color: var(--color-bg-input) !important;
+  border-color: var(--color-border) !important;
+}
+
+.el-dialog .el-checkbox__input.is-checked .el-checkbox__inner {
+  background-color: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+}
+
+.el-dialog .el-checkbox__label {
+  color: var(--color-text-primary) !important;
+}
+
+/* Fix el-radio inside dialogs */
+.el-dialog .el-radio__inner {
+  background-color: var(--color-bg-input) !important;
+  border-color: var(--color-border) !important;
+}
+
+.el-dialog .el-radio__input.is-checked .el-radio__inner {
+  background-color: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+}
+
+.el-dialog .el-radio__label {
+  color: var(--color-text-primary) !important;
 }
 
 /* Fix el-drawer in dark mode */
@@ -538,11 +713,126 @@ body {
   color: var(--el-menu-active-color);
 }
 
-/* Fix el-tag in dark mode */
+/* Fix el-tag in dark mode - comprehensive styling */
 .el-tag {
-  color: var(--el-tag-text-color);
-  background-color: var(--el-tag-bg-color);
-  border-color: var(--color-border);
+  --el-tag-bg-color: var(--color-bg-elevated);
+  --el-tag-text-color: var(--color-text-primary);
+  --el-tag-border-color: var(--color-border);
+
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-elevated) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* el-tag type variants - ensure proper colors in dark mode */
+.el-tag--success {
+  --el-tag-bg-color: var(--color-success-light);
+  --el-tag-text-color: var(--color-success);
+  --el-tag-border-color: var(--color-success);
+
+  color: var(--color-success) !important;
+  background-color: var(--color-success-light) !important;
+  border-color: rgba(34, 197, 94, 0.3) !important;
+}
+
+.el-tag--warning {
+  --el-tag-bg-color: var(--color-warning-light);
+  --el-tag-text-color: var(--color-warning);
+  --el-tag-border-color: var(--color-warning);
+
+  color: var(--color-warning) !important;
+  background-color: var(--color-warning-light) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+.el-tag--danger {
+  --el-tag-bg-color: var(--color-error-light);
+  --el-tag-text-color: var(--color-error);
+  --el-tag-border-color: var(--color-error);
+
+  color: var(--color-error) !important;
+  background-color: var(--color-error-light) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.el-tag--info {
+  --el-tag-bg-color: var(--color-info-light);
+  --el-tag-text-color: var(--color-text-secondary);
+  --el-tag-border-color: var(--color-info);
+
+  color: var(--color-text-secondary) !important;
+  background-color: var(--color-info-light) !important;
+  border-color: rgba(107, 114, 128, 0.3) !important;
+}
+
+.el-tag--primary {
+  --el-tag-bg-color: var(--color-accent-light);
+  --el-tag-text-color: var(--color-accent);
+  --el-tag-border-color: var(--color-accent);
+
+  color: var(--color-accent) !important;
+  background-color: var(--color-accent-light) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+/* el-tag dark variant (Element Plus uses this for contrast) */
+.el-tag--dark {
+  color: #ffffff !important;
+}
+
+.el-tag--dark.el-tag--success {
+  background-color: var(--color-success) !important;
+  border-color: var(--color-success) !important;
+}
+
+.el-tag--dark.el-tag--warning {
+  background-color: var(--color-warning) !important;
+  border-color: var(--color-warning) !important;
+}
+
+.el-tag--dark.el-tag--danger {
+  background-color: var(--color-error) !important;
+  border-color: var(--color-error) !important;
+}
+
+.el-tag--dark.el-tag--info {
+  background-color: var(--color-info) !important;
+  border-color: var(--color-info) !important;
+}
+
+.el-tag--dark.el-tag--primary {
+  background-color: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+}
+
+/* el-tag plain variant */
+.el-tag.el-tag--plain {
+  background-color: transparent !important;
+}
+
+.el-tag.el-tag--plain.el-tag--success {
+  color: var(--color-success) !important;
+  border-color: var(--color-success) !important;
+}
+
+.el-tag.el-tag--plain.el-tag--warning {
+  color: var(--color-warning) !important;
+  border-color: var(--color-warning) !important;
+}
+
+.el-tag.el-tag--plain.el-tag--danger {
+  color: var(--color-error) !important;
+  border-color: var(--color-error) !important;
+}
+
+.el-tag.el-tag--plain.el-tag--info {
+  color: var(--color-text-secondary) !important;
+  border-color: var(--color-border) !important;
+}
+
+.el-tag.el-tag--plain.el-tag--primary {
+  color: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
 }
 
 /* Fix el-select dropdown in dark mode */
@@ -859,6 +1149,815 @@ body {
 
 /* Fix el-input-number input text color */
 .el-input-number .el-input__inner {
-  color: var(--color-text-primary) !important;
   text-align: center;
+  color: var(--color-text-primary) !important;
+}
+
+/* ===== el-icon Dark Mode Fixes ===== */
+/* Base icon styling - ensure visibility in dark mode */
+.el-icon {
+  color: inherit;
+  fill: currentcolor;
+}
+
+/* Icon in buttons */
+.el-button .el-icon {
+  color: inherit;
+}
+
+/* Icon in inputs */
+.el-input__prefix .el-icon,
+.el-input__suffix .el-icon {
+  color: var(--color-text-secondary);
+}
+
+.el-input__prefix .el-icon:hover,
+.el-input__suffix .el-icon:hover {
+  color: var(--color-text-primary);
+}
+
+/* Icon in tabs */
+.el-tabs__item .el-icon {
+  color: var(--color-text-secondary);
+}
+
+.el-tabs__item.is-active .el-icon {
+  color: var(--color-accent);
+}
+
+/* Icon in menu items */
+.el-menu-item .el-icon,
+.el-sub-menu__title .el-icon {
+  color: var(--color-text-secondary);
+}
+
+.el-menu-item.is-active .el-icon {
+  color: var(--color-accent);
+}
+
+/* Icon in tags */
+.el-tag .el-icon {
+  color: inherit;
+}
+
+/* Icon closable in tags */
+.el-tag__close {
+  color: var(--color-text-secondary) !important;
+  background-color: var(--color-bg-hover) !important;
+}
+
+.el-tag__close:hover {
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-elevated) !important;
+}
+
+/* Icon in select */
+.el-select__caret .el-icon {
+  color: var(--color-text-secondary);
+}
+
+.el-select__caret .el-icon:hover {
+  color: var(--color-text-primary);
+}
+
+/* ===== el-input Dark Mode Comprehensive Fixes ===== */
+/* Input wrapper - the main container */
+.el-input__wrapper {
+  background-color: var(--color-bg-input) !important;
+  box-shadow: 0 0 0 1px var(--color-border) inset !important;
+}
+
+.el-input__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--color-border-focus) inset !important;
+}
+
+.el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px var(--color-accent) inset !important;
+}
+
+/* Input inner element */
+.el-input__inner {
+  color: var(--color-text-primary) !important;
+  background-color: transparent !important;
+  caret-color: var(--color-accent);
+}
+
+.el-input__inner::placeholder {
+  color: var(--color-text-placeholder);
+  opacity: 1;
+}
+
+/* Input with prefix/suffix icons */
+.el-input--prefix .el-input__inner,
+.el-input--suffix .el-input__inner {
+  padding-left: 30px;
+  padding-right: 30px;
+}
+
+/* Input disabled state */
+.el-input.is-disabled .el-input__wrapper {
+  background-color: var(--color-bg-secondary) !important;
+  box-shadow: 0 0 0 1px var(--color-border-light) inset !important;
+  cursor: not-allowed;
+}
+
+.el-input.is-disabled .el-input__inner {
+  color: var(--color-text-muted) !important;
+  cursor: not-allowed;
+}
+
+/* Input large size */
+.el-input--large .el-input__inner {
+  font-size: var(--text-lg);
+}
+
+/* Input small size */
+.el-input--small .el-input__inner {
+  font-size: var(--text-sm);
+}
+
+/* Textarea specific */
+.el-textarea__inner {
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-input) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 4px;
+  caret-color: var(--color-accent);
+}
+
+.el-textarea__inner:hover {
+  border-color: var(--color-border-focus) !important;
+}
+
+.el-textarea__inner:focus {
+  border-color: var(--color-accent) !important;
+  outline: none;
+}
+
+.el-textarea__inner::placeholder {
+  color: var(--color-text-placeholder);
+  opacity: 1;
+}
+
+/* Disabled textarea */
+.el-textarea.is-disabled .el-textarea__inner {
+  background-color: var(--color-bg-secondary) !important;
+  border-color: var(--color-border-light) !important;
+  color: var(--color-text-muted) !important;
+  cursor: not-allowed;
+}
+
+/* ===== el-switch Dark Mode Comprehensive Fixes ===== */
+/* Switch core - the track */
+.el-switch {
+  --el-switch-off-color: var(--color-bg-elevated);
+  --el-switch-on-color: var(--color-accent);
+  --el-switch-border-color: var(--color-border);
+}
+
+.el-switch__core {
+  background-color: var(--color-bg-elevated) !important;
+  border: 1px solid var(--color-border) !important;
+}
+
+/* Switch when checked */
+.el-switch.is-checked .el-switch__core {
+  background-color: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+}
+
+/* Switch inner dot/action */
+.el-switch__action {
+  background-color: var(--color-text-secondary) !important;
+}
+
+.el-switch.is-checked .el-switch__action {
+  background-color: #ffffff !important;
+}
+
+/* Switch disabled state */
+.el-switch.is-disabled .el-switch__core {
+  background-color: var(--color-bg-secondary) !important;
+  border-color: var(--color-border-light) !important;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.el-switch.is-disabled .el-switch__action {
+  background-color: var(--color-text-muted) !important;
+}
+
+/* Switch with inner text */
+.el-switch__inner {
+  color: var(--color-text-primary);
+}
+
+.el-switch.is-checked .el-switch__inner {
+  color: #ffffff;
+}
+
+/* Switch label */
+.el-switch__label {
+  color: var(--color-text-secondary);
+}
+
+.el-switch__label.is-active {
+  color: var(--color-accent);
+}
+
+/* ===== el-option Dark Mode Comprehensive Fixes ===== */
+/* Select dropdown popper */
+.el-select-dropdown {
+  background-color: var(--color-bg-card) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 4px;
+  box-shadow: var(--shadow-lg);
+}
+
+/* Option item */
+.el-select-dropdown__item {
+  color: var(--color-text-primary) !important;
+  background-color: transparent !important;
+}
+
+.el-select-dropdown__item:hover {
+  background-color: var(--color-bg-hover) !important;
+}
+
+.el-select-dropdown__item.selected {
+  color: var(--color-accent) !important;
+  font-weight: 500;
+}
+
+.el-select-dropdown__item.is-disabled {
+  color: var(--color-text-muted) !important;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Option group header */
+.el-select-group__title {
+  padding-left: 10px;
+  background-color: var(--color-bg-secondary) !important;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted) !important;
+}
+
+/* Empty text in select */
+.el-select-dropdown__empty {
+  color: var(--color-text-muted) !important;
+  background-color: var(--color-bg-card) !important;
+}
+
+/* ===== el-select Popper Teleported ===== */
+/* Select dropdown when teleported to body */
+.el-popper.is-light {
+  background-color: var(--color-bg-card) !important;
+  border-color: var(--color-border) !important;
+}
+
+.el-popper.is-dark {
+  background-color: var(--color-bg-elevated) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* Arrow for popper */
+.el-popper[data-popper-arrow]:before {
+  background-color: var(--color-bg-card) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* Fix for autocomplete dropdown */
+.el-autocomplete-suggestion {
+  background-color: var(--color-bg-card) !important;
+  border-color: var(--color-border) !important;
+}
+
+.el-autocomplete-suggestion li {
+  color: var(--color-text-primary);
+}
+
+.el-autocomplete-suggestion li:hover {
+  background-color: var(--color-bg-hover);
+}
+
+/* Fix for cascader dropdown */
+.el-cascader__dropdown {
+  background-color: var(--color-bg-card) !important;
+  border-color: var(--color-border) !important;
+}
+
+.el-cascader-node {
+  color: var(--color-text-primary);
+}
+
+.el-cascader-node:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.el-cascader-node.is-active {
+  color: var(--color-accent);
+}
+
+/* Fix for time-picker / date-picker */
+.el-date-editor .el-input__wrapper {
+  background-color: var(--color-bg-input) !important;
+}
+
+.el-picker__popper {
+  background-color: var(--color-bg-card) !important;
+  border-color: var(--color-border) !important;
+}
+
+.el-date-picker {
+  background-color: var(--color-bg-card) !important;
+}
+
+.el-date-table td.available:hover {
+  color: var(--color-accent);
+}
+
+.el-date-table td.today span {
+  color: var(--color-accent);
+}
+
+.el-date-table td.current:not(.disabled) span {
+  background-color: var(--color-accent) !important;
+}
+
+/* Light theme adjustments for these components */
+[data-theme='light'] .el-tag--success {
+  color: var(--color-success) !important;
+  background-color: var(--color-success-light) !important;
+  border-color: rgba(22, 163, 74, 0.3) !important;
+}
+
+[data-theme='light'] .el-tag--warning {
+  color: var(--color-warning) !important;
+  background-color: var(--color-warning-light) !important;
+  border-color: rgba(217, 119, 6, 0.3) !important;
+}
+
+[data-theme='light'] .el-tag--danger {
+  color: var(--color-error) !important;
+  background-color: var(--color-error-light) !important;
+  border-color: rgba(220, 38, 38, 0.3) !important;
+}
+
+[data-theme='light'] .el-tag--info {
+  color: var(--color-text-secondary) !important;
+  background-color: var(--color-info-light) !important;
+  border-color: rgba(107, 114, 128, 0.2) !important;
+}
+
+[data-theme='light'] .el-tag--primary {
+  color: var(--color-accent) !important;
+  background-color: var(--color-accent-light) !important;
+  border-color: rgba(37, 99, 235, 0.3) !important;
+}
+
+/* ===== el-progress Dark Mode Fixes ===== */
+/* Progress bar container */
+.el-progress {
+  --el-progress-default-color: var(--color-accent);
+  --el-progress-text-color: var(--color-text-primary);
+}
+
+/* Progress bar track (background) */
+.el-progress-bar__outer {
+  background-color: var(--color-bg-elevated) !important;
+  border-radius: 100px;
+}
+
+/* Progress bar inner (filled portion) */
+.el-progress-bar__inner {
+  background-color: var(--color-accent) !important;
+}
+
+/* Progress percentage text */
+.el-progress__text {
+  color: var(--color-text-primary) !important;
+}
+
+/* Progress circle variant */
+.el-progress-circle__track {
+  stroke: var(--color-bg-elevated) !important;
+}
+
+.el-progress-circle__path {
+  stroke: var(--color-accent) !important;
+}
+
+/* Progress with status variants */
+.el-progress--success .el-progress-bar__inner {
+  background-color: var(--color-success) !important;
+}
+
+.el-progress--success .el-progress-circle__path {
+  stroke: var(--color-success) !important;
+}
+
+.el-progress--warning .el-progress-bar__inner {
+  background-color: var(--color-warning) !important;
+}
+
+.el-progress--warning .el-progress-circle__path {
+  stroke: var(--color-warning) !important;
+}
+
+.el-progress--exception .el-progress-bar__inner {
+  background-color: var(--color-error) !important;
+}
+
+.el-progress--exception .el-progress-circle__path {
+  stroke: var(--color-error) !important;
+}
+
+/* Progress inside text (when text is inside the bar) */
+.el-progress-bar__innerText {
+  color: #ffffff !important;
+}
+
+/* Progress striped variant */
+.el-progress-bar__inner--striped {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.15) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.15) 50%,
+    transparent 50%,
+    transparent 75%,
+    rgba(255, 255, 255, 0.15) 75%,
+    transparent 75%,
+    rgba(255, 255, 255, 0.15)
+  ) !important;
+  background-size: 40px 40px !important;
+}
+
+/* Progress striped-flow animation */
+@keyframes progress-stripes-flow {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+.el-progress-bar__inner.el-progress-bar__inner--striped.el-progress-bar__inner--striped-flow {
+  animation: progress-stripes-flow 3s linear infinite !important;
+}
+
+/* ===== el-skeleton Dark Mode Fixes ===== */
+/* Skeleton base */
+.el-skeleton {
+  --el-skeleton-color: var(--color-bg-elevated);
+  --el-skeleton-to-color: var(--color-bg-hover);
+}
+
+/* Skeleton item (each line/shape) */
+.el-skeleton__item {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-elevated) 25%,
+    var(--color-bg-hover) 37%,
+    var(--color-bg-elevated) 63%
+  ) !important;
+  background-size: 400% 100% !important;
+  animation: el-skeleton-loading 1.4s ease infinite;
+}
+
+/* Skeleton paragraph lines */
+.el-skeleton__p {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-elevated) 25%,
+    var(--color-bg-hover) 37%,
+    var(--color-bg-elevated) 63%
+  ) !important;
+  background-size: 400% 100% !important;
+}
+
+/* Skeleton text variant */
+.el-skeleton__text {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-elevated) 25%,
+    var(--color-bg-hover) 37%,
+    var(--color-bg-elevated) 63%
+  ) !important;
+  background-size: 400% 100% !important;
+}
+
+/* Skeleton caption */
+.el-skeleton__caption {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-elevated) 25%,
+    var(--color-bg-hover) 37%,
+    var(--color-bg-elevated) 63%
+  ) !important;
+  background-size: 400% 100% !important;
+}
+
+/* Skeleton circle variant */
+.el-skeleton__circle {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-elevated) 25%,
+    var(--color-bg-hover) 37%,
+    var(--color-bg-elevated) 63%
+  ) !important;
+  background-size: 400% 100% !important;
+}
+
+/* Skeleton image placeholder */
+.el-skeleton__image {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-elevated) 25%,
+    var(--color-bg-hover) 37%,
+    var(--color-bg-elevated) 63%
+  ) !important;
+  background-size: 400% 100% !important;
+}
+
+/* Skeleton animation - ensure it's defined */
+@keyframes el-skeleton-loading {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+/* Animated skeleton */
+.el-skeleton.is-animated .el-skeleton__item {
+  animation: el-skeleton-loading 1.4s ease infinite;
+}
+
+/* Light theme adjustments for skeleton */
+[data-theme='light'] .el-skeleton__item,
+[data-theme='light'] .el-skeleton__p,
+[data-theme='light'] .el-skeleton__text,
+[data-theme='light'] .el-skeleton__caption,
+[data-theme='light'] .el-skeleton__circle,
+[data-theme='light'] .el-skeleton__image {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e0e0e0 37%,
+    #f0f0f0 63%
+  ) !important;
+  background-size: 400% 100% !important;
+}
+
+/* Light theme progress bar */
+[data-theme='light'] .el-progress-bar__outer {
+  background-color: #e5e7eb !important;
+}
+
+[data-theme='light'] .el-progress-circle__track {
+  stroke: #e5e7eb !important;
+}
+
+/* ===== el-checkbox Dark Mode Comprehensive Fixes ===== */
+/* Checkbox base */
+.el-checkbox {
+  --el-checkbox-bg-color: var(--color-bg-input);
+  --el-checkbox-input-border-color: var(--color-border);
+  --el-checkbox-checked-bg-color: var(--color-accent);
+  --el-checkbox-checked-input-border-color: var(--color-accent);
+  --el-checkbox-disabled-bg-color: var(--color-bg-secondary);
+  --el-checkbox-disabled-input-border-color: var(--color-border-light);
+  --el-checkbox-disabled-checked-bg-color: var(--color-bg-hover);
+}
+
+/* Checkbox inner box */
+.el-checkbox__inner {
+  background-color: var(--color-bg-input) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* Checkbox hover state */
+.el-checkbox__input:hover .el-checkbox__inner {
+  border-color: var(--color-accent) !important;
+}
+
+/* Checkbox checked state */
+.el-checkbox__input.is-checked .el-checkbox__inner {
+  background-color: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+}
+
+/* Checkbox checkmark icon */
+.el-checkbox__inner::after {
+  border-color: #ffffff !important;
+}
+
+/* Checkbox indeterminate state */
+.el-checkbox__input.is-indeterminate .el-checkbox__inner {
+  background-color: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+}
+
+/* Checkbox disabled state */
+.el-checkbox__input.is-disabled .el-checkbox__inner {
+  background-color: var(--color-bg-secondary) !important;
+  border-color: var(--color-border-light) !important;
+}
+
+.el-checkbox__input.is-disabled.is-checked .el-checkbox__inner {
+  background-color: var(--color-bg-hover) !important;
+  border-color: var(--color-border-light) !important;
+}
+
+/* Checkbox label */
+.el-checkbox__label {
+  color: var(--color-text-primary) !important;
+}
+
+.el-checkbox__input.is-disabled + .el-checkbox__label {
+  color: var(--color-text-muted) !important;
+}
+
+/* Checkbox group */
+.el-checkbox-group {
+  color: var(--color-text-primary);
+}
+
+/* ===== el-alert Dark Mode Comprehensive Fixes ===== */
+/* Alert base */
+.el-alert {
+  --el-alert-bg-color: var(--color-bg-card);
+  --el-alert-title-color: var(--color-text-primary);
+  --el-alert-description-color: var(--color-text-secondary);
+  --el-alert-border-color: var(--color-border);
+}
+
+/* Alert container */
+.el-alert {
+  background-color: var(--color-bg-card) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* Alert title */
+.el-alert__title {
+  color: var(--color-text-primary) !important;
+}
+
+/* Alert description/content */
+.el-alert__description {
+  color: var(--color-text-secondary) !important;
+}
+
+/* Alert close button */
+.el-alert__close-btn {
+  color: var(--color-text-muted) !important;
+}
+
+.el-alert__close-btn:hover {
+  color: var(--color-text-primary) !important;
+}
+
+/* Alert icon */
+.el-alert__icon {
+  color: inherit;
+}
+
+/* Alert info type */
+.el-alert--info {
+  background-color: var(--color-info-light) !important;
+  border-color: rgba(107, 114, 128, 0.3) !important;
+}
+
+.el-alert--info .el-alert__title,
+.el-alert--info .el-alert__icon {
+  color: var(--color-text-secondary) !important;
+}
+
+/* Alert success type */
+.el-alert--success {
+  background-color: var(--color-success-light) !important;
+  border-color: rgba(34, 197, 94, 0.3) !important;
+}
+
+.el-alert--success .el-alert__title,
+.el-alert--success .el-alert__icon {
+  color: var(--color-success) !important;
+}
+
+/* Alert warning type */
+.el-alert--warning {
+  background-color: var(--color-warning-light) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+.el-alert--warning .el-alert__title,
+.el-alert--warning .el-alert__icon {
+  color: var(--color-warning) !important;
+}
+
+/* Alert error type */
+.el-alert--error {
+  background-color: var(--color-error-light) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.el-alert--error .el-alert__title,
+.el-alert--error .el-alert__icon {
+  color: var(--color-error) !important;
+}
+
+/* Alert with dark background variant */
+.el-alert.is-dark {
+  color: #ffffff !important;
+}
+
+.el-alert.is-dark.el-alert--info {
+  background-color: var(--color-info) !important;
+}
+
+.el-alert.is-dark.el-alert--success {
+  background-color: var(--color-success) !important;
+}
+
+.el-alert.is-dark.el-alert--warning {
+  background-color: var(--color-warning) !important;
+}
+
+.el-alert.is-dark.el-alert--error {
+  background-color: var(--color-error) !important;
+}
+
+/* Alert content wrapper */
+.el-alert__content {
+  color: var(--color-text-primary);
+}
+
+/* ===== Bulk Actions Bar Dark Mode Fixes ===== */
+/* Bulk actions bar - custom component class */
+.bulk-actions-bar {
+  background-color: var(--color-bg-elevated) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-primary) !important;
+}
+
+/* Bulk actions bar text */
+.bulk-actions-bar .text-text-primary,
+.bulk-actions-bar .text-sm {
+  color: var(--color-text-primary) !important;
+}
+
+/* Bulk actions bar buttons */
+.bulk-actions-bar .el-button {
+  background-color: var(--color-bg-hover) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.bulk-actions-bar .el-button:hover {
+  background-color: var(--color-bg-secondary) !important;
+  border-color: var(--color-border-focus) !important;
+}
+
+/* Bulk actions bar checkbox */
+.bulk-actions-bar .el-checkbox__label {
+  color: var(--color-text-primary) !important;
+}
+
+/* Light theme adjustments */
+[data-theme='light'] .el-checkbox__inner {
+  background-color: #ffffff !important;
+  border-color: var(--color-border) !important;
+}
+
+[data-theme='light'] .el-alert {
+  background-color: #ffffff !important;
+}
+
+[data-theme='light'] .el-alert--info {
+  background-color: var(--color-info-light) !important;
+}
+
+[data-theme='light'] .el-alert--success {
+  background-color: var(--color-success-light) !important;
+}
+
+[data-theme='light'] .el-alert--warning {
+  background-color: var(--color-warning-light) !important;
+}
+
+[data-theme='light'] .el-alert--error {
+  background-color: var(--color-error-light) !important;
+}
+
+[data-theme='light'] .bulk-actions-bar {
+  background-color: var(--color-bg-elevated) !important;
+  border-color: var(--color-border) !important;
 }

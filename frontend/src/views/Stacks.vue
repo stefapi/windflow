@@ -392,13 +392,15 @@
           label="Compose Content"
           required
         >
-          <textarea
+          <el-input
             v-model="createForm.compose_content"
-            class="code-block yaml-textarea"
+
+            type="textarea"
             :rows="15"
             spellcheck="false"
             wrap="off"
             placeholder="version: '3.8'&#10;services:&#10;  web:&#10;    image: nginx:latest&#10;    ports:&#10;      - '80:80'"
+
           />
         </el-form-item>
       </el-form>

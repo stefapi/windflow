@@ -40,7 +40,7 @@
           :min="10"
           :max="10000"
           size="small"
-
+          style="width: 160px"
           controls-position="right"
           @change="handleTailChange"
         />
