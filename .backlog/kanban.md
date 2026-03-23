@@ -2,7 +2,7 @@
 
 ## 📋 BACKLOG (À faire)
 
-
+### EPIC-008 : Couverture Frontend des APIs Backend (Qualité — Q1 2026)
 ### EPIC-001 : Système de Plugins & Marketplace (Phase 2 — Q2 2026)
 ### EPIC-002 : Gestion des Machines Virtuelles — KVM & Proxmox (Phase 2 — Q2 2026)
 ### EPIC-003 : Sécurité, GitOps & Multi-Machines (Phase 3-4 — Q3–Q4 2026)
