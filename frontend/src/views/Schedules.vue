@@ -16,6 +16,7 @@
       <el-table
         v-loading="schedulesStore.loading"
         :data="schedulesStore.tasks"
+        stripe
       >
         <el-table-column
           prop="name"

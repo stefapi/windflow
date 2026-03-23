@@ -359,17 +359,17 @@
 
 /* ===== Global Reset ===== */
 html {
-  background-color: var(--color-bg-primary);
-  color: var(--color-text-primary);
   font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-primary);
 }
 
 body {
-  background-color: var(--color-bg-primary);
-  color: var(--color-text-primary);
   font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: var(--leading-normal);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-primary);
   transition: background-color 0.3s ease, color 0.3s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -392,32 +392,66 @@ body {
 
 /* ===== Element Plus Dark Mode Fixes ===== */
 /* Fix el-table in dark mode */
+/* NOTE: Variables must be set on .el-table element (not :root) to beat EL+'s bundled CSS cascade */
 .el-table {
   --el-table-bg-color: var(--color-bg-card);
   --el-table-tr-bg-color: var(--color-bg-card);
   --el-table-header-bg-color: var(--color-bg-elevated);
   --el-table-row-hover-bg-color: var(--color-bg-hover);
   --el-table-border-color: var(--color-border);
+  /* Fixes striped rows: EL+ uses this var internally, must override at element level */
+  --el-fill-color-lighter: var(--color-bg-secondary);
+
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-card);
+}
+
+/* Fix el-table wrappers — EL+ fixed columns create wrapper divs with their own bg */
+.el-table__header-wrapper,
+.el-table__body-wrapper,
+.el-table__footer-wrapper {
+  background-color: var(--color-bg-card); /* stylelint-disable-line declaration-empty-line-before */
+}
+
+/* Fix el-table fixed columns container (white background on fixed right column) */
+.el-table__fixed-right,
+.el-table__fixed {
+  background-color: var(--color-bg-card);
+  box-shadow: -2px 0 8px rgb(0, 0, 0, 0.4);
+}
+
+.el-table__fixed-right-body-wrapper,
+.el-table__fixed-body-wrapper,
+.el-table__fixed-header-wrapper,
+.el-table__fixed-right-header-wrapper,
+.el-table__fixed-footer-wrapper,
+.el-table__fixed-right-footer-wrapper {
+  background-color: var(--color-bg-card); /* stylelint-disable-line declaration-empty-line-before */
+}
+
+/* Fix el-table empty block (white zone in dark mode) */
+.el-table__empty-block {
+  background-color: var(--color-bg-card);
 }
 
 /* Fix el-card in dark mode */
 .el-card {
   --el-card-bg-color: var(--color-bg-card);
+  color: var(--color-text-primary);
   background-color: var(--color-bg-card) !important;
   border-color: var(--color-border);
-  color: var(--color-text-primary);
 }
 
 .el-card__header {
+  padding: 16px 20px;
+  color: var(--color-text-primary);
   background-color: var(--color-bg-elevated);
   border-bottom: 1px solid var(--color-border);
-  color: var(--color-text-primary);
-  padding: 16px 20px;
 }
 
 .el-card__body {
-  background-color: var(--color-bg-card);
   color: var(--color-text-primary);
+  background-color: var(--color-bg-card);
 }
 
 /* Fix el-dialog in dark mode */
@@ -454,15 +488,15 @@ body {
 
 /* Fix el-button default in dark mode */
 .el-button--default {
+  color: var(--el-button-text-color);
   background-color: var(--el-button-bg-color);
   border-color: var(--el-button-border-color);
-  color: var(--el-button-text-color);
 }
 
 .el-button--default:hover {
+  color: var(--el-button-text-color);
   background-color: var(--el-button-hover-bg-color);
   border-color: var(--el-button-hover-border-color);
-  color: var(--el-button-text-color);
 }
 
 /* Fix el-menu in dark mode */
@@ -484,8 +518,8 @@ body {
 
 /* Fix el-tag in dark mode */
 .el-tag {
-  background-color: var(--el-tag-bg-color);
   color: var(--el-tag-text-color);
+  background-color: var(--el-tag-bg-color);
   border-color: var(--color-border);
 }
 
@@ -547,46 +581,55 @@ body {
   color: var(--color-text-secondary);
 }
 
-/* Fix el-tabs in dark mode */
-.el-tabs__item {
-  color: var(--color-text-secondary);
-}
-
-.el-tabs__item.is-active {
-  color: var(--color-accent);
-}
-
-.el-tabs__item:hover {
-  color: var(--color-accent);
-}
-
+/* Fix el-tabs nav underline */
 .el-tabs__nav-wrap::after {
   background-color: var(--color-border);
 }
 
+/* Fix el-tabs background in dark mode (EL+ defaults to white) */
+.el-tabs__nav-wrap,
+.el-tabs__nav-scroll {
+  background-color: var(--color-bg-card);
+}
+
+.el-tabs__header {
+  background-color: var(--color-bg-card);
+  border-bottom-color: var(--color-border);
+}
+
+.el-tabs__content {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-card);
+}
+
+.el-tab-pane {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-card);
+}
+
 /* Fix el-switch in dark mode */
 .el-switch__core {
-  border-color: var(--color-border);
   background-color: var(--color-bg-elevated);
+  border-color: var(--color-border);
 }
 
 /* Fix el-checkbox in dark mode */
 .el-checkbox__inner {
-  border-color: var(--color-border);
   background-color: var(--color-bg-input);
+  border-color: var(--color-border);
 }
 
 /* Fix el-radio in dark mode */
 .el-radio__inner {
-  border-color: var(--color-border);
   background-color: var(--color-bg-input);
+  border-color: var(--color-border);
 }
 
 /* Fix el-textarea in dark mode */
 .el-textarea__inner {
+  color: var(--color-text-primary);
   background-color: var(--color-bg-input);
   border-color: var(--color-border);
-  color: var(--color-text-primary);
 }
 
 .el-textarea__inner:hover {
@@ -605,11 +648,11 @@ body {
 
 /* Fix el-loading-mask in dark mode */
 .el-loading-mask {
-  background-color: rgba(15, 17, 23, 0.8);
+  background-color: rgb(15, 17, 23, 0.8);
 }
 
 [data-theme='light'] .el-loading-mask {
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: rgb(255, 255, 255, 0.9);
 }
 
 /* Fix el-empty in dark mode */
@@ -637,6 +680,10 @@ body {
 }
 
 /* Fix el-descriptions in dark mode */
+.el-descriptions {
+  --el-descriptions-item-bordered-label-background: var(--color-bg-elevated);
+}
+
 .el-descriptions__label {
   color: var(--color-text-secondary);
 }
@@ -645,10 +692,33 @@ body {
   color: var(--color-text-primary);
 }
 
+.el-descriptions__body {
+  background-color: var(--color-bg-secondary);
+}
+
+.el-descriptions__table {
+  background-color: var(--color-bg-secondary);
+}
+
+.el-descriptions__cell {
+  background-color: var(--color-bg-card) !important;
+  border-color: var(--color-border) !important;
+}
+
+.el-descriptions__label.el-descriptions__cell {
+  color: var(--color-text-secondary) !important;
+  background-color: var(--color-bg-elevated) !important;
+}
+
+.el-descriptions__content.el-descriptions__cell {
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-card) !important;
+}
+
 /* Fix el-tree in dark mode */
 .el-tree {
-  background-color: transparent;
   color: var(--color-text-primary);
+  background-color: transparent;
 }
 
 .el-tree-node__content:hover {
@@ -657,4 +727,88 @@ body {
 
 .el-tree-node.is-current > .el-tree-node__content {
   background-color: var(--color-accent-light);
+}
+
+/* Fix el-table cells — !important required: EL+ defines vars at .el-table level (same specificity) */
+
+/* Using CSS custom properties ensures correct behavior in both light & dark modes */
+.el-table td.el-table__cell {
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-card) !important;
+  border-bottom-color: var(--color-border) !important;
+}
+
+.el-table th.el-table__cell {
+  color: var(--color-text-secondary) !important;
+  background-color: var(--color-bg-elevated) !important;
+  border-bottom-color: var(--color-border) !important;
+  font-weight: 600;
+}
+
+/* Striped rows — also applies to cells inside fixed columns */
+.el-table--striped .el-table__row--striped td.el-table__cell {
+  background-color: var(--color-bg-secondary) !important;
+}
+
+.el-table__body tr.hover-row > td.el-table__cell {
+  background-color: var(--color-bg-hover) !important;
+}
+
+.el-table__fixed-right-patch {
+  background-color: var(--color-bg-elevated) !important;
+}
+
+/* Header wrapper background (visible area behind th cells) */
+.el-table__header-wrapper {
+  background-color: var(--color-bg-elevated) !important;
+}
+
+/* Fix el-select wrapper in dark mode (EL+ v2 API) */
+.el-select__wrapper {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-input);
+  box-shadow: 0 0 0 1px var(--color-border) inset;
+}
+
+.el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--color-border-focus) inset;
+}
+
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--color-accent) inset;
+}
+
+.el-select__placeholder span {
+  color: var(--color-text-placeholder);
+}
+
+.el-select__suffix,
+.el-select__prefix,
+.el-select__caret {
+  color: var(--color-text-secondary);
+}
+
+/* Fix el-tabs aesthetics — better contrast & visual hierarchy */
+.el-tabs__active-bar {
+  height: 2px;
+  background-color: var(--color-accent);
+  border-radius: 1px;
+}
+
+.el-tabs__item {
+  color: var(--color-text-secondary) !important;
+}
+
+.el-tabs__item:not(.is-active, .is-disabled):hover {
+  color: var(--color-text-primary) !important;
+}
+
+.el-tabs__item.is-active {
+  color: var(--color-accent) !important;
+  font-weight: 500;
+}
+
+.el-tabs__item.is-disabled {
+  color: var(--color-text-muted) !important;
+  opacity: 0.5;
 }

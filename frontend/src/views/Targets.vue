@@ -17,6 +17,7 @@
         :data="targetsStore.targets"
         :expand-row-keys="expandedRowId ? [expandedRowId] : []"
         row-key="id"
+        stripe
         @expand-change="handleExpandChange"
       >
         <el-table-column type="expand">
@@ -31,6 +32,7 @@
               <el-table
                 v-if="row.capabilities && row.capabilities.length > 0"
                 :data="row.capabilities"
+                stripe
                 class="capabilities-table"
               >
                 <el-table-column

@@ -88,8 +88,8 @@
         >
           <div class="info-sections">
             <!-- General Info -->
-            <div class="info-section">
-              <h3>Informations générales</h3>
+            <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
+              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">Informations générales</h3>
               <el-descriptions
                 :column="2"
                 border
@@ -141,8 +141,8 @@
             </div>
 
             <!-- Ports Section -->
-            <div class="info-section">
-              <h3>Ports</h3>
+            <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
+              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">Ports</h3>
               <el-table
                 :data="parsedPorts"
                 empty-text="Aucun port exposé"
@@ -173,8 +173,8 @@
             </div>
 
             <!-- Volumes Section -->
-            <div class="info-section">
-              <h3>Volumes</h3>
+            <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
+              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">Volumes</h3>
               <el-table
                 :data="parsedMounts"
                 empty-text="Aucun volume monté"
@@ -221,8 +221,8 @@
             </div>
 
             <!-- Network Section -->
-            <div class="info-section">
-              <h3>Réseau</h3>
+            <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
+              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">Réseau</h3>
               <el-table
                 :data="parsedNetworks"
                 empty-text="Aucune information réseau"
@@ -253,9 +253,9 @@
             </div>
 
             <!-- Environment Variables Section -->
-            <div class="info-section">
+            <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
               <div class="section-header">
-                <h3>Variables d'environnement</h3>
+                <h3 class="m-0 text-base font-semibold text-[var(--color-text-primary)]">Variables d'environnement</h3>
                 <el-input
                   v-model="envSearch"
                   placeholder="Rechercher..."
@@ -404,7 +404,7 @@
           type="textarea"
           :rows="30"
           readonly
-          class="inspect-textarea"
+          class="code-block inspect-textarea"
         />
       </div>
     </el-drawer>
@@ -725,19 +725,6 @@ onMounted(() => {
   gap: 20px;
 }
 
-.info-section {
-  background-color: var(--el-bg-color);
-  border-radius: 8px;
-  padding: 16px;
-}
-
-.info-section h3 {
-  margin: 0 0 12px 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-
 .id-with-copy {
   display: flex;
   align-items: center;
@@ -808,11 +795,10 @@ onMounted(() => {
 }
 
 .inspect-textarea :deep(textarea) {
+  /* Propriétés font uniquement - couleurs gérées par la classe code-block UnoCSS */
   font-family: monospace;
   font-size: 11px;
   line-height: 1.4;
-  background-color: #1e1e1e;
-  color: #d4d4d4;
 }
 
 /* Responsive adjustments for mobile */

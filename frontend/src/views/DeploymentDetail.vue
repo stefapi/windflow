@@ -156,6 +156,7 @@
             <div v-if="envVars.length > 0">
               <el-table
                 :data="envVars"
+                stripe
                 size="small"
               >
                 <el-table-column

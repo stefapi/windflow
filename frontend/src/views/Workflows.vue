@@ -15,6 +15,7 @@
       <el-table
         v-loading="workflowsStore.loading"
         :data="workflowsStore.workflows"
+        stripe
       >
         <el-table-column
           prop="name"

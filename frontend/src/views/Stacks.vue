@@ -17,6 +17,7 @@
       <el-table
         v-loading="stacksStore.loading"
         :data="stacksStore.stacks"
+        stripe
         @row-click="selectStack"
       >
         <el-table-column
@@ -138,7 +139,7 @@
                 ref="yamlEditorRef"
                 v-model="editForm.compose_content"
                 :readonly="!isEditing"
-                class="yaml-textarea"
+                class="code-block yaml-textarea"
                 spellcheck="false"
                 wrap="off"
               />
@@ -169,6 +170,7 @@
             <div v-if="envVars.length > 0">
               <el-table
                 :data="envVars"
+                stripe
                 size="small"
               >
                 <el-table-column
@@ -216,7 +218,7 @@
           name="preview"
         >
           <div class="preview-section">
-            <h4>Services detected</h4>
+            <h4 class="mb-3 text-[var(--color-text-primary)]">Services detected</h4>
             <el-descriptions
               v-if="parsedServices.length > 0"
               :column="1"
@@ -283,6 +285,7 @@
               v-if="versions.length > 0"
               v-loading="loadingVersions"
               :data="versions"
+              stripe
               size="small"
             >
               <el-table-column
@@ -391,7 +394,7 @@
         >
           <textarea
             v-model="createForm.compose_content"
-            class="yaml-textarea"
+            class="code-block yaml-textarea"
             :rows="15"
             spellcheck="false"
             wrap="off"
@@ -830,14 +833,9 @@ onMounted(() => {
 }
 
 .yaml-textarea {
+  /* Propriétés layout - couleurs gérées par la classe code-block UnoCSS */
   width: 100%;
   min-height: 400px;
-  padding: 12px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.6;
-  background: #1e1e1e;
-  color: #d4d4d4;
   border: none;
   outline: none;
   resize: vertical;
@@ -847,7 +845,7 @@ onMounted(() => {
 }
 
 .yaml-textarea:read-only {
-  background: #252526;
+  opacity: 0.85;
   cursor: default;
 }
 
@@ -880,7 +878,7 @@ onMounted(() => {
   padding: 8px 0;
 }
 
-.preview-section h4 {
-  margin-bottom: 12px;
+.history-section {
+  padding: 8px 0;
 }
 </style>

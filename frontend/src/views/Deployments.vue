@@ -15,6 +15,7 @@
       <el-table
         v-loading="deploymentsStore.loading"
         :data="deploymentsStore.deployments"
+        stripe
       >
         <el-table-column
           prop="id"
