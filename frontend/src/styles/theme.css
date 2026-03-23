@@ -381,21 +381,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ===== Utility Classes ===== */
-.bg-primary { background-color: var(--color-bg-primary); }
-.bg-secondary { background-color: var(--color-bg-secondary); }
-.bg-card { background-color: var(--color-bg-card); }
-.bg-elevated { background-color: var(--color-bg-elevated); }
-.bg-hover { background-color: var(--color-bg-hover); }
-
-.text-primary { color: var(--color-text-primary); }
-.text-secondary { color: var(--color-text-secondary); }
-.text-muted { color: var(--color-text-muted); }
-.text-accent { color: var(--color-accent); }
-
-.border-default { border-color: var(--color-border); }
-.border-light { border-color: var(--color-border-light); }
-
 /* ===== Element Plus Dark Mode Fixes ===== */
 /* Fix el-table in dark mode */
 /* NOTE: Variables must be set on .el-table element (not :root) to beat EL+'s bundled CSS cascade */
@@ -493,17 +478,47 @@ body {
   color: var(--el-input-placeholder-color);
 }
 
-/* Fix el-button default in dark mode */
-.el-button--default {
-  color: var(--el-button-text-color);
-  background-color: var(--el-button-bg-color);
-  border-color: var(--el-button-border-color);
+/* Fix el-button in dark mode
+ * EL+ defines --el-button-bg-color at .el-button level (same as us), so we must override
+ * at the same level. Since theme.css loads after EL+, same-specificity rules win by order.
+ */
+.el-button {
+  --el-button-bg-color: var(--color-bg-elevated);
+  --el-button-text-color: var(--color-text-primary);
+  --el-button-border-color: var(--color-border);
+  --el-button-hover-bg-color: var(--color-bg-hover);
+  --el-button-hover-border-color: var(--color-border-focus);
+  --el-button-hover-text-color: var(--color-text-primary);
+  --el-button-active-bg-color: var(--color-bg-hover);
+  --el-button-active-border-color: var(--color-accent);
+  --el-button-active-text-color: var(--color-text-primary);
+  --el-button-disabled-bg-color: var(--color-bg-elevated);
+  --el-button-disabled-border-color: var(--color-border);
+  --el-button-disabled-text-color: var(--color-text-muted);
 }
 
-.el-button--default:hover {
-  color: var(--el-button-text-color);
-  background-color: var(--el-button-hover-bg-color);
-  border-color: var(--el-button-hover-border-color);
+/* Apply background-color explicitly to override EL+'s more specific rules.
+ * !important required: EL+ uses .el-button.el-button--default (2 classes = higher specificity)
+ * Same pattern as el-table cells fix above.
+ */
+.el-button--default {
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-elevated) !important;
+  border-color: var(--color-border) !important;
+}
+
+.el-button--default:hover,
+.el-button--default:focus {
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-hover) !important;
+  border-color: var(--color-border-focus) !important;
+}
+
+/* Also cover button with no explicit type (renders as default) */
+.el-button:not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger):not(.el-button--info):not(.el-button--text):not(.el-button--link):not([class*="is-"]) {
+  background-color: var(--color-bg-elevated) !important;
+  color: var(--color-text-primary) !important;
+  border-color: var(--color-border) !important;
 }
 
 /* Fix el-menu in dark mode */
@@ -818,4 +833,32 @@ body {
 .el-tabs__item.is-disabled {
   color: var(--color-text-muted) !important;
   opacity: 0.5;
+}
+
+/* Fix el-input-number in dark mode */
+.el-input-number {
+  --el-input-number-bg-color: var(--color-bg-input);
+}
+
+.el-input-number .el-input__wrapper {
+  background-color: var(--color-bg-input) !important;
+}
+
+.el-input-number__decrease,
+.el-input-number__increase {
+  color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-elevated) !important;
+  border-color: var(--color-border) !important;
+}
+
+.el-input-number__decrease:hover,
+.el-input-number__increase:hover {
+  color: var(--color-accent) !important;
+  background-color: var(--color-bg-hover) !important;
+}
+
+/* Fix el-input-number input text color */
+.el-input-number .el-input__inner {
+  color: var(--color-text-primary) !important;
+  text-align: center;
 }

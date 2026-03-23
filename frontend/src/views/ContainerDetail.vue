@@ -703,7 +703,7 @@ onMounted(() => {
   justify-content: center;
   padding: 40px;
   gap: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
 }
 
 .is-loading {
@@ -739,13 +739,13 @@ onMounted(() => {
 .command-text {
   font-family: monospace;
   font-size: 13px;
-  background-color: var(--el-fill-color-light);
+  background-color: var(--color-bg-hover);
   padding: 4px 8px;
   border-radius: 4px;
 }
 
 .text-muted {
-  color: var(--el-text-color-placeholder);
+  color: var(--color-text-placeholder);
 }
 
 .section-header {
@@ -757,6 +757,7 @@ onMounted(() => {
 
 .env-search {
   width: 200px;
+  color: var(--color-text-placeholder);
 }
 
 .value-cell {
@@ -772,7 +773,7 @@ onMounted(() => {
 }
 
 .masked-value {
-  color: var(--el-text-color-placeholder);
+  color: var(--color-text-placeholder);
 }
 
 .secret-tag {

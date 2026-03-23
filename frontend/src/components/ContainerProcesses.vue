@@ -259,8 +259,8 @@ function clearError(): void {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background-color: var(--el-bg-color);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  background-color: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .processes-count {
@@ -281,7 +281,7 @@ function clearError(): void {
   justify-content: center;
   gap: 8px;
   height: 200px;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
 }
 
 .processes-timestamp {
@@ -290,14 +290,14 @@ function clearError(): void {
   gap: 6px;
   padding: 8px 16px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
-  border-top: 1px solid var(--el-border-color-lighter);
+  color: var(--color-text-secondary);
+  border-top: 1px solid var(--color-border-light);
 }
 
 .command-cell {
   font-family: monospace;
   font-size: 12px;
-  color: var(--el-text-color-primary);
+  color: var(--color-text-primary);
   word-break: break-all;
 }
 

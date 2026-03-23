@@ -204,7 +204,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { getCssVarRgba } from '@/utils/css'
+import { getCssVar, getCssVarRgba } from '@/utils/css'
 import {
   Loading,
   RefreshRight,
@@ -285,6 +285,7 @@ const cpuChartOptions = computed(() => {
   const scale = getCpuScale(maxValue)
 
   return {
+    backgroundColor: 'transparent',
     grid: {
       left: 40,
       right: 10,
@@ -302,17 +303,20 @@ const cpuChartOptions = computed(() => {
       max: scale.niceMax,
       splitLine: {
         lineStyle: {
-          color: 'var(--el-border-color-lighter)',
+          color: getCssVar('--color-border-light'),
         },
       },
       axisLabel: {
-        color: 'var(--el-text-color-secondary)',
+        color: getCssVar('--color-text-secondary'),
         fontSize: 10,
         formatter: (value: number) => `${value}%`,
       },
     },
     tooltip: {
       trigger: 'axis',
+      backgroundColor: getCssVar('--color-bg-elevated'),
+      borderColor: getCssVar('--color-border'),
+      textStyle: { color: getCssVar('--color-text-primary') },
       formatter: (params: Array<{ value: number }>) => {
         const value = params[0]?.value ?? 0
         return `CPU: ${value.toFixed(1)}%`
@@ -338,7 +342,7 @@ const cpuChartOptions = computed(() => {
           },
         },
         lineStyle: {
-          color: 'var(--el-color-primary)',
+          color: getCssVar('--color-accent'),
           width: 2,
         },
       },
@@ -379,6 +383,7 @@ const memoryChartOptions = computed(() => {
   const scaledData = data.map(v => v / scale.divisor)
 
   return {
+    backgroundColor: 'transparent',
     grid: {
       left: 50,
       right: 10,
@@ -396,17 +401,20 @@ const memoryChartOptions = computed(() => {
       max: scale.niceMax,
       splitLine: {
         lineStyle: {
-          color: 'var(--el-border-color-lighter)',
+          color: getCssVar('--color-border-light'),
         },
       },
       axisLabel: {
-        color: 'var(--el-text-color-secondary)',
+        color: getCssVar('--color-text-secondary'),
         fontSize: 10,
         formatter: (value: number) => `${value} ${scale.unit}`,
       },
     },
     tooltip: {
       trigger: 'axis',
+      backgroundColor: getCssVar('--color-bg-elevated'),
+      borderColor: getCssVar('--color-border'),
+      textStyle: { color: getCssVar('--color-text-primary') },
       formatter: (params: Array<{ value: number }>) => {
         const rawValue = params[0]?.value ?? 0
         const bytes = rawValue * scale.divisor
@@ -433,7 +441,7 @@ const memoryChartOptions = computed(() => {
           },
         },
         lineStyle: {
-          color: 'var(--el-color-success)',
+          color: getCssVar('--color-success'),
           width: 2,
         },
       },
@@ -459,6 +467,7 @@ const networkChartOptions = computed(() => {
   const scaledTxData = txData.map(v => v / scale.divisor)
 
   return {
+    backgroundColor: 'transparent',
     grid: {
       left: 50,
       right: 10,
@@ -470,7 +479,7 @@ const networkChartOptions = computed(() => {
       top: 0,
       right: 0,
       textStyle: {
-        color: 'var(--el-text-color-secondary)',
+        color: getCssVar('--color-text-secondary'),
         fontSize: 10,
       },
     },
@@ -485,17 +494,20 @@ const networkChartOptions = computed(() => {
       max: scale.niceMax,
       splitLine: {
         lineStyle: {
-          color: 'var(--el-border-color-lighter)',
+          color: getCssVar('--color-border-light'),
         },
       },
       axisLabel: {
-        color: 'var(--el-text-color-secondary)',
+        color: getCssVar('--color-text-secondary'),
         fontSize: 10,
         formatter: (value: number) => `${value} ${scale.unit}`,
       },
     },
     tooltip: {
       trigger: 'axis',
+      backgroundColor: getCssVar('--color-bg-elevated'),
+      borderColor: getCssVar('--color-border'),
+      textStyle: { color: getCssVar('--color-text-primary') },
       formatter: (params: Array<{ seriesName: string; value: number }>) => {
         const parts = params.map((p) => {
           const bytes = p.value * scale.divisor
@@ -512,7 +524,7 @@ const networkChartOptions = computed(() => {
         smooth: true,
         symbol: 'none',
         lineStyle: {
-          color: 'var(--el-color-info)',
+          color: getCssVar('--color-info'),
           width: 2,
         },
         areaStyle: {
@@ -536,7 +548,7 @@ const networkChartOptions = computed(() => {
         smooth: true,
         symbol: 'none',
         lineStyle: {
-          color: 'var(--el-color-warning)',
+          color: getCssVar('--color-warning'),
           width: 2,
         },
         areaStyle: {
@@ -574,6 +586,7 @@ const ioChartOptions = computed(() => {
   const scaledWriteData = writeData.map(v => v / scale.divisor)
 
   return {
+    backgroundColor: 'transparent',
     grid: {
       left: 50,
       right: 10,
@@ -585,7 +598,7 @@ const ioChartOptions = computed(() => {
       top: 0,
       right: 0,
       textStyle: {
-        color: 'var(--el-text-color-secondary)',
+        color: getCssVar('--color-text-secondary'),
         fontSize: 10,
       },
     },
@@ -600,17 +613,20 @@ const ioChartOptions = computed(() => {
       max: scale.niceMax,
       splitLine: {
         lineStyle: {
-          color: 'var(--el-border-color-lighter)',
+          color: getCssVar('--color-border-light'),
         },
       },
       axisLabel: {
-        color: 'var(--el-text-color-secondary)',
+        color: getCssVar('--color-text-secondary'),
         fontSize: 10,
         formatter: (value: number) => `${value} ${scale.unit}`,
       },
     },
     tooltip: {
       trigger: 'axis',
+      backgroundColor: getCssVar('--color-bg-elevated'),
+      borderColor: getCssVar('--color-border'),
+      textStyle: { color: getCssVar('--color-text-primary') },
       formatter: (params: Array<{ seriesName: string; value: number }>) => {
         const parts = params.map((p) => {
           const bytes = p.value * scale.divisor
@@ -627,7 +643,7 @@ const ioChartOptions = computed(() => {
         smooth: true,
         symbol: 'none',
         lineStyle: {
-          color: 'var(--el-color-primary)',
+          color: getCssVar('--color-accent'),
           width: 2,
         },
         areaStyle: {
@@ -651,7 +667,7 @@ const ioChartOptions = computed(() => {
         smooth: true,
         symbol: 'none',
         lineStyle: {
-          color: 'var(--el-color-danger)',
+          color: getCssVar('--color-error'),
           width: 2,
         },
         areaStyle: {
@@ -737,8 +753,8 @@ function clearError(): void {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background-color: var(--el-bg-color);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  background-color: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .stats-status {
@@ -760,7 +776,7 @@ function clearError(): void {
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
 }
 
 .stats-loading {
@@ -778,7 +794,8 @@ function clearError(): void {
 }
 
 .stat-section {
-  background-color: var(--el-bg-color);
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 16px;
 }
@@ -789,7 +806,7 @@ function clearError(): void {
   gap: 8px;
   margin-bottom: 12px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--color-text-primary);
 }
 
 .stat-value {
@@ -799,7 +816,7 @@ function clearError(): void {
 .memory-details {
   margin-top: 8px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
   font-family: monospace;
 }
 
@@ -815,23 +832,24 @@ function clearError(): void {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background-color: var(--el-fill-color-light);
+  background-color: var(--color-bg-hover);
   border-radius: 4px;
 }
 
 .io-label {
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
 }
 
 .io-value {
   font-family: monospace;
   font-size: 13px;
-  color: var(--el-text-color-primary);
+  color: var(--color-text-primary);
 }
 
 .history-section {
-  background-color: var(--el-bg-color);
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 16px;
 }
@@ -840,7 +858,7 @@ function clearError(): void {
   margin: 0 0 16px 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--color-text-primary);
 }
 
 .history-charts {
@@ -850,7 +868,8 @@ function clearError(): void {
 }
 
 .history-chart {
-  background-color: var(--el-fill-color-lighter);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
   border-radius: 8px;
   padding: 12px;
 }
@@ -859,7 +878,7 @@ function clearError(): void {
   font-size: 12px;
   font-weight: 600;
   margin-bottom: 8px;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
 }
 
 .chart {
@@ -869,7 +888,7 @@ function clearError(): void {
 
 .no-history {
   text-align: center;
-  color: var(--el-text-color-placeholder);
+  color: var(--color-text-placeholder);
   font-size: 13px;
   padding: 20px;
 }

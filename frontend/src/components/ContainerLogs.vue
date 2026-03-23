@@ -40,7 +40,8 @@
           :min="10"
           :max="10000"
           size="small"
-          class="w-100px"
+
+          controls-position="right"
           @change="handleTailChange"
         />
         <span class="text-label">lignes</span>

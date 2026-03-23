@@ -47,6 +47,7 @@ export default defineConfig({
         primary: 'var(--color-bg-primary)',
         secondary: 'var(--color-bg-secondary)',
         card: 'var(--color-bg-card)',
+        'card-alpha': 'var(--color-bg-card-alpha)',
         elevated: 'var(--color-bg-elevated)',
         hover: 'var(--color-bg-hover)',
         input: 'var(--color-bg-input)',
@@ -77,6 +78,17 @@ export default defineConfig({
         dark: 'var(--color-error)',
       },
     },
+    // Shadows référencent les CSS vars thémées (dark/light adaptées)
+    boxShadow: {
+      sm: 'var(--shadow-sm)',
+      md: 'var(--shadow-md)',
+      lg: 'var(--shadow-lg)',
+    },
+    // Fonts référencent les CSS vars (Inter + JetBrains Mono self-hosted)
+    fontFamily: {
+      sans: 'var(--font-sans)',
+      mono: 'var(--font-mono)',
+    },
   },
   shortcuts: {
     // Layout
@@ -106,8 +118,8 @@ export default defineConfig({
     // Text styles
     'text-heading': 'text-text-primary font-semibold',
     'text-body': 'text-text-primary',
-    'text-muted': 'text-text-secondary',
-    'text-label': 'text-text-secondary text-sm',
+    'text-muted': 'text-text-muted',
+    'text-label': 'text-text-muted text-sm',
 
     // Input styles
     'input-base': 'bg-bg-input border border-border rounded text-text-primary placeholder-text-placeholder focus:border-accent focus:outline-none transition-colors',
@@ -149,8 +161,8 @@ export default defineConfig({
 
     // Terminal styles
     'terminal-container': 'bg-[var(--color-terminal-bg)] flex-1 p-2 overflow-hidden',
-    'terminal-wrapper': 'flex flex-col h-full min-h-400px bg-[var(--el-bg-color)] rounded overflow-hidden',
-    'terminal-toolbar': 'flex justify-between items-center p-2 bg-[var(--el-bg-color-overlay)] border-b border-[var(--el-border-color-lighter)] flex-shrink-0 flex-wrap gap-2',
+    'terminal-wrapper': 'flex flex-col h-full min-h-400px bg-[var(--color-bg-card)] rounded overflow-hidden',
+    'terminal-toolbar': 'flex justify-between items-center p-2 bg-[var(--color-bg-elevated)] border-b border-[var(--color-border-light)] flex-shrink-0 flex-wrap gap-2',
     'terminal-status-dot': 'w-2 h-2 rounded-full',
     'terminal-status-connected': 'terminal-status-dot bg-[var(--color-success)] animate-pulse',
     'terminal-status-connecting': 'terminal-status-dot bg-[var(--color-warning)]',

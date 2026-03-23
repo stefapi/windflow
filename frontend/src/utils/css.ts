@@ -44,9 +44,9 @@ export function getCssVarRgba(varName: string, opacity: number): string {
 
   if (full.length === 4) {
     // Format court #rgb → expand to #rrggbb
-    r = parseInt(full[1] + full[1], 16)
-    g = parseInt(full[2] + full[2], 16)
-    b = parseInt(full[3] + full[3], 16)
+    r = parseInt((full[1] ?? '0') + (full[1] ?? '0'), 16)
+    g = parseInt((full[2] ?? '0') + (full[2] ?? '0'), 16)
+    b = parseInt((full[3] ?? '0') + (full[3] ?? '0'), 16)
   }
   else {
     r = parseInt(full.slice(1, 3), 16)

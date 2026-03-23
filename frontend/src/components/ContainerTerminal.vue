@@ -531,7 +531,7 @@ defineExpose({
   flex-direction: column;
   height: 100%;
   min-height: 400px;
-  background-color: var(--el-bg-color);
+  background-color: var(--color-bg-card);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -541,8 +541,8 @@ defineExpose({
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background-color: var(--el-bg-color-overlay);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  background-color: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border-light);
   flex-shrink: 0;
   flex-wrap: wrap;
   gap: 8px;
@@ -592,15 +592,15 @@ defineExpose({
 
 .exec-id {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
   font-family: monospace;
 }
 
 .shell-info {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
   padding: 2px 8px;
-  background-color: var(--el-fill-color-light);
+  background-color: var(--color-bg-hover);
   border-radius: 4px;
   font-family: monospace;
 }
@@ -659,15 +659,15 @@ defineExpose({
 
 .login-hint {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
 }
 
 .disconnect-bar {
   display: flex;
   justify-content: center;
   padding: 6px 12px;
-  background-color: var(--el-bg-color-overlay);
-  border-top: 1px solid var(--el-border-color-lighter);
+  background-color: var(--color-bg-elevated);
+  border-top: 1px solid var(--color-border-light);
   flex-shrink: 0;
 }
 </style>
