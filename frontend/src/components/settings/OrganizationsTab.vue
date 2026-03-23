@@ -96,6 +96,7 @@
     <el-table
       ref="tableRef"
       v-loading="loading"
+      stripe
       :data="filteredOrganizations"
       @selection-change="handleSelectionChange"
     >

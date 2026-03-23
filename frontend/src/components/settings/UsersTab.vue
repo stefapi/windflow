@@ -125,6 +125,7 @@
     <el-table
       ref="tableRef"
       v-loading="loading"
+      stripe
       :data="filteredUsers"
       @selection-change="handleSelectionChange"
       @row-click="handleRowClick"
