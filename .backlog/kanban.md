@@ -9,7 +9,7 @@
 ### EPIC-007 : Infrastructure de Mocks pour Tests (Qualité — Phase 1)
 
 ### EPIC-008 : Homogénéisation des couleurs UnoCSS (Refactoring Design System)
-- [ ] STORY-508 : Refactoriser toutes les autres views (batch audit - ~15 fichiers)
+- [~] STORY-508 : Refactoriser toutes les autres views (batch audit - ~15 fichiers)
 
 ### EPIC-001 : Système de Plugins & Marketplace (Phase 2 — Q2 2026)
 ### EPIC-002 : Gestion des Machines Virtuelles — KVM & Proxmox (Phase 2 — Q2 2026)

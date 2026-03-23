@@ -204,6 +204,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { getCssVarRgba } from '@/utils/css'
 import {
   Loading,
   RefreshRight,
@@ -331,8 +332,8 @@ const cpuChartOptions = computed(() => {
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(64, 158, 255, 0.4)' },
-              { offset: 1, color: 'rgba(64, 158, 255, 0.05)' },
+              { offset: 0, color: getCssVarRgba('--color-accent', 0.4) },
+              { offset: 1, color: getCssVarRgba('--color-accent', 0.05) },
             ],
           },
         },
@@ -426,8 +427,8 @@ const memoryChartOptions = computed(() => {
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(103, 194, 58, 0.4)' },
-              { offset: 1, color: 'rgba(103, 194, 58, 0.05)' },
+              { offset: 0, color: getCssVarRgba('--color-success', 0.4) },
+              { offset: 1, color: getCssVarRgba('--color-success', 0.05) },
             ],
           },
         },
@@ -522,8 +523,8 @@ const networkChartOptions = computed(() => {
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(144, 147, 153, 0.3)' },
-              { offset: 1, color: 'rgba(144, 147, 153, 0.05)' },
+              { offset: 0, color: getCssVarRgba('--color-info', 0.3) },
+              { offset: 1, color: getCssVarRgba('--color-info', 0.05) },
             ],
           },
         },
@@ -546,8 +547,8 @@ const networkChartOptions = computed(() => {
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(230, 162, 60, 0.3)' },
-              { offset: 1, color: 'rgba(230, 162, 60, 0.05)' },
+              { offset: 0, color: getCssVarRgba('--color-warning', 0.3) },
+              { offset: 1, color: getCssVarRgba('--color-warning', 0.05) },
             ],
           },
         },
@@ -637,8 +638,8 @@ const ioChartOptions = computed(() => {
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(64, 158, 255, 0.3)' },
-              { offset: 1, color: 'rgba(64, 158, 255, 0.05)' },
+              { offset: 0, color: getCssVarRgba('--color-accent', 0.3) },
+              { offset: 1, color: getCssVarRgba('--color-accent', 0.05) },
             ],
           },
         },
@@ -661,8 +662,8 @@ const ioChartOptions = computed(() => {
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(245, 108, 108, 0.3)' },
-              { offset: 1, color: 'rgba(245, 108, 108, 0.05)' },
+              { offset: 0, color: getCssVarRgba('--color-error', 0.3) },
+              { offset: 1, color: getCssVarRgba('--color-error', 0.05) },
             ],
           },
         },

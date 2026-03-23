@@ -296,7 +296,7 @@ export default {
   align-items: center;
   margin-bottom: 16px;
   padding: 12px 16px;
-  background-color: var(--el-fill-color-light);
+  background-color: var(--color-bg-secondary);
   border-radius: 8px;
 }
 

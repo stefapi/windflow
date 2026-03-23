@@ -408,7 +408,7 @@ onMounted(() => {
 }
 
 .access-denied .el-icon {
-  color: #f56c6c;
+  color: var(--color-error);
 }
 
 :deep(.el-tab-pane) {

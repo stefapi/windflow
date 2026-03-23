@@ -82,7 +82,7 @@
                 <span class="nav-label">{{ item.label }}</span>
                 <span
                   v-if="item.badge"
-                  class="nav-badge"
+                  class="bg-[var(--color-accent)] text-white text-[11px] px-1.5 py-0.5 rounded-xl"
                 >{{ item.badge }}</span>
               </div>
             </el-tooltip>
@@ -119,7 +119,7 @@
                 <span class="nav-label">{{ item.label }}</span>
                 <span
                   v-if="item.badge"
-                  class="nav-badge"
+                  class="bg-[var(--color-accent)] text-white text-[11px] px-1.5 py-0.5 rounded-xl"
                 >{{ item.badge }}</span>
               </div>
             </el-tooltip>
@@ -156,7 +156,7 @@
                 <span class="nav-label">{{ item.label }}</span>
                 <span
                   v-if="item.badge"
-                  class="nav-badge"
+                  class="bg-[var(--color-accent)] text-white text-[11px] px-1.5 py-0.5 rounded-xl"
                 >{{ item.badge }}</span>
               </div>
             </el-tooltip>
@@ -238,7 +238,7 @@
                 <span class="nav-label">{{ item.label }}</span>
                 <span
                   v-if="item.badge"
-                  class="nav-badge"
+                  class="bg-[var(--color-accent)] text-white text-[11px] px-1.5 py-0.5 rounded-xl"
                 >{{ item.badge }}</span>
               </div>
             </el-tooltip>
@@ -552,14 +552,6 @@ function handleUserCommand(command: string): void {
   overflow: hidden;
 }
 
-.nav-badge {
-  background-color: var(--color-accent);
-  color: #fff;
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 10px;
-}
-
 /* Collapsed state adjustments */
 .sidebar-nav.collapsed .sidebar-logo {
   flex-direction: column;
@@ -581,8 +573,7 @@ function handleUserCommand(command: string): void {
   justify-content: center;
 }
 
-.sidebar-nav.collapsed .nav-label,
-.sidebar-nav.collapsed .nav-badge {
+.sidebar-nav.collapsed .nav-label {
   display: none;
 }
 

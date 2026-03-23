@@ -173,6 +173,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import { CanvasRenderer } from 'echarts/renderers'
 import { Monitor, Warning, InfoFilled, Clock, Timer, TrendCharts } from '@element-plus/icons-vue'
 import ResourceBar from '@/components/ui/ResourceBar.vue'
+import { getCssVar } from '@/utils/css'
 import type { ResourceMetrics } from '@/types/api'
 
 use([LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
@@ -215,9 +216,9 @@ const chartOption = computed(() => {
   return {
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-      borderColor: 'transparent',
-      textStyle: { color: '#fff' },
+      backgroundColor: getCssVar('--color-bg-elevated'),
+      borderColor: getCssVar('--color-border'),
+      textStyle: { color: getCssVar('--color-text-primary') },
     },
     legend: {
       data: ['CPU %', 'Memory %', 'Disk %'],
@@ -252,7 +253,7 @@ const chartOption = computed(() => {
         symbol: 'none',
         areaStyle: { opacity: 0.15 },
         lineStyle: { width: 2 },
-        itemStyle: { color: '#409EFF' },
+        itemStyle: { color: getCssVar('--color-accent') },
         data: props.metrics!.history!.map((p) => p.cpu),
       },
       {
@@ -262,7 +263,7 @@ const chartOption = computed(() => {
         symbol: 'none',
         areaStyle: { opacity: 0.15 },
         lineStyle: { width: 2 },
-        itemStyle: { color: '#E6A23C' },
+        itemStyle: { color: getCssVar('--color-warning') },
         data: props.metrics!.history!.map((p) => p.memory),
       },
     ],

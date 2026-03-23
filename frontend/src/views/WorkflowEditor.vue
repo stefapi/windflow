@@ -181,14 +181,15 @@ onMounted(async () => {
 
 .workflow-canvas {
   height: 500px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
 }
 
 .node-palette {
   margin-top: 20px;
   padding: 10px;
-  background-color: #f5f5f5;
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-primary);
   border-radius: 4px;
 }
 
