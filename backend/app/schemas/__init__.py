@@ -39,6 +39,16 @@ from .deployment import (
     DeploymentUpdate,
     DeploymentResponse
 )
+from .compute import (
+    ServiceWithMetrics,
+    StandaloneContainer,
+    DiscoveredItem,
+    StackWithServices,
+    ComputeGlobalView,
+    TargetMetrics,
+    TargetGroup,
+    ComputeStatsResponse,
+)
 
 __all__ = [
     # User schemas
@@ -73,5 +83,14 @@ __all__ = [
     "DeploymentBase",
     "DeploymentCreate",
     "DeploymentUpdate",
-    "DeploymentResponse"
+    "DeploymentResponse",
+    # Compute schemas
+    "ServiceWithMetrics",
+    "StandaloneContainer",
+    "DiscoveredItem",
+    "StackWithServices",
+    "ComputeGlobalView",
+    "TargetMetrics",
+    "TargetGroup",
+    "ComputeStatsResponse",
 ]

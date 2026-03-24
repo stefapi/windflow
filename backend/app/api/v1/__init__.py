@@ -18,6 +18,7 @@ from .import_export import router as import_export_router
 from .schedules import router as schedules_router
 from .admin import admin_router
 from .docker import router as docker_router
+from .compute import router as compute_router
 
 # Router principal v1
 api_router = APIRouter(prefix="/api/v1")
@@ -36,5 +37,6 @@ api_router.include_router(import_export_router, tags=["import-export"])
 api_router.include_router(schedules_router, tags=["schedules"])
 api_router.include_router(admin_router)  # Le préfixe /admin est déjà dans le router
 api_router.include_router(docker_router, prefix="/docker", tags=["docker"])
+api_router.include_router(compute_router, prefix="/compute", tags=["compute"])
 
 __all__ = ["api_router"]
