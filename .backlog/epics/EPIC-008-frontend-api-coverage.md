@@ -1,6 +1,6 @@
  # EPIC-008 : Couverture Frontend des APIs Backend
 
-**Statut :** TODO
+**Statut :** IN_PROGRESS
 **Priorité :** Haute
 
 ## Vision
@@ -203,129 +203,46 @@ Fonctionnalités avancées :
 
 #### Modèle Compute - Vue Globale
 
-- [ ] STORY-XXX : Vue globale Compute avec bandeau de statistiques
-  - **Fichier** : Nouvelle vue `views/Compute.vue` ou extension de `views/Stacks.vue`
-  - **API** : `GET /compute/stats`, `GET /compute/global`
-  - **Types** : `ComputeStatsResponse`, `ComputeGlobalView`, `StackWithServices`, `StandaloneContainer`
-  - **UI** : Bandeau de 5 métriques (total/running/stacks/discovered/standalone) + filtres Type/Technologie/Target + toggle "Tout → Par machine"
-  - **Vue "Par machine"** : `GET /compute/global?group_by=target` → `TargetGroup[]`
-
-#### Modèle Compute - Discovery & Adoption
-
-- [ ] STORY-XXX : Section Discovered — liste unifiée (containers, compositions, releases Helm)
-  - **Fichier** : Composant `components/DiscoveredSection.vue` intégré dans la vue Compute
-  - **API** : `GET /discovery/items` (remplace les anciens `/discovery/containers` et `/discovery/compositions`)
-  - **Types** : `DiscoveredItem`, `DiscoveredService`
-  - **UI** : Cards expandables avec badge technologie (Docker/Compose/Helm), compteur "N/N running", message source_path si disponible, actions [👁 Voir] [↗ Adopter]
-  - **Note** : Supporte containers orphelins, compositions Compose ET releases Helm dans une interface homogène
-
-- [ ] STORY-XXX : Wizard d'adoption d'objets découverts
-  - **Fichier** : Nouveau composant `components/AdoptionWizard.vue`
-  - **API** : `GET /discovery/{type}/{id}/adoption-data`, `POST /discovery/adopt`
-  - **Types** : `AdoptionRequest` (avec `helm_release` + options Helm), `AdoptionWizardData`
-  - **UI** : Dialog 3 étapes (Inventaire → Mapping → Validation)
-  - **Fonctionnalités** :
-    - Étape 1 : Afficher configuration détectée (services, env, volumes, réseaux, ports)
-    - Étape 2 : Choix nom stack, stratégie volumes/réseaux, options Helm si applicable
-    - Étape 3 : Preview Compose/Helm généré, confirmation
-
-#### Modèle Compute - Stack Actions
-
-- [ ] STORY-XXX : Actions globales de stack (Start/Stop/Redeploy)
-  - **Fichier** : Composant `components/StackActionsBar.vue` intégré dans la vue Compute
-  - **API** : `POST /stacks/{id}/start`, `POST /stacks/{id}/stop`, `POST /stacks/{id}/redeploy`
-  - **Types** : `StackActionResponse`, `StackRedeployRequest`
-  - **UI** : Icône refresh (redeploy), icône start/stop avec confirmation, indicateur de progression
-  - **Comportement** : Démarre/arrête dans l'ordre de dépendance ; redeploy propose le choix rolling/stop-start
+- [x] STORY-001 : Backend — Endpoints Compute Stats et Global
+- [ ] STORY-021 : Frontend — Vue globale Compute avec bandeau et 3 sections
+- [ ] STORY-002 : Section Discovered — liste unifiée (containers, compositions, releases Helm)
+- [ ] STORY-003 : Wizard d'adoption d'objets découverts
+- [ ] STORY-004 : Actions globales de stack (Start/Stop/Redeploy)
 
 #### Images Docker
-- [ ] STORY-XXX : Gestion des images Docker - Liste et visualisation
-  - **Fichier** : `frontend/src/views/Images.vue`
-  - **API** : `GET /docker/images`
-  - **Types** : Ajouter `ImageResponse` dans `types/api.ts`
-  - **UI** : Table avec colonnes (ID, Repo Tags, Size, Created, Actions)
-
-- [ ] STORY-XXX : Gestion des images Docker - Pull et suppression
-  - **Fichier** : `frontend/src/views/Images.vue`
-  - **API** : `POST /docker/images/pull`, `DELETE /docker/images/{id}`
-  - **UI** : Dialog pull avec champ nom:image, confirmation suppression
+- [ ] STORY-005 : Gestion des images Docker - Liste et visualisation
+- [ ] STORY-006 : Gestion des images Docker - Pull et suppression
 
 #### Export/Import Stacks
-- [ ] STORY-XXX : Export de stacks au format JSON
-  - **Fichier** : `frontend/src/views/Stacks.vue`
-  - **API** : `GET /stacks/{id}/export`
-  - **UI** : Bouton export → téléchargement fichier JSON
-
-- [ ] STORY-XXX : Import de stacks depuis fichier JSON
-  - **Fichier** : `frontend/src/views/Stacks.vue`
-  - **API** : `POST /stacks/import`
-  - **UI** : Upload fichier + validation format
+- [ ] STORY-007 : Export de stacks au format JSON
+- [ ] STORY-008 : Import de stacks depuis fichier JSON
 
 #### Deployments
-- [ ] STORY-XXX : Mise à jour des déploiements existants
-  - **Fichier** : `frontend/src/services/api.ts`
-  - **API** : `PUT /deployments/{id}`
-  - **UI** : Formulaire édition dans `DeploymentDetail.vue`
+- [ ] STORY-009 : Mise à jour des déploiements existants
 
 ### 🟡 Priorité Moyenne
 
 #### Modèle Compute - Stack Management
-- [ ] STORY-XXX : Duplication de stack
-  - **Fichier** : `views/Stacks.vue`
-  - **API** : `POST /stacks/{id}/duplicate`
-  - **Types** : Ajouter `StackDuplicateRequest`
-  - **UI** : Dialog avec nom de la nouvelle stack, option de changement de target
-
-- [ ] STORY-XXX : Archivage de stack
-  - **Fichier** : `views/Stacks.vue`
-  - **API** : `POST /stacks/{id}/archive`
-  - **UI** : Action avec confirmation, stack déplacée en section "Archivées"
-
-- [ ] STORY-XXX : Promotion container standalone en stack
-  - **Fichier** : `views/ContainerDetail.vue`
-  - **API** : `POST /containers/{id}/promote`
-  - **UI** : Action "Promouvoir en stack", dialog de confirmation avec nom de stack
+- [ ] STORY-010 : Duplication de stack
+- [ ] STORY-011 : Archivage de stack
+- [ ] STORY-012 : Promotion container standalone en stack
 
 #### Volumes Docker
-- [ ] STORY-XXX : Gestion des volumes Docker - Liste et création
-  - **Fichier** : `frontend/src/views/Volumes.vue`
-  - **API** : `GET /docker/volumes`, `POST /docker/volumes`
-  - **Types** : Ajouter `VolumeResponse`, `VolumeCreateRequest`
-
-- [ ] STORY-XXX : Gestion des volumes Docker - Suppression
-  - **Fichier** : `frontend/src/views/Volumes.vue`
-  - **API** : `DELETE /docker/volumes/{name}`
+- [ ] STORY-013 : Gestion des volumes Docker - Liste et création
+- [ ] STORY-014 : Gestion des volumes Docker - Suppression
 
 #### Networks Docker
-- [ ] STORY-XXX : Visualisation des réseaux Docker
-  - **Fichier** : `frontend/src/views/Networks.vue`
-  - **API** : `GET /docker/networks`
-  - **Types** : Ajouter `NetworkResponse`
+- [ ] STORY-015 : Visualisation des réseaux Docker
 
 #### Stats & Terminal
-- [ ] STORY-XXX : Statistiques détaillées par stack
-  - **Fichier** : `frontend/src/views/Stacks.vue` (section détails)
-  - **API** : `GET /stats/stacks/{id}`
-
-- [ ] STORY-XXX : Détection des shells disponibles dans le terminal
-  - **Fichier** : `frontend/src/components/ContainerTerminal.vue`
-  - **API** : `GET /docker/containers/{id}/shells`
-  - **UI** : Dropdown shells détectés au lieu de liste statique
-
-- [ ] STORY-XXX : Widget informations système Docker
-  - **Fichier** : Nouveau composant `frontend/src/components/dashboard/DockerInfoWidget.vue`
-  - **API** : `GET /docker/system/info`
+- [ ] STORY-016 : Statistiques détaillées par stack
+- [ ] STORY-017 : Détection des shells disponibles dans le terminal
+- [ ] STORY-018 : Widget informations système Docker
 
 ### 🟢 Priorité Basse
 
-- [ ] STORY-XXX : Création manuelle de containers Docker
-  - **Fichier** : `frontend/src/views/Containers.vue`
-  - **API** : `POST /docker/containers`
-  - **UI** : Formulaire complet (nom, image, env, ports, volumes, labels)
-
-- [ ] STORY-XXX : Page informations système Docker
-  - **Fichier** : Nouvelle vue `frontend/src/views/SystemInfo.vue`
-  - **API** : `GET /docker/system/version`, `GET /docker/system/ping`
+- [ ] STORY-019 : Création manuelle de containers Docker
+- [ ] STORY-020 : Page informations système Docker
 
 ---
 
