@@ -204,7 +204,7 @@ Fonctionnalités avancées :
 #### Modèle Compute - Vue Globale
 
 - [x] STORY-001 : Backend — Endpoints Compute Stats et Global
-- [ ] STORY-021 : Frontend — Vue globale Compute avec bandeau et 3 sections
+- [x] STORY-021 : Frontend — Vue globale Compute avec bandeau et 3 sections
 - [ ] STORY-002 : Section Discovered — liste unifiée (containers, compositions, releases Helm)
 - [ ] STORY-003 : Wizard d'adoption d'objets découverts
 - [ ] STORY-004 : Actions globales de stack (Start/Stop/Redeploy)

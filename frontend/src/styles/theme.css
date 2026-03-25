@@ -1871,3 +1871,79 @@ body {
   background-color: var(--color-bg-elevated) !important;
   border-color: var(--color-border) !important;
 }
+
+/* ===== el-collapse Dark Mode Fixes ===== */
+/* Collapse container */
+.el-collapse {
+  --el-collapse-bg-color: var(--color-bg-card);
+  --el-collapse-text-color: var(--color-text-primary);
+  --el-collapse-header-bg-color: var(--color-bg-elevated);
+  --el-collapse-header-text-color: var(--color-text-primary);
+  --el-collapse-content-bg-color: var(--color-bg-card);
+  --el-collapse-border-color: var(--color-border);
+
+  border-color: var(--color-border) !important;
+}
+
+/* Collapse item header - styled like el-card header */
+.el-collapse-item__header {
+  background-color: var(--color-bg-elevated) !important;
+  color: var(--color-text-primary) !important;
+  border-color: var(--color-border) !important;
+  font-weight: 500;
+}
+
+/* Collapse header hover state */
+.el-collapse-item__header:hover {
+  background-color: var(--color-bg-hover) !important;
+}
+
+/* Collapse header when active/expanded */
+.el-collapse-item__header.is-active {
+  border-bottom-color: var(--color-border) !important;
+}
+
+/* Collapse arrow icon */
+.el-collapse-item__arrow {
+  color: var(--color-text-secondary) !important;
+}
+
+.el-collapse-item__arrow:hover {
+  color: var(--color-accent) !important;
+}
+
+/* Collapse item wrapper (contains content) */
+.el-collapse-item__wrap {
+  background-color: var(--color-bg-card) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* Collapse content body - styled like el-card body */
+.el-collapse-item__content {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-card);
+  padding: 16px 20px;
+}
+
+/* Collapse item itself */
+.el-collapse-item {
+  background-color: var(--color-bg-card);
+}
+
+/* Last collapse item - no bottom border when closed */
+.el-collapse-item:last-child .el-collapse-item__header,
+.el-collapse-item:last-child .el-collapse-item__wrap {
+  border-bottom-color: transparent !important;
+}
+
+/* When last item is expanded, restore bottom border on wrap */
+.el-collapse-item:last-child.is-active .el-collapse-item__wrap {
+  border-bottom-color: var(--color-border) !important;
+}
+
+/* Disabled collapse item */
+.el-collapse-item.is-disabled .el-collapse-item__header {
+  color: var(--color-text-muted) !important;
+  cursor: not-allowed;
+  opacity: 0.6;
+}

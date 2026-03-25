@@ -1,6 +1,6 @@
 # STORY-021 : Frontend — Vue globale Compute avec bandeau et 3 sections
 
-**Statut :** TODO
+**Statut :** DONE
 **Epic Parent :** EPIC-008 — Couverture Frontend des APIs Backend
 
 ## Description
@@ -21,12 +21,12 @@ En tant qu'utilisateur DevOps, je veux accéder à une vue `/compute` qui affich
   - Service API : `frontend/src/services/api.ts` (pattern `containersApi`)
 
 ## Critères d'acceptation (AC)
-- [ ] AC 1 : Un bandeau en haut de la vue `/compute` affiche les 5 métriques clés (total containers, running, stacks, discovered, standalone) issues de `GET /compute/stats`
-- [ ] AC 2 : La vue affiche les 3 sections (📦 Stacks WindFlow / 🔍 Discovered / 📍 Standalone) alimentées par `GET /compute/global`
-- [ ] AC 3 : Des filtres (Type, Technologie, Target, Statut, Recherche) permettent de filtrer les données affichées côté frontend (ou via paramètres API)
-- [ ] AC 4 : Un toggle "Vue par machine" regroupe les données par target via `?group_by=target` et affiche un collapse par target
-- [ ] AC 5 : La vue est accessible depuis la sidebar (section INFRASTRUCTURE) et depuis la route `/compute`
-- [ ] AC 6 : Build, lint et tests frontend passent sans erreur
+- [x] AC 1 : Un bandeau en haut de la vue `/compute` affiche les 5 métriques clés (total containers, running, stacks, discovered, standalone) issues de `GET /compute/stats`
+- [x] AC 2 : La vue affiche les 3 sections (📦 Stacks WindFlow / 🔍 Discovered / 📍 Standalone) alimentées par `GET /compute/global`
+- [x] AC 3 : Des filtres (Type, Technologie, Target, Statut, Recherche) permettent de filtrer les données affichées côté frontend (ou via paramètres API)
+- [x] AC 4 : Un toggle "Vue par machine" regroupe les données par target via `?group_by=target` et affiche un collapse par target
+- [x] AC 5 : La vue est accessible depuis la sidebar (section INFRASTRUCTURE) et depuis la route `/compute`
+- [x] AC 6 : Build, lint et tests frontend passent sans erreur
 
 ## Dépendances
 - **STORY-001** : Endpoints backend `/compute/stats` et `/compute/global` (pré-requis)
@@ -92,59 +92,171 @@ En tant qu'utilisateur DevOps, je veux accéder à une vue `/compute` qui affich
 **Dépend de :** Tâche 1
 
 ### Tâche 3 : Store Pinia `useComputeStore`
-**Objectif :** Centraliser l'état compute (stats + vue globale) dans un store Pinia réutilisable.
+**Objectif :** Centraliser l'état compute (stats + vue globale + vue par target) dans un store Pinia réutilisable.
 **Fichiers :**
 - `frontend/src/stores/compute.ts` — Créer — Nouveau store Pinia (pattern : `stores/containers.ts`). Définir `useComputeStore` avec :
-  - State : `stats: Ref<ComputeStatsResponse | null>`, `globalView: Ref<ComputeGlobalView | null>`, `targetGroups: Ref<TargetGroup[]>`, `loading: Ref<boolean>`, `statsLoading: Ref<boolean>`, `error: Ref<string | null>`
-  - Action `fetchStats(organizationId?: string): Promise<void>` → appelle `computeApi.getStats()`, stocke dans `stats`, gère `statsLoading` + `error`
-  - Action `fetchGlobal(params?: parameters de computeApi.getGlobal): Promise<void>` → appelle `computeApi.getGlobal(params)`, si `group_by=target` stocke dans `targetGroups`, sinon stocke dans `globalView`, gère `loading` + `error`
-  - Action `$reset(): void` → remet tous les états à leurs valeurs initiales
-  - Getters `managedStacks` (computed depuis `globalView`), `discoveredItems`, `standaloneContainers`
-- `frontend/src/stores/index.ts` — Modifier — Ajouter `export { useComputeStore } from './compute'`
+  - **State** :
+    - `stats: Ref<ComputeStatsResponse | null>` — résultat de `/compute/stats`
+    - `globalView: Ref<ComputeGlobalView | null>` — résultat de `getGlobal()` (mode normal)
+    - `targetGroups: Ref<TargetGroup[]>` — résultat de `getGlobalByTarget()` (mode "Par machine")
+    - `loading: Ref<boolean>` — chargement de la vue globale
+    - `statsLoading: Ref<boolean>` — chargement des stats bandeau
+    - `error: Ref<string | null>` — dernier message d'erreur
+  - **Action `fetchStats(organizationId?: string): Promise<void>`** → appelle `computeApi.getStats(organizationId)`, stocke dans `stats`, gère `statsLoading` et `error` (pattern identique à `fetchContainers` dans containers.ts : try/catch/finally)
+  - **Action `fetchGlobal(params?: { type?: ControlLevel; technology?: string; target_id?: string; status?: string; search?: string; organization_id?: string }): Promise<void>`** → appelle `computeApi.getGlobal(params)`, stocke dans `globalView`, gère `loading` + `error`, remet `targetGroups` à `[]`
+  - **Action `fetchGlobalByTarget(params?: { type?: ControlLevel; technology?: string; target_id?: string; status?: string; search?: string; organization_id?: string }): Promise<void>`** → appelle `computeApi.getGlobalByTarget(params)`, stocke dans `targetGroups`, gère `loading` + `error`, remet `globalView` à `null`
+  - **Action `$reset(): void`** → remet tous les états à leurs valeurs initiales (`null`, `[]`, `false`)
+  - **Getters (computed)** :
+    - `managedStacks` → `globalView.value?.managed_stacks ?? []`
+    - `discoveredItems` → `globalView.value?.discovered_items ?? []`
+    - `standaloneContainers` → `globalView.value?.standalone_containers ?? []`
+  - Retourner tous les state, getters et actions dans le `return {}`
+- `frontend/src/stores/index.ts` — Modifier — Ajouter la ligne `export { useComputeStore } from './compute'` à la suite des exports existants
 **Dépend de :** Tâche 2
 
 ### Tâche 4 : Composant `ComputeStatsBanner.vue`
-**Objectif :** Afficher le bandeau de 5 métriques synthétiques en haut de la vue Compute.
+**Objectif :** Afficher le bandeau de 5 métriques synthétiques avec valeurs et sous-labels en haut de la vue Compute (fidèle au design de référence).
 **Fichiers :**
-- `frontend/src/components/ComputeStatsBanner.vue` — Créer — Nouveau composant (pattern : `ContainerStats.vue` pour la structure, `el-statistic` d'Element Plus pour les métriques). Template :
-  - Grille responsive (5 colonnes sur desktop, 2-3 sur mobile) via UnoCSS (`grid grid-cols-2 md:grid-cols-5 gap-4`)
-  - 5 `<el-card>` avec `<el-statistic>` chacune :
-    1. "Total Containers" → `stats.total_containers`
-    2. "Running" → `stats.running_containers` (couleur verte si > 0)
-    3. "Stacks" → `stats.stacks_count` avec sous-titre `stats.stacks_services_count + " services"`
-    4. "Discovered" → `stats.discovered_count` (couleur orange si > 0)
-    5. "Standalone" → `stats.standalone_count`
-  - Afficher `span` "sur N machines" sous "Total Containers" via `stats.targets_count`
-  - Props: `stats: ComputeStatsResponse | null`, `loading: boolean`
-  - Si `loading === true`, afficher `v-loading` sur la grille
-  - Si `stats === null`, afficher `el-skeleton` (5 blocs)
+- `frontend/src/components/ComputeStatsBanner.vue` — Créer — Nouveau composant (pattern : `ContainerStats.vue` pour la structure). Template :
+  - Grille responsive 5 colonnes desktop / 2-3 mobile via UnoCSS : `class="grid grid-cols-2 md:grid-cols-5 gap-4"`
+  - 5 `<el-card shadow="never">` avec label uppercase, valeur principale et sous-label secondaire :
+    1. **CONTAINERS TOTAL** → valeur : `stats.total_containers` (noir) — sous-label : `"sur " + stats.targets_count + " machines"`
+    2. **RUNNING** → valeur : `stats.running_containers` (vert si > 0, rouge si 0) — sous-label : `"healthy"`
+    3. **STACKS WINDFLOW** → valeur : `stats.stacks_count` (bleu) — sous-label : `stats.stacks_services_count + " services total"`
+    4. **DISCOVERED** → valeur : `stats.discovered_count` (orange si > 0, gris si 0) — sous-label : `"non managés"`
+    5. **STANDALONE** → valeur : `stats.standalone_count` (noir) — sous-label : `"containers isolés"`
+  - Structure HTML d'une carte :
+    ```html
+    <el-card shadow="never">
+      <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">LABEL</div>
+      <div class="text-3xl font-bold mt-1" :class="colorClass">{{ value }}</div>
+      <div class="text-sm text-gray-400 mt-1">{{ subLabel }}</div>
+    </el-card>
+    ```
+  - **Props** : `stats: ComputeStatsResponse | null`, `loading: boolean`
+  - Si `loading === true` → afficher `v-loading` directive sur le conteneur de la grille
+  - Si `stats === null && !loading` → afficher `<el-skeleton :rows="2" animated />` dans chaque carte (5 skeletons)
+  - **Pas de `<script setup>` complexe** : pas de store direct, tout passe via props
 **Dépend de :** Tâche 1
 
 ### Tâche 5 : Vue principale `Compute.vue`
-**Objectif :** Assembler la vue complète : bandeau + barre de filtres + 3 sections (stacks managées / discovered / standalone) + toggle par machine.
+**Objectif :** Assembler la vue complète fidèle au design de référence : header avec sous-titre + filtres pill-buttons + bandeau 5 métriques + 3 sections (Stacks accordion / Discovered avec Adopter / Standalone flat table) + mode "Par machine" + légende.
 **Fichiers :**
-- `frontend/src/views/Compute.vue` — Créer — Nouvelle vue (pattern structure : `Stacks.vue`). Sections :
-  1. **Bandeau** : `<ComputeStatsBanner :stats="computeStore.stats" :loading="computeStore.statsLoading" />`
-  2. **Barre de filtres** : `el-row` avec :
-     - `el-select` "Type" → options : Tous / Stacks managées / Discovered / Standalone ; v-model `filterType`
-     - `el-select` "Technologie" → options : Toutes / docker / compose / helm ; v-model `filterTechnology`
-     - `el-select` "Target" → options issues de `targetsStore.targets` ; v-model `filterTargetId`
-     - `el-select` "Statut" → options : Tous / running / stopped / partial / archived ; v-model `filterStatus`
-     - `el-input` placeholder "Rechercher..." v-model `filterSearch` avec debounce 300ms
-     - `el-switch` label "Par machine" v-model `groupByTarget`
-  3. **Mode "Par machine"** (si `groupByTarget === true`) : `el-collapse` avec un `el-collapse-item` par `TargetGroup` :
-     - Header : nom de la target + badge technologie + métriques CPU/RAM
-     - Contenu : `el-table` des stacks + discovered + standalone du groupe
-  4. **Mode normal** (3 sections) :
-     - Section "📦 Stacks WindFlow" : `el-card` + `el-table` avec colonnes : Nom, Technologie (badge), Target, Services (X/Y), Statut (`StatusBadge`)
-     - Section "🔍 Discovered" : `el-card` + `el-empty` description "Chargé par STORY-002" (stub pour STORY-021)
-     - Section "📍 Standalone" : `el-card` + `el-table` avec colonnes : Nom, Image, Target, Statut, CPU%, Mémoire
-  - Script setup :
-    - `useComputeStore()`, `useTargetsStore()`, `useAuthStore()`
-    - `onMounted` → appelle `computeStore.fetchStats()` + `computeStore.fetchGlobal(filtersReactifs)`
-    - `watch` sur les filtres (debounced) → rappelle `computeStore.fetchGlobal(...)` avec les nouveaux filtres
-    - `watch` sur `groupByTarget` → appelle `fetchGlobal({ group_by: groupByTarget ? 'target' : 'stack', ... })`
-    - Computed `filteredStacks`, `filteredStandalone` (filtres appliqués localement aussi pour réactivité immédiate)
+- `frontend/src/views/Compute.vue` — Créer — Nouvelle vue (pattern structure : `Stacks.vue`). Structure complète :
+
+  **A. Header de page**
+  - Titre H1 : "Containers — vue globale"
+  - Sous-titre dynamique : `"{{ stats.targets_count }} targets · {{ techCount }} technologies"` (techCount = nombre de technologies distinctes dans globalView)
+  - Zone boutons droite : toggle `Tout` / `Par machine` (deux `el-button` type="primary"/"default" selon état de `groupByTarget`) + bouton `+ Déployer` (désactivé, prévu pour story future)
+
+  **B. Barre de filtres (2 lignes de pills)**
+  - Ligne 1 — Filtre Type (boutons radio pill) :
+    - `Tout` | `● Stacks WindFlow` | `● Discovered (non managés)` | `● Standalone` (v-model `filterType : ControlLevel | 'all'`)
+    - `el-radio-group` avec `el-radio-button` pour chaque option
+    - Separator `|` visuel + `el-select` "Technologie" (v-model `filterTechnology`)
+  - Ligne 2 — Pills technologie + pills target :
+    - Pills technologie dynamiques (issues des données chargées) : `Docker`, `Compose`, `Helm / k8s` — sélection multiple (array `activeTechnologies`)
+    - Prefix `Target :` + pills target dynamiques (issues de `targetsStore.targets`) : ex. `localhost`, `vps-ovh`, `pi4-home` — sélection multiple (array `activeTargets`)
+    - Implémentation : `v-for` sur les valeurs distinctes + classes conditionnelles `selected` / `unselected`
+
+  **C. Bandeau métriques**
+  - `<ComputeStatsBanner :stats="computeStore.stats" :loading="computeStore.statsLoading" />`
+
+  **D. Section "STACKS WINDFLOW" (accordion collapsible)**
+  - En-tête section : indicateur bleu ◼ + texte "STACKS WINDFLOW (managées, source of truth dans WindFlow)"
+  - Pour chaque stack dans `computeStore.managedStacks` : `<el-collapse-item>` avec :
+    - **En-tête** : nom de la stack | `<el-tag type="primary" size="small">stack WindFlow</el-tag>` | `<el-tag>compose</el-tag>` | `<el-tag>● target_name</el-tag>` | `"X/Y running"` (vert si X===Y, orange si X<Y, rouge si X===0) | boutons : 📄 (copier) 🔄 (refresh) `Éditer stack`
+    - **Corps déplié** : `<el-table>` avec colonnes :
+      - SERVICE : indicateur ● vert/rouge + nom
+      - IMAGE : texte
+      - STATUT : `<el-tag>` coloré (running=vert, exited=rouge, etc.)
+      - CPU : mini barre horizontale (UnoCSS `w-full bg-gray-200 rounded`) + `"X.X%"`
+      - MÉMOIRE : `"540M"` (valeur de `service.memory_usage`)
+      - ACTIONS : icônes 📄 (copier ID) et `>_` (ouvrir terminal, router vers `/terminal/:id`)
+  - Si `managedStacks` vide et non-loading : `<el-empty description="Aucune stack WindFlow détectée" />`
+
+  **E. Section "DISCOVERED — NON MANAGÉS"**
+  - En-tête section : indicateur orange ◼ + texte "DISCOVERED — NON MANAGÉS (détectés sur la machine, WindFlow n'en est pas l'auteur)"
+  - Pour chaque item dans `computeStore.discoveredItems` : `<el-collapse-item>` avec :
+    - **En-tête** : nom | `<el-tag type="warning">discovered</el-tag>` | `<el-tag>tech</el-tag>` | `<el-tag>● target</el-tag>` | `"X/Y running"` | icône 👁 | `<el-button type="warning" size="small">↗ Adopter</el-button>` (si `item.adoptable`)
+    - **Bandeau info** (si `item.source_path`) : `<el-alert type="warning" :closable="false">⚠ Détecté via {{ source_path }} — lecture seule. Adoptez pour gérer depuis WindFlow.</el-alert>`
+    - **Corps déplié** : `<el-table>` des services (note : données partielles, lecture seule) avec colonnes :
+      - NOM : `● vert/rouge` + nom + badge `(read-only)` en gris
+      - IMAGE
+      - STATUT
+      - CPU : valeur en %
+      - ACTIONS : icône 👁 uniquement (pas de contrôle)
+  - Si `discoveredItems` vide et non-loading : `<el-empty description="Aucun objet découvert" />`
+
+  **F. Section "STANDALONE"**
+  - En-tête section : indicateur gris ◼ + texte "STANDALONE (containers individuels sans composition, créés directement)"
+  - `<el-table>` plate (pas d'accordion) avec colonnes :
+    - NOM : `● vert/rouge` selon statut + nom
+    - IMAGE
+    - TARGET : `<el-tag size="small">target_name</el-tag>`
+    - STATUT : `<el-tag>` coloré
+    - CPU / MÉM. : `"0.4% / 80M"` (concaténation de `cpu_percent + "% / " + memory_usage`)
+    - ACTIONS : selon statut — si running : 📄 `>_` 🔄 ; si stopped : 🟢 (start) 🗑 (suppr, rouge)
+  - Action start → `containersApi.start(id)` puis `fetchGlobal()` ; action remove → confirmation `ElMessageBox.confirm` puis `containersApi.remove(id)` puis `fetchGlobal()`
+
+  **G. Mode "Par machine" (toggle groupByTarget)**
+  - Conditionnel `v-if="groupByTarget"` sur tout le bloc D/E/F
+  - `<el-collapse>` avec un `<el-collapse-item>` par `TargetGroup` :
+    - Header : nom target + badge technologie + métriques agrégées `"CPU: X% | RAM: Y/Z"`
+    - Contenu : sous-sections Stacks / Discovered / Standalone du groupe (même structure que D/E/F mais limitée à ce groupe)
+
+  **H. Légende de bas de page**
+  - `<div class="flex gap-6 mt-4 text-sm text-gray-500">` avec 3 entrées :
+    - `◼ Stack WindFlow — géré, éditable` (carré bleu)
+    - `◼ Discovered — observé, adoptable` (carré orange)
+    - `◼ Standalone — container individuel géré` (carré gris)
+
+  **I. Script setup**
+  ```typescript
+  const computeStore = useComputeStore()
+  const targetsStore = useTargetsStore()
+  const authStore = useAuthStore()
+
+  const groupByTarget = ref(false)
+  const filterType = ref<ControlLevel | 'all'>('all')
+  const activeTechnologies = ref<string[]>([])
+  const activeTargets = ref<string[]>([])
+  const filterSearch = ref('')
+
+  // Debounce 300ms sur filterSearch
+  const debouncedSearch = useDebounce(filterSearch, 300)
+
+  const filterParams = computed(() => ({
+    type: filterType.value !== 'all' ? filterType.value : undefined,
+    technology: activeTechnologies.value[0] ?? undefined,
+    target_id: activeTargets.value[0] ?? undefined,
+    search: debouncedSearch.value || undefined,
+  }))
+
+  onMounted(() => {
+    computeStore.fetchStats(authStore.organizationId)
+    computeStore.fetchGlobal({ ...filterParams.value, organization_id: authStore.organizationId })
+    targetsStore.fetchTargets({ organization_id: authStore.organizationId })
+  })
+
+  watch(filterParams, () => {
+    if (!groupByTarget.value) {
+      computeStore.fetchGlobal({ ...filterParams.value, organization_id: authStore.organizationId })
+    } else {
+      computeStore.fetchGlobalByTarget({ ...filterParams.value, organization_id: authStore.organizationId })
+    }
+  })
+
+  watch(groupByTarget, (val) => {
+    if (val) {
+      computeStore.fetchGlobalByTarget({ ...filterParams.value, organization_id: authStore.organizationId })
+    } else {
+      computeStore.fetchGlobal({ ...filterParams.value, organization_id: authStore.organizationId })
+    }
+  })
+  ```
+  **Note** : `useDebounce` est importé depuis `@vueuse/core` (à vérifier dans `package.json` — si absent, implémenter manuellement avec `setTimeout`).
+
 **Dépend de :** Tâche 3, Tâche 4
 
 ### Tâche 6 : Route et Sidebar
@@ -166,22 +278,75 @@ En tant qu'utilisateur DevOps, je veux accéder à une vue `/compute` qui affich
 ## Tests à écrire
 
 ### Frontend
-- `frontend/tests/unit/stores/compute.spec.ts` — Créer — Tester :
-  - `fetchStats()` appelle `computeApi.getStats()` et stocke le résultat dans `stats`
-  - `fetchStats()` gère une erreur API → `error` est renseigné
-  - `fetchGlobal({ group_by: 'stack' })` stocke dans `globalView`
-  - `fetchGlobal({ group_by: 'target' })` stocke dans `targetGroups`
-  - `$reset()` remet tous les états à vide
-- `frontend/tests/unit/components/ComputeStatsBanner.spec.ts` — Créer — Tester :
-  - Rendu avec `stats = null` → affiche 5 skeletons
-  - Rendu avec `loading = true` → directive `v-loading` présente
-  - Rendu avec stats valides → affiche les 5 valeurs correctes
-  - Le sous-titre "sur N machines" affiche `stats.targets_count`
-- `frontend/tests/unit/views/Compute.spec.ts` — Créer — Tester :
-  - `onMounted` appelle `fetchStats()` et `fetchGlobal()`
-  - Le toggle "Par machine" déclenche `fetchGlobal({ group_by: 'target' })`
-  - La section "🔍 Discovered" affiche `el-empty` (stub)
-  - Le filtre de recherche déclenche `fetchGlobal` avec `search` param (debounce)
+
+#### `frontend/tests/unit/stores/compute.spec.ts` — Créer
+**Pattern** : `setActivePinia(createPinia())` + `vi.mock('@/services/api', () => ({ computeApi: { ... } }))` (comme le mock dans `Stacks.spec.ts` pour `stacksApi`).
+Cas de test :
+- `fetchStats()` appelle `computeApi.getStats()` et stocke le résultat dans `stats`
+- `fetchStats()` avec rejet API → `error` est renseigné, `statsLoading` repasse à `false`
+- `fetchGlobal()` appelle `computeApi.getGlobal()` et stocke dans `globalView`, remet `targetGroups` à `[]`
+- `fetchGlobalByTarget()` appelle `computeApi.getGlobalByTarget()` et stocke dans `targetGroups`, remet `globalView` à `null`
+- `fetchGlobal()` avec rejet API → `error` renseigné, `loading` repasse à `false`
+- `$reset()` remet `stats`, `globalView`, `targetGroups`, `loading`, `error` à leurs valeurs initiales
+- Getters `managedStacks`, `discoveredItems`, `standaloneContainers` retournent les bonnes sous-listes depuis `globalView`
+- Getters retournent `[]` quand `globalView` est `null`
+
+**Template de mock à utiliser au début du fichier :**
+```typescript
+vi.mock('@/services/api', () => ({
+  computeApi: {
+    getStats: vi.fn().mockResolvedValue({ data: { total_containers: 23, running_containers: 18, stacks_count: 3, stacks_services_count: 9, discovered_count: 4, standalone_count: 10, targets_count: 4 } }),
+    getGlobal: vi.fn().mockResolvedValue({ data: { managed_stacks: [], discovered_items: [], standalone_containers: [] } }),
+    getGlobalByTarget: vi.fn().mockResolvedValue({ data: [] }),
+  },
+}))
+```
+
+#### `frontend/tests/unit/components/ComputeStatsBanner.spec.ts` — Créer
+**Pattern** : `mount()` avec stubs Element Plus (comme `Stacks.spec.ts`).
+Cas de test :
+- Props `stats = null, loading = false` → 5 blocs `el-skeleton` présents
+- Props `stats = null, loading = true` → directive `v-loading` présente sur le conteneur
+- Props `stats = mockStats, loading = false` → affiche les 5 valeurs numériques correctes (total_containers, running_containers, stacks_count, discovered_count, standalone_count)
+- Sous-label "sur 4 machines" affiché quand `stats.targets_count = 4`
+- Valeur RUNNING en classe verte si `running_containers > 0`
+- Valeur DISCOVERED en classe orange si `discovered_count > 0`
+
+#### `frontend/tests/unit/views/Compute.spec.ts` — Créer
+**Pattern** : mock stores + mock API + mock router + mock Element Plus (comme `Stacks.spec.ts`).
+Cas de test :
+- `onMounted` appelle `fetchStats()` et `fetchGlobal()` du store mocké
+- Toggle `groupByTarget` passe à `true` → appelle `fetchGlobalByTarget()` (pas `fetchGlobal()`)
+- Toggle `groupByTarget` repasse à `false` → rappelle `fetchGlobal()`
+- Section Discovered : affichage `el-empty` quand `discoveredItems = []`
+- Header contient le texte "vue globale" et le sous-titre avec targets_count
+- Bouton "Éditer stack" présent dans la section Stacks quand `managedStacks` non vide
+
+**Template de mock stores :**
+```typescript
+vi.mock('@/stores', () => ({
+  useComputeStore: () => ({
+    stats: null,
+    statsLoading: false,
+    globalView: null,
+    targetGroups: [],
+    loading: false,
+    managedStacks: [],
+    discoveredItems: [],
+    standaloneContainers: [],
+    fetchStats: vi.fn(),
+    fetchGlobal: vi.fn(),
+    fetchGlobalByTarget: vi.fn(),
+  }),
+  useTargetsStore: () => ({
+    targets: [],
+    fetchTargets: vi.fn(),
+  }),
+}))
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ organizationId: 'test-org' }),
+}))
+```
 
 ### Commandes de validation
 ```bash
@@ -189,6 +354,8 @@ En tant qu'utilisateur DevOps, je veux accéder à une vue `/compute` qui affich
 cd frontend && pnpm test -- tests/unit/stores/compute
 cd frontend && pnpm test -- tests/unit/components/ComputeStatsBanner
 cd frontend && pnpm test -- tests/unit/views/Compute
+# Vérifier que les tests existants ne régressent pas
+cd frontend && pnpm test
 # Build & lint
 cd frontend && pnpm build
 cd frontend && pnpm lint
@@ -197,11 +364,37 @@ cd frontend && pnpm typecheck
 ```
 
 ## État d'avancement technique
-- [ ] Tâche 1 : Types TypeScript Compute (types/api.ts)
-- [ ] Tâche 2 : Service API computeApi (services/api.ts)
-- [ ] Tâche 3 : Store Pinia useComputeStore (stores/compute.ts + index.ts)
-- [ ] Tâche 4 : Composant ComputeStatsBanner.vue
-- [ ] Tâche 5 : Vue Compute.vue (bandeau + filtres + 3 sections + toggle)
-- [ ] Tâche 6 : Route /compute + Sidebar lien
-- [ ] Tests frontend (stores + composant + vue)
-- [ ] Build & lint OK
+- [x] Tâche 1 : Types TypeScript Compute (types/api.ts)
+- [x] Tâche 2 : Service API computeApi (services/api.ts)
+- [x] Tâche 3 : Store Pinia useComputeStore (stores/compute.ts + index.ts)
+- [x] Tâche 4 : Composant ComputeStatsBanner.vue
+- [x] Tâche 5 : Vue Compute.vue (bandeau + filtres + 3 sections + toggle)
+- [x] Tâche 6 : Route /compute + Sidebar lien
+- [x] Tests frontend (stores + composant + vue) — 34 tests, 3 fichiers
+- [x] Build & lint OK
+
+## Notes d'implémentation
+
+### Fichiers créés
+- `frontend/src/types/api.ts` — Ajout de 10 types/interfaces Compute à la fin du fichier
+- `frontend/src/services/api.ts` — Ajout de `computeApi` (3 méthodes) + `compute: computeApi` dans le default export
+- `frontend/src/stores/compute.ts` — Nouveau store Pinia avec state, getters, 4 actions
+- `frontend/src/stores/index.ts` — Export `useComputeStore` ajouté
+- `frontend/src/components/ComputeStatsBanner.vue` — Nouveau composant bandeau 5 métriques
+- `frontend/src/views/Compute.vue` — Nouvelle vue complète avec header, filtres, bandeau, 3 sections, mode par machine, légende
+- `frontend/src/router/index.ts` — Route `compute` ajoutée après `stacks`
+- `frontend/src/components/SidebarNav.vue` — Item `Compute` avec icône `DataAnalysis` ajouté dans `infrastructureItems`
+- `frontend/tests/unit/stores/compute.spec.ts` — 16 tests (store actions, getters, edge cases)
+- `frontend/tests/unit/components/ComputeStatsBanner.spec.ts` — 10 tests (skeleton, loading, valeurs, couleurs)
+- `frontend/tests/unit/views/Compute.spec.ts` — 9 tests (montage, onMounted, toggle, sections, légende)
+
+### Décisions techniques prises
+1. **Deux méthodes API séparées** (`getGlobal` vs `getGlobalByTarget`) au lieu d'une avec union type — évite le type unsafe `ComputeGlobalView | TargetGroup[]` dans le store
+2. **Debounce manuel** (ref + watch + window.setTimeout) — `@vueuse/core` absent du projet
+3. **`window.setTimeout` / `window.clearTimeout` / `window.navigator`** — globals browser non déclarés dans ESLint config (seuls `console`, `window`, `document` sont listés) ; résolu en préfixant par `window.`
+4. **`authStore.organizationId` traité avec `?? undefined`** — `ComputedRef<string | null>` converti en `string | undefined` attendu par l'API
+5. **Tests vi.mock hoisting** — mock data inlinée directement dans la factory (pas de variables top-level référencées dans vi.mock)
+
+### Divergences par rapport à l'analyse
+- `@vueuse/core` absent → debounce implémenté manuellement
+- `targetsStore.fetchTargets(orgId?)` prend une string directe (pas un objet) — adapté en conséquence

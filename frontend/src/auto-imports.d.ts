@@ -16,6 +16,7 @@ declare global {
   const autoResetRef: typeof import('@vueuse/core')['autoResetRef']
   const baseURL: typeof import('./services/http')['baseURL']
   const businessValidationRules: typeof import('@/composables/business')['businessValidationRules']
+  const computeApi: typeof import('./services/api')['computeApi']
   const computed: typeof import('vue')['computed']
   const computedAsync: typeof import('@vueuse/core')['computedAsync']
   const computedEager: typeof import('@vueuse/core')['computedEager']
@@ -357,6 +358,7 @@ declare module 'vue' {
     readonly autoResetRef: UnwrapRef<typeof import('@vueuse/core')['autoResetRef']>
     readonly baseURL: UnwrapRef<typeof import('./services/http')['baseURL']>
     readonly businessValidationRules: UnwrapRef<typeof import('@/composables/business')['businessValidationRules']>
+    readonly computeApi: UnwrapRef<typeof import('./services/api')['computeApi']>
     readonly computed: UnwrapRef<typeof import('vue')['computed']>
     readonly computedAsync: UnwrapRef<typeof import('@vueuse/core')['computedAsync']>
     readonly computedEager: UnwrapRef<typeof import('@vueuse/core')['computedEager']>

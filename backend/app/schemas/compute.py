@@ -29,6 +29,15 @@ class ServiceWithMetrics(BaseModel):
     memory_limit: Optional[str] = Field(None, description="Limite mémoire formatée (ex: 2G)")
 
 
+class ContainerPortMapping(BaseModel):
+    """Mapping de port container."""
+
+    host_ip: str = Field("0.0.0.0", description="IP hôte")
+    host_port: int = Field(..., description="Port hôte")
+    container_port: int = Field(..., description="Port container")
+    protocol: str = Field("tcp", description="Protocole (tcp/udp)")
+
+
 class StandaloneContainer(BaseModel):
     """
     Container standalone — sans label compose ni WindFlow.
@@ -45,6 +54,13 @@ class StandaloneContainer(BaseModel):
     status: str = Field(..., description="État du container (running, exited, etc.)")
     cpu_percent: float = Field(0.0, description="Utilisation CPU en %")
     memory_usage: str = Field("0M", description="Utilisation mémoire formatée")
+    uptime: Optional[str] = Field(None, description="Uptime formaté (ex: 'Up 2 hours')")
+    ports: list[ContainerPortMapping] = Field(
+        default_factory=list, description="Ports mappés"
+    )
+    health_status: Optional[str] = Field(
+        None, description="Statut de santé (healthy, unhealthy, starting) si healthcheck configuré"
+    )
 
 
 class DiscoveredItem(BaseModel):
@@ -70,6 +86,10 @@ class DiscoveredItem(BaseModel):
     services_running: int = Field(0, description="Nombre de services en état running")
     detected_at: str = Field(..., description="Timestamp ISO de détection")
     adoptable: bool = Field(True, description="Peut être adopté dans WindFlow")
+    services: list[ServiceWithMetrics] = Field(
+        default_factory=list,
+        description="Liste des containers détectés pour cet objet découvert"
+    )
 
 
 # =============================================================================
@@ -178,13 +198,25 @@ class ComputeStatsResponse(BaseModel):
     total_containers: int = Field(..., description="Nombre total de containers Docker (tous états)")
     running_containers: int = Field(..., description="Nombre de containers en état running")
     stacks_count: int = Field(..., description="Nombre de stacks managées par WindFlow (DB)")
+    stacks_running_count: int = Field(
+        ..., description="Nombre de stacks avec tous leurs services en running"
+    )
+    stacks_targets_count: int = Field(
+        ..., description="Nombre de machines distinctes hébergeant des stacks WindFlow"
+    )
     stacks_services_count: int = Field(
         ..., description="Nombre total de services dans les stacks WindFlow actifs"
     )
     discovered_count: int = Field(
         ..., description="Nombre de projets Compose découverts (hors WindFlow)"
     )
+    discovered_targets_count: int = Field(
+        ..., description="Nombre de machines distinctes hébergeant des projets découverts"
+    )
     standalone_count: int = Field(
         ..., description="Nombre de containers standalone (ni compose ni WindFlow)"
+    )
+    standalone_targets_count: int = Field(
+        ..., description="Nombre de machines distinctes hébergeant des containers standalone"
     )
     targets_count: int = Field(..., description="Nombre de targets enregistrées dans WindFlow")

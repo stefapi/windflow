@@ -352,6 +352,7 @@ Les composants suivants sont intégralement thémés via `theme.css` :
 |---|---|
 | `el-table` | Cellules, header, lignes striped, colonnes fixes |
 | `el-card` | Header, body |
+| `el-collapse` | Header, wrap, content, arrow |
 | `el-dialog` | Header, body, footer, tous les inputs internes |
 | `el-drawer` | Fond et texte |
 | `el-button` | Default, hover, disabled (nécessite `!important`) |

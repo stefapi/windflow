@@ -27,6 +27,7 @@ from ..models.target import Target
 from ..schemas.compute import (
     ComputeGlobalView,
     ComputeStatsResponse,
+    ContainerPortMapping,
     DiscoveredItem,
     ServiceWithMetrics,
     StackWithServices,
@@ -82,6 +83,37 @@ def _is_windflow_managed(labels: dict[str, str]) -> bool:
 def _is_compose_project(labels: dict[str, str]) -> bool:
     """Retourne True si le container fait partie d'un projet Docker Compose."""
     return LABEL_COMPOSE_PROJECT in labels
+
+
+def _parse_ports(ports_data: list[dict]) -> list[ContainerPortMapping]:
+    """
+    Parse les ports Docker vers ContainerPortMapping.
+
+    Docker retourne: [{"IP": "0.0.0.0", "PrivatePort": 80, "PublicPort": 8080, "Type": "tcp"}]
+    """
+    result: list[ContainerPortMapping] = []
+    for p in ports_data:
+        if p.get("PublicPort") and p.get("PrivatePort"):
+            result.append(
+                ContainerPortMapping(
+                    host_ip=p.get("IP", "0.0.0.0"),
+                    host_port=p["PublicPort"],
+                    container_port=p["PrivatePort"],
+                    protocol=p.get("Type", "tcp"),
+                )
+            )
+    return result
+
+
+def _extract_uptime(status: str) -> Optional[str]:
+    """
+    Extrait l'uptime depuis le champ status Docker.
+
+    Exemples: "Up 2 hours" -> "Up 2 hours", "Exited (0) 3 minutes ago" -> None
+    """
+    if status.startswith("Up"):
+        return status
+    return None
 
 
 def _classify_containers(
@@ -152,7 +184,7 @@ async def get_compute_stats(
         org_id: ID de l'organisation (filtre multi-tenant)
 
     Returns:
-        ComputeStatsResponse avec les 7 compteurs
+        ComputeStatsResponse avec les 9 compteurs
     """
     # --- DB : stacks ---
     stacks_stmt = select(func.count(Stack.id))
@@ -170,8 +202,12 @@ async def get_compute_stats(
     total_containers = 0
     running_containers = 0
     stacks_services_count = 0
+    stacks_running_count = 0
+    stacks_targets_count = 0
     discovered_count = 0
+    discovered_targets_count = 0
     standalone_count = 0
+    standalone_targets_count = 0
 
     try:
         docker = DockerClientService()
@@ -186,6 +222,37 @@ async def get_compute_stats(
             stacks_services_count = sum(len(v) for v in managed.values())
             discovered_count = len(discovered)
             standalone_count = len(standalone_list)
+
+            # Calcul des stacks running et targets distinctes
+            # Une stack est "running" si tous ses containers sont en état "running"
+            stack_target_ids: set[str] = set()
+            for stack_id, stack_containers in managed.items():
+                if stack_containers:
+                    # Vérifier si tous les containers de cette stack sont running
+                    all_running = all(c.state == "running" for c in stack_containers)
+                    if all_running:
+                        stacks_running_count += 1
+                    # Collecter les target_ids distincts (depuis les labels ou local)
+                    for c in stack_containers:
+                        # Le target_id peut être dans les labels ou on utilise "local"
+                        t_id = c.labels.get("windflow.target_id", LOCAL_TARGET_ID)
+                        stack_target_ids.add(t_id)
+            stacks_targets_count = len(stack_target_ids)
+
+            # Calcul des targets distinctes pour discovered
+            discovered_target_ids: set[str] = set()
+            for project_name, project_containers in discovered.items():
+                for c in project_containers:
+                    t_id = c.labels.get("windflow.target_id", LOCAL_TARGET_ID)
+                    discovered_target_ids.add(t_id)
+            discovered_targets_count = len(discovered_target_ids)
+
+            # Calcul des targets distinctes pour standalone
+            standalone_target_ids: set[str] = set()
+            for c in standalone_list:
+                t_id = c.labels.get("windflow.target_id", LOCAL_TARGET_ID)
+                standalone_target_ids.add(t_id)
+            standalone_targets_count = len(standalone_target_ids)
         else:
             await docker.close()
             logger.warning("Docker non disponible — compteurs containers à 0")
@@ -196,9 +263,13 @@ async def get_compute_stats(
         total_containers=total_containers,
         running_containers=running_containers,
         stacks_count=stacks_count,
+        stacks_running_count=stacks_running_count,
+        stacks_targets_count=stacks_targets_count,
         stacks_services_count=stacks_services_count,
         discovered_count=discovered_count,
+        discovered_targets_count=discovered_targets_count,
         standalone_count=standalone_count,
+        standalone_targets_count=standalone_targets_count,
         targets_count=targets_count,
     )
 
@@ -324,11 +395,15 @@ async def get_compute_global(
         else:
             computed_status = "stopped"
 
+        # Normaliser la technologie (docker_compose → docker-compose)
+        raw_tech = stack.target_type or "windflow"
+        normalized_tech = "docker-compose" if raw_tech == "docker_compose" else raw_tech
+
         managed_stacks.append(
             StackWithServices(
                 id=stack.id,
                 name=stack.name,
-                technology=stack.target_type or "compose",
+                technology=normalized_tech,
                 target_id=s_target_id,
                 target_name=s_target_name,
                 services_total=services_total,
@@ -364,25 +439,74 @@ async def get_compute_global(
                 services_running=running,
                 detected_at=now_iso,
                 adoptable=True,
+                services=[
+                    ServiceWithMetrics(
+                        id=c.id,
+                        name=c.name,
+                        image=c.image,
+                        status=c.state,
+                        cpu_percent=0.0,
+                        memory_usage="0M",
+                    )
+                    for c in containers
+                ],
             )
         )
 
     # =========================================================================
-    # 6. Construire les StandaloneContainer
+    # 6. Construire les StandaloneContainer avec uptime, ports et health
     # =========================================================================
-    standalone_list: list[StandaloneContainer] = [
-        StandaloneContainer(
-            id=c.id,
-            name=c.name,
-            image=c.image,
-            target_id=local_target_id,
-            target_name=local_target_name,
-            status=c.state,
-            cpu_percent=0.0,
-            memory_usage="0M",
+    standalone_list: list[StandaloneContainer] = []
+
+    # On garde le client Docker ouvert pour les inspections de health
+    docker_for_health: Optional[DockerClientService] = None
+    if docker_available and standalone_containers_raw:
+        try:
+            docker_for_health = DockerClientService()
+            if not await docker_for_health.ping():
+                await docker_for_health.close()
+                docker_for_health = None
+        except Exception:
+            docker_for_health = None
+
+    for c in standalone_containers_raw:
+        # Parser les ports
+        ports = _parse_ports(c.ports)
+
+        # Extraire l'uptime depuis le status Docker
+        uptime = _extract_uptime(c.status)
+
+        # Récupérer le health status seulement si running
+        health_status: Optional[str] = None
+        if c.state == "running" and docker_for_health:
+            try:
+                detail = await docker_for_health.inspect_container(c.id)
+                state_info = detail.get("State", {})
+                health_info = state_info.get("Health", {})
+                if health_info:
+                    health_status = health_info.get("Status")  # healthy, unhealthy, starting
+            except Exception as e:
+                logger.debug(f"Impossible d'inspecter le container {c.id}: {e}")
+
+        standalone_list.append(
+            StandaloneContainer(
+                id=c.id,
+                name=c.name,
+                image=c.image,
+                target_id=local_target_id,
+                target_name=local_target_name,
+                status=c.state,
+                cpu_percent=0.0,
+                memory_usage="0M",
+                uptime=uptime,
+                ports=ports,
+                health_status=health_status,
+            )
         )
-        for c in standalone_containers_raw
-    ]
+
+    # Fermer le client Docker d'inspection
+    if docker_for_health:
+        await docker_for_health.close()
 
     # =========================================================================
     # 7. Appliquer les filtres

@@ -177,7 +177,9 @@ class TestGetComputeStats:
         assert result.running_containers == 0
         assert result.stacks_services_count == 0
         assert result.discovered_count == 0
+        assert result.discovered_targets_count == 0
         assert result.standalone_count == 0
+        assert result.standalone_targets_count == 0
 
     @pytest.mark.asyncio
     async def test_docker_exception_returns_zeros(self, mock_db) -> None:

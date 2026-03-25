@@ -329,6 +329,7 @@ import {
   MoreFilled,
   ArrowLeft,
   ArrowRight,
+  DataAnalysis,
 } from '@element-plus/icons-vue'
 import type { NavItem, PluginNavItem } from '@/types/navigation'
 
@@ -357,6 +358,7 @@ const infrastructureItems: NavItem[] = [
   { icon: Box, label: 'Containers', path: '/containers' },
   { icon: Monitor, label: 'VMs', path: '/vms', badge: 'Bientôt' },
   { icon: Connection, label: 'Stacks', path: '/stacks' },
+  { icon: DataAnalysis, label: 'Compute', path: '/compute' },
   { icon: Upload, label: 'Targets', path: '/targets' },
 ]
 

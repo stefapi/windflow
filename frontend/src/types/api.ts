@@ -495,3 +495,102 @@ export interface ContainerProcessListResponse {
   processes: ContainerProcess[]
   timestamp: string
 }
+
+// Compute types (STORY-021)
+export type ControlLevel = 'managed' | 'discovered' | 'standalone'
+
+export type ComputeTechnology = 'docker' | 'compose' | 'helm' | 'kvm' | 'proxmox' | 'lxc'
+
+export interface ServiceWithMetrics {
+  id: string
+  name: string
+  image: string
+  status: string
+  cpu_percent: number
+  memory_usage: string
+  memory_limit?: string
+}
+
+export interface StackWithServices {
+  id: string
+  name: string
+  technology: ComputeTechnology
+  target_id: string
+  target_name: string
+  services_total: number
+  services_running: number
+  status: 'running' | 'partial' | 'stopped' | 'archived'
+  services: ServiceWithMetrics[]
+}
+
+export interface StandaloneContainerPortMapping {
+  host_ip: string
+  host_port: number
+  container_port: number
+  protocol: string
+}
+
+export interface StandaloneContainer {
+  id: string
+  name: string
+  image: string
+  target_id: string
+  target_name: string
+  status: string
+  cpu_percent: number
+  memory_usage: string
+  uptime: string | null
+  ports: StandaloneContainerPortMapping[]
+  health_status: string | null
+}
+
+export interface DiscoveredItem {
+  id: string
+  name: string
+  type: 'container' | 'composition' | 'helm_release'
+  technology: ComputeTechnology
+  source_path?: string
+  target_id: string
+  target_name: string
+  services_total: number
+  services_running: number
+  detected_at: string
+  adoptable: boolean
+  services?: ServiceWithMetrics[]
+}
+
+export interface ComputeGlobalView {
+  managed_stacks: StackWithServices[]
+  discovered_items: DiscoveredItem[]
+  standalone_containers: StandaloneContainer[]
+}
+
+export interface TargetMetrics {
+  cpu_total_percent: number
+  memory_used: string
+  memory_total: string
+}
+
+export interface TargetGroup {
+  target_id: string
+  target_name: string
+  technology: string
+  stacks: StackWithServices[]
+  discovered: DiscoveredItem[]
+  standalone: StandaloneContainer[]
+  metrics: TargetMetrics
+}
+
+export interface ComputeStatsResponse {
+  total_containers: number
+  running_containers: number
+  stacks_count: number
+  stacks_running_count: number
+  stacks_targets_count: number
+  stacks_services_count: number
+  discovered_count: number
+  discovered_targets_count: number
+  standalone_count: number
+  standalone_targets_count: number
+  targets_count: number
+}

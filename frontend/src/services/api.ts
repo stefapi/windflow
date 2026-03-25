@@ -34,6 +34,10 @@ import type {
   Container,
   ContainerLogsResponse,
   ContainerDetail,
+  ControlLevel,
+  ComputeStatsResponse,
+  ComputeGlobalView,
+  TargetGroup,
 } from '@/types/api'
 
 // Auth API
@@ -263,6 +267,38 @@ export const containersApi = {
     http.get<ContainerLogsResponse>(`/docker/containers/${id}/logs`, { params: { tail, timestamps } }),
 }
 
+// Compute API
+export const computeApi = {
+  getStats: (organizationId?: string) =>
+    http.get<ComputeStatsResponse>('/compute/stats', {
+      params: organizationId ? { organization_id: organizationId } : {},
+    }),
+
+  // Retourne ComputeGlobalView quand group_by est absent ou 'stack'
+  getGlobal: (params?: {
+    type?: ControlLevel
+    technology?: string
+    target_id?: string
+    status?: string
+    search?: string
+    organization_id?: string
+  }) =>
+    http.get<ComputeGlobalView>('/compute/global', { params }),
+
+  // Retourne TargetGroup[] quand group_by='target'
+  getGlobalByTarget: (params?: {
+    type?: ControlLevel
+    technology?: string
+    target_id?: string
+    status?: string
+    search?: string
+    organization_id?: string
+  }) =>
+    http.get<TargetGroup[]>('/compute/global', {
+      params: { ...params, group_by: 'target' },
+    }),
+}
+
 export default {
   auth: authApi,
   users: usersApi,
@@ -274,4 +310,5 @@ export default {
   dashboard: dashboardApi,
   schedules: schedulesApi,
   containers: containersApi,
+  compute: computeApi,
 }

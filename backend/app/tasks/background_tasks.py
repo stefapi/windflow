@@ -202,6 +202,32 @@ async def deploy_stack_async(
                     logs="[INFO] Validation du fichier compose réussie"
                 )
 
+                # 3b. Injecter les labels WindFlow dans chaque service
+                # Permet au compute_service de reconnaître ces containers comme "managed"
+                for svc_cfg in final_compose.get("services", {}).values():
+                    if not isinstance(svc_cfg, dict):
+                        continue
+                    existing_labels = svc_cfg.get("labels", {})
+                    if isinstance(existing_labels, list):
+                        # Normaliser liste → dict (format "KEY=VALUE")
+                        labels_dict: dict[str, str] = {}
+                        for entry in existing_labels:
+                            if "=" in entry:
+                                k, _, v = entry.partition("=")
+                                labels_dict[k.strip()] = v.strip()
+                        existing_labels = labels_dict
+                    if not isinstance(existing_labels, dict):
+                        existing_labels = {}
+                    existing_labels["windflow.managed"] = "true"
+                    existing_labels["windflow.stack_id"] = stack_id
+                    svc_cfg["labels"] = existing_labels
+
+                logger.info(f"Labels WindFlow injectés dans les services (stack_id={stack_id})")
+                await DeploymentService.update_status(
+                    db, deployment_id, DeploymentStatus.DEPLOYING,
+                    logs=f"[INFO] Labels WindFlow injectés (windflow.stack_id={stack_id})"
+                )
+
                 # 4. Générer le fichier docker-compose.yml
                 deploy_dir = Path(f"/tmp/windflow-deployments/{deployment_id}")
                 compose_file = deploy_dir / "docker-compose.yml"
