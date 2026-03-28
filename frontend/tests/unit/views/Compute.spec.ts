@@ -113,6 +113,30 @@ const globalConfig = {
         template: '<div class="compute-stats-banner" />',
         props: ['stats', 'loading'],
       },
+      ManagedStacksSection: {
+        template: '<div class="managed-stubs-section"><slot /></div>',
+        props: ['stacks', 'loading'],
+      },
+      DiscoveredSection: {
+        template: '<div class="discovered-stubs-section"><div v-if="items.length === 0" class="el-empty">Aucun objet découvert avec des instances actives</div></div>',
+        props: ['items', 'loading'],
+      },
+      StandaloneSection: {
+        template: '<div class="standalone-stubs-section"><slot /></div>',
+        props: ['containers', 'loading'],
+      },
+      TargetGroupView: {
+        template: '<div class="target-group-view-stub" />',
+        props: ['groups', 'loading'],
+      },
+      ElCheckbox: {
+        template: '<label><input type="checkbox" /><slot /></label>',
+        props: ['modelValue'],
+      },
+      ElDialog: {
+        template: '<div class="el-dialog"><slot /><slot name="footer" /></div>',
+        props: ['modelValue', 'title', 'width'],
+      },
     },
     directives: {
       loading: {},
