@@ -11,7 +11,7 @@ _(vide)_
 ## 📋 BACKLOG (À faire)
 
 ### EPIC-008 : Couverture Frontend des APIs Backend (Qualité — Q1 2026)
-- [ ] STORY-022 : Frontend — Refactoring de Compute.vue en sous-composants
+- [ ] STORY-023 : Frontend — Harmonisation tables containers et actions en masse
 - [ ] STORY-003 : Wizard d'adoption d'objets découverts
 - [ ] STORY-004 : Actions globales de stack (Start/Stop/Redeploy)
 - [ ] STORY-005 : Gestion des images Docker - Liste et visualisation
@@ -42,4 +42,5 @@ _(vide)_
 - [x] STORY-001 : Backend — Endpoints Compute Stats et Global
 - [x] STORY-021 : Frontend — Vue globale Compute avec bandeau et 3 sections
 - [x] STORY-002 : Backend — Refactoring des services de listage Docker
+- [x] STORY-022 : Frontend — Refactoring de Compute.vue en sous-composants
 

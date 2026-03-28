@@ -1,6 +1,6 @@
 # STORY-022 : Frontend — Refactoring de Compute.vue en sous-composants
 
-**Statut :** REVIEW
+**Statut :** DONE
 **Epic Parent :** EPIC-008 — Couverture Frontend des APIs Backend
 
 ## Description
