@@ -5,7 +5,8 @@
 ## 📋 BACKLOG (À faire)
 
 ### EPIC-008 : Couverture Frontend des APIs Backend (Qualité — Q1 2026)
-- [ ] STORY-002 : Section Discovered — liste unifiée (containers, compositions, releases Helm)
+- [ ] STORY-002 : Backend — Refactoring des services de listage Docker
+- [ ] STORY-022 : Frontend — Refactoring de Compute.vue en sous-composants
 - [ ] STORY-003 : Wizard d'adoption d'objets découverts
 - [ ] STORY-004 : Actions globales de stack (Start/Stop/Redeploy)
 - [ ] STORY-005 : Gestion des images Docker - Liste et visualisation
