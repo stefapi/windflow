@@ -95,64 +95,44 @@ export const useContainersStore = defineStore('containers', () => {
   }
 
   async function startContainer(id: string): Promise<void> {
-    try {
-      await containersApi.start(id)
-      // Update local state
-      const container = containers.value.find(c => c.id === id)
-      if (container) {
-        container.state = 'running'
-        container.status = 'Up'
-      }
-    } catch (err) {
-      throw err
+    await containersApi.start(id)
+    // Update local state
+    const container = containers.value.find(c => c.id === id)
+    if (container) {
+      container.state = 'running'
+      container.status = 'Up'
     }
   }
 
   async function stopContainer(id: string, timeout: number = 10): Promise<void> {
-    try {
-      await containersApi.stop(id, timeout)
-      // Update local state
-      const container = containers.value.find(c => c.id === id)
-      if (container) {
-        container.state = 'exited'
-        container.status = 'Exited'
-      }
-    } catch (err) {
-      throw err
+    await containersApi.stop(id, timeout)
+    // Update local state
+    const container = containers.value.find(c => c.id === id)
+    if (container) {
+      container.state = 'exited'
+      container.status = 'Exited'
     }
   }
 
   async function restartContainer(id: string, timeout: number = 10): Promise<void> {
-    try {
-      await containersApi.restart(id, timeout)
-      // Update local state
-      const container = containers.value.find(c => c.id === id)
-      if (container) {
-        container.state = 'running'
-        container.status = 'Restarted'
-      }
-    } catch (err) {
-      throw err
+    await containersApi.restart(id, timeout)
+    // Update local state
+    const container = containers.value.find(c => c.id === id)
+    if (container) {
+      container.state = 'running'
+      container.status = 'Restarted'
     }
   }
 
   async function removeContainer(id: string, force: boolean = false): Promise<void> {
-    try {
-      await containersApi.remove(id, force)
-      // Remove from local state
-      containers.value = containers.value.filter(c => c.id !== id)
-    } catch (err) {
-      throw err
-    }
+    await containersApi.remove(id, force)
+    // Remove from local state
+    containers.value = containers.value.filter(c => c.id !== id)
   }
 
   async function getContainerLogs(id: string, tail: number = 100): Promise<string> {
-    try {
-      const response = await containersApi.getLogs(id, tail)
-      return response.data.logs
-    } catch (err) {
-      throw err
-    }
+    const response = await containersApi.getLogs(id, tail)
+    return response.data.logs
   }
 
   // Batch actions for multiple containers

@@ -14,7 +14,7 @@ export const useSchedulesStore = defineStore('schedules', () => {
     try {
       const response = await schedulesApi.list(organizationId)
       tasks.value = response.data
-    } catch (e: unknown) {
+    } catch (_e: unknown) {
       error.value = 'Failed to fetch scheduled tasks'
     } finally {
       loading.value = false

@@ -88,7 +88,7 @@ const executeWorkflow = async (id: string) => {
   try {
     const executionId = await workflowsStore.executeWorkflow(id)
     ElMessage.success(`Workflow execution started: ${executionId}`)
-  } catch (error) {
+  } catch (_error) {
     ElMessage.error('Failed to execute workflow')
   }
 }
@@ -97,7 +97,7 @@ const deleteWorkflow = async (id: string) => {
   try {
     await workflowsStore.deleteWorkflow(id)
     ElMessage.success('Workflow deleted successfully')
-  } catch (error) {
+  } catch (_error) {
     ElMessage.error('Failed to delete workflow')
   }
 }

@@ -294,7 +294,7 @@ const copyToClipboard = async () => {
     const logsText = logs.value.join('\n')
     await navigator.clipboard.writeText(logsText)
     ElMessage.success('Logs copiés dans le presse-papier')
-  } catch (err) {
+  } catch (_err) {
     ElMessage.error('Échec de la copie dans le presse-papier')
   }
 }

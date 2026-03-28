@@ -37,7 +37,7 @@ onMounted(async () => {
     if (containerIdFromRoute.value) {
       selectedContainerId.value = containerIdFromRoute.value
     }
-  } catch (error) {
+  } catch (_error) {
     ElMessage.error('Failed to load deployments')
   } finally {
     isLoading.value = false
