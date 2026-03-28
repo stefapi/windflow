@@ -170,11 +170,13 @@ class TestGetLatestActiveDeployment:
 
 
 class TestBuildManagedStacks:
-    def test_empty_stacks(self) -> None:
-        result = build_managed_stacks([], {}, {}, "local", "Local Docker")
+    @pytest.mark.asyncio
+    async def test_empty_stacks(self) -> None:
+        result = await build_managed_stacks([], {}, {}, "local", "Local Docker")
         assert result == []
 
-    def test_single_stack_with_containers(self) -> None:
+    @pytest.mark.asyncio
+    async def test_single_stack_with_containers(self) -> None:
         stack = _make_db_stack("s1", "My Stack", deployments=[
             _make_deployment("t1", DeploymentStatus.RUNNING),
         ])
@@ -182,7 +184,7 @@ class TestBuildManagedStacks:
         c1 = _make_container_info("c1", "svc1", state="running")
         c2 = _make_container_info("c2", "svc2", state="running")
 
-        result = build_managed_stacks(
+        result = await build_managed_stacks(
             [stack], {"s1": [c1, c2]}, {"t1": target}, "local", "Local Docker",
         )
 
@@ -195,37 +197,60 @@ class TestBuildManagedStacks:
         assert s.services_running == 2
         assert s.status == "running"
 
-    def test_partial_status(self) -> None:
+    @pytest.mark.asyncio
+    async def test_partial_status(self) -> None:
         stack = _make_db_stack("s1", deployments=[_make_deployment("t1")])
         c1 = _make_container_info("c1", state="running")
         c2 = _make_container_info("c2", state="exited")
 
-        result = build_managed_stacks([stack], {"s1": [c1, c2]}, {"t1": _make_target()}, "local", "Local")
+        result = await build_managed_stacks([stack], {"s1": [c1, c2]}, {"t1": _make_target()}, "local", "Local")
 
         assert result[0].status == "partial"
         assert result[0].services_running == 1
 
-    def test_stopped_when_no_containers(self) -> None:
+    @pytest.mark.asyncio
+    async def test_stopped_when_no_containers(self) -> None:
         stack = _make_db_stack("s1", deployments=[_make_deployment("t1")])
-        result = build_managed_stacks([stack], {}, {"t1": _make_target()}, "local", "Local")
+        result = await build_managed_stacks([stack], {}, {"t1": _make_target()}, "local", "Local")
         assert result[0].status == "stopped"
         assert result[0].services_total == 0
 
-    def test_fallback_to_local_target_when_no_deployment(self) -> None:
+    @pytest.mark.asyncio
+    async def test_fallback_to_local_target_when_no_deployment(self) -> None:
         stack = _make_db_stack("s1", deployments=[])
-        result = build_managed_stacks([stack], {}, {}, "local", "Local Docker")
+        result = await build_managed_stacks([stack], {}, {}, "local", "Local Docker")
         assert result[0].target_id == "local"
         assert result[0].target_name == "Local Docker"
 
-    def test_technology_normalization(self) -> None:
+    @pytest.mark.asyncio
+    async def test_technology_normalization(self) -> None:
         stack = _make_db_stack("s1", target_type="docker_compose")
-        result = build_managed_stacks([stack], {}, {}, "local", "Local")
+        result = await build_managed_stacks([stack], {}, {}, "local", "Local")
         assert result[0].technology == "docker-compose"
 
-    def test_technology_windflow_unchanged(self) -> None:
+    @pytest.mark.asyncio
+    async def test_technology_windflow_unchanged(self) -> None:
         stack = _make_db_stack("s1", target_type="windflow")
-        result = build_managed_stacks([stack], {}, {}, "local", "Local")
+        result = await build_managed_stacks([stack], {}, {}, "local", "Local")
         assert result[0].technology == "windflow"
+
+    @pytest.mark.asyncio
+    async def test_service_uptime_and_ports_populated(self) -> None:
+        """Les champs uptime et ports sont extraits depuis ContainerInfo."""
+        stack = _make_db_stack("s1", deployments=[_make_deployment("t1")])
+        c1 = _make_container_info(
+            "c1", state="running", status="Up 5 minutes",
+            ports=[{"IP": "0.0.0.0", "PublicPort": 80, "PrivatePort": 80, "Type": "tcp"}],
+        )
+
+        result = await build_managed_stacks(
+            [stack], {"s1": [c1]}, {"t1": _make_target()}, "local", "Local",
+        )
+
+        svc = result[0].services[0]
+        assert svc.uptime == "Up 5 minutes"
+        assert len(svc.ports) == 1
+        assert svc.ports[0].host_port == 80
 
 
 # =============================================================================
@@ -234,16 +259,18 @@ class TestBuildManagedStacks:
 
 
 class TestBuildDiscoveredItems:
-    def test_empty(self) -> None:
-        result = build_discovered_items({}, "local", "Local Docker", "2026-01-01T00:00:00Z")
+    @pytest.mark.asyncio
+    async def test_empty(self) -> None:
+        result = await build_discovered_items({}, "local", "Local Docker", "2026-01-01T00:00:00Z")
         assert result == []
 
-    def test_single_project(self) -> None:
+    @pytest.mark.asyncio
+    async def test_single_project(self) -> None:
         c1 = _make_container_info("c1", "app-web", state="running")
         c1.labels = {"com.docker.compose.project.config_files": "/opt/app/docker-compose.yml"}
         c2 = _make_container_info("c2", "app-db", state="running")
 
-        result = build_discovered_items(
+        result = await build_discovered_items(
             {"myapp": [c1, c2]}, "local", "Local Docker", "2026-03-28T00:00:00Z",
         )
 
@@ -260,11 +287,12 @@ class TestBuildDiscoveredItems:
         assert item.source_path == "/opt/app/docker-compose.yml"
         assert len(item.services) == 2
 
-    def test_multiple_projects(self) -> None:
+    @pytest.mark.asyncio
+    async def test_multiple_projects(self) -> None:
         c1 = _make_container_info("c1")
         c2 = _make_container_info("c2")
 
-        result = build_discovered_items(
+        result = await build_discovered_items(
             {"proj-a": [c1], "proj-b": [c2]}, "local", "Local", "2026-01-01T00:00:00Z",
         )
 
@@ -272,12 +300,30 @@ class TestBuildDiscoveredItems:
         names = {item.name for item in result}
         assert names == {"proj-a", "proj-b"}
 
-    def test_no_source_path(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_source_path(self) -> None:
         c1 = _make_container_info("c1")
         c1.labels = {}  # Pas de config_files label
 
-        result = build_discovered_items({"proj": [c1]}, "local", "Local", "2026-01-01T00:00:00Z")
+        result = await build_discovered_items({"proj": [c1]}, "local", "Local", "2026-01-01T00:00:00Z")
         assert result[0].source_path is None
+
+    @pytest.mark.asyncio
+    async def test_service_uptime_and_ports_populated(self) -> None:
+        """Les champs uptime et ports sont extraits depuis ContainerInfo."""
+        c1 = _make_container_info(
+            "c1", state="running", status="Up 3 hours",
+            ports=[{"IP": "0.0.0.0", "PublicPort": 443, "PrivatePort": 443, "Type": "tcp"}],
+        )
+
+        result = await build_discovered_items(
+            {"myproj": [c1]}, "local", "Local", "2026-01-01T00:00:00Z",
+        )
+
+        svc = result[0].services[0]
+        assert svc.uptime == "Up 3 hours"
+        assert len(svc.ports) == 1
+        assert svc.ports[0].host_port == 443
 
 
 # =============================================================================

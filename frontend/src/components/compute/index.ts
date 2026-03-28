@@ -6,6 +6,7 @@
 
 // Components
 export { default as ContainerTable } from './ContainerTable.vue'
+export { default as BulkActionBar } from './BulkActionBar.vue'
 export { default as ManagedStacksSection } from './ManagedStacksSection.vue'
 export { default as DiscoveredSection } from './DiscoveredSection.vue'
 export { default as StandaloneSection } from './StandaloneSection.vue'

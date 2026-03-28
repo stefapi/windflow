@@ -509,6 +509,9 @@ export interface ServiceWithMetrics {
   cpu_percent: number
   memory_usage: string
   memory_limit?: string
+  uptime?: string | null
+  ports?: StandaloneContainerPortMapping[]
+  health_status?: string | null
 }
 
 export interface StackWithServices {

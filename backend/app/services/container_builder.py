@@ -30,6 +30,51 @@ from ..helper.compute_helpers import extract_uptime, parse_ports
 logger = logging.getLogger(__name__)
 
 
+async def _build_service_with_metrics(
+    c: ContainerInfo,
+    docker_for_health: Optional[DockerClientService] = None,
+) -> ServiceWithMetrics:
+    """
+    Construit un ServiceWithMetrics enrichi depuis un ContainerInfo.
+
+    Extrait uptime, ports et health_status quand les données sont disponibles.
+    Graceful degradation : en cas d'erreur d'inspection, les champs optionnels
+    restent à leur valeur par défaut.
+
+    Args:
+        c: ContainerInfo brut depuis Docker.
+        docker_for_health: Client Docker pour inspection health (optionnel).
+
+    Returns:
+        ServiceWithMetrics avec uptime, ports et health_status.
+    """
+    uptime = extract_uptime(c.status)
+    ports = parse_ports(c.ports)
+    health_status: Optional[str] = None
+
+    if c.state == "running" and docker_for_health:
+        try:
+            detail = await docker_for_health.inspect_container(c.id)
+            state_info = detail.get("State", {})
+            health_info = state_info.get("Health", {})
+            if health_info:
+                health_status = health_info.get("Status")
+        except Exception as e:
+            logger.debug(f"Impossible d'inspecter le container {c.id}: {e}")
+
+    return ServiceWithMetrics(
+        id=c.id,
+        name=c.name,
+        image=c.image,
+        status=c.state,
+        cpu_percent=0.0,
+        memory_usage="0M",
+        uptime=uptime,
+        ports=ports,
+        health_status=health_status,
+    )
+
+
 def get_latest_active_deployment(
     deployments: list[Deployment],
 ) -> Optional[Deployment]:
@@ -55,12 +100,13 @@ def get_latest_active_deployment(
     return sorted(active, key=lambda d: d.created_at, reverse=True)[0]
 
 
-def build_managed_stacks(
+async def build_managed_stacks(
     db_stacks: list,
     managed_by_stack_id: dict[str, list[ContainerInfo]],
     targets_by_id: dict[str, Target],
     local_target_id: str,
     local_target_name: str,
+    docker_for_health: Optional[DockerClientService] = None,
 ) -> list[StackWithServices]:
     """
     Construit les StackWithServices depuis les stacks DB enrichies avec Docker.
@@ -68,6 +114,7 @@ def build_managed_stacks(
     Pour chaque stack DB :
     - Résout la target via le déploiement actif le plus récent.
     - Construit les services à partir des containers Docker correspondants.
+    - Extrait uptime, ports et health_status pour chaque service.
     - Calcule le statut dérivé : running/partial/stopped.
     - Normalise la technologie (docker_compose → docker-compose).
 
@@ -77,6 +124,7 @@ def build_managed_stacks(
         targets_by_id: Targets indexées par ID.
         local_target_id: ID de la target locale.
         local_target_name: Nom de la target locale.
+        docker_for_health: Client Docker pour inspections health (optionnel).
 
     Returns:
         Liste de StackWithServices.
@@ -97,14 +145,7 @@ def build_managed_stacks(
         # Containers actifs de cette stack (via labels)
         stack_containers = managed_by_stack_id.get(stack.id, [])
         services = [
-            ServiceWithMetrics(
-                id=c.id,
-                name=c.name,
-                image=c.image,
-                status=c.state,
-                cpu_percent=0.0,
-                memory_usage="0M",
-            )
+            await _build_service_with_metrics(c, docker_for_health)
             for c in stack_containers
         ]
         services_total = len(stack_containers)
@@ -141,23 +182,26 @@ def build_managed_stacks(
     return managed_stacks
 
 
-def build_discovered_items(
+async def build_discovered_items(
     discovered_by_project: dict[str, list[ContainerInfo]],
     local_target_id: str,
     local_target_name: str,
     now_iso: str,
+    docker_for_health: Optional[DockerClientService] = None,
 ) -> list[DiscoveredItem]:
     """
     Construit les DiscoveredItem (projets Compose externes).
 
     Extrait source_path depuis les labels Docker, génère un ID au format
-    ``compose:<project>@<target>``.
+    ``compose:<project>@<target>``. Enrichit chaque service avec uptime,
+    ports et health_status.
 
     Args:
         discovered_by_project: Containers groupés par nom de projet Compose.
         local_target_id: ID de la target locale.
         local_target_name: Nom de la target locale.
         now_iso: Timestamp ISO actuel.
+        docker_for_health: Client Docker pour inspections health (optionnel).
 
     Returns:
         Liste de DiscoveredItem.
@@ -172,6 +216,11 @@ def build_discovered_items(
         if containers:
             source_path = containers[0].labels.get(LABEL_COMPOSE_CONFIG_FILES)
 
+        services = [
+            await _build_service_with_metrics(c, docker_for_health)
+            for c in containers
+        ]
+
         discovered_items.append(
             DiscoveredItem(
                 id=f"compose:{project_name}@{local_target_id}",
@@ -185,17 +234,7 @@ def build_discovered_items(
                 services_running=running,
                 detected_at=now_iso,
                 adoptable=True,
-                services=[
-                    ServiceWithMetrics(
-                        id=c.id,
-                        name=c.name,
-                        image=c.image,
-                        status=c.state,
-                        cpu_percent=0.0,
-                        memory_usage="0M",
-                    )
-                    for c in containers
-                ],
+                services=services,
             )
         )
 

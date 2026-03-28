@@ -86,11 +86,24 @@
           </div>
         </template>
 
+        <BulkActionBar
+          :selected-count="getStackSelectedIds(stack.id).length"
+          :loading-action="bulkActionLoading"
+          @start="handleBulkAction('start', stack.id)"
+          @stop="handleBulkAction('stop', stack.id)"
+          @restart="handleBulkAction('restart', stack.id)"
+          @delete="handleBulkAction('delete', stack.id)"
+          @cancel="clearStackSelection(stack.id)"
+        />
+
         <ContainerTable
-          :items="stack.services.map(s => serviceToRow(s, stack.target_name))"
-          :columns="['name', 'image', 'status', 'cpu', 'memory', 'actions']"
+          :ref="(el: any) => setTableRef(stack.id, el)"
+          :items="stackRowsMap[stack.id] ?? []"
+          :columns="['name', 'image', 'status', 'cpu', 'memory', 'uptime', 'ports', 'actions']"
+          :selectable="true"
           :show-actions="true"
           @action="(type, item) => handleServiceAction(type, item)"
+          @selection-change="(items: ContainerTableRow[]) => handleStackSelectionChange(stack.id, items)"
         />
       </el-collapse-item>
     </el-collapse>
@@ -105,12 +118,14 @@
  * Each stack shows its services in a ContainerTable with individual actions.
  */
 
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import { containersApi } from '@/services/api'
 import ContainerTable from './ContainerTable.vue'
-import { serviceToRow, servicesRunningClass } from './helpers'
+import BulkActionBar from './BulkActionBar.vue'
+import { serviceToRow, servicesRunningClass, getActionPastParticiple } from './helpers'
 import type { ContainerTableRow } from './helpers'
 import type { StackWithServices } from '@/types/api'
 import type { ActionType } from '@/components/ui/ActionButtons.vue'
@@ -120,7 +135,7 @@ export interface ManagedStacksSectionProps {
   loading: boolean
 }
 
-defineProps<ManagedStacksSectionProps>()
+const props = defineProps<ManagedStacksSectionProps>()
 
 const emit = defineEmits<{
   (e: 'refresh'): void
@@ -128,6 +143,80 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+
+// ── Computed rows per stack (stable references for row-key) ──
+const stackRowsMap = computed(() => {
+  const map: Record<string, ContainerTableRow[]> = {}
+  for (const stack of props.stacks) {
+    map[stack.id] = stack.services.map(s => serviceToRow(s, stack.target_name))
+  }
+  return map
+})
+
+// ── Per-stack selection state ──
+const stackSelections = ref<Record<string, ContainerTableRow[]>>({})
+const tableRefs = ref<Record<string, { clearSelection: () => void }>>({})
+const bulkActionLoading = ref<string | null>(null)
+
+function setTableRef(stackId: string, el: any): void {
+  if (el) tableRefs.value[stackId] = el
+}
+
+function handleStackSelectionChange(stackId: string, items: ContainerTableRow[]): void {
+  stackSelections.value[stackId] = items
+}
+
+function getStackSelectedIds(stackId: string): string[] {
+  return (stackSelections.value[stackId] ?? []).map(c => c.id)
+}
+
+function clearStackSelection(stackId: string): void {
+  tableRefs.value[stackId]?.clearSelection()
+  stackSelections.value[stackId] = []
+}
+
+async function handleBulkAction(action: 'start' | 'stop' | 'restart' | 'delete', stackId: string): Promise<void> {
+  const ids = getStackSelectedIds(stackId)
+  if (ids.length === 0) return
+
+  if (action === 'delete') {
+    try {
+      await ElMessageBox.confirm(
+        `Supprimer ${ids.length} container${ids.length > 1 ? 's' : ''} ? Cette action est irréversible.`,
+        'Confirmation',
+        { confirmButtonText: 'Supprimer', cancelButtonText: 'Annuler', type: 'warning' },
+      )
+    } catch { return }
+  }
+
+  bulkActionLoading.value = action
+  let successCount = 0
+  let failCount = 0
+
+  for (const id of ids) {
+    try {
+      switch (action) {
+        case 'start': await containersApi.start(id); break
+        case 'stop': await containersApi.stop(id); break
+        case 'restart': await containersApi.restart(id); break
+        case 'delete': await containersApi.remove(id); break
+      }
+      successCount++
+    } catch { failCount++ }
+  }
+
+  if (failCount === 0) {
+    ElMessage.success(`${successCount} container${successCount > 1 ? 's' : ''} ${getActionPastParticiple(action as 'start' | 'stop' | 'restart')}`)
+  } else if (successCount === 0) {
+    ElMessage.error(`Échec de l'action sur ${failCount} container${failCount > 1 ? 's' : ''}`)
+  } else {
+    ElMessage.warning(`${successCount} réussi${successCount > 1 ? 's' : ''}, ${failCount} échoué${failCount > 1 ? 's' : ''}`)
+  }
+
+  clearStackSelection(stackId)
+  bulkActionLoading.value = null
+  emit('refresh')
+}
 
 async function handleServiceAction(type: ActionType, item: ContainerTableRow): Promise<void> {
   switch (type) {

@@ -67,6 +67,9 @@ describe('serviceToRow', () => {
       cpuPercent: 2.5,
       memoryUsage: '50 MiB',
       targetName: undefined,
+      uptime: null,
+      ports: [],
+      healthStatus: null,
     })
   })
 

@@ -1,8 +1,9 @@
-<template>
+j'ai<template>
   <el-table
     ref="tableRef"
     :data="items"
     :size="size"
+    row-key="id"
     stripe
     class="container-table w-full"
     @selection-change="handleSelectionChange"
@@ -12,6 +13,7 @@
       v-if="selectable"
       type="selection"
       width="55"
+      reserve-selection
     />
 
     <!-- Name column (always shown) -->
@@ -164,18 +166,6 @@
           v-else
           class="text-xs text-gray-400"
         >-</span>
-      </template>
-    </el-table-column>
-
-    <!-- CPU / Memory compact column -->
-    <el-table-column
-      v-if="isVisible('cpuMemory')"
-      label="CPU / Mém."
-      width="110"
-      class-name="col-cpu-memory"
-    >
-      <template #default="{ row }">
-        {{ row.cpuPercent.toFixed(1) }}% / {{ row.memoryUsage }}
       </template>
     </el-table-column>
 

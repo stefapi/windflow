@@ -17,8 +17,17 @@ from pydantic import BaseModel, Field
 # =============================================================================
 
 
+class ContainerPortMapping(BaseModel):
+    """Mapping de port container."""
+
+    host_ip: str = Field("0.0.0.0", description="IP hôte")
+    host_port: int = Field(..., description="Port hôte")
+    container_port: int = Field(..., description="Port container")
+    protocol: str = Field("tcp", description="Protocole (tcp/udp)")
+
+
 class ServiceWithMetrics(BaseModel):
-    """Un service (container) appartenant à une stack managée."""
+    """Un service (container) appartenant à une stack managée ou découverte."""
 
     id: str = Field(..., description="Container ID (12 premiers caractères)")
     name: str = Field(..., description="Nom du container/service")
@@ -27,15 +36,13 @@ class ServiceWithMetrics(BaseModel):
     cpu_percent: float = Field(0.0, description="Utilisation CPU en %")
     memory_usage: str = Field("0M", description="Utilisation mémoire formatée (ex: 540M)")
     memory_limit: Optional[str] = Field(None, description="Limite mémoire formatée (ex: 2G)")
-
-
-class ContainerPortMapping(BaseModel):
-    """Mapping de port container."""
-
-    host_ip: str = Field("0.0.0.0", description="IP hôte")
-    host_port: int = Field(..., description="Port hôte")
-    container_port: int = Field(..., description="Port container")
-    protocol: str = Field("tcp", description="Protocole (tcp/udp)")
+    uptime: Optional[str] = Field(None, description="Uptime formaté (ex: 'Up 2 hours')")
+    ports: list[ContainerPortMapping] = Field(
+        default_factory=list, description="Ports mappés"
+    )
+    health_status: Optional[str] = Field(
+        None, description="Statut de santé (healthy, unhealthy, starting) si healthcheck configuré"
+    )
 
 
 class StandaloneContainer(BaseModel):

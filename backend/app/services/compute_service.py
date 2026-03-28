@@ -236,19 +236,36 @@ async def get_compute_global(
     local_target_id, local_target_name = await _get_local_target(db, org_id)
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    managed_stacks = build_managed_stacks(
-        db_stacks, managed_by_stack_id, targets_by_id,
-        local_target_id, local_target_name,
-    )
+    # Client Docker partagé pour les inspections health
+    docker_for_health: Optional[DockerClientService] = None
+    if docker_available:
+        try:
+            docker_for_health = DockerClientService()
+            if not await docker_for_health.ping():
+                await docker_for_health.close()
+                docker_for_health = None
+        except Exception:
+            docker_for_health = None
 
-    discovered_items = build_discovered_items(
-        discovered_by_project, local_target_id, local_target_name, now_iso,
-    )
+    try:
+        managed_stacks = await build_managed_stacks(
+            db_stacks, managed_by_stack_id, targets_by_id,
+            local_target_id, local_target_name,
+            docker_for_health=docker_for_health,
+        )
 
-    standalone_list = await build_standalone_containers(
-        standalone_containers_raw, local_target_id, local_target_name,
-        docker_available,
-    )
+        discovered_items = await build_discovered_items(
+            discovered_by_project, local_target_id, local_target_name, now_iso,
+            docker_for_health=docker_for_health,
+        )
+
+        standalone_list = await build_standalone_containers(
+            standalone_containers_raw, local_target_id, local_target_name,
+            docker_available,
+        )
+    finally:
+        if docker_for_health:
+            await docker_for_health.close()
 
     # 5. Appliquer les filtres
     managed_stacks, discovered_items, standalone_list = apply_filters(

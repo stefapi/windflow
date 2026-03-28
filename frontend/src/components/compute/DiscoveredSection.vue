@@ -68,11 +68,25 @@
           ⚠ Détecté via {{ item.source_path }} — lecture seule. Adoptez pour gérer depuis WindFlow.
         </el-alert>
 
+        <BulkActionBar
+          v-if="item.adoptable"
+          :selected-count="getItemSelectedIds(item.id).length"
+          :loading-action="bulkActionLoading"
+          @start="handleBulkAction('start', item.id)"
+          @stop="handleBulkAction('stop', item.id)"
+          @restart="handleBulkAction('restart', item.id)"
+          @delete="handleBulkAction('delete', item.id)"
+          @cancel="clearItemSelection(item.id)"
+        />
+
         <ContainerTable
-          :items="(item.services ?? []).map(s => serviceToRow(s, item.target_name))"
-          :columns="['name', 'image', 'status', 'cpu', 'memory', 'actions']"
+          :ref="(el: any) => setTableRef(item.id, el)"
+          :items="itemRowsMap[item.id] ?? []"
+          :columns="['name', 'image', 'status', 'cpu', 'memory', 'uptime', 'ports', 'actions']"
+          :selectable="item.adoptable"
           :readonly="!item.adoptable"
           @action="(type, row) => handleServiceAction(type, row, item)"
+          @selection-change="(rows: ContainerTableRow[]) => handleItemSelectionChange(item.id, rows)"
         />
       </el-collapse-item>
     </el-collapse>
@@ -88,11 +102,13 @@
  * Actions are available only if the item is adoptable.
  */
 
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { containersApi } from '@/services/api'
 import ContainerTable from './ContainerTable.vue'
-import { serviceToRow } from './helpers'
+import BulkActionBar from './BulkActionBar.vue'
+import { serviceToRow, getActionPastParticiple } from './helpers'
 import type { ContainerTableRow } from './helpers'
 import type { DiscoveredItem } from '@/types/api'
 import type { ActionType } from '@/components/ui/ActionButtons.vue'
@@ -102,7 +118,7 @@ export interface DiscoveredSectionProps {
   loading: boolean
 }
 
-defineProps<DiscoveredSectionProps>()
+const props = defineProps<DiscoveredSectionProps>()
 
 const emit = defineEmits<{
   (e: 'refresh'): void
@@ -110,6 +126,80 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+
+// ── Computed rows per item (stable references for row-key) ──
+const itemRowsMap = computed(() => {
+  const map: Record<string, ContainerTableRow[]> = {}
+  for (const item of props.items) {
+    map[item.id] = (item.services ?? []).map(s => serviceToRow(s, item.target_name))
+  }
+  return map
+})
+
+// ── Per-item selection state ──
+const itemSelections = ref<Record<string, ContainerTableRow[]>>({})
+const tableRefs = ref<Record<string, { clearSelection: () => void }>>({})
+const bulkActionLoading = ref<string | null>(null)
+
+function setTableRef(itemId: string, el: any): void {
+  if (el) tableRefs.value[itemId] = el
+}
+
+function handleItemSelectionChange(itemId: string, items: ContainerTableRow[]): void {
+  itemSelections.value[itemId] = items
+}
+
+function getItemSelectedIds(itemId: string): string[] {
+  return (itemSelections.value[itemId] ?? []).map(c => c.id)
+}
+
+function clearItemSelection(itemId: string): void {
+  tableRefs.value[itemId]?.clearSelection()
+  itemSelections.value[itemId] = []
+}
+
+async function handleBulkAction(action: 'start' | 'stop' | 'restart' | 'delete', itemId: string): Promise<void> {
+  const ids = getItemSelectedIds(itemId)
+  if (ids.length === 0) return
+
+  if (action === 'delete') {
+    try {
+      await ElMessageBox.confirm(
+        `Supprimer ${ids.length} container${ids.length > 1 ? 's' : ''} ? Cette action est irréversible.`,
+        'Confirmation',
+        { confirmButtonText: 'Supprimer', cancelButtonText: 'Annuler', type: 'warning' },
+      )
+    } catch { return }
+  }
+
+  bulkActionLoading.value = action
+  let successCount = 0
+  let failCount = 0
+
+  for (const id of ids) {
+    try {
+      switch (action) {
+        case 'start': await containersApi.start(id); break
+        case 'stop': await containersApi.stop(id); break
+        case 'restart': await containersApi.restart(id); break
+        case 'delete': await containersApi.remove(id); break
+      }
+      successCount++
+    } catch { failCount++ }
+  }
+
+  if (failCount === 0) {
+    ElMessage.success(`${successCount} container${successCount > 1 ? 's' : ''} ${getActionPastParticiple(action as 'start' | 'stop' | 'restart')}`)
+  } else if (successCount === 0) {
+    ElMessage.error(`Échec de l'action sur ${failCount} container${failCount > 1 ? 's' : ''}`)
+  } else {
+    ElMessage.warning(`${successCount} réussi${successCount > 1 ? 's' : ''}, ${failCount} échoué${failCount > 1 ? 's' : ''}`)
+  }
+
+  clearItemSelection(itemId)
+  bulkActionLoading.value = null
+  emit('refresh')
+}
 
 async function handleServiceAction(type: ActionType, row: ContainerTableRow, item: DiscoveredItem): Promise<void> {
   // If not adoptable, only allow navigation

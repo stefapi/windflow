@@ -16,77 +16,21 @@
 
     <template v-else-if="containers.length > 0">
       <!-- Bulk Actions Bar -->
-      <transition name="slide-down">
-        <div
-          v-if="selectedIds.length > 0"
-          class="flex justify-between items-center px-4 py-3 mb-4 bg-[var(--color-accent-light)] border border-[var(--color-accent)] rounded-lg"
-        >
-          <div class="flex items-center gap-3">
-            <el-tag
-              type="primary"
-              effect="dark"
-            >
-              {{ selectedIds.length }} sélectionné{{ selectedIds.length > 1 ? 's' : '' }}
-            </el-tag>
-            <el-button
-              text
-              size="small"
-              @click="clearSelection"
-            >
-              Annuler la sélection
-            </el-button>
-          </div>
-          <div class="flex items-center gap-2">
-            <el-button
-              size="small"
-              :loading="bulkActionLoading === 'start'"
-              @click="handleBulkAction('start')"
-            >
-              <el-icon class="el-icon--left">
-                <VideoPlay />
-              </el-icon>
-              Démarrer
-            </el-button>
-            <el-button
-              size="small"
-              :loading="bulkActionLoading === 'stop'"
-              @click="handleBulkAction('stop')"
-            >
-              <el-icon class="el-icon--left">
-                <VideoPause />
-              </el-icon>
-              Arrêter
-            </el-button>
-            <el-button
-              size="small"
-              :loading="bulkActionLoading === 'restart'"
-              @click="handleBulkAction('restart')"
-            >
-              <el-icon class="el-icon--left">
-                <RefreshRight />
-              </el-icon>
-              Redémarrer
-            </el-button>
-            <el-button
-              type="danger"
-              size="small"
-              :loading="bulkActionLoading === 'delete'"
-              @click="showBulkDeleteDialog"
-            >
-              <el-icon class="el-icon--left">
-                <Delete />
-              </el-icon>
-              Supprimer
-            </el-button>
-          </div>
-        </div>
-      </transition>
+      <BulkActionBar
+        :selected-count="selectedIds.length"
+        :loading-action="bulkActionLoading"
+        @start="handleBulkAction('start')"
+        @stop="handleBulkAction('stop')"
+        @restart="handleBulkAction('restart')"
+        @delete="showBulkDeleteDialog"
+        @cancel="clearSelection"
+      />
 
       <!-- Container Table -->
       <ContainerTable
         ref="tableRef"
-        :items="containers.map(standaloneToRow)"
-        :columns="['selection', 'name', 'image', 'target', 'status', 'uptime', 'ports', 'cpuMemory', 'actions']"
+        :items="tableRows"
+        :columns="['name', 'image', 'status', 'cpu', 'memory', 'uptime', 'ports', 'actions']"
         :selectable="true"
         :show-actions="true"
         @action="handleAction"
@@ -157,9 +101,9 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { VideoPlay, VideoPause, RefreshRight, Delete } from '@element-plus/icons-vue'
 import { containersApi } from '@/services/api'
 import ContainerTable from './ContainerTable.vue'
+import BulkActionBar from './BulkActionBar.vue'
 import { standaloneToRow, getActionPastParticiple } from './helpers'
 import type { ContainerTableRow } from './helpers'
 import type { StandaloneContainer } from '@/types/api'
@@ -180,6 +124,9 @@ const router = useRouter()
 
 // Table ref — typed as any to avoid generic constraint issues with defineExpose
 const tableRef = ref<{ clearSelection: () => void }>()
+
+// Computed table rows — stable references for el-table row-key
+const tableRows = computed(() => props.containers.map(standaloneToRow))
 
 // Selection state
 const selectedContainers = ref<ContainerTableRow[]>([])

@@ -39,7 +39,6 @@ export type ColumnKey =
   | 'memory'
   | 'uptime'
   | 'ports'
-  | 'cpuMemory'
   | 'actions'
 
 /** Default visible columns when none specified */
@@ -59,6 +58,9 @@ export function serviceToRow(service: ServiceWithMetrics, targetName?: string): 
     cpuPercent: service.cpu_percent,
     memoryUsage: service.memory_usage,
     targetName,
+    uptime: service.uptime ?? null,
+    ports: service.ports ?? [],
+    healthStatus: service.health_status ?? null,
   }
 }
 
