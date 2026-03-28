@@ -11,7 +11,6 @@ _(vide)_
 ## 📋 BACKLOG (À faire)
 
 ### EPIC-008 : Couverture Frontend des APIs Backend (Qualité — Q1 2026)
-- [ ] STORY-003 : Wizard d'adoption d'objets découverts
 - [ ] STORY-004 : Actions globales de stack (Start/Stop/Redeploy)
 - [ ] STORY-005 : Gestion des images Docker - Liste et visualisation
 - [ ] STORY-006 : Gestion des images Docker - Pull et suppression
@@ -43,4 +42,5 @@ _(vide)_
 - [x] STORY-002 : Backend — Refactoring des services de listage Docker
 - [x] STORY-022 : Frontend — Refactoring de Compute.vue en sous-composants
 - [x] STORY-023 : Frontend — Harmonisation tables containers et actions en masse
+- [x] STORY-003 : Wizard d'adoption d'objets découverts
 

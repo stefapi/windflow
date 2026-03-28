@@ -597,3 +597,83 @@ export interface ComputeStatsResponse {
   standalone_targets_count: number
   targets_count: number
 }
+
+// Discovery / Adoption types (STORY-003)
+export type VolumeStrategy = 'keep_existing' | 'create_named' | 'bind_mount'
+export type NetworkStrategy = 'keep_existing' | 'create_new'
+
+export interface AdoptionEnvVar {
+  key: string
+  value: string
+  is_secret: boolean
+}
+
+export interface AdoptionVolume {
+  source?: string | null
+  destination: string
+  mode: string
+  type: string
+}
+
+export interface AdoptionNetwork {
+  name: string
+  driver: string
+  is_default: boolean
+}
+
+export interface AdoptionPortMapping {
+  host_ip: string
+  host_port: number
+  container_port: number
+  protocol: string
+}
+
+export interface AdoptionServiceData {
+  name: string
+  image: string
+  status: string
+  env_vars: AdoptionEnvVar[]
+  volumes: AdoptionVolume[]
+  networks: AdoptionNetwork[]
+  ports: AdoptionPortMapping[]
+  cpu_percent: number
+  memory_usage: string
+}
+
+export interface AdoptionWizardData {
+  discovered_id: string
+  name: string
+  type: 'container' | 'composition' | 'helm_release'
+  technology: string
+  target_id: string
+  target_name: string
+  services: AdoptionServiceData[]
+  generated_compose: string | null
+  volumes_strategy_options: string[]
+  networks_strategy_options: string[]
+}
+
+export interface HelmOptions {
+  namespace: string
+  release_name: string
+  values_overrides: Record<string, unknown>
+}
+
+export interface AdoptionRequest {
+  discovered_id: string
+  type: 'container' | 'composition' | 'helm_release'
+  stack_name: string
+  volume_strategy: VolumeStrategy
+  network_strategy: NetworkStrategy
+  target_id?: string | null
+  helm_options?: HelmOptions | null
+  compose_content?: string | null
+}
+
+export interface AdoptionResponse {
+  success: boolean
+  stack_id?: string | null
+  stack_name?: string | null
+  deployment_id?: string | null
+  message: string
+}

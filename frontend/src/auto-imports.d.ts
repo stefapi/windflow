@@ -44,6 +44,7 @@ declare global {
   const defineStore: typeof import('pinia')['defineStore']
   const deploymentEvents: typeof import('./services/websocket')['deploymentEvents']
   const deploymentsApi: typeof import('./services/api')['deploymentsApi']
+  const discoveryApi: typeof import('./services/api')['discoveryApi']
   const eagerComputed: typeof import('@vueuse/core')['eagerComputed']
   const effectScope: typeof import('vue')['effectScope']
   const eventHelpers: typeof import('./services/websocket')['eventHelpers']
@@ -386,6 +387,7 @@ declare module 'vue' {
     readonly defineStore: UnwrapRef<typeof import('pinia')['defineStore']>
     readonly deploymentEvents: UnwrapRef<typeof import('./services/websocket')['deploymentEvents']>
     readonly deploymentsApi: UnwrapRef<typeof import('./services/api')['deploymentsApi']>
+    readonly discoveryApi: UnwrapRef<typeof import('./services/api')['discoveryApi']>
     readonly eagerComputed: UnwrapRef<typeof import('@vueuse/core')['eagerComputed']>
     readonly effectScope: UnwrapRef<typeof import('vue')['effectScope']>
     readonly eventHelpers: UnwrapRef<typeof import('./services/websocket')['eventHelpers']>

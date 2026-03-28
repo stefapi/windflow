@@ -38,6 +38,9 @@ import type {
   ComputeStatsResponse,
   ComputeGlobalView,
   TargetGroup,
+  AdoptionWizardData,
+  AdoptionRequest,
+  AdoptionResponse,
 } from '@/types/api'
 
 // Auth API
@@ -299,6 +302,22 @@ export const computeApi = {
     }),
 }
 
+// Discovery / Adoption API
+export const discoveryApi = {
+  getAdoptionData: (
+    itemType: 'container' | 'composition' | 'helm_release',
+    itemId: string,
+    organizationId?: string,
+  ) =>
+    http.get<AdoptionWizardData>(
+      `/discovery/${itemType}/${encodeURIComponent(itemId)}/adoption-data`,
+      { params: organizationId ? { organization_id: organizationId } : {} },
+    ),
+
+  adopt: (data: AdoptionRequest) =>
+    http.post<AdoptionResponse>('/discovery/adopt', data),
+}
+
 export default {
   auth: authApi,
   users: usersApi,
@@ -311,4 +330,5 @@ export default {
   schedules: schedulesApi,
   containers: containersApi,
   compute: computeApi,
+  discovery: discoveryApi,
 }

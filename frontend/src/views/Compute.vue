@@ -117,6 +117,7 @@
         :items="visibleDiscoveredItems"
         :loading="computeStore.loading"
         @refresh="refreshGlobal"
+        @adopt="openAdoptionWizard"
       />
 
       <StandaloneSection
@@ -132,6 +133,15 @@
       v-if="groupByTarget"
       :groups="filteredTargetGroups"
       :loading="computeStore.loading"
+    />
+
+    <!-- Adoption Wizard -->
+    <AdoptionWizard
+      v-model="adoptionWizardVisible"
+      :item-type="adoptionWizardItemType"
+      :item-id="adoptionWizardItemId"
+      :item-name="adoptionWizardItemName"
+      @adopted="onAdopted"
     />
 
     <!-- H. Légende -->
@@ -170,8 +180,9 @@ import {
   DiscoveredSection,
   StandaloneSection,
   TargetGroupView,
+  AdoptionWizard,
 } from '@/components/compute'
-import type { ControlLevel } from '@/types/api'
+import type { ControlLevel, AdoptionResponse } from '@/types/api'
 
 const computeStore = useComputeStore()
 const targetsStore = useTargetsStore()
@@ -251,6 +262,29 @@ function toggleTarget(targetId: string): void {
   } else {
     activeTargets.value.splice(idx, 1)
   }
+}
+
+// ─── Adoption Wizard ─────────────────────────────────────────────────────────
+
+const adoptionWizardVisible = ref(false)
+const adoptionWizardItemType = ref<'container' | 'composition' | 'helm_release'>('composition')
+const adoptionWizardItemId = ref('')
+const adoptionWizardItemName = ref('')
+
+function openAdoptionWizard(discoveredId: string): void {
+  // Trouver l'item dans les discovered items pour récupérer le type et le nom
+  const item = computeStore.discoveredItems.find(d => d.id === discoveredId)
+  if (!item) return
+
+  adoptionWizardItemType.value = item.type
+  adoptionWizardItemId.value = discoveredId
+  adoptionWizardItemName.value = item.name
+  adoptionWizardVisible.value = true
+}
+
+function onAdopted(_response: AdoptionResponse): void {
+  // Rafraîchir les données après adoption
+  refreshGlobal()
 }
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
