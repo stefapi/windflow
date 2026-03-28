@@ -32,6 +32,8 @@ def _make_container(
     image: str = "nginx:latest",
     state: str = "running",
     labels: dict | None = None,
+    status: str | None = None,
+    ports: list | None = None,
 ) -> MagicMock:
     """Crée un ContainerInfo mocké."""
     c = MagicMock()
@@ -40,6 +42,10 @@ def _make_container(
     c.image = image
     c.state = state
     c.labels = labels or {}
+    # status et ports doivent être des strings/lists réels (pas MagicMock)
+    # pour que extract_uptime/parse_ports fonctionnent correctement
+    c.status = status or ("Up 2 hours" if state == "running" else "Exited (0) 3 minutes ago")
+    c.ports = ports or []
     return c
 
 

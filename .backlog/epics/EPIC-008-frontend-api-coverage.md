@@ -205,7 +205,7 @@ Fonctionnalités avancées :
 
 - [x] STORY-001 : Backend — Endpoints Compute Stats et Global
 - [x] STORY-021 : Frontend — Vue globale Compute avec bandeau et 3 sections
-- [ ] STORY-002 : Backend — Refactoring des services de listage Docker
+- [x] STORY-002 : Backend — Refactoring des services de listage Docker
 - [ ] STORY-022 : Frontend — Refactoring de Compute.vue en sous-composants
 - [ ] STORY-003 : Wizard d'adoption d'objets découverts
 - [ ] STORY-004 : Actions globales de stack (Start/Stop/Redeploy)

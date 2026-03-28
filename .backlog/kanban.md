@@ -2,10 +2,15 @@
 
 ## 🏗️ IN PROGRESS (En cours)
 
+_(vide)_
+
+## 🚧 REVIEW (En attente de validation)
+
+_(vide)_
+
 ## 📋 BACKLOG (À faire)
 
 ### EPIC-008 : Couverture Frontend des APIs Backend (Qualité — Q1 2026)
-- [ ] STORY-002 : Backend — Refactoring des services de listage Docker
 - [ ] STORY-022 : Frontend — Refactoring de Compute.vue en sous-composants
 - [ ] STORY-003 : Wizard d'adoption d'objets découverts
 - [ ] STORY-004 : Actions globales de stack (Start/Stop/Redeploy)
@@ -36,4 +41,5 @@
 
 - [x] STORY-001 : Backend — Endpoints Compute Stats et Global
 - [x] STORY-021 : Frontend — Vue globale Compute avec bandeau et 3 sections
+- [x] STORY-002 : Backend — Refactoring des services de listage Docker
 

@@ -55,9 +55,13 @@ def _make_stats_response(**kwargs) -> ComputeStatsResponse:
         total_containers=10,
         running_containers=7,
         stacks_count=3,
+        stacks_running_count=2,
+        stacks_targets_count=1,
         stacks_services_count=5,
         discovered_count=2,
+        discovered_targets_count=1,
         standalone_count=1,
+        standalone_targets_count=1,
         targets_count=2,
     )
     defaults.update(kwargs)

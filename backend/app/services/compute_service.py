@@ -1,19 +1,13 @@
 """
-Service d'agrégation Compute.
+Service d'agrégation Compute — Orchestrateur.
 
-Fournit les données agrégées pour la vue globale Compute :
-- Stacks managées par WindFlow (identifiées via labels Docker windflow.managed=true)
-- Objets découverts (projets Docker Compose externes sans label WindFlow)
-- Containers standalone (ni compose ni WindFlow)
-
-Stratégie de classification (par labels Docker) :
-  windflow.managed=true                  → managed_stacks (enrichi avec données DB)
-  com.docker.compose.project (sans wf)   → discovered_items (groupés par projet)
-  aucun des deux                         → standalone_containers
+Délègue la classification, la construction et le filtrage aux modules spécialisés :
+- container_classifier : classification des containers par labels
+- container_builder : construction des objets domaine Pydantic
+- compute_helpers : utilitaires (formatage, filtrage)
 """
 
 import logging
-from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional, Union
 
@@ -21,129 +15,31 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..models.deployment import Deployment, DeploymentStatus
 from ..models.stack import Stack
 from ..models.target import Target
 from ..schemas.compute import (
     ComputeGlobalView,
     ComputeStatsResponse,
-    ContainerPortMapping,
-    DiscoveredItem,
-    ServiceWithMetrics,
-    StackWithServices,
-    StandaloneContainer,
-    TargetGroup,
-    TargetMetrics,
 )
-from ..services.docker_client_service import DockerClientService, ContainerInfo
+from ..services.docker_client_service import DockerClientService
+from ..services.container_classifier import (
+    classify_containers,
+    LOCAL_TARGET_ID,
+    LOCAL_TARGET_NAME,
+)
+from ..services.container_builder import (
+    build_managed_stacks,
+    build_discovered_items,
+    build_standalone_containers,
+    build_target_groups,
+)
+from ..helper.compute_helpers import apply_filters
+
+# Ré-export pour compatibilité (tests existants qui importent depuis compute_service)
+from ..services.container_classifier import classify_containers as _classify_containers
+from ..helper.compute_helpers import format_memory as _format_memory
 
 logger = logging.getLogger(__name__)
-
-# Labels WindFlow posés sur les containers lors du déploiement
-LABEL_WINDFLOW_MANAGED = "windflow.managed"
-LABEL_WINDFLOW_STACK_ID = "windflow.stack_id"
-
-# Label Docker Compose standard
-LABEL_COMPOSE_PROJECT = "com.docker.compose.project"
-LABEL_COMPOSE_CONFIG_FILES = "com.docker.compose.project.config_files"
-
-# Placeholder pour la target locale (Docker sur Unix socket)
-LOCAL_TARGET_ID = "local"
-LOCAL_TARGET_NAME = "Local Docker"
-
-
-# =============================================================================
-# Helpers
-# =============================================================================
-
-
-def _format_memory(bytes_val: int) -> str:
-    """
-    Formate une valeur en bytes vers une string lisible.
-
-    Exemples : 103809024 → "99M", 1073741824 → "1G"
-    """
-    if bytes_val <= 0:
-        return "0M"
-    kb = bytes_val / 1024
-    if kb < 1024:
-        return f"{kb:.0f}K"
-    mb = kb / 1024
-    if mb < 1024:
-        return f"{mb:.0f}M"
-    gb = mb / 1024
-    return f"{gb:.1f}G"
-
-
-def _is_windflow_managed(labels: dict[str, str]) -> bool:
-    """Retourne True si le container est géré par WindFlow."""
-    return labels.get(LABEL_WINDFLOW_MANAGED, "").lower() == "true"
-
-
-def _is_compose_project(labels: dict[str, str]) -> bool:
-    """Retourne True si le container fait partie d'un projet Docker Compose."""
-    return LABEL_COMPOSE_PROJECT in labels
-
-
-def _parse_ports(ports_data: list[dict]) -> list[ContainerPortMapping]:
-    """
-    Parse les ports Docker vers ContainerPortMapping.
-
-    Docker retourne: [{"IP": "0.0.0.0", "PrivatePort": 80, "PublicPort": 8080, "Type": "tcp"}]
-    """
-    result: list[ContainerPortMapping] = []
-    for p in ports_data:
-        if p.get("PublicPort") and p.get("PrivatePort"):
-            result.append(
-                ContainerPortMapping(
-                    host_ip=p.get("IP", "0.0.0.0"),
-                    host_port=p["PublicPort"],
-                    container_port=p["PrivatePort"],
-                    protocol=p.get("Type", "tcp"),
-                )
-            )
-    return result
-
-
-def _extract_uptime(status: str) -> Optional[str]:
-    """
-    Extrait l'uptime depuis le champ status Docker.
-
-    Exemples: "Up 2 hours" -> "Up 2 hours", "Exited (0) 3 minutes ago" -> None
-    """
-    if status.startswith("Up"):
-        return status
-    return None
-
-
-def _classify_containers(
-    containers: list[ContainerInfo],
-) -> tuple[
-    dict[str, list[ContainerInfo]],  # managed: {stack_id: [containers]}
-    dict[str, list[ContainerInfo]],  # discovered: {project_name: [containers]}
-    list[ContainerInfo],             # standalone: [containers]
-]:
-    """
-    Classe les containers Docker en 3 catégories.
-
-    Returns:
-        (managed_by_stack_id, discovered_by_project, standalone_list)
-    """
-    managed: dict[str, list[ContainerInfo]] = defaultdict(list)
-    discovered: dict[str, list[ContainerInfo]] = defaultdict(list)
-    standalone: list[ContainerInfo] = []
-
-    for c in containers:
-        if _is_windflow_managed(c.labels):
-            stack_id = c.labels.get(LABEL_WINDFLOW_STACK_ID, "unknown")
-            managed[stack_id].append(c)
-        elif _is_compose_project(c.labels):
-            project = c.labels[LABEL_COMPOSE_PROJECT]
-            discovered[project].append(c)
-        else:
-            standalone.append(c)
-
-    return dict(managed), dict(discovered), standalone
 
 
 async def _get_local_target(db: AsyncSession, org_id: Optional[str]) -> tuple[str, str]:
@@ -162,11 +58,6 @@ async def _get_local_target(db: AsyncSession, org_id: Optional[str]) -> tuple[st
     if target:
         return target.id, target.name
     return LOCAL_TARGET_ID, LOCAL_TARGET_NAME
-
-
-# =============================================================================
-# Fonctions principales
-# =============================================================================
 
 
 async def get_compute_stats(
@@ -215,7 +106,7 @@ async def get_compute_stats(
             containers = await docker.list_containers(all=True)
             await docker.close()
 
-            managed, discovered, standalone_list = _classify_containers(containers)
+            managed, discovered, standalone_list = classify_containers(containers)
 
             total_containers = len(containers)
             running_containers = sum(1 for c in containers if c.state == "running")
@@ -224,17 +115,13 @@ async def get_compute_stats(
             standalone_count = len(standalone_list)
 
             # Calcul des stacks running et targets distinctes
-            # Une stack est "running" si tous ses containers sont en état "running"
             stack_target_ids: set[str] = set()
             for stack_id, stack_containers in managed.items():
                 if stack_containers:
-                    # Vérifier si tous les containers de cette stack sont running
                     all_running = all(c.state == "running" for c in stack_containers)
                     if all_running:
                         stacks_running_count += 1
-                    # Collecter les target_ids distincts (depuis les labels ou local)
                     for c in stack_containers:
-                        # Le target_id peut être dans les labels ou on utilise "local"
                         t_id = c.labels.get("windflow.target_id", LOCAL_TARGET_ID)
                         stack_target_ids.add(t_id)
             stacks_targets_count = len(stack_target_ids)
@@ -283,7 +170,7 @@ async def get_compute_global(
     status_filter: Optional[str] = None,
     search: Optional[str] = None,
     group_by: str = "stack",
-) -> Union[ComputeGlobalView, list[TargetGroup]]:
+) -> Union[ComputeGlobalView, list]:
     """
     Retourne la vue globale des ressources compute.
 
@@ -304,9 +191,7 @@ async def get_compute_global(
     Returns:
         ComputeGlobalView ou list[TargetGroup] selon group_by
     """
-    # =========================================================================
     # 1. Récupérer les stacks DB avec leurs deployments actifs
-    # =========================================================================
     stacks_stmt = (
         select(Stack)
         .options(selectinload(Stack.deployments))
@@ -323,230 +208,62 @@ async def get_compute_global(
     targets_result = await db.execute(targets_stmt)
     targets_by_id: dict[str, Target] = {t.id: t for t in targets_result.scalars().all()}
 
-    # =========================================================================
     # 2. Récupérer les containers Docker (graceful degradation)
-    # =========================================================================
-    docker_containers: list[ContainerInfo] = []
+    docker_containers: list = []
     docker_available = False
 
     try:
         docker = DockerClientService()
         if await docker.ping():
+            from ..services.docker_client_service import ContainerInfo
             docker_containers = await docker.list_containers(all=True)
             docker_available = True
         await docker.close()
     except Exception as exc:
         logger.warning(f"Docker non disponible, vue partielle : {exc}")
 
-    # =========================================================================
     # 3. Classifier les containers Docker
-    # =========================================================================
-    managed_by_stack_id: dict[str, list[ContainerInfo]] = {}
-    discovered_by_project: dict[str, list[ContainerInfo]] = {}
-    standalone_containers_raw: list[ContainerInfo] = []
+    managed_by_stack_id: dict = {}
+    discovered_by_project: dict = {}
+    standalone_containers_raw: list = []
 
     if docker_available:
         managed_by_stack_id, discovered_by_project, standalone_containers_raw = (
-            _classify_containers(docker_containers)
+            classify_containers(docker_containers)
         )
 
-    # =========================================================================
-    # 4. Construire les StackWithServices (depuis DB, enrichies avec Docker)
-    # =========================================================================
+    # 4. Construire les objets domaine via les builders
     local_target_id, local_target_name = await _get_local_target(db, org_id)
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    managed_stacks: list[StackWithServices] = []
+    managed_stacks = build_managed_stacks(
+        db_stacks, managed_by_stack_id, targets_by_id,
+        local_target_id, local_target_name,
+    )
 
-    for stack in db_stacks:
-        # Trouver le déploiement le plus récent pour obtenir la target
-        active_deployment = _get_latest_active_deployment(stack.deployments)
-        if active_deployment and active_deployment.target_id in targets_by_id:
-            t = targets_by_id[active_deployment.target_id]
-            s_target_id = t.id
-            s_target_name = t.name
-        else:
-            s_target_id = local_target_id
-            s_target_name = local_target_name
+    discovered_items = build_discovered_items(
+        discovered_by_project, local_target_id, local_target_name, now_iso,
+    )
 
-        # Containers actifs de cette stack (via labels)
-        stack_containers = managed_by_stack_id.get(stack.id, [])
-        services = [
-            ServiceWithMetrics(
-                id=c.id,
-                name=c.name,
-                image=c.image,
-                status=c.state,
-                cpu_percent=0.0,
-                memory_usage="0M",
-            )
-            for c in stack_containers
-        ]
-        services_total = len(stack_containers)
-        services_running = sum(1 for c in stack_containers if c.state == "running")
+    standalone_list = await build_standalone_containers(
+        standalone_containers_raw, local_target_id, local_target_name,
+        docker_available,
+    )
 
-        # Statut dérivé
-        if services_total == 0:
-            computed_status: str = "stopped"
-        elif services_running == services_total:
-            computed_status = "running"
-        elif services_running > 0:
-            computed_status = "partial"
-        else:
-            computed_status = "stopped"
+    # 5. Appliquer les filtres
+    managed_stacks, discovered_items, standalone_list = apply_filters(
+        managed_stacks, discovered_items, standalone_list,
+        type_filter=type_filter,
+        technology=technology,
+        target_id_filter=target_id_filter,
+        status_filter=status_filter,
+        search=search,
+    )
 
-        # Normaliser la technologie (docker_compose → docker-compose)
-        raw_tech = stack.target_type or "windflow"
-        normalized_tech = "docker-compose" if raw_tech == "docker_compose" else raw_tech
-
-        managed_stacks.append(
-            StackWithServices(
-                id=stack.id,
-                name=stack.name,
-                technology=normalized_tech,
-                target_id=s_target_id,
-                target_name=s_target_name,
-                services_total=services_total,
-                services_running=services_running,
-                status=computed_status,  # type: ignore[arg-type]
-                services=services,
-            )
-        )
-
-    # =========================================================================
-    # 5. Construire les DiscoveredItem (projets Compose externes)
-    # =========================================================================
-    discovered_items: list[DiscoveredItem] = []
-
-    for project_name, containers in discovered_by_project.items():
-        total = len(containers)
-        running = sum(1 for c in containers if c.state == "running")
-        source_path = None
-        # Essayer d'extraire le chemin depuis le premier container
-        if containers:
-            source_path = containers[0].labels.get(LABEL_COMPOSE_CONFIG_FILES)
-
-        discovered_items.append(
-            DiscoveredItem(
-                id=f"compose:{project_name}@{local_target_id}",
-                name=project_name,
-                type="composition",
-                technology="docker-compose",
-                source_path=source_path,
-                target_id=local_target_id,
-                target_name=local_target_name,
-                services_total=total,
-                services_running=running,
-                detected_at=now_iso,
-                adoptable=True,
-                services=[
-                    ServiceWithMetrics(
-                        id=c.id,
-                        name=c.name,
-                        image=c.image,
-                        status=c.state,
-                        cpu_percent=0.0,
-                        memory_usage="0M",
-                    )
-                    for c in containers
-                ],
-            )
-        )
-
-    # =========================================================================
-    # 6. Construire les StandaloneContainer avec uptime, ports et health
-    # =========================================================================
-    standalone_list: list[StandaloneContainer] = []
-
-    # On garde le client Docker ouvert pour les inspections de health
-    docker_for_health: Optional[DockerClientService] = None
-    if docker_available and standalone_containers_raw:
-        try:
-            docker_for_health = DockerClientService()
-            if not await docker_for_health.ping():
-                await docker_for_health.close()
-                docker_for_health = None
-        except Exception:
-            docker_for_health = None
-
-    for c in standalone_containers_raw:
-        # Parser les ports
-        ports = _parse_ports(c.ports)
-
-        # Extraire l'uptime depuis le status Docker
-        uptime = _extract_uptime(c.status)
-
-        # Récupérer le health status seulement si running
-        health_status: Optional[str] = None
-        if c.state == "running" and docker_for_health:
-            try:
-                detail = await docker_for_health.inspect_container(c.id)
-                state_info = detail.get("State", {})
-                health_info = state_info.get("Health", {})
-                if health_info:
-                    health_status = health_info.get("Status")  # healthy, unhealthy, starting
-            except Exception as e:
-                logger.debug(f"Impossible d'inspecter le container {c.id}: {e}")
-
-        standalone_list.append(
-            StandaloneContainer(
-                id=c.id,
-                name=c.name,
-                image=c.image,
-                target_id=local_target_id,
-                target_name=local_target_name,
-                status=c.state,
-                cpu_percent=0.0,
-                memory_usage="0M",
-                uptime=uptime,
-                ports=ports,
-                health_status=health_status,
-            )
-        )
-
-    # Fermer le client Docker d'inspection
-    if docker_for_health:
-        await docker_for_health.close()
-
-    # =========================================================================
-    # 7. Appliquer les filtres
-    # =========================================================================
-    if type_filter:
-        if type_filter == "managed":
-            discovered_items = []
-            standalone_list = []
-        elif type_filter == "discovered":
-            managed_stacks = []
-            standalone_list = []
-        elif type_filter == "standalone":
-            managed_stacks = []
-            discovered_items = []
-
-    if search:
-        search_lower = search.lower()
-        managed_stacks = [s for s in managed_stacks if search_lower in s.name.lower()]
-        discovered_items = [d for d in discovered_items if search_lower in d.name.lower()]
-        standalone_list = [c for c in standalone_list if search_lower in c.name.lower()]
-
-    if status_filter:
-        managed_stacks = [s for s in managed_stacks if s.status == status_filter]
-        standalone_list = [c for c in standalone_list if c.status == status_filter]
-
-    if target_id_filter:
-        managed_stacks = [s for s in managed_stacks if s.target_id == target_id_filter]
-        discovered_items = [d for d in discovered_items if d.target_id == target_id_filter]
-        standalone_list = [c for c in standalone_list if c.target_id == target_id_filter]
-
-    if technology:
-        managed_stacks = [s for s in managed_stacks if s.technology == technology]
-        discovered_items = [d for d in discovered_items if d.technology == technology]
-
-    # =========================================================================
-    # 8. Retourner selon group_by
-    # =========================================================================
+    # 6. Retourner selon group_by
     if group_by == "target":
-        return _build_target_groups(
-            managed_stacks, discovered_items, standalone_list, targets_by_id
+        return build_target_groups(
+            managed_stacks, discovered_items, standalone_list, targets_by_id,
         )
 
     return ComputeGlobalView(
@@ -554,65 +271,3 @@ async def get_compute_global(
         discovered_items=discovered_items,
         standalone_containers=standalone_list,
     )
-
-
-# =============================================================================
-# Helpers privés
-# =============================================================================
-
-
-def _get_latest_active_deployment(
-    deployments: list[Deployment],
-) -> Optional[Deployment]:
-    """Retourne le déploiement le plus récent qui n'est pas STOPPED/FAILED."""
-    active = [
-        d for d in deployments
-        if d.status not in (DeploymentStatus.STOPPED, DeploymentStatus.FAILED)
-    ]
-    if not active:
-        # Fallback : le plus récent même si stopped
-        all_sorted = sorted(deployments, key=lambda d: d.created_at, reverse=True)
-        return all_sorted[0] if all_sorted else None
-    return sorted(active, key=lambda d: d.created_at, reverse=True)[0]
-
-
-def _build_target_groups(
-    managed_stacks: list[StackWithServices],
-    discovered_items: list[DiscoveredItem],
-    standalone_list: list[StandaloneContainer],
-    targets_by_id: dict[str, "Target"],
-) -> list[TargetGroup]:
-    """
-    Regroupe toutes les ressources par target.
-
-    Les ressources Docker locales non associées à une target DB sont regroupées
-    sous le groupe "local".
-    """
-    groups: dict[str, TargetGroup] = {}
-
-    def _get_or_create_group(tid: str, tname: str) -> TargetGroup:
-        if tid not in groups:
-            tech = "docker"
-            if tid in targets_by_id:
-                tech = targets_by_id[tid].type.value if hasattr(targets_by_id[tid].type, "value") else str(targets_by_id[tid].type)
-            groups[tid] = TargetGroup(
-                target_id=tid,
-                target_name=tname,
-                technology=tech,
-                metrics=TargetMetrics(),
-            )
-        return groups[tid]
-
-    for stack in managed_stacks:
-        grp = _get_or_create_group(stack.target_id, stack.target_name)
-        grp.stacks.append(stack)
-
-    for item in discovered_items:
-        grp = _get_or_create_group(item.target_id, item.target_name)
-        grp.discovered.append(item)
-
-    for container in standalone_list:
-        grp = _get_or_create_group(container.target_id, container.target_name)
-        grp.standalone.append(container)
-
-    return list(groups.values())
