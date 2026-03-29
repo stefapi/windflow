@@ -110,6 +110,24 @@ class ToolInfo(BaseModel):
     )
 
 
+class SocketInfo(BaseModel):
+    """Information about a detected Unix socket."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    path: str = Field(..., description="Absolute path of the Unix socket")
+    exists: bool = Field(
+        default=False, description="Whether the socket file exists on the filesystem"
+    )
+    accessible: bool = Field(
+        default=False, description="Whether the socket is readable/writable by current user"
+    )
+    mode: str = Field(
+        default="system",
+        description="Socket mode: 'system' (root), 'rootless', or 'session'",
+    )
+
+
 class DockerComposeInfo(BaseModel):
     """Docker Compose capability information."""
 
@@ -164,11 +182,37 @@ class DockerCapabilities(BaseModel):
         default=False,
         description="Indicates whether Docker socket is accessible to the user",
     )
+    socket: Optional[SocketInfo] = Field(
+        default=None, description="Unix socket information for Docker daemon"
+    )
     compose: Optional[DockerComposeInfo] = Field(
         default=None, description="Docker Compose capability details"
     )
     swarm: Optional[DockerSwarmInfo] = Field(
         default=None, description="Docker Swarm capability details"
+    )
+
+
+class ContainerRuntimeInfo(BaseModel):
+    """Detailed information about a container runtime (LXC/LXD/Incus)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    available: bool = Field(
+        ..., description="Indicates whether the runtime is installed"
+    )
+    version: Optional[str] = Field(
+        default=None, description="Detected version string"
+    )
+    socket: Optional[SocketInfo] = Field(
+        default=None, description="Unix socket information when applicable"
+    )
+    install_method: Optional[str] = Field(
+        default=None,
+        description="How the tool was installed: 'package', 'snap', 'binary', etc.",
+    )
+    details: Optional[Dict[str, Any]] = Field(
+        default=None, description="Additional runtime-specific information"
     )
 
 
@@ -195,6 +239,18 @@ class ScanResult(BaseModel):
     )
     kubernetes: Dict[str, ToolInfo] = Field(
         default_factory=dict, description="Kubernetes related tooling capabilities"
+    )
+    container_runtimes: Dict[str, ContainerRuntimeInfo] = Field(
+        default_factory=dict,
+        description="Container runtimes detected (LXC, LXD, Incus, containerd, etc.)",
+    )
+    oci_tools: Dict[str, ToolInfo] = Field(
+        default_factory=dict,
+        description="OCI low-level tools (runc, crun, buildah, skopeo)",
+    )
+    discovered_sockets: Dict[str, SocketInfo] = Field(
+        default_factory=dict,
+        description="Unified map of all discovered Unix sockets keyed by tool name",
     )
     errors: List[str] = Field(
         default_factory=list,

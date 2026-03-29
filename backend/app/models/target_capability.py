@@ -23,22 +23,42 @@ class CapabilityType(str, Enum):
 
     # Virtualisation
     LIBVIRT = "libvirt"
+    VIRSH = "virsh"
     VIRTUALBOX = "virtualbox"
     VAGRANT = "vagrant"
     PROXMOX = "proxmox"
     QEMU_KVM = "qemu_kvm"
+    MULTIPASS = "multipass"
 
-    # Conteneurisation
+    # Conteneurisation — Docker
     DOCKER = "docker"
     DOCKER_COMPOSE = "docker_compose"
     DOCKER_SWARM = "docker_swarm"
+
+    # Conteneurisation — Podman
     PODMAN = "podman"
+    PODMAN_COMPOSE = "podman_compose"
+
+    # Conteneurisation — Système (LXC/LXD/Incus)
+    LXC = "lxc"
+    LXD = "lxd"
+    INCUS = "incus"
+
+    # Runtimes OCI bas niveau
+    RUNC = "runc"
+    CRUN = "crun"
+    CONTAINERD = "containerd"
+
+    # Outils OCI
+    BUILDAH = "buildah"
+    SKOPEO = "skopeo"
 
     # Kubernetes / Orchestration
     KUBECTL = "kubectl"
     KUBEADM = "kubeadm"
     K3S = "k3s"
     MICROK8S = "microk8s"
+    HELM = "helm"
 
 
 class TargetCapability(Base):

@@ -2,13 +2,14 @@
 Service for scanning deployment targets capabilities (local or remote).
 
 Provides detection of virtualization, container, and orchestration tooling,
-including hardware platform information.
+including hardware platform information, socket topology, and CLI availability.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -32,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.target import Target
 from ..models.target_capability import CapabilityType
 from ..schemas.target_scan import (
+    ContainerRuntimeInfo,
     DockerCapabilities,
     DockerComposeInfo,
     DockerSwarmInfo,
@@ -40,6 +42,7 @@ from ..schemas.target_scan import (
     PlatformInfo,
     ScanRequest,
     ScanResult,
+    SocketInfo,
     ToolInfo,
 )
 from .target_service import TargetService
@@ -207,11 +210,144 @@ Parser = Callable[[str], Dict[str, Any]]
 T = TypeVar("T")
 
 
+# ---------------------------------------------------------------------------
+# Socket topology
+# ---------------------------------------------------------------------------
+
+class SocketProbe:
+    """Centralized socket path definitions and probing utilities.
+
+    Maps every container/VM tool to its possible Unix socket locations,
+    covering system (root), rootless (user), session, and snap variants.
+    """
+
+    SOCKET_PATHS: Dict[str, Dict[str, List[str]]] = {
+        "docker": {
+            "system": ["/var/run/docker.sock"],
+            "rootless": ["/run/user/{uid}/docker.sock"],
+        },
+        "podman": {
+            "system": ["/run/podman/podman.sock"],
+            "rootless": ["/run/user/{uid}/podman/podman.sock"],
+        },
+        "lxd": {
+            "system": [
+                "/var/lib/lxd/unix.socket",
+                "/var/snap/lxd/common/lxd/unix.socket",
+            ],
+        },
+        "incus": {
+            "system": [
+                "/var/lib/incus/unix.socket",
+                "/var/snap/incus/common/incus/unix.socket",
+            ],
+        },
+        "libvirt": {
+            "system": ["/var/run/libvirt/libvirt-sock"],
+            "session": ["/run/user/{uid}/libvirt/libvirt-sock"],
+        },
+        "lxc": {
+            "system": ["/run/lxc.socket"],
+        },
+        "containerd": {
+            "system": [
+                "/run/containerd/containerd.sock",
+                "/run/k3s/containerd/containerd.sock",
+            ],
+        },
+    }
+
+    @classmethod
+    def _resolve_uid_paths(cls, paths: List[str]) -> List[str]:
+        """Replace ``{uid}`` placeholders with the current UID."""
+        uid = os.getuid()
+        return [p.format(uid=uid) for p in paths]
+
+    @classmethod
+    async def probe(
+        cls,
+        executor: CommandExecutor,
+        tool: str,
+        timeout: int = 5,
+    ) -> Optional[SocketInfo]:
+        """Probe socket paths for *tool* and return the first match.
+
+        Tries system paths first, then rootless/session paths.
+        Returns a :class:`SocketInfo` even when the socket exists but is not
+        readable by the current user (``exists=True, accessible=False``).
+        This is important for tools like LXD/Incus whose control sockets are
+        group-owned (``lxd``, ``incus``) and may not be readable.
+        """
+        paths_by_mode = cls.SOCKET_PATHS.get(tool)
+        if not paths_by_mode:
+            return None
+
+        # Order: system → rootless → session
+        probe_order: List[Tuple[str, List[str]]] = []
+        for mode in ("system", "rootless", "session"):
+            raw = paths_by_mode.get(mode)
+            if raw:
+                resolved = cls._resolve_uid_paths(raw) if "{uid}" in str(raw) else raw
+                probe_order.append((mode, resolved))
+
+        for mode, paths in probe_order:
+            for socket_path in paths:
+                # Step 1: check if the socket file exists
+                exists_result = await executor.run(
+                    f"test -S {socket_path}",
+                    timeout=timeout,
+                )
+                if not exists_result.success:
+                    continue
+
+                # Socket exists — check readability
+                accessible_result = await executor.run(
+                    f"test -r {socket_path}",
+                    timeout=timeout,
+                )
+                return SocketInfo(
+                    path=socket_path,
+                    exists=True,
+                    accessible=accessible_result.success,
+                    mode=mode,
+                )
+        return None
+
+    @classmethod
+    async def probe_local(cls, tool: str) -> Optional[SocketInfo]:
+        """Fast local-only probe (no subprocess, just ``Path`` checks).
+
+        Returns a :class:`SocketInfo` even when the socket exists but is not
+        readable by the current user.
+        """
+        paths_by_mode = cls.SOCKET_PATHS.get(tool)
+        if not paths_by_mode:
+            return None
+
+        for mode in ("system", "rootless", "session"):
+            raw = paths_by_mode.get(mode)
+            if not raw:
+                continue
+            resolved = cls._resolve_uid_paths(raw) if "{uid}" in str(raw) else raw
+            for socket_path in resolved:
+                p = Path(socket_path)
+                if p.is_socket():
+                    return SocketInfo(
+                        path=socket_path,
+                        exists=True,
+                        accessible=os.access(socket_path, os.R_OK),
+                        mode=mode,
+                    )
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Environment detector
+# ---------------------------------------------------------------------------
+
 class ContainerEnvironmentDetector:
     """Detects runtime environment characteristics."""
 
-    _DOCKER_SOCKET = Path("/var/run/docker.sock")
-    _LIBVIRT_SOCKET = Path("/var/run/libvirt/libvirt-sock")
     _DOCKERENV = Path("/.dockerenv")
 
     @staticmethod
@@ -228,16 +364,10 @@ class ContainerEnvironmentDetector:
         except FileNotFoundError:  # pragma: no cover - uncommon
             return False
 
-    @staticmethod
-    def has_docker_socket() -> bool:
-        """Checks whether the Docker socket is available."""
-        return ContainerEnvironmentDetector._DOCKER_SOCKET.exists()
 
-    @staticmethod
-    def has_libvirt_socket() -> bool:
-        """Checks whether the libvirt socket is available."""
-        return ContainerEnvironmentDetector._LIBVIRT_SOCKET.exists()
-
+# ---------------------------------------------------------------------------
+# Docker socket client
+# ---------------------------------------------------------------------------
 
 class DockerSocketClient:
     """Collects Docker capabilities through the mounted Unix socket."""
@@ -316,6 +446,10 @@ class DockerSocketClient:
             available=available, active=active, node_role=node_role, details=swarm_info
         )
 
+
+# ---------------------------------------------------------------------------
+# Libvirt socket client
+# ---------------------------------------------------------------------------
 
 class LibvirtSocketClient:
     """Collects libvirt (KVM/QEMU) capabilities via the libvirt socket."""
@@ -404,6 +538,10 @@ class LibvirtSocketClient:
         return f"{major}.{minor}.{patch}"
 
 
+# ---------------------------------------------------------------------------
+# Main scanner service
+# ---------------------------------------------------------------------------
+
 class TargetScannerService:
     """Service capable of scanning deployment targets for capabilities."""
 
@@ -416,18 +554,8 @@ class TargetScannerService:
         Returns:
             ScanResult: Detected capabilities for localhost.
         """
-        detector = ContainerEnvironmentDetector()
         executor: CommandExecutor = LocalCommandExecutor()
-
-        # Prioritize Docker socket when available (works both inside/outside containers)
-        use_socket = detector.has_docker_socket()
-        if detector.is_in_container() and not use_socket:
-            # Fallback to command execution when socket not provided
-            use_socket = False
-
-        # Run regular scan (Docker detection routine will leverage the socket)
-        host_label = "localhost"
-        return await self._run_scan(executor, host=host_label)
+        return await self._run_scan(executor, host="localhost")
 
     async def scan_remote(self, scan_request: ScanRequest) -> ScanResult:
         """
@@ -527,23 +655,77 @@ class TargetScannerService:
             await TargetService.mark_scan_failed(db, target)
             raise
 
+    # ------------------------------------------------------------------
+    # Core scan pipeline
+    # ------------------------------------------------------------------
+
     async def _run_scan(self, executor: CommandExecutor, host: str) -> ScanResult:
         errors: list[str] = []
-        platform_info = await self._safe_execute(
+
+        # Run all detection tasks concurrently for performance
+        platform_task = self._safe_execute(
             self._detect_platform, executor, errors
         )
-        os_info = await self._safe_execute(self._detect_os, executor, errors)
-        virtualization = await self._safe_execute(
+        os_task = self._safe_execute(self._detect_os, executor, errors)
+        virtualization_task = self._safe_execute(
             self._detect_virtualization, executor, errors, default={}
         )
-        docker_info = await self._safe_execute(
+        docker_task = self._safe_execute(
             lambda exec_: self._detect_docker(exec_, host=host), executor, errors
         )
-        kubernetes = await self._safe_execute(
+        kubernetes_task = self._safe_execute(
             self._detect_kubernetes, executor, errors, default={}
+        )
+        container_runtimes_task = self._safe_execute(
+            self._detect_container_runtimes, executor, errors, default={}
+        )
+        oci_tools_task = self._safe_execute(
+            self._detect_oci_tools, executor, errors, default={}
+        )
+
+        (
+            platform_info,
+            os_info,
+            virtualization,
+            docker_info,
+            kubernetes,
+            container_runtimes,
+            oci_tools,
+        ) = await asyncio.gather(
+            platform_task,
+            os_task,
+            virtualization_task,
+            docker_task,
+            kubernetes_task,
+            container_runtimes_task,
+            oci_tools_task,
         )
 
         success = not errors
+
+        # Build unified discovered_sockets map
+        discovered_sockets: Dict[str, SocketInfo] = {}
+
+        # Docker socket
+        if docker_info and docker_info.socket:
+            discovered_sockets["docker"] = docker_info.socket
+
+        # Virtualization sockets (podman, libvirt)
+        for _vkey, _vinfo in (virtualization or {}).items():
+            if isinstance(_vinfo, ToolInfo) and _vinfo.details:
+                _sock_data = _vinfo.details.get("socket")
+                if isinstance(_sock_data, dict):
+                    try:
+                        discovered_sockets[_vkey] = SocketInfo(**_sock_data)
+                    except Exception:
+                        pass
+                elif isinstance(_sock_data, SocketInfo):
+                    discovered_sockets[_vkey] = _sock_data
+
+        # Container runtime sockets (lxc, lxd, incus, containerd)
+        for _rkey, _rinfo in (container_runtimes or {}).items():
+            if isinstance(_rinfo, ContainerRuntimeInfo) and _rinfo.socket:
+                discovered_sockets[_rkey] = _rinfo.socket
 
         return ScanResult(
             host=host,
@@ -554,6 +736,9 @@ class TargetScannerService:
             virtualization=virtualization or {},
             docker=docker_info,
             kubernetes=kubernetes or {},
+            container_runtimes=container_runtimes or {},
+            oci_tools=oci_tools or {},
+            discovered_sockets=discovered_sockets,
             errors=errors,
         )
 
@@ -572,6 +757,10 @@ class TargetScannerService:
         except Exception as exc:  # noqa: B902
             errors.append(str(exc))
             return default
+
+    # ------------------------------------------------------------------
+    # Platform & OS detection
+    # ------------------------------------------------------------------
 
     async def _detect_platform(self, executor: CommandExecutor) -> PlatformInfo:
         architecture = PlatformArchitecture.UNKNOWN
@@ -665,24 +854,60 @@ class TargetScannerService:
             kernel=kernel,
         )
 
+    # ------------------------------------------------------------------
+    # Virtualization detection
+    # ------------------------------------------------------------------
+
     async def _detect_virtualization(
         self, executor: CommandExecutor
     ) -> Dict[str, ToolInfo]:
         virtualization: Dict[str, ToolInfo] = {}
 
-        # libvirt socket detection (KVM/QEMU)
-        libvirt_client = LibvirtSocketClient()
-        if (
-            ContainerEnvironmentDetector.has_libvirt_socket()
-            and await libvirt_client.is_available()
-        ):
-            libvirt_details = await libvirt_client.collect_details()
-            virtualization["libvirt"] = ToolInfo(
+        # --- libvirt socket detection (KVM/QEMU) ---
+        libvirt_socket_info = await SocketProbe.probe(executor, "libvirt")
+        if libvirt_socket_info is not None:
+            libvirt_client = LibvirtSocketClient(
+                socket_path=libvirt_socket_info.path,
+                uri=(
+                    "qemu:///session"
+                    if libvirt_socket_info.mode == "session"
+                    else "qemu:///system"
+                ),
+            )
+            if await libvirt_client.is_available():
+                libvirt_details = await libvirt_client.collect_details()
+                virtualization["libvirt"] = ToolInfo(
+                    available=True,
+                    version=libvirt_details.get("version"),
+                    details={
+                        **(libvirt_details or {}),
+                        "socket": libvirt_socket_info.model_dump(),
+                    },
+                )
+
+        # --- virsh CLI ---
+        virsh_result = await executor.run(
+            "virsh --version", timeout=self._DEFAULT_TIMEOUT
+        )
+        if virsh_result.success and virsh_result.stripped_stdout():
+            virtualization["virsh"] = ToolInfo(
                 available=True,
-                version=libvirt_details.get("version"),
-                details=libvirt_details or None,
+                version=virsh_result.stripped_stdout(),
+            )
+        else:
+            virtualization.setdefault("virsh", ToolInfo(available=False))
+
+        # --- virt-install ---
+        virt_install_result = await executor.run(
+            "virt-install --version", timeout=self._DEFAULT_TIMEOUT
+        )
+        if virt_install_result.success and virt_install_result.stripped_stdout():
+            virtualization["virt_install"] = ToolInfo(
+                available=True,
+                version=virt_install_result.stripped_stdout(),
             )
 
+        # --- Other virtualization tools ---
         checks: Dict[str, Tuple[str, Optional[Parser]]] = {
             "virtualbox": ("vboxmanage --version", self._parse_version_only),
             "vagrant": ("vagrant --version", self._parse_vagrant_version),
@@ -702,30 +927,35 @@ class TargetScannerService:
             else:
                 virtualization.setdefault(tool, ToolInfo(available=False))
 
+        # --- Podman (with rootless socket detection) ---
+        podman_socket_info = await SocketProbe.probe(executor, "podman")
         podman_version_result = await executor.run(
             "podman --version", timeout=self._DEFAULT_TIMEOUT
         )
         if podman_version_result.success:
             version_info = self._parse_version_only(podman_version_result.stdout)
-            podman_details: Dict[str, Any] | None = None
+            podman_details: Dict[str, Any] = {}
+            if podman_socket_info:
+                podman_details["socket"] = podman_socket_info.model_dump()
             podman_info_result = await executor.run(
                 "podman info --format json", timeout=self._DEFAULT_TIMEOUT
             )
             if podman_info_result.success and podman_info_result.stripped_stdout():
                 try:
-                    podman_details = json.loads(podman_info_result.stripped_stdout())
+                    podman_details["info"] = json.loads(
+                        podman_info_result.stripped_stdout()
+                    )
                 except json.JSONDecodeError:
-                    podman_details = {
-                        "raw_output": podman_info_result.stripped_stdout()
-                    }
+                    podman_details["raw_output"] = podman_info_result.stripped_stdout()
             virtualization["podman"] = ToolInfo(
                 available=True,
                 version=version_info.get("version") if version_info else None,
-                details=podman_details,
+                details=podman_details or None,
             )
         else:
             virtualization.setdefault("podman", ToolInfo(available=False))
 
+        # --- KVM device check ---
         kvm_result = await executor.run(
             "test -e /dev/kvm && echo 'present'", timeout=self._DEFAULT_TIMEOUT
         )
@@ -734,25 +964,30 @@ class TargetScannerService:
                 **(virtualization.get("qemu_kvm").details or {}),
                 "kvm_device": True,
             }
+
+        # --- Multipass ---
+        multipass_result = await executor.run(
+            "multipass version", timeout=self._DEFAULT_TIMEOUT
+        )
+        if multipass_result.success and multipass_result.stripped_stdout():
+            version_info = self._parse_version_only(multipass_result.stdout)
+            virtualization["multipass"] = ToolInfo(
+                available=True,
+                version=version_info.get("version"),
+                details={"raw": multipass_result.stripped_stdout()},
+            )
+        else:
+            virtualization.setdefault("multipass", ToolInfo(available=False))
+
         return virtualization
+
+    # ------------------------------------------------------------------
+    # Docker detection
+    # ------------------------------------------------------------------
 
     async def _detect_docker(
         self, executor: CommandExecutor, host: str
     ) -> Optional[DockerCapabilities]:
-        docker_socket_client = DockerSocketClient()
-        is_local_execution = isinstance(executor, LocalCommandExecutor) and host in {
-            "localhost",
-            "127.0.0.1",
-        }
-
-        if is_local_execution and await docker_socket_client.is_available():
-            capabilities = await docker_socket_client.collect_capabilities()
-            if capabilities:
-                # Complete capabilities with Docker Compose detection
-                compose_info = await self._detect_docker_compose(executor)
-                capabilities.compose = compose_info
-                return capabilities
-
         docker_version_result = await executor.run(
             "docker --version", timeout=self._DEFAULT_TIMEOUT
         )
@@ -765,6 +1000,34 @@ class TargetScannerService:
         socket_accessible = False
         swarm_info = None
 
+        # Try socket-based detection (local only)
+        is_local_execution = isinstance(executor, LocalCommandExecutor) and host in {
+            "localhost",
+            "127.0.0.1",
+        }
+
+        docker_socket_path = "/var/run/docker.sock"
+        docker_socket: Optional[SocketInfo] = None
+
+        # Probe socket for all execution types (local uses fast path, remote uses command)
+        if is_local_execution:
+            docker_socket = await SocketProbe.probe_local("docker")
+        else:
+            docker_socket = await SocketProbe.probe(executor, "docker")
+
+        if is_local_execution and docker_socket:
+            docker_socket_path = docker_socket.path
+            socket_client = DockerSocketClient(socket_path=docker_socket_path)
+            if await socket_client.is_available():
+                capabilities = await socket_client.collect_capabilities()
+                if capabilities:
+                    capabilities.version = capabilities.version or docker_version
+                    capabilities.socket = docker_socket
+                    compose_info = await self._detect_docker_compose(executor)
+                    capabilities.compose = compose_info
+                    return capabilities
+
+        # Fallback: CLI-based detection
         info_result = await executor.run(
             "docker info --format '{{json .}}'", timeout=self._DEFAULT_TIMEOUT
         )
@@ -811,6 +1074,7 @@ class TargetScannerService:
             version=docker_version,
             running=running,
             socket_accessible=socket_accessible,
+            socket=docker_socket,
             compose=compose_info,
             swarm=swarm_details,
         )
@@ -839,6 +1103,10 @@ class TargetScannerService:
             )
         return None
 
+    # ------------------------------------------------------------------
+    # Kubernetes / Orchestration detection
+    # ------------------------------------------------------------------
+
     async def _detect_kubernetes(
         self, executor: CommandExecutor
     ) -> Dict[str, ToolInfo]:
@@ -848,10 +1116,14 @@ class TargetScannerService:
                 self._parse_kubectl_version,
             ),
             "kubeadm": ("kubeadm version -o json", self._parse_kubeadm_version),
-            "k3s": ("k3s --version", self._parse_version_only),
+            "k3s": ("k3s --version", self._parse_k3s_version),
             "microk8s": (
                 "microk8s.kubectl version --output=json",
                 self._parse_kubectl_version,
+            ),
+            "helm": (
+                "helm version --short",
+                self._parse_version_only,
             ),
         }
 
@@ -859,16 +1131,257 @@ class TargetScannerService:
         for tool, (command, parser) in kube_tools.items():
             result = await executor.run(command, timeout=self._DEFAULT_TIMEOUT)
             if result.success and parser:
+                parsed = parser(result.stdout)
                 kubernetes[tool] = ToolInfo(
                     available=True,
-                    version=parser(result.stdout).get("version"),
-                    details=parser(result.stdout),
+                    version=parsed.get("version"),
+                    details=parsed,
                 )
             elif result.success:
                 kubernetes[tool] = ToolInfo(available=True)
             else:
                 kubernetes[tool] = ToolInfo(available=False)
         return kubernetes
+
+    # ------------------------------------------------------------------
+    # Container runtimes detection (LXC, LXD, Incus, containerd)
+    # ------------------------------------------------------------------
+
+    async def _detect_container_runtimes(
+        self, executor: CommandExecutor
+    ) -> Dict[str, ContainerRuntimeInfo]:
+        runtimes: Dict[str, ContainerRuntimeInfo] = {}
+
+        # --- LXC ---
+        runtimes["lxc"] = await self._detect_lxc(executor)
+
+        # --- LXD ---
+        runtimes["lxd"] = await self._detect_lxd(executor)
+
+        # --- Incus ---
+        runtimes["incus"] = await self._detect_incus(executor)
+
+        # --- containerd ---
+        runtimes["containerd"] = await self._detect_containerd(executor)
+
+        return runtimes
+
+    async def _detect_lxc(
+        self, executor: CommandExecutor
+    ) -> ContainerRuntimeInfo:
+        """Detect raw LXC tools (lxc-info, lxc-create, etc.)."""
+        version_result = await executor.run(
+            "lxc-info --version", timeout=self._DEFAULT_TIMEOUT
+        )
+        if not version_result.success:
+            return ContainerRuntimeInfo(available=False)
+
+        version = version_result.stripped_stdout()
+        details: Dict[str, Any] = {}
+
+        # Check kernel support
+        checkconfig = await executor.run(
+            "lxc-checkconfig 2>/dev/null | head -20", timeout=self._DEFAULT_TIMEOUT
+        )
+        if checkconfig.success and checkconfig.stripped_stdout():
+            details["kernel_support"] = checkconfig.stripped_stdout()
+
+        # Socket
+        socket_info = await SocketProbe.probe(executor, "lxc")
+        if socket_info:
+            details["socket"] = socket_info.model_dump()
+
+        return ContainerRuntimeInfo(
+            available=True,
+            version=version or None,
+            socket=socket_info,
+            details=details or None,
+        )
+
+    async def _detect_lxd(
+        self, executor: CommandExecutor
+    ) -> ContainerRuntimeInfo:
+        """Detect LXD daemon and its CLI client."""
+        # Check daemon
+        daemon_result = await executor.run(
+            "lxd --version", timeout=self._DEFAULT_TIMEOUT
+        )
+        daemon_version = None
+        if daemon_result.success:
+            daemon_version = daemon_result.stripped_stdout()
+
+        # Check client (lxc command for LXD, not raw LXC)
+        client_result = await executor.run(
+            "lxc version 2>/dev/null", timeout=self._DEFAULT_TIMEOUT
+        )
+        client_version = None
+        if client_result.success:
+            parsed = self._parse_version_only(client_result.stdout)
+            client_version = parsed.get("version")
+
+        if not daemon_result.success and not client_result.success:
+            return ContainerRuntimeInfo(available=False)
+
+        version = daemon_version or client_version
+        details: Dict[str, Any] = {}
+
+        # Determine install method
+        snap_result = await executor.run(
+            "snap list lxd 2>/dev/null | tail -1", timeout=self._DEFAULT_TIMEOUT
+        )
+        install_method = "package"
+        if snap_result.success and snap_result.stripped_stdout():
+            install_method = "snap"
+            details["snap_info"] = snap_result.stripped_stdout()
+
+        # Socket
+        socket_info = await SocketProbe.probe(executor, "lxd")
+        if socket_info:
+            details["socket"] = socket_info.model_dump()
+
+        # Service status
+        service_result = await executor.run(
+            "systemctl is-active snap.lxd.daemon 2>/dev/null "
+            "|| systemctl is-active lxd 2>/dev/null",
+            timeout=self._DEFAULT_TIMEOUT,
+        )
+        if service_result.success and service_result.stripped_stdout():
+            details["service_status"] = service_result.stripped_stdout()
+
+        return ContainerRuntimeInfo(
+            available=True,
+            version=version,
+            socket=socket_info,
+            install_method=install_method,
+            details=details or None,
+        )
+
+    async def _detect_incus(
+        self, executor: CommandExecutor
+    ) -> ContainerRuntimeInfo:
+        """Detect Incus (community fork of LXD)."""
+        version_result = await executor.run(
+            "incus version", timeout=self._DEFAULT_TIMEOUT
+        )
+        if not version_result.success:
+            return ContainerRuntimeInfo(available=False)
+
+        parsed = self._parse_version_only(version_result.stdout)
+        version = parsed.get("version", version_result.stripped_stdout())
+        details: Dict[str, Any] = {}
+
+        # Determine install method
+        snap_result = await executor.run(
+            "snap list incus 2>/dev/null | tail -1", timeout=self._DEFAULT_TIMEOUT
+        )
+        install_method = "package"
+        if snap_result.success and snap_result.stripped_stdout():
+            install_method = "snap"
+            details["snap_info"] = snap_result.stripped_stdout()
+
+        # Socket
+        socket_info = await SocketProbe.probe(executor, "incus")
+        if socket_info:
+            details["socket"] = socket_info.model_dump()
+
+        # Service status
+        service_result = await executor.run(
+            "systemctl is-active incus 2>/dev/null",
+            timeout=self._DEFAULT_TIMEOUT,
+        )
+        if service_result.success and service_result.stripped_stdout():
+            details["service_status"] = service_result.stripped_stdout()
+
+        return ContainerRuntimeInfo(
+            available=True,
+            version=version,
+            socket=socket_info,
+            install_method=install_method,
+            details=details or None,
+        )
+
+    async def _detect_containerd(
+        self, executor: CommandExecutor
+    ) -> ContainerRuntimeInfo:
+        """Detect containerd runtime."""
+        version_result = await executor.run(
+            "containerd --version", timeout=self._DEFAULT_TIMEOUT
+        )
+        if not version_result.success:
+            # Try ctr as alternative
+            ctr_result = await executor.run(
+                "ctr version", timeout=self._DEFAULT_TIMEOUT
+            )
+            if not ctr_result.success:
+                return ContainerRuntimeInfo(available=False)
+            parsed = self._parse_version_only(ctr_result.stdout)
+            return ContainerRuntimeInfo(
+                available=True,
+                version=parsed.get("version"),
+                details={"detected_via": "ctr"},
+            )
+
+        parsed = self._parse_version_only(version_result.stdout)
+        details: Dict[str, Any] = {}
+
+        # Socket
+        socket_info = await SocketProbe.probe(executor, "containerd")
+        if socket_info:
+            details["socket"] = socket_info.model_dump()
+
+        # Check if k3s containerd
+        k3s_check = await executor.run(
+            "test -S /run/k3s/containerd/containerd.sock && echo 'k3s'",
+            timeout=self._DEFAULT_TIMEOUT,
+        )
+        if k3s_check.success and "k3s" in k3s_check.stdout:
+            details["managed_by"] = "k3s"
+
+        return ContainerRuntimeInfo(
+            available=True,
+            version=parsed.get("version"),
+            socket=socket_info,
+            details=details or None,
+        )
+
+    # ------------------------------------------------------------------
+    # OCI low-level tools detection
+    # ------------------------------------------------------------------
+
+    async def _detect_oci_tools(
+        self, executor: CommandExecutor
+    ) -> Dict[str, ToolInfo]:
+        """Detect OCI runtimes and tools (runc, crun, buildah, skopeo, podman-compose)."""
+        tools: Dict[str, ToolInfo] = {}
+
+        oci_checks: Dict[str, Tuple[str, Optional[Parser]]] = {
+            "runc": ("runc --version", self._parse_runc_version),
+            "crun": ("crun --version", self._parse_version_only),
+            "buildah": ("buildah --version", self._parse_version_only),
+            "skopeo": ("skopeo --version", self._parse_version_only),
+            "podman_compose": (
+                "podman-compose --version",
+                self._parse_version_only,
+            ),
+        }
+
+        for tool, (command, parser) in oci_checks.items():
+            result = await executor.run(command, timeout=self._DEFAULT_TIMEOUT)
+            if result.success:
+                details = parser(result.stdout) if parser else None
+                tools[tool] = ToolInfo(
+                    available=True,
+                    version=details.get("version") if details else None,
+                    details=details,
+                )
+            else:
+                tools[tool] = ToolInfo(available=False)
+
+        return tools
+
+    # ------------------------------------------------------------------
+    # Capabilities payload builder
+    # ------------------------------------------------------------------
 
     def build_capabilities_payload(
         self, scan_result: ScanResult
@@ -886,7 +1399,6 @@ class TargetScannerService:
             version: Optional[str],
             details: Optional[Dict[str, Any]],
         ) -> None:
-            # Ne créer une entrée que si la capacité est disponible
             if available:
                 capabilities.append(
                     {
@@ -898,7 +1410,7 @@ class TargetScannerService:
                     }
                 )
 
-        # Virtualisation : ne garder que les outils disponibles
+        # Virtualization tools
         virtualization = scan_result.virtualization or {}
         for key, info in virtualization.items():
             capability_type = self._map_virtualization_key_to_capability(key)
@@ -907,13 +1419,15 @@ class TargetScannerService:
             available, version, details = self._extract_tool_info(info)
             add_capability(capability_type, available, version, details)
 
-        # Docker : ne créer des entrées que si installé et disponible
+        # Docker
         docker_caps = scan_result.docker
         if docker_caps is not None and docker_caps.installed:
-            docker_details = {
+            docker_details: Dict[str, Any] = {
                 "running": docker_caps.running,
                 "socket_accessible": docker_caps.socket_accessible,
             }
+            if docker_caps.socket:
+                docker_details["socket"] = docker_caps.socket.model_dump()
             add_capability(
                 CapabilityType.DOCKER,
                 docker_caps.installed,
@@ -921,7 +1435,6 @@ class TargetScannerService:
                 docker_details,
             )
 
-            # Docker Compose : seulement si disponible
             compose_info = docker_caps.compose
             if compose_info and compose_info.available:
                 compose_details: Dict[str, Any] = {}
@@ -934,7 +1447,6 @@ class TargetScannerService:
                     compose_details or None,
                 )
 
-            # Docker Swarm : seulement si disponible
             swarm_info = docker_caps.swarm
             if swarm_info and swarm_info.available:
                 swarm_details = swarm_info.details or {
@@ -948,7 +1460,7 @@ class TargetScannerService:
                     swarm_details,
                 )
 
-        # Kubernetes : ne garder que les outils disponibles
+        # Kubernetes tools
         kubernetes_tools = scan_result.kubernetes or {}
         for key, info in kubernetes_tools.items():
             capability_type = self._map_kubernetes_key_to_capability(key)
@@ -957,18 +1469,54 @@ class TargetScannerService:
             available, version, details = self._extract_tool_info(info)
             add_capability(capability_type, available, version, details)
 
+        # Container runtimes (LXC, LXD, Incus, containerd)
+        container_runtimes = scan_result.container_runtimes or {}
+        for key, info in container_runtimes.items():
+            capability_type = self._map_runtime_key_to_capability(key)
+            if capability_type is None:
+                continue
+            details_payload: Optional[Dict[str, Any]] = {}
+            if info.socket:
+                details_payload["socket"] = info.socket.model_dump()
+            if info.install_method:
+                details_payload["install_method"] = info.install_method
+            if info.details:
+                details_payload.update(info.details)
+            add_capability(
+                capability_type,
+                info.available,
+                info.version,
+                details_payload or None,
+            )
+
+        # OCI tools (runc, crun, buildah, skopeo, podman-compose)
+        oci_tools = scan_result.oci_tools or {}
+        for key, info in oci_tools.items():
+            capability_type = self._map_oci_key_to_capability(key)
+            if capability_type is None:
+                continue
+            available, version, details = self._extract_tool_info(info)
+            add_capability(capability_type, available, version, details)
+
         return capabilities
+
+    # ------------------------------------------------------------------
+    # Key-to-capability mapping helpers
+    # ------------------------------------------------------------------
 
     def _map_virtualization_key_to_capability(
         self, key: str
     ) -> Optional[CapabilityType]:
         mapping = {
             "libvirt": CapabilityType.LIBVIRT,
+            "virsh": CapabilityType.VIRSH,
+            "virt_install": None,  # no dedicated capability type
             "virtualbox": CapabilityType.VIRTUALBOX,
             "vagrant": CapabilityType.VAGRANT,
             "proxmox": CapabilityType.PROXMOX,
             "qemu_kvm": CapabilityType.QEMU_KVM,
             "podman": CapabilityType.PODMAN,
+            "multipass": CapabilityType.MULTIPASS,
         }
         return mapping.get(key.lower())
 
@@ -978,6 +1526,26 @@ class TargetScannerService:
             "kubeadm": CapabilityType.KUBEADM,
             "k3s": CapabilityType.K3S,
             "microk8s": CapabilityType.MICROK8S,
+            "helm": CapabilityType.HELM,
+        }
+        return mapping.get(key.lower())
+
+    def _map_runtime_key_to_capability(self, key: str) -> Optional[CapabilityType]:
+        mapping = {
+            "lxc": CapabilityType.LXC,
+            "lxd": CapabilityType.LXD,
+            "incus": CapabilityType.INCUS,
+            "containerd": CapabilityType.CONTAINERD,
+        }
+        return mapping.get(key.lower())
+
+    def _map_oci_key_to_capability(self, key: str) -> Optional[CapabilityType]:
+        mapping = {
+            "runc": CapabilityType.RUNC,
+            "crun": CapabilityType.CRUN,
+            "buildah": CapabilityType.BUILDAH,
+            "skopeo": CapabilityType.SKOPEO,
+            "podman_compose": CapabilityType.PODMAN_COMPOSE,
         }
         return mapping.get(key.lower())
 
@@ -993,6 +1561,10 @@ class TargetScannerService:
             details = raw_details if isinstance(raw_details, dict) else None
             return available, version, details
         return False, None, None
+
+    # ------------------------------------------------------------------
+    # Parsing helpers
+    # ------------------------------------------------------------------
 
     def _map_architecture(self, raw_arch: str) -> PlatformArchitecture:
         normalized = raw_arch.strip().lower()
@@ -1073,3 +1645,19 @@ class TargetScannerService:
             }
         except json.JSONDecodeError:
             return TargetScannerService._parse_version_only(output)
+
+    @staticmethod
+    def _parse_k3s_version(output: str) -> Dict[str, Any]:
+        """Parse k3s version output like 'k3s version v1.28.4+k3s2'."""
+        match = re.search(r"v?(\d+\.\d+(?:\.\d+)?(?:\+\S+)?)", output)
+        if match:
+            return {"version": match.group(1)}
+        return TargetScannerService._parse_version_only(output)
+
+    @staticmethod
+    def _parse_runc_version(output: str) -> Dict[str, Any]:
+        """Parse runc version output (may be multi-line)."""
+        for line in output.splitlines():
+            if "runc" in line.lower() or line.strip().startswith("1.") or line.strip().startswith("2."):
+                return TargetScannerService._parse_version_only(line)
+        return TargetScannerService._parse_version_only(output)
