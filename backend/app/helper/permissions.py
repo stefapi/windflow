@@ -1,6 +1,11 @@
-from datetime import datetime
-from .croniter import croniter
+from __future__ import annotations
+
 import json
+from datetime import datetime
+from typing import Any
+
+from .croniter import croniter
+
 
 def is_in_cron_interval(test_dt, cron_start_expr, cron_end_expr):
     """
@@ -24,6 +29,7 @@ def is_in_cron_interval(test_dt, cron_start_expr, cron_end_expr):
     # Vérifier l'intervalle [début, fin[
     return start_occurrence <= test_dt < end_occurrence
 
+
 def is_rule_accessible_now(rule):
     """
     Vérifie si une règle est accessible au moment actuel en fonction de son access_schedule.
@@ -43,18 +49,25 @@ def is_rule_accessible_now(rule):
             schedule = rule.access_schedule
 
         # Vérifier que les clés 'start' et 'end' sont présentes
-        if 'start' not in schedule or 'end' not in schedule:
+        if "start" not in schedule or "end" not in schedule:
             return True  # Si le format n'est pas correct, on autorise l'accès
 
         # Vérifier si l'heure actuelle est dans l'intervalle
         current_time = datetime.now()
-        return is_in_cron_interval(current_time, schedule['start'], schedule['end'])
+        return is_in_cron_interval(current_time, schedule["start"], schedule["end"])
 
     except (json.JSONDecodeError, KeyError, Exception):
         # En cas d'erreur de parsing ou autre, on autorise l'accès par défaut
         return True
 
-def has_permission(db, user, target_env: int= None, target_element:int =None, permission: (str or list[str]) = None ) -> bool:
+
+def has_permission(
+    db: Any,
+    user: Any,
+    target_env: int | None = None,
+    target_element: Any = None,
+    permission: str | list[str] | None = None,
+) -> bool:
     """
     Vérifie si l'utilisateur possède la permission demandée dans l'environnement cible ou sur l'élément cible.
 
@@ -105,7 +118,9 @@ def has_permission(db, user, target_env: int= None, target_element:int =None, pe
         for rule in policy.rules:
             # Vérifier que la fonction correspond à la permission demandée
             if isinstance(permission, list):
-                check = any( str.lower(perm) == rule.function.name for perm in permission )
+                check = any(
+                    str.lower(perm) == rule.function.name for perm in permission
+                )
             elif permission is None:
                 check = False
             else:
@@ -143,7 +158,10 @@ def has_permission(db, user, target_env: int= None, target_element:int =None, pe
                     if rule.element_id == target_element.id:
                         return True
                     # Si la règle s'applique à l'environnement de l'élément ou à l'environnement cible
-                    if rule.environment_id == target_element.environment_id or rule.environment_id == target_env:
+                    if (
+                        rule.environment_id == target_element.environment_id
+                        or rule.environment_id == target_env
+                    ):
                         return True
 
     return False

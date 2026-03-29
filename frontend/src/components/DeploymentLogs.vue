@@ -344,12 +344,12 @@ watch(logs, () => {
 }
 
 .logs-content {
-  background: var(--color-code-bg);
   padding: 12px;
-  font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1.6;
+  font-family: var(--font-mono);
   color: var(--color-code-fg);
+  background: var(--color-code-bg);
+  line-height: 1.6;
 }
 
 .log-line {
@@ -365,11 +365,11 @@ watch(logs, () => {
 .log-line-number {
   flex-shrink: 0;
   width: 50px;
-  text-align: right;
   padding-right: 12px;
+  font-size: 12px;
+  text-align: right;
   color: var(--color-log-line-number);
   user-select: none;
-  font-size: 12px;
 }
 
 .log-line-content {
@@ -379,6 +379,7 @@ watch(logs, () => {
 }
 
 /* Log levels styling - colors use UnoCSS shortcuts via getLogLevel() */
+
 /* Only font styles remain here; colors are applied via log-error, log-warning, log-info, log-debug classes */
 .log-error .log-line-content {
   font-weight: 500;
@@ -390,8 +391,8 @@ watch(logs, () => {
 
 .logs-footer {
   padding: 8px 16px;
+  text-align: right;
   background-color: var(--color-bg-card);
   border-top: 1px solid var(--color-border);
-  text-align: right;
 }
 </style>

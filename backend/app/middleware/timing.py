@@ -1,10 +1,10 @@
 """Performance timing middleware for monitoring request duration."""
 
-import time
 import logging
+import time
+
 from fastapi import Request
 from starlette.responses import Response
-
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,8 @@ async def timing_middleware(request: Request, call_next) -> Response:
                 "correlation_id": correlation_id,
                 "method": request.method,
                 "path": request.url.path,
-                "process_time_ms": process_time_ms
-            }
+                "process_time_ms": process_time_ms,
+            },
         )
 
     return response

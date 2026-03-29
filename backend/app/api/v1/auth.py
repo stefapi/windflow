@@ -6,14 +6,20 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...database import get_db
-from ...config import settings
-from ...schemas.user import LoginResponse, UserResponse, UserLogin, RefreshTokenRequest, RefreshResponse, UserCreate
-from ...services.user_service import UserService
-from ...auth.jwt import create_access_token, create_token_pair, decode_refresh_token
 from ...auth.dependencies import get_current_active_user
-from ...models.user import User
+from ...auth.jwt import create_token_pair, decode_refresh_token
+from ...config import settings
 from ...core.rate_limit import conditional_rate_limiter
+from ...database import get_db
+from ...models.user import User
+from ...schemas.user import (
+    LoginResponse,
+    RefreshResponse,
+    RefreshTokenRequest,
+    UserCreate,
+    UserResponse,
+)
+from ...services.user_service import UserService
 
 router = APIRouter()
 
@@ -59,25 +65,25 @@ Authenticate a user and generate JWT tokens.
                             "description": "Standard username and password authentication",
                             "value": {
                                 "username": "admin",
-                                "password": "SecurePassword123!"
-                            }
+                                "password": "SecurePassword123!",
+                            },
                         },
                         "email_login": {
                             "summary": "Login with email",
                             "description": "Use email instead of username",
                             "value": {
                                 "username": "user@windflow.io",
-                                "password": "MyPassword456!"
-                            }
+                                "password": "MyPassword456!",
+                            },
                         },
                         "simple_login": {
                             "summary": "Simple login",
                             "description": "Basic authentication example",
                             "value": {
                                 "username": "john_doe",
-                                "password": "password123"
-                            }
-                        }
+                                "password": "password123",
+                            },
+                        },
                     }
                 }
             }
@@ -100,31 +106,23 @@ Authenticate a user and generate JWT tokens.
                             "full_name": "Administrator",
                             "is_active": True,
                             "is_superuser": True,
-                            "organization_id": "660e8400-e29b-41d4-a716-446655440001"
-                        }
+                            "organization_id": "660e8400-e29b-41d4-a716-446655440001",
+                        },
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Invalid credentials",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "Incorrect username or password"
-                    }
+                    "example": {"detail": "Incorrect username or password"}
                 }
-            }
+            },
         },
         403: {
             "description": "Account inactive",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Inactive user"
-                    }
-                }
-            }
+            "content": {"application/json": {"example": {"detail": "Inactive user"}}},
         },
         429: {
             "description": "Rate limit exceeded",
@@ -134,25 +132,23 @@ Authenticate a user and generate JWT tokens.
                         "detail": "Too Many Requests. Maximum 5 login attempts per minute."
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "An unexpected error occurred"
-                    }
+                    "example": {"detail": "An unexpected error occurred"}
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["authentication"]
+    tags=["authentication"],
 )
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """User authentication and JWT token generation."""
     # Mode développement : auto-login avec credentials vides
@@ -161,7 +157,7 @@ async def login(
         if user is None:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No superadmin user found in database for development mode"
+                detail="No superadmin user found in database for development mode",
             )
     else:
         # Récupérer l'utilisateur
@@ -170,7 +166,9 @@ async def login(
             user = await UserService.get_by_email(session, form_data.username)
 
         # Vérifier le mot de passe et mettre à jour le hash si nécessaire
-        if not user or not await UserService.verify_and_update_user(session, user, form_data.password):
+        if not user or not await UserService.verify_and_update_user(
+            session, user, form_data.password
+        ):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
@@ -179,8 +177,7 @@ async def login(
 
         if not user.is_active:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Inactive user"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
             )
 
     # Créer la paire de tokens JWT
@@ -188,7 +185,7 @@ async def login(
         "sub": user.id,
         "username": user.username,
         "organization_id": user.organization_id,
-        "is_superuser": user.is_superuser
+        "is_superuser": user.is_superuser,
     }
 
     access_token, refresh_token = create_token_pair(token_data)
@@ -198,7 +195,7 @@ async def login(
         refresh_token=refresh_token,
         token_type="bearer",
         expires_in=settings.jwt_access_token_expire_minutes * 60,
-        user=UserResponse.model_validate(user)
+        user=UserResponse.model_validate(user),
     )
 
 
@@ -247,22 +244,22 @@ This endpoint implements **token rotation** for enhanced security:
                             "description": "Refresh access token with valid refresh token",
                             "value": {
                                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJ1c2VybmFtZSI6ImFkbWluIiwib3JnYW5pemF0aW9uX2lkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAxIiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJ0eXBlIjoicmVmcmVzaCIsImV4cCI6MTczNTk0NTIwMH0.signature"
-                            }
+                            },
                         },
                         "before_expiration": {
                             "summary": "Proactive refresh",
                             "description": "Refresh before access token expires",
                             "value": {
                                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                            }
+                            },
                         },
                         "after_expiration": {
                             "summary": "After access token expired",
                             "description": "Refresh after access token has expired",
                             "value": {
                                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                            }
-                        }
+                            },
+                        },
                     }
                 }
             }
@@ -277,10 +274,10 @@ This endpoint implements **token rotation** for enhanced security:
                         "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.new_access_token...",
                         "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.new_refresh_token...",
                         "token_type": "bearer",
-                        "expires_in": 1800
+                        "expires_in": 1800,
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Invalid or expired refresh token",
@@ -289,25 +286,19 @@ This endpoint implements **token rotation** for enhanced security:
                     "examples": {
                         "invalid_token": {
                             "summary": "Invalid token",
-                            "value": {
-                                "detail": "Invalid refresh token"
-                            }
+                            "value": {"detail": "Invalid refresh token"},
                         },
                         "user_not_found": {
                             "summary": "User not found",
-                            "value": {
-                                "detail": "User not found or inactive"
-                            }
+                            "value": {"detail": "User not found or inactive"},
                         },
                         "token_mismatch": {
                             "summary": "Token data mismatch",
-                            "value": {
-                                "detail": "Token data mismatch"
-                            }
-                        }
+                            "value": {"detail": "Token data mismatch"},
+                        },
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -317,25 +308,23 @@ This endpoint implements **token rotation** for enhanced security:
                         "detail": "Too Many Requests. Maximum 10 refresh attempts per minute."
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "An unexpected error occurred"
-                    }
+                    "example": {"detail": "An unexpected error occurred"}
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["authentication"]
+    tags=["authentication"],
 )
 async def refresh_token(
     request: Request,
     refresh_request: RefreshTokenRequest,
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Refresh access token using a valid refresh token."""
     # Décoder et valider le refresh token
@@ -358,9 +347,11 @@ async def refresh_token(
         )
 
     # Vérifier que les données du token correspondent à l'utilisateur
-    if (user.username != token_data.username or
-        user.organization_id != token_data.organization_id or
-        user.is_superuser != token_data.is_superuser):
+    if (
+        user.username != token_data.username
+        or user.organization_id != token_data.organization_id
+        or user.is_superuser != token_data.is_superuser
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token data mismatch",
@@ -372,7 +363,7 @@ async def refresh_token(
         "sub": user.id,
         "username": user.username,
         "organization_id": user.organization_id,
-        "is_superuser": user.is_superuser
+        "is_superuser": user.is_superuser,
     }
 
     new_access_token, new_refresh_token = create_token_pair(new_token_data)
@@ -381,7 +372,7 @@ async def refresh_token(
         access_token=new_access_token,
         refresh_token=new_refresh_token,
         token_type="bearer",
-        expires_in=settings.jwt_access_token_expire_minutes * 60
+        expires_in=settings.jwt_access_token_expire_minutes * 60,
     )
 
 
@@ -425,20 +416,16 @@ After calling this endpoint, the client must:
                 "application/json": {
                     "example": {
                         "message": "Successfully logged out",
-                        "detail": "Token invalidated on client side"
+                        "detail": "Token invalidated on client side",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -448,29 +435,26 @@ After calling this endpoint, the client must:
                         "detail": "Too Many Requests. Maximum 20 requests per minute."
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "An unexpected error occurred"
-                    }
+                    "example": {"detail": "An unexpected error occurred"}
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["authentication"]
+    tags=["authentication"],
 )
 async def logout(
-    request: Request,
-    current_user: User = Depends(get_current_active_user)
+    request: Request, current_user: User = Depends(get_current_active_user)
 ):
     """User logout and session invalidation."""
     return {
         "message": "Successfully logged out",
-        "detail": "Token invalidated on client side"
+        "detail": "Token invalidated on client side",
     }
 
 
@@ -527,8 +511,8 @@ After successful registration, the user is **automatically logged in**:
                                 "username": "john_doe",
                                 "email": "john.doe@example.com",
                                 "password": "SecurePassword123!",
-                                "full_name": "John Doe"
-                            }
+                                "full_name": "John Doe",
+                            },
                         },
                         "minimal_registration": {
                             "summary": "Minimal registration",
@@ -536,8 +520,8 @@ After successful registration, the user is **automatically logged in**:
                             "value": {
                                 "username": "jane_smith",
                                 "email": "jane.smith@example.com",
-                                "password": "MyPassword456!"
-                            }
+                                "password": "MyPassword456!",
+                            },
                         },
                         "organization_user": {
                             "summary": "Organization user",
@@ -547,9 +531,9 @@ After successful registration, the user is **automatically logged in**:
                                 "email": "bob@company.com",
                                 "password": "CompanyPass789!",
                                 "full_name": "Bob Wilson",
-                                "organization_id": "770e8400-e29b-41d4-a716-446655440002"
-                            }
-                        }
+                                "organization_id": "770e8400-e29b-41d4-a716-446655440002",
+                            },
+                        },
                     }
                 }
             }
@@ -572,21 +556,19 @@ After successful registration, the user is **automatically logged in**:
                             "full_name": "John Doe",
                             "is_active": True,
                             "is_superuser": False,
-                            "organization_id": None
-                        }
+                            "organization_id": None,
+                        },
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid request data",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "Invalid email format or password too weak"
-                    }
+                    "example": {"detail": "Invalid email format or password too weak"}
                 }
-            }
+            },
         },
         409: {
             "description": "User already exists",
@@ -597,17 +579,17 @@ After successful registration, the user is **automatically logged in**:
                             "summary": "Email already exists",
                             "value": {
                                 "detail": "User with email 'john.doe@example.com' already exists"
-                            }
+                            },
                         },
                         "username_exists": {
                             "summary": "Username already exists",
                             "value": {
                                 "detail": "User with username 'john_doe' already exists"
-                            }
-                        }
+                            },
+                        },
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -617,25 +599,21 @@ After successful registration, the user is **automatically logged in**:
                         "detail": "Too Many Requests. Maximum 3 registration attempts per minute."
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "An unexpected error occurred"
-                    }
+                    "example": {"detail": "An unexpected error occurred"}
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["authentication"]
+    tags=["authentication"],
 )
 async def register(
-    request: Request,
-    user_data: UserCreate,
-    session: AsyncSession = Depends(get_db)
+    request: Request, user_data: UserCreate, session: AsyncSession = Depends(get_db)
 ):
     """Register a new user account and automatically log them in."""
     # Vérifier que l'email n'existe pas déjà
@@ -643,7 +621,7 @@ async def register(
     if existing_email:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"User with email '{user_data.email}' already exists"
+            detail=f"User with email '{user_data.email}' already exists",
         )
 
     # Vérifier que le username n'existe pas déjà
@@ -651,7 +629,7 @@ async def register(
     if existing_username:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"User with username '{user_data.username}' already exists"
+            detail=f"User with username '{user_data.username}' already exists",
         )
 
     # Créer l'utilisateur
@@ -662,7 +640,7 @@ async def register(
         "sub": user.id,
         "username": user.username,
         "organization_id": user.organization_id,
-        "is_superuser": user.is_superuser
+        "is_superuser": user.is_superuser,
     }
 
     access_token, refresh_token = create_token_pair(token_data)
@@ -672,7 +650,7 @@ async def register(
         refresh_token=refresh_token,
         token_type="bearer",
         expires_in=settings.jwt_access_token_expire_minutes * 60,
-        user=UserResponse.model_validate(user)
+        user=UserResponse.model_validate(user),
     )
 
 
@@ -727,8 +705,8 @@ Get the profile information of the currently authenticated user.
                                 "is_superuser": False,
                                 "organization_id": "660e8400-e29b-41d4-a716-446655440001",
                                 "created_at": "2026-01-15T10:30:00Z",
-                                "updated_at": "2026-02-01T14:20:00Z"
-                            }
+                                "updated_at": "2026-02-01T14:20:00Z",
+                            },
                         },
                         "superuser": {
                             "summary": "Superuser profile",
@@ -741,22 +719,18 @@ Get the profile information of the currently authenticated user.
                                 "is_superuser": True,
                                 "organization_id": None,
                                 "created_at": "2026-01-01T00:00:00Z",
-                                "updated_at": "2026-02-01T12:00:00Z"
-                            }
-                        }
+                                "updated_at": "2026-02-01T12:00:00Z",
+                            },
+                        },
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -766,24 +740,21 @@ Get the profile information of the currently authenticated user.
                         "detail": "Too Many Requests. Maximum 60 requests per minute."
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "An unexpected error occurred"
-                    }
+                    "example": {"detail": "An unexpected error occurred"}
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["authentication"]
+    tags=["authentication"],
 )
 async def get_current_user_profile(
-    request: Request,
-    current_user: User = Depends(get_current_active_user)
+    request: Request, current_user: User = Depends(get_current_active_user)
 ):
     """Get the profile information of the currently authenticated user."""
     return current_user

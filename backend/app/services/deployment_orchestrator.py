@@ -5,15 +5,15 @@ Remplace Celery pour la gestion des tâches de déploiement asynchrones.
 Fournit retry automatique, recovery après crash, et tracking des tâches.
 """
 
-import logging
 import asyncio
-from typing import Dict, Any, Optional
+import logging
 from datetime import datetime, timedelta
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any, Dict, Optional
+
 from sqlalchemy import select
 
-from ..models.deployment import Deployment, DeploymentStatus
 from ..database import AsyncSessionLocal
+from ..models.deployment import Deployment, DeploymentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class DeploymentOrchestrator:
         stack_id: str,
         target_id: str,
         user_id: str,
-        configuration: Dict[str, Any]
+        configuration: Dict[str, Any],
     ) -> asyncio.Task:
         """
         Démarre un déploiement en arrière-plan.
@@ -79,7 +79,7 @@ class DeploymentOrchestrator:
                 stack_id=stack_id,
                 target_id=target_id,
                 user_id=user_id,
-                configuration=configuration
+                configuration=configuration,
             )
         )
 
@@ -107,37 +107,49 @@ class DeploymentOrchestrator:
                         deployment = result.scalar_one_or_none()
 
                         if not deployment:
-                            logger.warning(f"Déploiement {deployment_id} non trouvé pour notification finale")
+                            logger.warning(
+                                f"Déploiement {deployment_id} non trouvé pour notification finale"
+                            )
                             return
 
                         # Si le statut est déjà terminal (RUNNING, FAILED, STOPPED), ne rien faire
                         # car deploy_stack_async a déjà notifié
-                        if deployment.status in [DeploymentStatus.RUNNING, DeploymentStatus.FAILED, DeploymentStatus.STOPPED]:
-                            logger.debug(f"Déploiement {deployment_id} déjà en statut terminal: {deployment.status.value}")
+                        if deployment.status in [
+                            DeploymentStatus.RUNNING,
+                            DeploymentStatus.FAILED,
+                            DeploymentStatus.STOPPED,
+                        ]:
+                            logger.debug(
+                                f"Déploiement {deployment_id} déjà en statut terminal: {deployment.status.value}"
+                            )
                             return
 
                         # Sinon, déterminer le statut final et notifier
                         try:
                             if t.exception():
                                 exception = t.exception()
-                                logger.error(f"Déploiement {deployment_id} échoué: {exception}")
+                                logger.error(
+                                    f"Déploiement {deployment_id} échoué: {exception}"
+                                )
                                 await DeploymentService.update_status(
                                     db,
                                     deployment_id,
                                     DeploymentStatus.FAILED,
                                     error_message=f"Erreur inattendue: {str(exception)}",
-                                    logs=f"[ERROR] Erreur inattendue dans la tâche asyncio: {str(exception)}"
+                                    logs=f"[ERROR] Erreur inattendue dans la tâche asyncio: {str(exception)}",
                                 )
                             else:
                                 task_result = t.result()
-                                logger.info(f"Déploiement {deployment_id} terminé: {task_result.get('status', 'unknown')}")
+                                logger.info(
+                                    f"Déploiement {deployment_id} terminé: {task_result.get('status', 'unknown')}"
+                                )
                                 # Le statut a normalement déjà été mis à jour par deploy_stack_async
                                 # Mais on émet quand même un événement pour être sûr
                                 await DeploymentService.update_status(
                                     db,
                                     deployment_id,
                                     DeploymentStatus.RUNNING,
-                                    logs="[INFO] Déploiement terminé avec succès"
+                                    logs="[INFO] Déploiement terminé avec succès",
                                 )
                         except asyncio.CancelledError:
                             logger.warning(f"Déploiement {deployment_id} annulé")
@@ -145,19 +157,23 @@ class DeploymentOrchestrator:
                                 db,
                                 deployment_id,
                                 DeploymentStatus.STOPPED,
-                                logs="[SYSTEM] Déploiement annulé"
+                                logs="[SYSTEM] Déploiement annulé",
                             )
                         except Exception as e:
-                            logger.error(f"Erreur dans le callback du déploiement {deployment_id}: {e}")
+                            logger.error(
+                                f"Erreur dans le callback du déploiement {deployment_id}: {e}"
+                            )
                             await DeploymentService.update_status(
                                 db,
                                 deployment_id,
                                 DeploymentStatus.FAILED,
                                 error_message=f"Erreur dans le callback: {str(e)}",
-                                logs=f"[ERROR] Erreur dans le callback: {str(e)}"
+                                logs=f"[ERROR] Erreur dans le callback: {str(e)}",
                             )
                 except Exception as e:
-                    logger.error(f"Erreur lors de la notification de fin de déploiement {deployment_id}: {e}")
+                    logger.error(
+                        f"Erreur lors de la notification de fin de déploiement {deployment_id}: {e}"
+                    )
 
             # Exécuter la notification de manière asynchrone
             asyncio.create_task(notify_completion())
@@ -187,7 +203,9 @@ class DeploymentOrchestrator:
                 logger.warning(f"Tâche de déploiement {deployment_id} déjà terminée")
                 return False
         else:
-            logger.debug(f"Aucune tâche active trouvée pour le déploiement {deployment_id}")
+            logger.debug(
+                f"Aucune tâche active trouvée pour le déploiement {deployment_id}"
+            )
             return False
 
     @classmethod
@@ -197,7 +215,7 @@ class DeploymentOrchestrator:
         stack_id: str,
         target_id: str,
         user_id: str,
-        configuration: Dict[str, Any]
+        configuration: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Exécute le déploiement avec retry automatique.
@@ -233,7 +251,9 @@ class DeploymentOrchestrator:
                             deployment.task_retry_count = retry_count
                             await db.commit()
 
-                    logger.info(f"Tentative {retry_count}/{cls.MAX_RETRIES} pour {deployment_id}")
+                    logger.info(
+                        f"Tentative {retry_count}/{cls.MAX_RETRIES} pour {deployment_id}"
+                    )
 
                 # Exécuter le déploiement
                 result = await deploy_stack_async(
@@ -241,11 +261,13 @@ class DeploymentOrchestrator:
                     stack_id=stack_id,
                     target_id=target_id,
                     user_id=user_id,
-                    configuration=configuration
+                    configuration=configuration,
                 )
 
                 # Succès !
-                logger.info(f"Déploiement {deployment_id} réussi après {retry_count} retry(s)")
+                logger.info(
+                    f"Déploiement {deployment_id} réussi après {retry_count} retry(s)"
+                )
                 return result
 
             except Exception as e:
@@ -261,12 +283,13 @@ class DeploymentOrchestrator:
                     # Marquer comme FAILED
                     async with AsyncSessionLocal() as db:
                         from ..services.deployment_service import DeploymentService
+
                         await DeploymentService.update_status(
                             db,
                             deployment_id,
                             DeploymentStatus.FAILED,
                             error_message=f"Échec après {cls.MAX_RETRIES} tentatives: {str(e)}",
-                            logs=f"[ERROR] Toutes les tentatives de retry ont échoué\nDernière erreur: {str(e)}"
+                            logs=f"[ERROR] Toutes les tentatives de retry ont échoué\nDernière erreur: {str(e)}",
                         )
 
                     raise
@@ -274,7 +297,7 @@ class DeploymentOrchestrator:
                 # Calculer le délai de retry avec backoff exponentiel
                 delay = min(
                     cls.INITIAL_RETRY_DELAY * (2 ** (retry_count - 1)),
-                    cls.MAX_RETRY_DELAY
+                    cls.MAX_RETRY_DELAY,
                 )
 
                 logger.warning(
@@ -290,9 +313,7 @@ class DeploymentOrchestrator:
 
     @classmethod
     async def recover_pending_deployments(
-        cls,
-        max_age_minutes: int = 2,
-        timeout_minutes: int = 60
+        cls, max_age_minutes: int = 2, timeout_minutes: int = 60
     ) -> Dict[str, int]:
         """
         Récupère les déploiements bloqués en PENDING ou DEPLOYING.
@@ -312,12 +333,7 @@ class DeploymentOrchestrator:
             f"(max_age={max_age_minutes}min, timeout={timeout_minutes}min)"
         )
 
-        stats = {
-            "retried": 0,
-            "failed": 0,
-            "skipped": 0,
-            "errors": 0
-        }
+        stats = {"retried": 0, "failed": 0, "skipped": 0, "errors": 0}
 
         try:
             async with AsyncSessionLocal() as db:
@@ -328,16 +344,17 @@ class DeploymentOrchestrator:
 
                 result = await db.execute(
                     select(Deployment).where(
-                        Deployment.status.in_([
-                            DeploymentStatus.PENDING,
-                            DeploymentStatus.DEPLOYING
-                        ]),
-                        Deployment.created_at < max_age_threshold
+                        Deployment.status.in_(
+                            [DeploymentStatus.PENDING, DeploymentStatus.DEPLOYING]
+                        ),
+                        Deployment.created_at < max_age_threshold,
                     )
                 )
                 pending_deployments = result.scalars().all()
 
-                logger.info(f"Trouvé {len(pending_deployments)} déploiements à récupérer")
+                logger.info(
+                    f"Trouvé {len(pending_deployments)} déploiements à récupérer"
+                )
 
                 for deployment in pending_deployments:
                     try:
@@ -349,9 +366,7 @@ class DeploymentOrchestrator:
                             )
 
                             deployment.status = DeploymentStatus.FAILED
-                            deployment.error_message = (
-                                f"Timeout: déploiement bloqué pendant plus de {timeout_minutes} minutes"
-                            )
+                            deployment.error_message = f"Timeout: déploiement bloqué pendant plus de {timeout_minutes} minutes"
                             deployment.logs = (
                                 f"{deployment.logs or ''}\n"
                                 f"[ERROR] Déploiement marqué comme FAILED après timeout de {timeout_minutes} min"
@@ -364,7 +379,9 @@ class DeploymentOrchestrator:
                         if deployment.id in cls._active_tasks:
                             task = cls._active_tasks[deployment.id]
                             if not task.done():
-                                logger.info(f"Déploiement {deployment.id} déjà en cours, skip")
+                                logger.info(
+                                    f"Déploiement {deployment.id} déjà en cours, skip"
+                                )
                                 stats["skipped"] += 1
                                 continue
 
@@ -375,8 +392,10 @@ class DeploymentOrchestrator:
                             deployment_id=deployment.id,
                             stack_id=deployment.stack_id,
                             target_id=deployment.target_id,
-                            user_id=str(deployment.organization_id),  # Utiliser l'org comme user_id
-                            configuration=deployment.variables
+                            user_id=str(
+                                deployment.organization_id
+                            ),  # Utiliser l'org comme user_id
+                            configuration=deployment.variables,
                         )
 
                         stats["retried"] += 1

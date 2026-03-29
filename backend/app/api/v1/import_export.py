@@ -2,17 +2,17 @@
 Endpoints API pour l'import/export de stacks.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 import json
-from typing import Dict, Any
 
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import JSONResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ...auth.dependencies import get_current_user
 from ...database import get_db
 from ...models.stack import Stack
 from ...models.user import User
-from ...auth.dependencies import get_current_user
 
 router = APIRouter()
 
@@ -21,7 +21,7 @@ router = APIRouter()
 async def export_stack(
     stack_id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Exporte un stack au format JSON."""
 
@@ -31,15 +31,16 @@ async def export_stack(
 
     if not stack:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Stack not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Stack not found"
         )
 
     # Vérifier les permissions
-    if stack.organization_id != current_user.organization_id and not current_user.is_superuser:
+    if (
+        stack.organization_id != current_user.organization_id
+        and not current_user.is_superuser
+    ):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
 
     # Format d'export
@@ -57,15 +58,13 @@ async def export_stack(
             "screenshots": stack.screenshots,
             "documentation_url": stack.documentation_url,
             "author": stack.author,
-            "license": stack.license
-        }
+            "license": stack.license,
+        },
     }
 
     return JSONResponse(
         content=export_data,
-        headers={
-            "Content-Disposition": f'attachment; filename="{stack.name}.json"'
-        }
+        headers={"Content-Disposition": f'attachment; filename="{stack.name}.json"'},
     )
 
 
@@ -73,7 +72,7 @@ async def export_stack(
 async def import_stack(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Importe un stack depuis un fichier JSON."""
 
@@ -105,7 +104,7 @@ async def import_stack(
             author=stack_data.get("author"),
             license=stack_data.get("license", "MIT"),
             organization_id=current_user.organization_id,
-            is_public=False  # Importé en privé par défaut
+            is_public=False,  # Importé en privé par défaut
         )
 
         db.add(new_stack)
@@ -115,21 +114,17 @@ async def import_stack(
         return {
             "message": "Stack imported successfully",
             "stack_id": new_stack.id,
-            "name": new_stack.name
+            "name": new_stack.name,
         }
 
     except json.JSONDecodeError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid JSON file"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON file"
         )
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Import failed: {str(e)}"
+            detail=f"Import failed: {str(e)}",
         )

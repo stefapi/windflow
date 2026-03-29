@@ -14,7 +14,7 @@ from ...auth.dependencies import get_current_active_user
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
-from ...schemas.target import TargetResponse, TargetCreate, TargetUpdate, TargetType
+from ...schemas.target import TargetCreate, TargetResponse, TargetType, TargetUpdate
 from ...schemas.target_capability import CapabilityType, TargetCapabilityResponse
 from ...schemas.target_scan import (
     ScanResult,
@@ -78,7 +78,7 @@ Default limit is 100 targets per request.
                             "port": 2376,
                             "is_active": True,
                             "organization_id": "660e8400-e29b-41d4-a716-446655440001",
-                            "created_at": "2026-01-15T10:30:00Z"
+                            "created_at": "2026-01-15T10:30:00Z",
                         },
                         {
                             "id": "770e8400-e29b-41d4-a716-446655440002",
@@ -88,11 +88,11 @@ Default limit is 100 targets per request.
                             "port": 6443,
                             "is_active": True,
                             "organization_id": "660e8400-e29b-41d4-a716-446655440001",
-                            "created_at": "2026-01-20T14:20:00Z"
-                        }
+                            "created_at": "2026-01-20T14:20:00Z",
+                        },
                     ]
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -100,10 +100,10 @@ Default limit is 100 targets per request.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -112,10 +112,10 @@ Default limit is 100 targets per request.
                     "example": {
                         "error": "Too Many Requests",
                         "detail": "Rate limit exceeded. Maximum 100 requests per minute.",
-                        "retry_after": 30
+                        "retry_after": 30,
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -123,20 +123,20 @@ Default limit is 100 targets per request.
                 "application/json": {
                     "example": {
                         "error": "Internal Server Error",
-                        "detail": "An unexpected error occurred"
+                        "detail": "An unexpected error occurred",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["targets"]
+    tags=["targets"],
 )
 async def list_targets(
     request: Request,
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ) -> List[TargetResponse]:
     """List deployment targets for the organization."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -147,14 +147,11 @@ async def list_targets(
             "user_id": str(current_user.id),
             "organization_id": str(current_user.organization_id),
             "skip": skip,
-            "limit": limit
-        }
+            "limit": limit,
+        },
     )
     targets = await TargetService.list_by_organization(
-        session,
-        current_user.organization_id,
-        skip,
-        limit
+        session, current_user.organization_id, skip, limit
     )
     return [TargetResponse.model_validate(t) for t in targets]
 
@@ -199,13 +196,13 @@ Attempting to access targets from other organizations returns 403 Forbidden.
                         "organization_id": "660e8400-e29b-41d4-a716-446655440001",
                         "credentials": {
                             "tls_enabled": True,
-                            "cert_path": "/etc/docker/certs"
+                            "cert_path": "/etc/docker/certs",
                         },
                         "created_at": "2026-01-15T10:30:00Z",
-                        "updated_at": "2026-01-20T08:15:00Z"
+                        "updated_at": "2026-01-20T08:15:00Z",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -213,10 +210,10 @@ Attempting to access targets from other organizations returns 403 Forbidden.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied to this target",
@@ -224,10 +221,10 @@ Attempting to access targets from other organizations returns 403 Forbidden.
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Accès refusé à cette cible"
+                        "detail": "Accès refusé à cette cible",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Target not found",
@@ -235,10 +232,10 @@ Attempting to access targets from other organizations returns 403 Forbidden.
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée"
+                        "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée",
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -247,10 +244,10 @@ Attempting to access targets from other organizations returns 403 Forbidden.
                     "example": {
                         "error": "Too Many Requests",
                         "detail": "Rate limit exceeded. Maximum 100 requests per minute.",
-                        "retry_after": 30
+                        "retry_after": 30,
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -258,37 +255,36 @@ Attempting to access targets from other organizations returns 403 Forbidden.
                 "application/json": {
                     "example": {
                         "error": "Internal Server Error",
-                        "detail": "An unexpected error occurred"
+                        "detail": "An unexpected error occurred",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["targets"]
+    tags=["targets"],
 )
 async def get_target(
     request: Request,
     target_id: str,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ) -> TargetResponse:
     """Retrieve a deployment target by ID."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Getting target {target_id}",
-        extra={"correlation_id": correlation_id, "target_id": target_id}
+        extra={"correlation_id": correlation_id, "target_id": target_id},
     )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée"
+            detail=f"Cible {target_id} non trouvée",
         )
 
     if target.organization_id != current_user.organization_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette cible"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )
 
     return TargetResponse.model_validate(target)
@@ -345,9 +341,9 @@ Attempting to create a target with an existing name returns 409 Conflict.
                                     "tls_enabled": True,
                                     "ca_cert": "-----BEGIN CERTIFICATE-----\n...",
                                     "client_cert": "-----BEGIN CERTIFICATE-----\n...",
-                                    "client_key": "-----BEGIN PRIVATE KEY-----\n..."
-                                }
-                            }
+                                    "client_key": "-----BEGIN PRIVATE KEY-----\n...",
+                                },
+                            },
                         },
                         "ssh_target": {
                             "summary": "SSH remote server",
@@ -359,9 +355,9 @@ Attempting to create a target with an existing name returns 409 Conflict.
                                 "port": 22,
                                 "credentials": {
                                     "username": "deploy",
-                                    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\n..."
-                                }
-                            }
+                                    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\n...",
+                                },
+                            },
                         },
                         "kubernetes_target": {
                             "summary": "Kubernetes cluster",
@@ -373,8 +369,8 @@ Attempting to create a target with an existing name returns 409 Conflict.
                                 "port": 6443,
                                 "credentials": {
                                     "kubeconfig": "apiVersion: v1\nkind: Config\n..."
-                                }
-                            }
+                                },
+                            },
                         },
                         "local_docker": {
                             "summary": "Local Docker (Unix socket)",
@@ -383,9 +379,9 @@ Attempting to create a target with an existing name returns 409 Conflict.
                                 "name": "local-docker",
                                 "type": "docker",
                                 "host": "unix:///var/run/docker.sock",
-                                "port": 0
-                            }
-                        }
+                                "port": 0,
+                            },
+                        },
                     }
                 }
             }
@@ -404,10 +400,10 @@ Attempting to create a target with an existing name returns 409 Conflict.
                         "port": 2376,
                         "is_active": True,
                         "organization_id": "660e8400-e29b-41d4-a716-446655440001",
-                        "created_at": "2026-02-02T21:50:00Z"
+                        "created_at": "2026-02-02T21:50:00Z",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid request",
@@ -418,19 +414,19 @@ Attempting to create a target with an existing name returns 409 Conflict.
                             "summary": "Invalid target type",
                             "value": {
                                 "error": "Validation Error",
-                                "detail": "Invalid target type: invalid_type"
-                            }
+                                "detail": "Invalid target type: invalid_type",
+                            },
                         },
                         "missing_credentials": {
                             "summary": "Missing credentials",
                             "value": {
                                 "error": "Validation Error",
-                                "detail": "Credentials required for target type: docker"
-                            }
-                        }
+                                "detail": "Credentials required for target type: docker",
+                            },
+                        },
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -438,10 +434,10 @@ Attempting to create a target with an existing name returns 409 Conflict.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         409: {
             "description": "Target name already exists",
@@ -449,10 +445,10 @@ Attempting to create a target with an existing name returns 409 Conflict.
                 "application/json": {
                     "example": {
                         "error": "Conflict",
-                        "detail": "Cible avec le nom 'production-docker' existe déjà"
+                        "detail": "Cible avec le nom 'production-docker' existe déjà",
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -461,10 +457,10 @@ Attempting to create a target with an existing name returns 409 Conflict.
                     "example": {
                         "error": "Too Many Requests",
                         "detail": "Rate limit exceeded. Maximum 20 requests per minute.",
-                        "retry_after": 30
+                        "retry_after": 30,
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -472,19 +468,19 @@ Attempting to create a target with an existing name returns 409 Conflict.
                 "application/json": {
                     "example": {
                         "error": "Internal Server Error",
-                        "detail": "An unexpected error occurred"
+                        "detail": "An unexpected error occurred",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["targets"]
+    tags=["targets"],
 )
 async def create_target(
     request: Request,
     target_data: TargetCreate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ) -> TargetResponse:
     """Create a new deployment target."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -493,24 +489,20 @@ async def create_target(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "target_name": target_data.name
-        }
+            "target_name": target_data.name,
+        },
     )
     existing = await TargetService.get_by_name(
-        session,
-        current_user.organization_id,
-        target_data.name
+        session, current_user.organization_id, target_data.name
     )
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cible avec le nom '{target_data.name}' existe déjà"
+            detail=f"Cible avec le nom '{target_data.name}' existe déjà",
         )
 
     target = await TargetService.create(
-        session,
-        target_data,
-        organization_id=current_user.organization_id
+        session, target_data, organization_id=current_user.organization_id
     )
     return TargetResponse.model_validate(target)
 
@@ -556,8 +548,8 @@ Attempting to use an existing name returns 409 Conflict.
                             "description": "Change target connection details",
                             "value": {
                                 "host": "docker-new.prod.example.com",
-                                "port": 2377
-                            }
+                                "port": 2377,
+                            },
                         },
                         "update_credentials": {
                             "summary": "Update credentials",
@@ -567,24 +559,20 @@ Attempting to use an existing name returns 409 Conflict.
                                     "tls_enabled": True,
                                     "ca_cert": "-----BEGIN CERTIFICATE-----\nNEW_CERT...",
                                     "client_cert": "-----BEGIN CERTIFICATE-----\nNEW_CERT...",
-                                    "client_key": "-----BEGIN PRIVATE KEY-----\nNEW_KEY..."
+                                    "client_key": "-----BEGIN PRIVATE KEY-----\nNEW_KEY...",
                                 }
-                            }
+                            },
                         },
                         "rename_target": {
                             "summary": "Rename target",
                             "description": "Change target name",
-                            "value": {
-                                "name": "production-docker-v2"
-                            }
+                            "value": {"name": "production-docker-v2"},
                         },
                         "disable_target": {
                             "summary": "Disable target",
                             "description": "Temporarily disable target",
-                            "value": {
-                                "is_active": False
-                            }
-                        }
+                            "value": {"is_active": False},
+                        },
                     }
                 }
             }
@@ -604,10 +592,10 @@ Attempting to use an existing name returns 409 Conflict.
                         "is_active": True,
                         "organization_id": "660e8400-e29b-41d4-a716-446655440001",
                         "created_at": "2026-01-15T10:30:00Z",
-                        "updated_at": "2026-02-02T21:50:00Z"
+                        "updated_at": "2026-02-02T21:50:00Z",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid request",
@@ -615,10 +603,10 @@ Attempting to use an existing name returns 409 Conflict.
                 "application/json": {
                     "example": {
                         "error": "Validation Error",
-                        "detail": "Invalid port number: must be between 1 and 65535"
+                        "detail": "Invalid port number: must be between 1 and 65535",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -626,10 +614,10 @@ Attempting to use an existing name returns 409 Conflict.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied to this target",
@@ -637,10 +625,10 @@ Attempting to use an existing name returns 409 Conflict.
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Accès refusé à cette cible"
+                        "detail": "Accès refusé à cette cible",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Target not found",
@@ -648,10 +636,10 @@ Attempting to use an existing name returns 409 Conflict.
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée"
+                        "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée",
                     }
                 }
-            }
+            },
         },
         409: {
             "description": "Target name already exists",
@@ -659,10 +647,10 @@ Attempting to use an existing name returns 409 Conflict.
                 "application/json": {
                     "example": {
                         "error": "Conflict",
-                        "detail": "Cible avec le nom 'production-docker-v2' existe déjà"
+                        "detail": "Cible avec le nom 'production-docker-v2' existe déjà",
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -671,10 +659,10 @@ Attempting to use an existing name returns 409 Conflict.
                     "example": {
                         "error": "Too Many Requests",
                         "detail": "Rate limit exceeded. Maximum 50 requests per minute.",
-                        "retry_after": 30
+                        "retry_after": 30,
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -682,20 +670,20 @@ Attempting to use an existing name returns 409 Conflict.
                 "application/json": {
                     "example": {
                         "error": "Internal Server Error",
-                        "detail": "Erreur lors de la mise à jour de la cible"
+                        "detail": "Erreur lors de la mise à jour de la cible",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["targets"]
+    tags=["targets"],
 )
 async def update_target(
     request: Request,
     target_id: str,
     target_data: TargetUpdate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ) -> TargetResponse:
     """Update a deployment target."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -704,39 +692,36 @@ async def update_target(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "target_id": target_id
-        }
+            "target_id": target_id,
+        },
     )
     existing_target = await TargetService.get_by_id(session, target_id)
     if not existing_target:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée"
+            detail=f"Cible {target_id} non trouvée",
         )
 
     if existing_target.organization_id != current_user.organization_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette cible"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )
 
     if target_data.name and target_data.name != existing_target.name:
         existing_name = await TargetService.get_by_name(
-            session,
-            current_user.organization_id,
-            target_data.name
+            session, current_user.organization_id, target_data.name
         )
         if existing_name:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cible avec le nom '{target_data.name}' existe déjà"
+                detail=f"Cible avec le nom '{target_data.name}' existe déjà",
             )
 
     target = await TargetService.update(session, target_id, target_data)
     if target is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erreur lors de la mise à jour de la cible"
+            detail="Erreur lors de la mise à jour de la cible",
         )
     return TargetResponse.model_validate(target)
 
@@ -767,19 +752,17 @@ Returns 204 No Content on successful deletion (empty response body).
 """,
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
     responses={
-        204: {
-            "description": "Target deleted successfully (no content)"
-        },
+        204: {"description": "Target deleted successfully (no content)"},
         401: {
             "description": "Authentication required",
             "content": {
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied to this target",
@@ -787,10 +770,10 @@ Returns 204 No Content on successful deletion (empty response body).
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Accès refusé à cette cible"
+                        "detail": "Accès refusé à cette cible",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Target not found",
@@ -798,10 +781,10 @@ Returns 204 No Content on successful deletion (empty response body).
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée"
+                        "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée",
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -810,10 +793,10 @@ Returns 204 No Content on successful deletion (empty response body).
                     "example": {
                         "error": "Too Many Requests",
                         "detail": "Rate limit exceeded. Maximum 30 requests per minute.",
-                        "retry_after": 30
+                        "retry_after": 30,
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -821,19 +804,19 @@ Returns 204 No Content on successful deletion (empty response body).
                 "application/json": {
                     "example": {
                         "error": "Internal Server Error",
-                        "detail": "An unexpected error occurred"
+                        "detail": "An unexpected error occurred",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["targets"]
+    tags=["targets"],
 )
 async def delete_target(
     request: Request,
     target_id: str,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete a deployment target permanently."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -842,20 +825,19 @@ async def delete_target(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "target_id": target_id
-        }
+            "target_id": target_id,
+        },
     )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée"
+            detail=f"Cible {target_id} non trouvée",
         )
 
     if target.organization_id != current_user.organization_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette cible"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )
 
     await TargetService.delete(session, target_id)
@@ -914,8 +896,8 @@ If no preferred type is specified, the system automatically selects:
                                 "name": "local-machine",
                                 "host": "localhost",
                                 "port": 22,
-                                "description": "Local development machine"
-                            }
+                                "description": "Local development machine",
+                            },
                         },
                         "discover_remote_ssh": {
                             "summary": "Discover remote server via SSH",
@@ -926,8 +908,8 @@ If no preferred type is specified, the system automatically selects:
                                 "port": 22,
                                 "username": "deploy",
                                 "password": "SecurePassword123!",
-                                "description": "Production deployment server"
-                            }
+                                "description": "Production deployment server",
+                            },
                         },
                         "discover_with_sudo": {
                             "summary": "Discover with sudo access",
@@ -940,8 +922,8 @@ If no preferred type is specified, the system automatically selects:
                                 "password": "Password123!",
                                 "sudo_user": "root",
                                 "sudo_password": "RootPassword456!",
-                                "description": "Staging server with sudo"
-                            }
+                                "description": "Staging server with sudo",
+                            },
                         },
                         "discover_preferred_type": {
                             "summary": "Discover with preferred type",
@@ -953,9 +935,9 @@ If no preferred type is specified, the system automatically selects:
                                 "username": "admin",
                                 "password": "AdminPass789!",
                                 "preferred_type": "kubernetes",
-                                "description": "Kubernetes cluster"
-                            }
-                        }
+                                "description": "Kubernetes cluster",
+                            },
+                        },
                     }
                 }
             }
@@ -975,7 +957,7 @@ If no preferred type is specified, the system automatically selects:
                             "port": 22,
                             "is_active": True,
                             "organization_id": "660e8400-e29b-41d4-a716-446655440001",
-                            "created_at": "2026-02-02T21:50:00Z"
+                            "created_at": "2026-02-02T21:50:00Z",
                         },
                         "scan_result": {
                             "success": True,
@@ -984,22 +966,22 @@ If no preferred type is specified, the system automatically selects:
                                 "docker": True,
                                 "docker_compose": True,
                                 "kubernetes": False,
-                                "libvirt": False
+                                "libvirt": False,
                             },
                             "platform": {
                                 "system": "Linux",
                                 "release": "5.15.0-91-generic",
-                                "machine": "x86_64"
+                                "machine": "x86_64",
                             },
                             "os": {
                                 "name": "Ubuntu",
                                 "version": "22.04",
-                                "codename": "jammy"
-                            }
-                        }
+                                "codename": "jammy",
+                            },
+                        },
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid request",
@@ -1010,19 +992,19 @@ If no preferred type is specified, the system automatically selects:
                             "summary": "Connection failed",
                             "value": {
                                 "error": "Connection Error",
-                                "detail": "Failed to connect to host: Connection refused"
-                            }
+                                "detail": "Failed to connect to host: Connection refused",
+                            },
                         },
                         "authentication_failed": {
                             "summary": "Authentication failed",
                             "value": {
                                 "error": "Authentication Error",
-                                "detail": "SSH authentication failed: Invalid credentials"
-                            }
-                        }
+                                "detail": "SSH authentication failed: Invalid credentials",
+                            },
+                        },
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -1030,10 +1012,10 @@ If no preferred type is specified, the system automatically selects:
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied",
@@ -1041,10 +1023,10 @@ If no preferred type is specified, the system automatically selects:
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Impossible de découvrir une cible pour une autre organisation"
+                        "detail": "Impossible de découvrir une cible pour une autre organisation",
                     }
                 }
-            }
+            },
         },
         409: {
             "description": "Target name already exists",
@@ -1052,10 +1034,10 @@ If no preferred type is specified, the system automatically selects:
                 "application/json": {
                     "example": {
                         "error": "Conflict",
-                        "detail": "Cible avec le nom 'production-server' existe déjà"
+                        "detail": "Cible avec le nom 'production-server' existe déjà",
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -1064,10 +1046,10 @@ If no preferred type is specified, the system automatically selects:
                     "example": {
                         "error": "Too Many Requests",
                         "detail": "Rate limit exceeded. Maximum 10 requests per minute.",
-                        "retry_after": 30
+                        "retry_after": 30,
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -1075,19 +1057,19 @@ If no preferred type is specified, the system automatically selects:
                 "application/json": {
                     "example": {
                         "error": "Internal Server Error",
-                        "detail": "An unexpected error occurred during discovery"
+                        "detail": "An unexpected error occurred during discovery",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["targets"]
+    tags=["targets"],
 )
 async def discover_target(
     request: Request,
     discovery_request: TargetDiscoveryRequest,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ) -> TargetDiscoveryResponse:
     """Discover target capabilities and create deployment target."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1096,21 +1078,23 @@ async def discover_target(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "host": discovery_request.host
-        }
+            "host": discovery_request.host,
+        },
     )
     organization_id = discovery_request.organization_id or current_user.organization_id
     if organization_id != current_user.organization_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Impossible de découvrir une cible pour une autre organisation"
+            detail="Impossible de découvrir une cible pour une autre organisation",
         )
 
-    existing = await TargetService.get_by_name(session, organization_id, discovery_request.name)
+    existing = await TargetService.get_by_name(
+        session, organization_id, discovery_request.name
+    )
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cible avec le nom '{discovery_request.name}' existe déjà"
+            detail=f"Cible avec le nom '{discovery_request.name}' existe déjà",
         )
 
     scanner = TargetScannerService()
@@ -1150,22 +1134,14 @@ async def discover_target(
     )
 
     target = await TargetService.create(
-        session,
-        target_payload,
-        organization_id=organization_id
+        session, target_payload, organization_id=organization_id
     )
 
     capabilities_payload = scanner.build_capabilities_payload(scan_result)
     platform_payload = (
-        scan_result.platform.model_dump(mode="json")
-        if scan_result.platform
-        else None
+        scan_result.platform.model_dump(mode="json") if scan_result.platform else None
     )
-    os_payload = (
-        scan_result.os.model_dump(mode="json")
-        if scan_result.os
-        else None
-    )
+    os_payload = scan_result.os.model_dump(mode="json") if scan_result.os else None
 
     await TargetService.apply_scan_result(
         db=session,
@@ -1178,8 +1154,7 @@ async def discover_target(
     )
 
     return TargetDiscoveryResponse(
-        target=TargetResponse.model_validate(target),
-        scan_result=scan_result
+        target=TargetResponse.model_validate(target), scan_result=scan_result
     )
 
 
@@ -1232,10 +1207,10 @@ Users can only scan targets belonging to their organization.
                         "scan_date": "2026-02-02T21:50:00Z",
                         "scan_success": True,
                         "created_at": "2026-01-15T10:30:00Z",
-                        "updated_at": "2026-02-02T21:50:00Z"
+                        "updated_at": "2026-02-02T21:50:00Z",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Scan failed",
@@ -1243,10 +1218,10 @@ Users can only scan targets belonging to their organization.
                 "application/json": {
                     "example": {
                         "error": "Scan Error",
-                        "detail": "Failed to connect to target for scanning"
+                        "detail": "Failed to connect to target for scanning",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -1254,10 +1229,10 @@ Users can only scan targets belonging to their organization.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied to this target",
@@ -1265,10 +1240,10 @@ Users can only scan targets belonging to their organization.
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Accès refusé à cette cible"
+                        "detail": "Accès refusé à cette cible",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Target not found",
@@ -1276,10 +1251,10 @@ Users can only scan targets belonging to their organization.
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée"
+                        "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée",
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -1288,10 +1263,10 @@ Users can only scan targets belonging to their organization.
                     "example": {
                         "error": "Too Many Requests",
                         "detail": "Rate limit exceeded. Maximum 20 requests per minute.",
-                        "retry_after": 30
+                        "retry_after": 30,
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -1299,19 +1274,19 @@ Users can only scan targets belonging to their organization.
                 "application/json": {
                     "example": {
                         "error": "Internal Server Error",
-                        "detail": "An unexpected error occurred during scan"
+                        "detail": "An unexpected error occurred during scan",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["targets"]
+    tags=["targets"],
 )
 async def scan_target(
     request: Request,
     target_id: str,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ) -> TargetResponse:
     """Scan target capabilities and update information."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1320,20 +1295,19 @@ async def scan_target(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "target_id": target_id
-        }
+            "target_id": target_id,
+        },
     )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée"
+            detail=f"Cible {target_id} non trouvée",
         )
 
     if target.organization_id != current_user.organization_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette cible"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )
 
     scanner = TargetScannerService()
@@ -1388,12 +1362,12 @@ Retrieve all capabilities detected for a specific target.
                         "platform_info": {
                             "system": "Linux",
                             "release": "5.15.0-91-generic",
-                            "machine": "x86_64"
+                            "machine": "x86_64",
                         },
                         "os_info": {
                             "name": "Ubuntu",
                             "version": "22.04",
-                            "codename": "jammy"
+                            "codename": "jammy",
                         },
                         "capabilities": [
                             {
@@ -1402,22 +1376,19 @@ Retrieve all capabilities detected for a specific target.
                                 "version": "24.0.7",
                                 "details": {
                                     "api_version": "1.43",
-                                    "socket": "/var/run/docker.sock"
-                                }
+                                    "socket": "/var/run/docker.sock",
+                                },
                             },
                             {
                                 "type": "docker_compose",
                                 "available": True,
-                                "version": "2.23.0"
+                                "version": "2.23.0",
                             },
-                            {
-                                "type": "kubernetes",
-                                "available": False
-                            }
-                        ]
+                            {"type": "kubernetes", "available": False},
+                        ],
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -1425,10 +1396,10 @@ Retrieve all capabilities detected for a specific target.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied to this target",
@@ -1436,10 +1407,10 @@ Retrieve all capabilities detected for a specific target.
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Accès refusé à cette cible"
+                        "detail": "Accès refusé à cette cible",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Target not found",
@@ -1447,10 +1418,10 @@ Retrieve all capabilities detected for a specific target.
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée"
+                        "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée",
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -1459,10 +1430,10 @@ Retrieve all capabilities detected for a specific target.
                     "example": {
                         "error": "Too Many Requests",
                         "detail": "Rate limit exceeded. Maximum 100 requests per minute.",
-                        "retry_after": 30
+                        "retry_after": 30,
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -1470,44 +1441,41 @@ Retrieve all capabilities detected for a specific target.
                 "application/json": {
                     "example": {
                         "error": "Internal Server Error",
-                        "detail": "An unexpected error occurred"
+                        "detail": "An unexpected error occurred",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["targets"]
+    tags=["targets"],
 )
 async def get_target_capabilities(
     request: Request,
     target_id: str,
     capability_type: Optional[CapabilityType] = None,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ) -> TargetCapabilitiesResponse:
     """Retrieve target capabilities with optional filtering."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Getting capabilities for target {target_id}",
-        extra={"correlation_id": correlation_id, "target_id": target_id}
+        extra={"correlation_id": correlation_id, "target_id": target_id},
     )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée"
+            detail=f"Cible {target_id} non trouvée",
         )
 
     if target.organization_id != current_user.organization_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette cible"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )
 
     capabilities = await TargetService.list_capabilities(
-        db=session,
-        target_id=target.id,
-        capability_type=capability_type
+        db=session, target_id=target.id, capability_type=capability_type
     )
 
     return TargetCapabilitiesResponse(
@@ -1570,11 +1538,11 @@ Returns 404 if the capability type is not found for the target.
                         "details": {
                             "api_version": "1.43",
                             "socket": "/var/run/docker.sock",
-                            "root_dir": "/var/lib/docker"
-                        }
+                            "root_dir": "/var/lib/docker",
+                        },
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -1582,10 +1550,10 @@ Returns 404 if the capability type is not found for the target.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied to this target",
@@ -1593,10 +1561,10 @@ Returns 404 if the capability type is not found for the target.
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Accès refusé à cette cible"
+                        "detail": "Accès refusé à cette cible",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Target or capability not found",
@@ -1607,19 +1575,19 @@ Returns 404 if the capability type is not found for the target.
                             "summary": "Target not found",
                             "value": {
                                 "error": "Not Found",
-                                "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée"
-                            }
+                                "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée",
+                            },
                         },
                         "capability_not_found": {
                             "summary": "Capability not found",
                             "value": {
                                 "error": "Not Found",
-                                "detail": "Capacité kubernetes non trouvée pour cette cible"
-                            }
-                        }
+                                "detail": "Capacité kubernetes non trouvée pour cette cible",
+                            },
+                        },
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -1628,10 +1596,10 @@ Returns 404 if the capability type is not found for the target.
                     "example": {
                         "error": "Too Many Requests",
                         "detail": "Rate limit exceeded. Maximum 100 requests per minute.",
-                        "retry_after": 30
+                        "retry_after": 30,
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -1639,50 +1607,51 @@ Returns 404 if the capability type is not found for the target.
                 "application/json": {
                     "example": {
                         "error": "Internal Server Error",
-                        "detail": "An unexpected error occurred"
+                        "detail": "An unexpected error occurred",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["targets"]
+    tags=["targets"],
 )
 async def get_target_capability_by_type(
     request: Request,
     target_id: str,
     capability_type: CapabilityType,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ) -> TargetCapabilityResponse:
     """Retrieve a specific capability by type for a target."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Getting capability {capability_type} for target {target_id}",
-        extra={"correlation_id": correlation_id, "target_id": target_id, "capability_type": str(capability_type)}
+        extra={
+            "correlation_id": correlation_id,
+            "target_id": target_id,
+            "capability_type": str(capability_type),
+        },
     )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée"
+            detail=f"Cible {target_id} non trouvée",
         )
 
     if target.organization_id != current_user.organization_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette cible"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )
 
     capabilities = await TargetService.list_capabilities(
-        db=session,
-        target_id=target.id,
-        capability_type=capability_type
+        db=session, target_id=target.id, capability_type=capability_type
     )
 
     if not capabilities:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Capacité {capability_type.value} non trouvée pour cette cible"
+            detail=f"Capacité {capability_type.value} non trouvée pour cette cible",
         )
 
     return TargetCapabilityResponse.model_validate(capabilities[0])
@@ -1736,23 +1705,23 @@ Returns an array of virtualization capabilities, which may be empty if no virtua
                                     "version": "8.0.0",
                                     "details": {
                                         "uri": "qemu:///system",
-                                        "hypervisor": "QEMU"
-                                    }
+                                        "hypervisor": "QEMU",
+                                    },
                                 },
                                 {
                                     "type": "virtualbox",
                                     "available": True,
-                                    "version": "7.0.12"
-                                }
-                            ]
+                                    "version": "7.0.12",
+                                },
+                            ],
                         },
                         "no_capabilities": {
                             "summary": "No virtualization detected",
-                            "value": []
-                        }
+                            "value": [],
+                        },
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -1760,10 +1729,10 @@ Returns an array of virtualization capabilities, which may be empty if no virtua
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied to this target",
@@ -1771,10 +1740,10 @@ Returns an array of virtualization capabilities, which may be empty if no virtua
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Accès refusé à cette cible"
+                        "detail": "Accès refusé à cette cible",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Target not found",
@@ -1782,10 +1751,10 @@ Returns an array of virtualization capabilities, which may be empty if no virtua
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée"
+                        "detail": "Cible 550e8400-e29b-41d4-a716-446655440000 non trouvée",
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -1794,10 +1763,10 @@ Returns an array of virtualization capabilities, which may be empty if no virtua
                     "example": {
                         "error": "Too Many Requests",
                         "detail": "Rate limit exceeded. Maximum 100 requests per minute.",
-                        "retry_after": 30
+                        "retry_after": 30,
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -1805,40 +1774,41 @@ Returns an array of virtualization capabilities, which may be empty if no virtua
                 "application/json": {
                     "example": {
                         "error": "Internal Server Error",
-                        "detail": "An unexpected error occurred"
+                        "detail": "An unexpected error occurred",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["targets"]
+    tags=["targets"],
 )
 async def get_target_virtualization_capabilities(
     request: Request,
     target_id: str,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ) -> List[TargetCapabilityResponse]:
     """Retrieve virtualization capabilities for a target."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Getting virtualization capabilities for target {target_id}",
-        extra={"correlation_id": correlation_id, "target_id": target_id}
+        extra={"correlation_id": correlation_id, "target_id": target_id},
     )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée"
+            detail=f"Cible {target_id} non trouvée",
         )
 
     if target.organization_id != current_user.organization_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette cible"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )
 
-    capabilities = await TargetService.list_capabilities(db=session, target_id=target.id)
+    capabilities = await TargetService.list_capabilities(
+        db=session, target_id=target.id
+    )
 
     virtualization_capabilities = [
         TargetCapabilityResponse.model_validate(capability)

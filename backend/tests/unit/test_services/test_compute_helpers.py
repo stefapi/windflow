@@ -8,8 +8,6 @@ Aucun mock nécessaire — tests déterministes et rapides.
 
 from __future__ import annotations
 
-import pytest
-
 from app.helper.compute_helpers import (
     apply_filters,
     extract_uptime,
@@ -19,11 +17,10 @@ from app.helper.compute_helpers import (
 from app.schemas.compute import (
     ContainerPortMapping,
     DiscoveredItem,
-    StandaloneContainer,
-    StackWithServices,
     ServiceWithMetrics,
+    StackWithServices,
+    StandaloneContainer,
 )
-
 
 # =============================================================================
 # Helpers — construction d'objets domaine pour les tests de filtrage
@@ -48,8 +45,12 @@ def _make_stack(
         status=status,  # type: ignore[arg-type]
         services=[
             ServiceWithMetrics(
-                id="svc1", name="svc", image="nginx",
-                status="running", cpu_percent=0.0, memory_usage="0M",
+                id="svc1",
+                name="svc",
+                image="nginx",
+                status="running",
+                cpu_percent=0.0,
+                memory_usage="0M",
             )
         ],
     )
@@ -147,7 +148,10 @@ class TestParsePorts:
         result = parse_ports(data)
         assert len(result) == 1
         assert result[0] == ContainerPortMapping(
-            host_ip="0.0.0.0", host_port=8080, container_port=80, protocol="tcp",
+            host_ip="0.0.0.0",
+            host_port=8080,
+            container_port=80,
+            protocol="tcp",
         )
 
     def test_filters_incomplete_ports(self) -> None:
@@ -220,7 +224,9 @@ class TestApplyFilters:
         discovered = [_make_discovered()]
         standalone = [_make_standalone()]
 
-        rs, rd, rc = apply_filters(stacks, discovered, standalone, type_filter="managed")
+        rs, rd, rc = apply_filters(
+            stacks, discovered, standalone, type_filter="managed"
+        )
 
         assert rs == stacks
         assert rd == []
@@ -231,7 +237,9 @@ class TestApplyFilters:
         discovered = [_make_discovered()]
         standalone = [_make_standalone()]
 
-        rs, rd, rc = apply_filters(stacks, discovered, standalone, type_filter="discovered")
+        rs, rd, rc = apply_filters(
+            stacks, discovered, standalone, type_filter="discovered"
+        )
 
         assert rs == []
         assert rd == discovered
@@ -242,14 +250,19 @@ class TestApplyFilters:
         discovered = [_make_discovered()]
         standalone = [_make_standalone()]
 
-        rs, rd, rc = apply_filters(stacks, discovered, standalone, type_filter="standalone")
+        rs, rd, rc = apply_filters(
+            stacks, discovered, standalone, type_filter="standalone"
+        )
 
         assert rs == []
         assert rd == []
         assert rc == standalone
 
     def test_search_filter_case_insensitive(self) -> None:
-        stacks = [_make_stack(name="Nginx-Stack"), _make_stack(stack_id="s2", name="Redis")]
+        stacks = [
+            _make_stack(name="Nginx-Stack"),
+            _make_stack(stack_id="s2", name="Redis"),
+        ]
         discovered = [_make_discovered(name="nginx-proj")]
         standalone = [_make_standalone(name="Redis-standalone")]
 
@@ -313,7 +326,9 @@ class TestApplyFilters:
         standalone = [_make_standalone(status="running", target_id="local")]
 
         rs, _, rc = apply_filters(
-            stacks, [], standalone,
+            stacks,
+            [],
+            standalone,
             type_filter="managed",
             status_filter="running",
             target_id_filter="local",

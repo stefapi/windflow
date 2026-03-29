@@ -12,6 +12,9 @@ import asyncio
 from typing import AsyncGenerator, Generator
 
 import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from app.database import Base, get_db
 from app.main import app
 from app.models.organization import Organization
@@ -19,8 +22,6 @@ from app.models.stack import Stack
 from app.models.target import Target, TargetStatus, TargetType
 from app.models.user import User
 from app.services.user_service import UserService
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Configuration pytest-asyncio
 pytest_plugins = ("pytest_asyncio",)

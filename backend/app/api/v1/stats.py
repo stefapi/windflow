@@ -3,29 +3,29 @@ Endpoints API pour les statistiques du dashboard.
 """
 
 import time
-
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
 from datetime import datetime, timedelta
 from typing import Optional
 
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ...auth.dependencies import get_current_active_user
 from ...database import get_db
-from ...models.stack import Stack
 from ...models.deployment import Deployment
+from ...models.stack import Stack
 from ...models.target import Target
+from ...models.user import User
 from ...schemas.dashboard import (
-    DashboardStats,
-    TargetHealthItem,
     ActivityFeedItem,
     AlertItem,
+    DashboardStats,
     DeploymentMetrics,
-    ResourceMetrics,
-    ResourceMetricPoint,
     ResourceCounter,
+    ResourceMetricPoint,
+    ResourceMetrics,
+    TargetHealthItem,
 )
-from ...auth.dependencies import get_current_active_user
-from ...models.user import User
 
 router = APIRouter()
 
@@ -52,18 +52,25 @@ async def get_dashboard_stats(
     targets = targets_result.scalars().all()
 
     total_targets = len(targets)
-    target_health: dict[str, int] = {"online": 0, "offline": 0, "error": 0, "maintenance": 0}
+    target_health: dict[str, int] = {
+        "online": 0,
+        "offline": 0,
+        "error": 0,
+        "maintenance": 0,
+    }
     targets_detail: list[TargetHealthItem] = []
     for t in targets:
         status_key = t.status.value if hasattr(t.status, "value") else str(t.status)
         target_health[status_key] = target_health.get(status_key, 0) + 1
-        targets_detail.append(TargetHealthItem(
-            id=t.id,
-            name=t.name,
-            status=status_key,
-            host=t.host,
-            last_check=t.last_check,
-        ))
+        targets_detail.append(
+            TargetHealthItem(
+                id=t.id,
+                name=t.name,
+                status=status_key,
+                host=t.host,
+                last_check=t.last_check,
+            )
+        )
     online_targets = target_health.get("online", 0)
 
     # --- Stacks (STORY-432) ---
@@ -86,9 +93,8 @@ async def get_dashboard_stats(
         dep_base = dep_base.where(Deployment.organization_id == org_id)
 
     # Compteurs par statut
-    dep_status_stmt = (
-        select(Deployment.status, func.count(Deployment.id))
-        .group_by(Deployment.status)
+    dep_status_stmt = select(Deployment.status, func.count(Deployment.id)).group_by(
+        Deployment.status
     )
     if org_id:
         dep_status_stmt = dep_status_stmt.where(Deployment.organization_id == org_id)
@@ -101,7 +107,11 @@ async def get_dashboard_stats(
     total_dep = sum(status_counts.values())
     success_dep = status_counts.get("running", 0)
     failed_dep = status_counts.get("failed", 0)
-    active_dep = status_counts.get("running", 0) + status_counts.get("pending", 0) + status_counts.get("deploying", 0)
+    active_dep = (
+        status_counts.get("running", 0)
+        + status_counts.get("pending", 0)
+        + status_counts.get("deploying", 0)
+    )
     success_rate = (success_dep / total_dep * 100) if total_dep > 0 else 0.0
 
     deployment_metrics = DeploymentMetrics(
@@ -115,7 +125,9 @@ async def get_dashboard_stats(
     # --- Compteurs Containers (STORY-432) ---
     # Les containers sont déduits des deployments avec statut running/stopped
     containers_running = status_counts.get("running", 0)
-    containers_stopped = status_counts.get("stopped", 0) + status_counts.get("failed", 0)
+    containers_stopped = status_counts.get("stopped", 0) + status_counts.get(
+        "failed", 0
+    )
     containers_total = containers_running + containers_stopped
 
     containers_counter = ResourceCounter(
@@ -135,9 +147,7 @@ async def get_dashboard_stats(
 
     # --- Activité récente (derniers déploiements) ---
     recent_dep_stmt = (
-        select(Deployment)
-        .order_by(Deployment.created_at.desc())
-        .limit(20)
+        select(Deployment).order_by(Deployment.created_at.desc()).limit(20)
     )
     if org_id:
         recent_dep_stmt = recent_dep_stmt.where(Deployment.organization_id == org_id)
@@ -145,15 +155,19 @@ async def get_dashboard_stats(
 
     recent_activity: list[ActivityFeedItem] = []
     for dep in recent_deps:
-        dep_status = dep.status.value if hasattr(dep.status, "value") else str(dep.status)
-        recent_activity.append(ActivityFeedItem(
-            id=dep.id,
-            type="deployment",
-            title=f"Déploiement {dep.name or dep.id[:8]}",
-            status=dep_status,
-            timestamp=dep.created_at,
-            details=f"Stack: {dep.stack_id[:8]}... → Target: {dep.target_id[:8]}...",
-        ))
+        dep_status = (
+            dep.status.value if hasattr(dep.status, "value") else str(dep.status)
+        )
+        recent_activity.append(
+            ActivityFeedItem(
+                id=dep.id,
+                type="deployment",
+                title=f"Déploiement {dep.name or dep.id[:8]}",
+                status=dep_status,
+                timestamp=dep.created_at,
+                details=f"Stack: {dep.stack_id[:8]}... → Target: {dep.target_id[:8]}...",
+            )
+        )
 
     # --- Alertes automatiques ---
     alerts: list[AlertItem] = []
@@ -164,63 +178,74 @@ async def get_dashboard_stats(
         status_key = t.status.value if hasattr(t.status, "value") else str(t.status)
         if status_key == "error":
             alert_counter += 1
-            alerts.append(AlertItem(
-                id=f"alert-target-{t.id}",
-                severity="critical",
-                title=f"Target en erreur : {t.name}",
-                message=f"La target {t.name} ({t.host}) est en état d'erreur.",
-                source="target",
-                timestamp=t.updated_at or datetime.utcnow(),
-                acknowledged=False,
-            ))
+            alerts.append(
+                AlertItem(
+                    id=f"alert-target-{t.id}",
+                    severity="critical",
+                    title=f"Target en erreur : {t.name}",
+                    message=f"La target {t.name} ({t.host}) est en état d'erreur.",
+                    source="target",
+                    timestamp=t.updated_at or datetime.utcnow(),
+                    acknowledged=False,
+                )
+            )
         elif status_key == "offline":
             alert_counter += 1
-            alerts.append(AlertItem(
-                id=f"alert-target-{t.id}",
-                severity="warning",
-                title=f"Target hors ligne : {t.name}",
-                message=f"La target {t.name} ({t.host}) est hors ligne.",
-                source="target",
-                timestamp=t.updated_at or datetime.utcnow(),
-                acknowledged=False,
-            ))
+            alerts.append(
+                AlertItem(
+                    id=f"alert-target-{t.id}",
+                    severity="warning",
+                    title=f"Target hors ligne : {t.name}",
+                    message=f"La target {t.name} ({t.host}) est hors ligne.",
+                    source="target",
+                    timestamp=t.updated_at or datetime.utcnow(),
+                    acknowledged=False,
+                )
+            )
 
     # Alertes déploiements échoués récents
     for dep in recent_deps:
-        dep_status = dep.status.value if hasattr(dep.status, "value") else str(dep.status)
+        dep_status = (
+            dep.status.value if hasattr(dep.status, "value") else str(dep.status)
+        )
         if dep_status == "failed":
             alert_counter += 1
-            alerts.append(AlertItem(
-                id=f"alert-deploy-{dep.id}",
-                severity="critical",
-                title=f"Déploiement échoué : {dep.name or dep.id[:8]}",
-                message=f"Le déploiement {dep.name or dep.id[:8]} a échoué.",
-                source="deployment",
-                timestamp=dep.updated_at or dep.created_at,
-                acknowledged=False,
-            ))
+            alerts.append(
+                AlertItem(
+                    id=f"alert-deploy-{dep.id}",
+                    severity="critical",
+                    title=f"Déploiement échoué : {dep.name or dep.id[:8]}",
+                    message=f"Le déploiement {dep.name or dep.id[:8]} a échoué.",
+                    source="deployment",
+                    timestamp=dep.updated_at or dep.created_at,
+                    acknowledged=False,
+                )
+            )
             if alert_counter >= 10:
                 break
 
     # Alerte taux de succès faible
     if total_dep > 5 and success_rate < 50.0:
-        alerts.append(AlertItem(
-            id="alert-success-rate",
-            severity="warning",
-            title="Taux de succès faible",
-            message=f"Le taux de succès des déploiements est de {success_rate:.1f}%.",
-            source="system",
-            timestamp=datetime.utcnow(),
-            acknowledged=False,
-        ))
+        alerts.append(
+            AlertItem(
+                id="alert-success-rate",
+                severity="warning",
+                title="Taux de succès faible",
+                message=f"Le taux de succès des déploiements est de {success_rate:.1f}%.",
+                source="system",
+                timestamp=datetime.utcnow(),
+                acknowledged=False,
+            )
+        )
 
     # --- Métriques ressources système ---
     resource_metrics = ResourceMetrics()
     try:
         import psutil
+
         cpu_percent = psutil.cpu_percent(interval=0.1)
         mem = psutil.virtual_memory()
-        disk = psutil.disk_usage('/')
+        disk = psutil.disk_usage("/")
         # Calcul uptime
         uptime_seconds = int(time.time() - psutil.boot_time())
 
@@ -287,6 +312,8 @@ async def get_stack_stats(stack_id: str, db: AsyncSession = Depends(get_db)):
     recent_deployments = (await db.execute(recent_deployments_stmt)).scalar()
 
     return {
-        "deployments_by_status": {status: count for status, count in deployments_by_status},
-        "deployments_last_30_days": recent_deployments
+        "deployments_by_status": {
+            status: count for status, count in deployments_by_status
+        },
+        "deployments_last_30_days": recent_deployments,
     }

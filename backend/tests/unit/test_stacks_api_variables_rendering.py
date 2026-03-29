@@ -1,10 +1,8 @@
 """Tests pour le rendu des variables dans les endpoints stacks API."""
 
-import pytest
-from datetime import datetime
-
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.api.v1.stacks import _render_stack_variables
@@ -18,9 +16,20 @@ class TestStacksAPIVariablesRendering:
         """Vérifie que StackSummaryResponse contient uniquement les champs attendus."""
         fields = StackSummaryResponse.model_fields.keys()
         expected_fields = {
-            "id", "name", "description", "version", "category", "tags",
-            "icon_url", "screenshots", "author", "license",
-            "downloads", "rating", "created_at", "updated_at"
+            "id",
+            "name",
+            "description",
+            "version",
+            "category",
+            "tags",
+            "icon_url",
+            "screenshots",
+            "author",
+            "license",
+            "downloads",
+            "rating",
+            "created_at",
+            "updated_at",
         }
         assert set(fields) == expected_fields
 
@@ -40,12 +49,12 @@ class TestStacksAPIVariablesRendering:
             variables={
                 "POSTGRES_PASSWORD": {
                     "default": "{{ generate_password(24) }}",
-                    "description": "Database password"
+                    "description": "Database password",
                 },
                 "POSTGRES_USER": {
                     "default": "postgres",
-                    "description": "Database user"
-                }
+                    "description": "Database user",
+                },
             },
             tags=["database", "postgresql"],
             is_public=True,
@@ -55,7 +64,7 @@ class TestStacksAPIVariablesRendering:
             documentation_url=None,
             organization_id="org-123",
             created_at="2024-01-01T00:00:00",
-            updated_at="2024-01-01T00:00:00"
+            updated_at="2024-01-01T00:00:00",
         )
 
         # Rendre les variables
@@ -83,15 +92,9 @@ class TestStacksAPIVariablesRendering:
             license="MIT",
             template={"version": "3.8"},
             variables={
-                "DB_PASSWORD": {
-                    "default": "{{ generate_password(16) }}"
-                },
-                "ADMIN_PASSWORD": {
-                    "default": "{{ generate_password(16) }}"
-                },
-                "API_SECRET": {
-                    "default": "{{ generate_secret(32) }}"
-                }
+                "DB_PASSWORD": {"default": "{{ generate_password(16) }}"},
+                "ADMIN_PASSWORD": {"default": "{{ generate_password(16) }}"},
+                "API_SECRET": {"default": "{{ generate_secret(32) }}"},
             },
             tags=["multi"],
             is_public=True,
@@ -101,7 +104,7 @@ class TestStacksAPIVariablesRendering:
             documentation_url=None,
             organization_id="org-123",
             created_at="2024-01-01T00:00:00",
-            updated_at="2024-01-01T00:00:00"
+            updated_at="2024-01-01T00:00:00",
         )
 
         # Rendre les variables
@@ -138,14 +141,7 @@ class TestStacksAPIVariablesRendering:
             author="WindFlow",
             license="MIT",
             template={"version": "3.8"},
-            variables={
-                "APP_NAME": {
-                    "default": "myapp"
-                },
-                "PORT": {
-                    "default": "8080"
-                }
-            },
+            variables={"APP_NAME": {"default": "myapp"}, "PORT": {"default": "8080"}},
             tags=["simple"],
             is_public=True,
             downloads=0,
@@ -154,7 +150,7 @@ class TestStacksAPIVariablesRendering:
             documentation_url=None,
             organization_id="org-123",
             created_at="2024-01-01T00:00:00",
-            updated_at="2024-01-01T00:00:00"
+            updated_at="2024-01-01T00:00:00",
         )
 
         # Rendre les variables
@@ -185,7 +181,7 @@ class TestStacksAPIVariablesRendering:
             documentation_url=None,
             organization_id="org-123",
             created_at="2024-01-01T00:00:00",
-            updated_at="2024-01-01T00:00:00"
+            updated_at="2024-01-01T00:00:00",
         )
 
         # Rendre les variables
@@ -206,11 +202,7 @@ class TestStacksAPIVariablesRendering:
             author="WindFlow",
             license="MIT",
             template={"version": "3.8"},
-            variables={
-                "PASSWORD": {
-                    "default": "{{ generate_password(24) }}"
-                }
-            },
+            variables={"PASSWORD": {"default": "{{ generate_password(24) }}"}},
             tags=["database"],
             is_public=True,
             downloads=0,
@@ -219,7 +211,7 @@ class TestStacksAPIVariablesRendering:
             documentation_url=None,
             organization_id="org-123",
             created_at="2024-01-01T00:00:00",
-            updated_at="2024-01-01T00:00:00"
+            updated_at="2024-01-01T00:00:00",
         )
 
         # Rendre les variables plusieurs fois

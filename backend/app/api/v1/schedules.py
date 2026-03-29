@@ -1,21 +1,22 @@
 """
 API endpoints pour la gestion des tâches planifiées.
 """
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...auth.dependencies import get_current_active_user
 from ...database import get_db
 from ...models.scheduled_task import TaskType
+from ...models.user import User
 from ...schemas.scheduled_task import (
     ScheduledTaskCreate,
-    ScheduledTaskUpdate,
     ScheduledTaskResponse,
+    ScheduledTaskUpdate,
 )
 from ...services.scheduler_service import SchedulerService
-from ...auth.dependencies import get_current_active_user
-from ...models.user import User
 
 router = APIRouter()
 
@@ -73,9 +74,7 @@ async def update_schedule(
 ):
     """Met à jour une tâche planifiée."""
     service = SchedulerService(db)
-    task = await service.update_task(
-        task_id, **data.model_dump(exclude_none=True)
-    )
+    task = await service.update_task(task_id, **data.model_dump(exclude_none=True))
     if not task:
         raise HTTPException(status_code=404, detail="Tâche planifiée non trouvée")
     return task

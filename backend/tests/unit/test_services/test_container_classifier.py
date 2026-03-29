@@ -9,17 +9,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from app.services.container_classifier import (
-    classify_containers,
-    is_compose_project,
-    is_windflow_managed,
     LABEL_COMPOSE_PROJECT,
     LABEL_WINDFLOW_MANAGED,
     LABEL_WINDFLOW_STACK_ID,
+    classify_containers,
+    is_compose_project,
+    is_windflow_managed,
 )
-
 
 # =============================================================================
 # Helpers
@@ -86,7 +83,9 @@ class TestClassifyContainers:
         assert standalone == []
 
     def test_single_windflow_managed(self) -> None:
-        c = _make_container({LABEL_WINDFLOW_MANAGED: "true", LABEL_WINDFLOW_STACK_ID: "stack-1"})
+        c = _make_container(
+            {LABEL_WINDFLOW_MANAGED: "true", LABEL_WINDFLOW_STACK_ID: "stack-1"}
+        )
         managed, discovered, standalone = classify_containers([c])
         assert "stack-1" in managed
         assert len(managed["stack-1"]) == 1
@@ -122,9 +121,15 @@ class TestClassifyContainers:
         assert standalone == []
 
     def test_multiple_stacks(self) -> None:
-        c1 = _make_container({LABEL_WINDFLOW_MANAGED: "true", LABEL_WINDFLOW_STACK_ID: "s1"})
-        c2 = _make_container({LABEL_WINDFLOW_MANAGED: "true", LABEL_WINDFLOW_STACK_ID: "s2"})
-        c3 = _make_container({LABEL_WINDFLOW_MANAGED: "true", LABEL_WINDFLOW_STACK_ID: "s1"})
+        c1 = _make_container(
+            {LABEL_WINDFLOW_MANAGED: "true", LABEL_WINDFLOW_STACK_ID: "s1"}
+        )
+        c2 = _make_container(
+            {LABEL_WINDFLOW_MANAGED: "true", LABEL_WINDFLOW_STACK_ID: "s2"}
+        )
+        c3 = _make_container(
+            {LABEL_WINDFLOW_MANAGED: "true", LABEL_WINDFLOW_STACK_ID: "s1"}
+        )
         managed, _, _ = classify_containers([c1, c2, c3])
         assert len(managed["s1"]) == 2
         assert len(managed["s2"]) == 1
@@ -140,10 +145,14 @@ class TestClassifyContainers:
     def test_mixed_classification(self) -> None:
         """Containers répartis dans les 3 catégories."""
         containers = [
-            _make_container({LABEL_WINDFLOW_MANAGED: "true", LABEL_WINDFLOW_STACK_ID: "s1"}),
+            _make_container(
+                {LABEL_WINDFLOW_MANAGED: "true", LABEL_WINDFLOW_STACK_ID: "s1"}
+            ),
             _make_container({LABEL_COMPOSE_PROJECT: "proj"}),
             _make_container({}),
-            _make_container({LABEL_WINDFLOW_MANAGED: "true", LABEL_WINDFLOW_STACK_ID: "s1"}),
+            _make_container(
+                {LABEL_WINDFLOW_MANAGED: "true", LABEL_WINDFLOW_STACK_ID: "s1"}
+            ),
             _make_container({}),
         ]
         managed, discovered, standalone = classify_containers(containers)

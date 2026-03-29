@@ -3,22 +3,26 @@ Modèle Target pour gestion des serveurs cibles de déploiement.
 """
 
 from datetime import datetime
-from uuid import uuid4
 from enum import Enum
-from sqlalchemy import String, DateTime, JSON, ForeignKey, Enum as SQLEnum, Boolean
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING, List
+from uuid import uuid4
+
+from sqlalchemy import JSON, Boolean, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
 
 if TYPE_CHECKING:
-    from .organization import Organization
     from .deployment import Deployment
+    from .organization import Organization
     from .target_capability import TargetCapability
 
 
 class TargetType(str, Enum):
     """Types de cibles de déploiement supportés."""
+
     DOCKER = "docker"
     DOCKER_SWARM = "docker_swarm"
     KUBERNETES = "kubernetes"
@@ -28,6 +32,7 @@ class TargetType(str, Enum):
 
 class TargetStatus(str, Enum):
     """Statuts possibles pour une cible."""
+
     ONLINE = "online"
     OFFLINE = "offline"
     ERROR = "error"
@@ -45,9 +50,7 @@ class Target(Base):
 
     # Clé primaire
     id: Mapped[str] = mapped_column(
-        String(36),
-        primary_key=True,
-        default=lambda: str(uuid4())
+        String(36), primary_key=True, default=lambda: str(uuid4())
     )
 
     # Informations de base
@@ -58,9 +61,7 @@ class Target(Base):
     host: Mapped[str] = mapped_column(String(255), nullable=False)
     port: Mapped[int] = mapped_column(default=22, nullable=False)
     type: Mapped[TargetType] = mapped_column(
-        SQLEnum(TargetType),
-        nullable=False,
-        default=TargetType.DOCKER
+        SQLEnum(TargetType), nullable=False, default=TargetType.DOCKER
     )
 
     # Credentials (chiffrés en production avec Vault)
@@ -68,35 +69,31 @@ class Target(Base):
 
     # Statut
     status: Mapped[TargetStatus] = mapped_column(
-        SQLEnum(TargetStatus),
-        nullable=False,
-        default=TargetStatus.OFFLINE
+        SQLEnum(TargetStatus), nullable=False, default=TargetStatus.OFFLINE
     )
     last_check: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
     # Configuration additionnelle
     extra_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     scan_date: Mapped[datetime | None] = mapped_column(
-        DateTime,
-        nullable=True,
-        comment="Timestamp of the last capabilities scan"
+        DateTime, nullable=True, comment="Timestamp of the last capabilities scan"
     )
     scan_success: Mapped[bool | None] = mapped_column(
         Boolean,
         nullable=True,
-        comment="Indicates if the last capabilities scan succeeded"
+        comment="Indicates if the last capabilities scan succeeded",
     )
     platform_info: Mapped[dict | None] = mapped_column(
         JSON,
         nullable=True,
         default=None,
-        comment="Platform capabilities detected during the last scan"
+        comment="Platform capabilities detected during the last scan",
     )
     os_info: Mapped[dict | None] = mapped_column(
         JSON,
         nullable=True,
         default=None,
-        comment="Operating system information detected during the last scan"
+        comment="Operating system information detected during the last scan",
     )
 
     # Organisation (multi-tenant)
@@ -104,38 +101,28 @@ class Target(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
     # Relations
     organization: Mapped["Organization"] = relationship(
-        "Organization",
-        back_populates="targets"
+        "Organization", back_populates="targets"
     )
 
     deployments: Mapped[List["Deployment"]] = relationship(
-        "Deployment",
-        back_populates="target",
-        cascade="all, delete-orphan"
+        "Deployment", back_populates="target", cascade="all, delete-orphan"
     )
 
     capabilities: Mapped[List["TargetCapability"]] = relationship(
-        "TargetCapability",
-        back_populates="target",
-        cascade="all, delete-orphan"
+        "TargetCapability", back_populates="target", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

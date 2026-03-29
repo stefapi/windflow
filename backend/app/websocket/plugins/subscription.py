@@ -7,10 +7,10 @@ Handles CLIENT → SERVER subscription messages like:
 - deployment_logs: Subscribe to deployment-specific logs
 """
 
-from typing import Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, Optional
 
-from ..plugin import WebSocketMessageHandler, PluginContext
+from ..plugin import PluginContext, WebSocketMessageHandler
 
 
 class SubscriptionHandler(WebSocketMessageHandler):
@@ -29,9 +29,7 @@ class SubscriptionHandler(WebSocketMessageHandler):
     handles_message_types = ["subscribe", "unsubscribe", "deployment_logs"]
 
     async def handle_message(
-        self,
-        message: Dict[str, Any],
-        context: PluginContext
+        self, message: Dict[str, Any], context: PluginContext
     ) -> Optional[Dict[str, Any]]:
         """
         Process subscription messages.
@@ -55,9 +53,7 @@ class SubscriptionHandler(WebSocketMessageHandler):
         return None
 
     async def _handle_subscribe(
-        self,
-        message: Dict[str, Any],
-        context: PluginContext
+        self, message: Dict[str, Any], context: PluginContext
     ) -> Dict[str, Any]:
         """
         Handle subscribe message: client wants to receive specific events.
@@ -78,7 +74,7 @@ class SubscriptionHandler(WebSocketMessageHandler):
             return {
                 "type": "error",
                 "message": "Missing event_type in subscribe message",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
         # Use the helper function from broadcasting module
@@ -89,7 +85,7 @@ class SubscriptionHandler(WebSocketMessageHandler):
             return {
                 "type": "error",
                 "message": "Authentication required",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
         try:
@@ -100,30 +96,25 @@ class SubscriptionHandler(WebSocketMessageHandler):
                 extra={
                     "user_id": user_id,
                     "event_type": event_type,
-                    "action": "subscribe"
-                }
+                    "action": "subscribe",
+                },
             )
 
             return {
                 "type": "subscribed",
                 "timestamp": datetime.utcnow().isoformat(),
-                "data": {"event_type": event_type}
+                "data": {"event_type": event_type},
             }
         except Exception as e:
-            context.logger.error(
-                f"Error subscribing to event: {e}",
-                exc_info=True
-            )
+            context.logger.error(f"Error subscribing to event: {e}", exc_info=True)
             return {
                 "type": "error",
                 "message": f"Subscription failed: {str(e)}",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
     async def _handle_unsubscribe(
-        self,
-        message: Dict[str, Any],
-        context: PluginContext
+        self, message: Dict[str, Any], context: PluginContext
     ) -> Dict[str, Any]:
         """
         Handle unsubscribe message: client wants to stop receiving specific events.
@@ -144,7 +135,7 @@ class SubscriptionHandler(WebSocketMessageHandler):
             return {
                 "type": "error",
                 "message": "Missing event_type in unsubscribe message",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
         from ..broadcasting import unsubscribe_from_event
@@ -154,7 +145,7 @@ class SubscriptionHandler(WebSocketMessageHandler):
             return {
                 "type": "error",
                 "message": "Authentication required",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
         try:
@@ -165,30 +156,25 @@ class SubscriptionHandler(WebSocketMessageHandler):
                 extra={
                     "user_id": user_id,
                     "event_type": event_type,
-                    "action": "unsubscribe"
-                }
+                    "action": "unsubscribe",
+                },
             )
 
             return {
                 "type": "unsubscribed",
                 "timestamp": datetime.utcnow().isoformat(),
-                "data": {"event_type": event_type}
+                "data": {"event_type": event_type},
             }
         except Exception as e:
-            context.logger.error(
-                f"Error unsubscribing from event: {e}",
-                exc_info=True
-            )
+            context.logger.error(f"Error unsubscribing from event: {e}", exc_info=True)
             return {
                 "type": "error",
                 "message": f"Unsubscription failed: {str(e)}",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
     async def _handle_deployment_logs(
-        self,
-        message: Dict[str, Any],
-        context: PluginContext
+        self, message: Dict[str, Any], context: PluginContext
     ) -> Dict[str, Any]:
         """
         Handle deployment_logs message: client wants to receive logs for a deployment.
@@ -209,7 +195,7 @@ class SubscriptionHandler(WebSocketMessageHandler):
             return {
                 "type": "error",
                 "message": "Missing deployment_id in deployment_logs message",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
         from ..broadcasting import subscribe_to_deployment_logs
@@ -219,33 +205,34 @@ class SubscriptionHandler(WebSocketMessageHandler):
             return {
                 "type": "error",
                 "message": "Authentication required",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
         try:
-            await subscribe_to_deployment_logs(user_id, deployment_id, context.websocket)
+            await subscribe_to_deployment_logs(
+                user_id, deployment_id, context.websocket
+            )
 
             context.logger.info(
                 f"User {user_id} subscribed to deployment logs: {deployment_id}",
                 extra={
                     "user_id": user_id,
                     "deployment_id": deployment_id,
-                    "action": "subscribe_deployment_logs"
-                }
+                    "action": "subscribe_deployment_logs",
+                },
             )
 
             return {
                 "type": "logs_subscribed",
                 "timestamp": datetime.utcnow().isoformat(),
-                "data": {"deployment_id": deployment_id}
+                "data": {"deployment_id": deployment_id},
             }
         except Exception as e:
             context.logger.error(
-                f"Error subscribing to deployment logs: {e}",
-                exc_info=True
+                f"Error subscribing to deployment logs: {e}", exc_info=True
             )
             return {
                 "type": "error",
                 "message": f"Deployment logs subscription failed: {str(e)}",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }

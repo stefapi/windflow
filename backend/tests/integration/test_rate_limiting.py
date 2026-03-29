@@ -8,7 +8,6 @@ Vérifie que le système de rate limiting est correctement configuré:
 """
 
 import pytest
-from unittest.mock import patch, AsyncMock
 from httpx import AsyncClient
 
 
@@ -55,8 +54,9 @@ async def test_conditional_rate_limiter_returns_noop():
 @pytest.mark.asyncio
 async def test_conditional_rate_limiter_noop_allows_request():
     """Test that no-op rate limiter allows all requests."""
-    from app.core.rate_limit import conditional_rate_limiter
     from unittest.mock import MagicMock
+
+    from app.core.rate_limit import conditional_rate_limiter
 
     limiter = conditional_rate_limiter(10, 60)
 
@@ -67,7 +67,7 @@ async def test_conditional_rate_limiter_noop_allows_request():
     mock_request.client.host = "127.0.0.1"
 
     # The no-op limiter should not raise any exception
-    if hasattr(limiter, '__call__'):
+    if hasattr(limiter, "__call__"):
         try:
             result = await limiter(mock_request)
             # Should return None (no-op)
@@ -81,9 +81,9 @@ async def test_conditional_rate_limiter_noop_allows_request():
 async def test_rate_limit_aliases():
     """Test rate limit convenience aliases return callables."""
     from app.core.rate_limit import (
-        rate_limit_strict,
         rate_limit_moderate,
         rate_limit_relaxed,
+        rate_limit_strict,
     )
 
     strict = rate_limit_strict()
@@ -116,7 +116,8 @@ async def test_organization_endpoints_have_rate_limiting(client: AsyncClient):
 
     # Check that organization endpoints exist
     org_endpoints = [
-        path for path in schema.get("paths", {}).keys()
+        path
+        for path in schema.get("paths", {}).keys()
         if "/api/v1/organizations" in path
     ]
     assert len(org_endpoints) > 0, "Organization endpoints should be documented"

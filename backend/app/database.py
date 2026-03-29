@@ -4,24 +4,24 @@ Configuration de la base de données avec SQLAlchemy 2.0 async.
 Support SQLite par défaut et PostgreSQL optionnel selon l'architecture modulaire.
 """
 
-from typing import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any, AsyncGenerator
+
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
-    create_async_engine,
+    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
-    AsyncEngine
+    create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import StaticPool, NullPool
-from sqlalchemy import text
+from sqlalchemy.pool import StaticPool
 
 from .config import settings
 
 
 class Base(DeclarativeBase):
     """Base class pour tous les modèles SQLAlchemy."""
-    pass
 
 
 class Database:
@@ -41,7 +41,7 @@ class Database:
         """Crée le moteur de base de données et configure les sessions."""
         # Configuration spécifique selon le type de base de données
         connect_args = {}
-        engine_kwargs = {
+        engine_kwargs: dict[str, Any] = {
             "echo": settings.debug,
         }
 
@@ -54,6 +54,7 @@ class Database:
 
             # Créer le répertoire data si nécessaire
             import os
+
             db_path = settings.database_url.replace("sqlite:///", "")
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
         else:
@@ -64,10 +65,7 @@ class Database:
             engine_kwargs["pool_recycle"] = settings.database_pool_recycle
 
         # Création du moteur async
-        self.engine = create_async_engine(
-            settings.database_url,
-            **engine_kwargs
-        )
+        self.engine = create_async_engine(settings.database_url, **engine_kwargs)
 
         # Factory de sessions
         self.session_factory = async_sessionmaker(
@@ -105,6 +103,7 @@ class Database:
 
         async with self.session() as session:
             from .database_seed import seed_database
+
             await seed_database(session)
 
     @asynccontextmanager

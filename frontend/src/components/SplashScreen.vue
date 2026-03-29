@@ -34,29 +34,29 @@ withDefaults(defineProps<Props>(), {
 <style scoped>
 .splash-screen {
   position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--color-bg-primary);
-  background-image: radial-gradient(ellipse at 50% 40%, var(--color-accent-light) 0%, transparent 60%);
   z-index: 9999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--color-bg-primary);
+  inset: 0;
+  background-image: radial-gradient(ellipse at 50% 40%, var(--color-accent-light) 0%, transparent 60%);
 }
 
 .splash-content {
+  display: flex;
+  align-items: center;
   text-align: center;
   color: var(--color-text-primary);
-  display: flex;
   flex-direction: column;
-  align-items: center;
 }
 
 .title {
-  font-size: 2.5rem;
-  font-weight: 700;
   margin: 16px 0 2rem;
-  letter-spacing: 0.05em;
+  font-size: 2.5rem;
   color: var(--color-text-primary);
+  font-weight: 700;
+  letter-spacing: 0.05em;
 }
 
 .loading-container {
@@ -82,9 +82,9 @@ withDefaults(defineProps<Props>(), {
 }
 
 .loading-text {
-  font-size: 0.95rem;
-  opacity: 0.7;
   margin: 0;
+  font-size: 0.95rem;
   color: var(--color-text-secondary);
+  opacity: 0.7;
 }
 </style>

@@ -4,8 +4,9 @@ Middleware de logging structuré.
 Log toutes les requêtes avec contexte métier en JSON.
 """
 
-import time
 import logging
+import time
+
 from fastapi import Request
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ async def logging_middleware(request: Request, call_next):
             "path": str(request.url.path),
             "query_params": str(request.query_params),
             "client_ip": request.client.host if request.client else None,
-        }
+        },
     )
 
     # Traitement de la requête
@@ -48,7 +49,7 @@ async def logging_middleware(request: Request, call_next):
             "path": str(request.url.path),
             "status_code": response.status_code,
             "process_time": f"{process_time:.3f}s",
-        }
+        },
     )
 
     # Ajouter le header de timing

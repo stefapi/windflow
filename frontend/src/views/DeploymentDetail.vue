@@ -459,8 +459,8 @@ onUnmounted(() => {
 }
 
 .link {
-  color: var(--el-color-primary);
   text-decoration: none;
+  color: var(--el-color-primary);
 }
 
 .link:hover {
@@ -479,8 +479,8 @@ onUnmounted(() => {
 }
 
 .empty-hint {
+  margin-top: 8px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
-  margin-top: 8px;
 }
 </style>

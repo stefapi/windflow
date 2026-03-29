@@ -70,26 +70,23 @@ const sidebarWidth = computed(() => {
 
 <style scoped>
 .main-layout {
-  height: 100vh;
   overflow: hidden;
+  height: 100vh;
 }
 
 .sidebar-aside {
-  background-color: var(--color-bg-primary);
-  height: 100vh;
   overflow: hidden;
+  height: 100vh;
+  background-color: var(--color-bg-primary);
   transition: width 0.3s ease;
 }
 
 /* Mobile overlay */
 .sidebar-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--color-overlay);
+  inset: 0;
   z-index: 999;
+  background-color: var(--color-overlay);
 }
 
 /* Mobile header */
@@ -102,16 +99,16 @@ const sidebarWidth = computed(() => {
 }
 
 .hamburger-btn {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px;
+  color: var(--color-text-primary);
   background: transparent;
   border: none;
-  color: var(--color-text-primary);
-  cursor: pointer;
-  padding: 8px;
   border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   transition: background-color 0.2s;
+  cursor: pointer;
 }
 
 .hamburger-btn:hover {
@@ -130,33 +127,33 @@ const sidebarWidth = computed(() => {
 }
 
 .main-content {
-  background-color: var(--color-bg-secondary);
-  padding: 20px;
   overflow-y: auto;
   height: 100vh;
+  padding: 20px;
+  background-color: var(--color-bg-secondary);
 }
 
 .content-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 16px;
 }
 
 /* Responsive adjustments */
-@media (max-width: 767px) {
+@media (width <= 767px) {
   .main-content {
     padding: 16px;
   }
 
   .sidebar-aside {
     position: fixed;
-    left: 0;
     top: 0;
-    height: 100vh;
+    left: 0;
     z-index: 1000;
-    width: 0 !important;
     overflow: hidden;
+    width: 0 !important;
+    height: 100vh;
   }
 
   .sidebar-aside.mobile-open {
@@ -165,7 +162,7 @@ const sidebarWidth = computed(() => {
 }
 
 /* Tablet: collapsed sidebar */
-@media (min-width: 768px) and (max-width: 1023px) {
+@media (width >= 768px) and (width <= 1023px) {
   .sidebar-aside {
     width: 64px !important;
   }

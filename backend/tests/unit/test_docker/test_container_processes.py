@@ -4,15 +4,15 @@ Tests unitaires pour l'endpoint des processus de container.
 Teste l'endpoint GET /api/v1/docker/containers/{container_id}/top.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.docker import router
-from app.schemas.docker import ContainerProcessListResponse, ContainerProcess
+from app.schemas.docker import ContainerProcess, ContainerProcessListResponse
 
 
 class TestContainerProcessesEndpoint:
@@ -41,11 +41,15 @@ class TestContainerProcessesEndpoint:
             "Processes": [
                 ["1", "root", "0.0", "0.1", "00:00:01", "/bin/bash"],
                 ["42", "app", "1.5", "2.3", "00:00:05", "python app.py"],
-            ]
+            ],
         }
 
-        with patch("app.api.v1.docker.get_docker_client", return_value=mock_docker_client):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with patch(
+            "app.api.v1.docker.get_docker_client", return_value=mock_docker_client
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.get("/api/v1/docker/containers/abc123/top")
 
         assert response.status_code == 200
@@ -65,11 +69,15 @@ class TestContainerProcessesEndpoint:
         """Test avec aucun processus."""
         mock_docker_client.list_processes.return_value = {
             "Titles": ["PID", "USER", "%CPU", "%MEM", "TIME", "COMMAND"],
-            "Processes": []
+            "Processes": [],
         }
 
-        with patch("app.api.v1.docker.get_docker_client", return_value=mock_docker_client):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with patch(
+            "app.api.v1.docker.get_docker_client", return_value=mock_docker_client
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.get("/api/v1/docker/containers/abc123/top")
 
         assert response.status_code == 200
@@ -77,17 +85,22 @@ class TestContainerProcessesEndpoint:
         assert len(data["processes"]) == 0
 
     @pytest.mark.asyncio
-    async def test_get_container_processes_container_not_found(self, app, mock_docker_client):
+    async def test_get_container_processes_container_not_found(
+        self, app, mock_docker_client
+    ):
         """Test avec container non trouvé."""
         import aiohttp
+
         mock_docker_client.list_processes.side_effect = aiohttp.ClientResponseError(
-            request_info=MagicMock(),
-            history=(),
-            status=404
+            request_info=MagicMock(), history=(), status=404
         )
 
-        with patch("app.api.v1.docker.get_docker_client", return_value=mock_docker_client):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with patch(
+            "app.api.v1.docker.get_docker_client", return_value=mock_docker_client
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.get("/api/v1/docker/containers/notfound/top")
 
         assert response.status_code == 404
@@ -97,15 +110,23 @@ class TestContainerProcessesEndpoint:
         """Test avec argument ps_args personnalisé."""
         mock_docker_client.list_processes.return_value = {
             "Titles": ["PID", "USER", "%CPU", "%MEM", "TIME", "COMMAND"],
-            "Processes": []
+            "Processes": [],
         }
 
-        with patch("app.api.v1.docker.get_docker_client", return_value=mock_docker_client):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-                response = await client.get("/api/v1/docker/containers/abc123/top?ps_args=aux")
+        with patch(
+            "app.api.v1.docker.get_docker_client", return_value=mock_docker_client
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.get(
+                    "/api/v1/docker/containers/abc123/top?ps_args=aux"
+                )
 
         assert response.status_code == 200
-        mock_docker_client.list_processes.assert_called_once_with("abc123", ps_args="aux")
+        mock_docker_client.list_processes.assert_called_once_with(
+            "abc123", ps_args="aux"
+        )
 
 
 class TestContainerProcessSchema:
@@ -129,7 +150,7 @@ class TestContainerProcessSchema:
             cpu=15.5,
             mem=23.7,
             time="00:05:30",
-            command="python -m uvicorn app:main"
+            command="python -m uvicorn app:main",
         )
         assert process.pid == 42
         assert process.user == "appuser"
@@ -148,8 +169,15 @@ class TestContainerProcessListResponseSchema:
             container_id="abc123",
             titles=["PID", "USER", "%CPU", "%MEM", "TIME", "COMMAND"],
             processes=[
-                ContainerProcess(pid=1, user="root", cpu=0.0, mem=0.1, time="00:00:01", command="/bin/bash"),
-            ]
+                ContainerProcess(
+                    pid=1,
+                    user="root",
+                    cpu=0.0,
+                    mem=0.1,
+                    time="00:00:01",
+                    command="/bin/bash",
+                ),
+            ],
         )
         assert response.container_id == "abc123"
         assert len(response.titles) == 6
@@ -160,9 +188,7 @@ class TestContainerProcessListResponseSchema:
         """Test que le timestamp est généré automatiquement."""
         before = datetime.now(timezone.utc)
         response = ContainerProcessListResponse(
-            container_id="test",
-            titles=[],
-            processes=[]
+            container_id="test", titles=[], processes=[]
         )
         after = datetime.now(timezone.utc)
 
@@ -175,7 +201,7 @@ class TestProcessParsing:
     def test_parse_standard_format(self):
         """Test le parsing du format standard ps aux."""
         titles = ["PID", "USER", "%CPU", "%MEM", "TIME", "COMMAND"]
-        processes_raw = [
+        _processes_raw = [  # noqa: F841
             ["1", "root", "0.0", "0.1", "00:00:01", "/bin/bash"],
             ["42", "app", "1.5", "2.3", "00:00:05", "python app.py"],
         ]
@@ -204,7 +230,7 @@ class TestProcessParsing:
     def test_parse_alternate_format(self):
         """Test le parsing avec des titres alternatifs."""
         titles = ["PID", "USER", "CPU", "MEM", "TIME", "CMD"]
-        processes_raw = [
+        _processes_raw = [  # noqa: F841
             ["1", "root", "0.0", "0.1", "00:00:01", "/bin/bash"],
         ]
 
@@ -225,7 +251,7 @@ class TestProcessParsing:
     def test_parse_missing_columns(self):
         """Test le parsing avec des colonnes manquantes."""
         titles = ["PID", "COMMAND"]  # Colonnes minimales
-        processes_raw = [
+        _processes_raw = [  # noqa: F841
             ["1", "/bin/bash"],
         ]
 

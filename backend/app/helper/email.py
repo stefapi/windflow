@@ -1,19 +1,20 @@
 import os
 import smtplib
 from email.mime.text import MIMEText
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # Configuration SMTP
-SMTP_SERVER = os.getenv("SMTP_SERVER")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 25))
-SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "false").lower() == "true"
-SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-EMAIL_FROM = os.getenv("EMAIL_FROM")
-VITE_BASE_URL = os.getenv("VITE_BASE_URL")
+SMTP_SERVER: str = os.getenv("SMTP_SERVER", "localhost")
+SMTP_PORT: int = int(os.getenv("SMTP_PORT", "25"))
+SMTP_USE_TLS: bool = os.getenv("SMTP_USE_TLS", "false").lower() == "true"
+SMTP_USE_SSL: bool = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
+SMTP_USER: str | None = os.getenv("SMTP_USER")
+SMTP_PASSWORD: str | None = os.getenv("SMTP_PASSWORD")
+EMAIL_FROM: str = os.getenv("EMAIL_FROM", "noreply@windflow.local")
+VITE_BASE_URL: str = os.getenv("VITE_BASE_URL", "http://localhost:5173")
 
 
 def send_email(to_email: str, subject: str, body: str, subtype: str = "plain"):
@@ -27,10 +28,7 @@ def send_email(to_email: str, subject: str, body: str, subtype: str = "plain"):
 
     try:
         # Choix de la classe de connexion en fonction de SSL
-        if SMTP_USE_SSL:
-            server_class = smtplib.SMTP_SSL
-        else:
-            server_class = smtplib.SMTP
+        server_class: type[smtplib.SMTP] = smtplib.SMTP_SSL if SMTP_USE_SSL else smtplib.SMTP
 
         with server_class(SMTP_SERVER, SMTP_PORT) as server:
             # Démarrage TLS si configuré (uniquement pour les connexions non-SSL)
@@ -57,9 +55,4 @@ def send_reset_email(to_email: str, token: str):
         f"cliquez sur le lien suivant :\n{reset_link}\n\n"
         "Si vous n'avez pas fait cette demande, ignorez cet email."
     )
-    send_email(
-        to_email=to_email,
-        subject=subject,
-        body=body,
-        subtype="plain"
-    )
+    send_email(to_email=to_email, subject=subject, body=body, subtype="plain")

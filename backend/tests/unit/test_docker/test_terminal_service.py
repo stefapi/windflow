@@ -6,13 +6,14 @@ pour les conteneurs Docker, utilisant un pseudo-terminal (PTY).
 """
 
 import os
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from app.services.terminal_service import (
-    TerminalService,
     ExecSession,
     ShellInfo,
+    TerminalService,
     get_terminal_service,
 )
 
@@ -49,10 +50,16 @@ class TestTerminalService:
         fake_master_fd = 42
         fake_slave_fd = 43
 
-        with patch('app.services.terminal_service.pty.openpty', return_value=(fake_master_fd, fake_slave_fd)), \
-             patch('app.services.terminal_service.fcntl.ioctl'), \
-             patch('app.services.terminal_service.os.close') as mock_os_close, \
-             patch('app.services.terminal_service.asyncio.create_subprocess_exec', new_callable=AsyncMock, return_value=mock_process):
+        with patch(
+            "app.services.terminal_service.pty.openpty",
+            return_value=(fake_master_fd, fake_slave_fd),
+        ), patch("app.services.terminal_service.fcntl.ioctl"), patch(
+            "app.services.terminal_service.os.close"
+        ) as mock_os_close, patch(
+            "app.services.terminal_service.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+            return_value=mock_process,
+        ):
 
             session = await terminal_service.create_session(
                 container_id="test-container",
@@ -77,7 +84,9 @@ class TestTerminalService:
             mock_os_close.assert_called_once_with(fake_slave_fd)
 
     @pytest.mark.asyncio
-    async def test_create_session_container_not_running(self, terminal_service, mock_docker_client):
+    async def test_create_session_container_not_running(
+        self, terminal_service, mock_docker_client
+    ):
         """Test la création d'une session quand le container n'est pas en cours d'exécution."""
         mock_container = MagicMock()
         mock_container.state = {"Status": "stopped"}
@@ -85,23 +94,25 @@ class TestTerminalService:
 
         with pytest.raises(ValueError, match="not running"):
             await terminal_service.create_session(
-                container_id="test-container",
-                shell="/bin/bash"
+                container_id="test-container", shell="/bin/bash"
             )
 
     @pytest.mark.asyncio
-    async def test_create_session_container_not_found(self, terminal_service, mock_docker_client):
+    async def test_create_session_container_not_found(
+        self, terminal_service, mock_docker_client
+    ):
         """Test la création d'une session quand le container n'existe pas."""
         mock_docker_client.get_container.side_effect = Exception("Container not found")
 
         with pytest.raises(ValueError, match="not found"):
             await terminal_service.create_session(
-                container_id="nonexistent-container",
-                shell="/bin/bash"
+                container_id="nonexistent-container", shell="/bin/bash"
             )
 
     @pytest.mark.asyncio
-    async def test_create_session_with_non_root_user(self, terminal_service, mock_docker_client):
+    async def test_create_session_with_non_root_user(
+        self, terminal_service, mock_docker_client
+    ):
         """Test la création d'une session avec un utilisateur non-root."""
         mock_container = MagicMock()
         mock_container.state = {"Status": "running"}
@@ -110,10 +121,15 @@ class TestTerminalService:
         mock_process = MagicMock()
         mock_process.returncode = None
 
-        with patch('app.services.terminal_service.pty.openpty', return_value=(10, 11)), \
-             patch('app.services.terminal_service.fcntl.ioctl'), \
-             patch('app.services.terminal_service.os.close'), \
-             patch('app.services.terminal_service.asyncio.create_subprocess_exec', new_callable=AsyncMock, return_value=mock_process) as mock_exec:
+        with patch(
+            "app.services.terminal_service.pty.openpty", return_value=(10, 11)
+        ), patch("app.services.terminal_service.fcntl.ioctl"), patch(
+            "app.services.terminal_service.os.close"
+        ), patch(
+            "app.services.terminal_service.asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+            return_value=mock_process,
+        ) as mock_exec:
 
             session = await terminal_service.create_session(
                 container_id="test-container",
@@ -146,7 +162,7 @@ class TestTerminalService:
             master_fd=fake_master_fd,
         )
 
-        with patch('app.services.terminal_service.os.write') as mock_os_write:
+        with patch("app.services.terminal_service.os.write") as mock_os_write:
             await terminal_service.send_input(session, "ls -la\n")
 
             mock_os_write.assert_called_once_with(fake_master_fd, b"ls -la\n")
@@ -182,7 +198,7 @@ class TestTerminalService:
             master_fd=fake_master_fd,
         )
 
-        with patch('app.services.terminal_service.fcntl.ioctl') as mock_ioctl:
+        with patch("app.services.terminal_service.fcntl.ioctl") as mock_ioctl:
             await terminal_service.resize_tty(session, 120, 40)
 
             assert session.cols == 120
@@ -232,7 +248,7 @@ class TestTerminalService:
         # Ajouter la session au service
         terminal_service._sessions["test123"] = session
 
-        with patch('app.services.terminal_service.os.close') as mock_os_close:
+        with patch("app.services.terminal_service.os.close") as mock_os_close:
             await terminal_service.cleanup_session(session)
 
             assert "test123" not in terminal_service._sessions
@@ -261,7 +277,7 @@ class TestTerminalService:
 
         terminal_service._sessions["test456"] = session
 
-        with patch('app.services.terminal_service.os.close'):
+        with patch("app.services.terminal_service.os.close"):
             await terminal_service.cleanup_session(session)
 
             # terminate ne doit PAS être appelé si returncode n'est pas None
@@ -291,7 +307,7 @@ class TestTerminalService:
 
         terminal_service._sessions["test789"] = session
 
-        with patch('app.services.terminal_service.os.close'):
+        with patch("app.services.terminal_service.os.close"):
             await terminal_service.cleanup_session(session)
 
             mock_process.terminate.assert_called_once()
@@ -301,14 +317,16 @@ class TestTerminalService:
     async def test_detect_shells(self, terminal_service, mock_docker_client):
         """Test la détection des shells disponibles."""
         # Mock exec_in_container pour retourner différents résultats
-        mock_docker_client.exec_in_container = AsyncMock(side_effect=[
-            MagicMock(exit_code=0),  # /bin/bash existe
-            MagicMock(exit_code=1),  # /bin/zsh n'existe pas
-            MagicMock(exit_code=0),  # /bin/sh existe
-            MagicMock(exit_code=0),  # /bin/ash existe
-            MagicMock(exit_code=1),  # /bin/dash n'existe pas
-            MagicMock(exit_code=1),  # /bin/ksh n'existe pas
-        ])
+        mock_docker_client.exec_in_container = AsyncMock(
+            side_effect=[
+                MagicMock(exit_code=0),  # /bin/bash existe
+                MagicMock(exit_code=1),  # /bin/zsh n'existe pas
+                MagicMock(exit_code=0),  # /bin/sh existe
+                MagicMock(exit_code=0),  # /bin/ash existe
+                MagicMock(exit_code=1),  # /bin/dash n'existe pas
+                MagicMock(exit_code=1),  # /bin/ksh n'existe pas
+            ]
+        )
 
         shells = await terminal_service.detect_shells("test-container")
 
@@ -321,7 +339,9 @@ class TestTerminalService:
         assert shells[2].available is True
 
     @pytest.mark.asyncio
-    async def test_detect_shells_exception_marks_unavailable(self, terminal_service, mock_docker_client):
+    async def test_detect_shells_exception_marks_unavailable(
+        self, terminal_service, mock_docker_client
+    ):
         """Test que les exceptions lors de la détection marquent le shell comme indisponible."""
         mock_docker_client.exec_in_container = AsyncMock(
             side_effect=Exception("Connection error")
@@ -381,7 +401,7 @@ class TestTerminalService:
             )
             terminal_service._sessions[f"session{i}"] = session
 
-        with patch('app.services.terminal_service.os.close'):
+        with patch("app.services.terminal_service.os.close"):
             await terminal_service.close()
 
             # Vérifier que toutes les sessions ont été nettoyées
@@ -584,6 +604,7 @@ class TestGetTerminalService:
 # =============================================================================
 # Tests d'intégration avec le serveur Docker (optionnels)
 # =============================================================================
+
 
 @pytest.mark.integration
 @pytest.mark.asyncio

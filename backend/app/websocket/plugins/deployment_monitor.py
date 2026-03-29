@@ -4,11 +4,11 @@ Deployment Monitor Plugin - Monitors deployment-related WebSocket events.
 Handles deployment status changes, logs updates, and progress tracking.
 """
 
-from typing import Dict, Any
 from datetime import datetime
+from typing import Any, Dict
 
-from ..plugin import WebSocketPlugin, PluginContext
 from ...schemas.websocket_events import WebSocketEventType
+from ..plugin import PluginContext, WebSocketPlugin
 
 
 class DeploymentMonitorPlugin(WebSocketPlugin):
@@ -30,10 +30,7 @@ class DeploymentMonitorPlugin(WebSocketPlugin):
     ]
 
     async def handle_event(
-        self,
-        event: WebSocketEventType,
-        data: Dict[str, Any],
-        context: PluginContext
+        self, event: WebSocketEventType, data: Dict[str, Any], context: PluginContext
     ) -> None:
         """
         Handle deployment-related events.
@@ -60,8 +57,8 @@ class DeploymentMonitorPlugin(WebSocketPlugin):
                     "old_status": old_status,
                     "new_status": new_status,
                     "timestamp": data.get("timestamp", datetime.utcnow().isoformat()),
-                    "user_id": str(context.user.id) if context.user else None
-                }
+                    "user_id": str(context.user.id) if context.user else None,
+                },
             )
 
             # TODO: Future enhancements:
@@ -81,8 +78,8 @@ class DeploymentMonitorPlugin(WebSocketPlugin):
                     "deployment_id": deployment_id,
                     "log_count": len(logs),
                     "log_level": log_level,
-                    "timestamp": data.get("timestamp", datetime.utcnow().isoformat())
-                }
+                    "timestamp": data.get("timestamp", datetime.utcnow().isoformat()),
+                },
             )
 
             # TODO: Future enhancements:
@@ -101,8 +98,8 @@ class DeploymentMonitorPlugin(WebSocketPlugin):
                     "deployment_id": deployment_id,
                     "progress": progress,
                     "step": step,
-                    "timestamp": data.get("timestamp", datetime.utcnow().isoformat())
-                }
+                    "timestamp": data.get("timestamp", datetime.utcnow().isoformat()),
+                },
             )
 
             # TODO: Future enhancements:

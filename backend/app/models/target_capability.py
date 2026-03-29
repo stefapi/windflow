@@ -4,18 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from uuid import uuid4
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
-from sqlalchemy import (
-    String,
-    DateTime,
-    JSON,
-    ForeignKey,
-    Boolean,
-    Enum as SQLEnum,
-    UniqueConstraint,
-)
+from sqlalchemy import JSON, Boolean, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base

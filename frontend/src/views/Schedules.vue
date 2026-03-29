@@ -379,8 +379,8 @@ onMounted(() => {
 }
 
 .cron-help {
+  margin-top: 4px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
-  margin-top: 4px;
 }
 </style>

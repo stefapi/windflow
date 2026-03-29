@@ -3,17 +3,18 @@ Modèle Stack pour gestion des templates Docker Compose.
 """
 
 from datetime import datetime
-from uuid import uuid4
-from sqlalchemy import String, DateTime, JSON, ForeignKey, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING, List
+from uuid import uuid4
+
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
 from ..schemas.target import TargetType
 
 if TYPE_CHECKING:
-    from .organization import Organization
     from .deployment import Deployment
+    from .organization import Organization
     from .stack_version import StackVersion
 
 
@@ -28,9 +29,7 @@ class Stack(Base):
 
     # Clé primaire
     id: Mapped[str] = mapped_column(
-        String(36),
-        primary_key=True,
-        default=lambda: str(uuid4())
+        String(36), primary_key=True, default=lambda: str(uuid4())
     )
 
     # Informations de base
@@ -45,7 +44,7 @@ class Stack(Base):
         JSON,
         nullable=False,
         default=dict,
-        comment="Variables configurables au format simple"
+        comment="Variables configurables au format simple",
     )
 
     # Métadonnées
@@ -58,7 +57,7 @@ class Stack(Base):
         String(50),
         nullable=False,
         default=TargetType.DOCKER.value,
-        comment="Type de déploiement supporté par ce stack"
+        comment="Type de déploiement supporté par ce stack",
     )
 
     # Paramètres spécifiques à la target (ex: volumes à supprimer)
@@ -66,7 +65,7 @@ class Stack(Base):
         JSON,
         nullable=True,
         default=None,
-        comment="Paramètres spécifiques à la target (ex: volumes à supprimer)"
+        comment="Paramètres spécifiques à la target (ex: volumes à supprimer)",
     )
 
     # Statut public et statistiques
@@ -80,39 +79,33 @@ class Stack(Base):
     documentation_url: Mapped[str] = mapped_column(String(500), nullable=True)
     author: Mapped[str] = mapped_column(String(255), nullable=True)
     license: Mapped[str] = mapped_column(String(100), nullable=True, default="MIT")
-    deployment_name: Mapped[str] = mapped_column(String(255), nullable=True, comment="Nom par défaut du déploiement (template)")
+    deployment_name: Mapped[str] = mapped_column(
+        String(255), nullable=True, comment="Nom par défaut du déploiement (template)"
+    )
 
     # Organisation (multi-tenant)
     organization_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
     # Relations
     organization: Mapped["Organization"] = relationship(
-        "Organization",
-        back_populates="stacks"
+        "Organization", back_populates="stacks"
     )
 
     deployments: Mapped[List["Deployment"]] = relationship(
-        "Deployment",
-        back_populates="stack",
-        cascade="all, delete-orphan"
+        "Deployment", back_populates="stack", cascade="all, delete-orphan"
     )
 
     versions: Mapped[List["StackVersion"]] = relationship(

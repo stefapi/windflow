@@ -281,7 +281,7 @@ defineExpose({ clearSelection, tableRef })
 </script>
 
 <style scoped>
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .container-table :deep(.col-ports),
   .container-table :deep(.col-uptime) {
     display: none;

@@ -98,17 +98,17 @@ const fillClass = computed(() => {
 
 .resource-bar__value {
   font-size: var(--text-sm, 0.875rem);
+  font-family: var(--font-mono, monospace);
   color: var(--color-text-primary);
   font-weight: 600;
-  font-family: var(--font-mono, monospace);
 }
 
 .resource-bar__track {
+  overflow: hidden;
   width: 100%;
   height: 0.5rem;
   background-color: var(--color-bg-elevated);
   border-radius: 0.25rem;
-  overflow: hidden;
 }
 
 .resource-bar__fill {

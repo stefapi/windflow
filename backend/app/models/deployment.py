@@ -3,22 +3,26 @@ Modèle Deployment pour suivi des déploiements de stacks.
 """
 
 from datetime import datetime
-from uuid import uuid4
 from enum import Enum
-from sqlalchemy import String, DateTime, JSON, ForeignKey, Text, Enum as SQLEnum
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING
+from uuid import uuid4
+
+from sqlalchemy import JSON, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
 
 if TYPE_CHECKING:
+    from .organization import Organization
     from .stack import Stack
     from .target import Target
-    from .organization import Organization
 
 
 class DeploymentStatus(str, Enum):
     """Statuts possibles pour un déploiement."""
+
     PENDING = "pending"
     DEPLOYING = "deploying"
     RUNNING = "running"
@@ -38,9 +42,7 @@ class Deployment(Base):
 
     # Clé primaire
     id: Mapped[str] = mapped_column(
-        String(36),
-        primary_key=True,
-        default=lambda: str(uuid4())
+        String(36), primary_key=True, default=lambda: str(uuid4())
     )
 
     # Relations avec stack et target
@@ -48,14 +50,14 @@ class Deployment(Base):
         String(36),
         ForeignKey("stacks.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     target_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("targets.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     # Organisation (multi-tenant)
@@ -63,7 +65,7 @@ class Deployment(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     # Informations de déploiement
@@ -71,9 +73,7 @@ class Deployment(Base):
 
     # Statut
     status: Mapped[DeploymentStatus] = mapped_column(
-        SQLEnum(DeploymentStatus),
-        nullable=False,
-        default=DeploymentStatus.PENDING
+        SQLEnum(DeploymentStatus), nullable=False, default=DeploymentStatus.PENDING
     )
 
     # Configuration utilisée au déploiement (snapshot)
@@ -84,7 +84,7 @@ class Deployment(Base):
         String(128),
         nullable=True,
         index=True,
-        comment="ID du conteneur Docker créé par ce déploiement"
+        comment="ID du conteneur Docker créé par ce déploiement",
     )
 
     # Variables appliquées
@@ -95,7 +95,7 @@ class Deployment(Base):
         JSON,
         nullable=True,
         default=None,
-        comment="Target parameters rendus avec Jinja lors de la création du déploiement"
+        comment="Target parameters rendus avec Jinja lors de la création du déploiement",
     )
 
     # Logs et erreurs
@@ -114,32 +114,20 @@ class Deployment(Base):
     stopped_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
     # Relations
     organization: Mapped["Organization"] = relationship(
-        "Organization",
-        back_populates="deployments"
+        "Organization", back_populates="deployments"
     )
 
-    stack: Mapped["Stack"] = relationship(
-        "Stack",
-        back_populates="deployments"
-    )
+    stack: Mapped["Stack"] = relationship("Stack", back_populates="deployments")
 
-    target: Mapped["Target"] = relationship(
-        "Target",
-        back_populates="deployments"
-    )
+    target: Mapped["Target"] = relationship("Target", back_populates="deployments")
 
     def __repr__(self) -> str:
         return f"<Deployment(id={self.id}, name={self.name}, status={self.status})>"

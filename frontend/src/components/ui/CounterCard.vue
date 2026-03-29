@@ -158,14 +158,14 @@ const hasRunningStopped = computed(() => {
 /* Icon styling */
 .counter-card__icon {
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
   width: 3.5rem;
   height: 3.5rem;
+  color: var(--color-accent);
   background-color: var(--color-accent-light);
   border-radius: 0.5rem;
-  color: var(--color-accent);
-  flex-shrink: 0;
 }
 
 .counter-card--small .counter-card__icon {
@@ -188,10 +188,10 @@ const hasRunningStopped = computed(() => {
 
 .counter-card__count {
   font-size: var(--text-2xl, 1.5rem);
-  font-weight: 600;
-  color: var(--color-text-primary);
-  line-height: 1.2;
   font-family: var(--font-mono, monospace);
+  color: var(--color-text-primary);
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 .counter-card--small .counter-card__count {
@@ -203,11 +203,11 @@ const hasRunningStopped = computed(() => {
 }
 
 .counter-card__label {
-  font-size: var(--text-sm, 0.875rem);
-  color: var(--color-text-secondary);
-  white-space: nowrap;
   overflow: hidden;
+  font-size: var(--text-sm, 0.875rem);
   text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
 }
 
 .counter-card--large .counter-card__label {
@@ -223,30 +223,30 @@ const hasRunningStopped = computed(() => {
 
 /* Badge styling */
 .counter-card__badge {
-  font-size: var(--text-xs, 0.75rem);
-  font-weight: 500;
   padding: 0.125rem 0.375rem;
+  font-size: var(--text-xs, 0.75rem);
   border-radius: 0.25rem;
+  font-weight: 500;
 }
 
 .counter-card__badge--success {
-  background-color: var(--color-success-light);
   color: var(--color-success);
+  background-color: var(--color-success-light);
 }
 
 .counter-card__badge--warning {
-  background-color: var(--color-warning-light);
   color: var(--color-warning);
+  background-color: var(--color-warning-light);
 }
 
 .counter-card__badge--error {
-  background-color: var(--color-error-light);
   color: var(--color-error);
+  background-color: var(--color-error-light);
 }
 
 .counter-card__badge--info {
-  background-color: var(--color-info-light);
   color: var(--color-info);
+  background-color: var(--color-info-light);
 }
 
 /* Running/Stopped status indicators (STORY-432) */

@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.models.deployment import Deployment, DeploymentStatus
+from app.schemas.compute import DiscoveredItem, StackWithServices, StandaloneContainer
 from app.services.container_builder import (
     build_discovered_items,
     build_managed_stacks,
@@ -20,13 +21,6 @@ from app.services.container_builder import (
     build_target_groups,
     get_latest_active_deployment,
 )
-from app.schemas.compute import (
-    DiscoveredItem,
-    StandaloneContainer,
-    StackWithServices,
-    TargetGroup,
-)
-
 
 # =============================================================================
 # Helpers
@@ -82,7 +76,9 @@ def _make_db_stack(
     return s
 
 
-def _make_target(target_id: str = "t1", name: str = "Target1", target_type: str = "docker") -> MagicMock:
+def _make_target(
+    target_id: str = "t1", name: str = "Target1", target_type: str = "docker"
+) -> MagicMock:
     """Crée un Target ORM mocké."""
     t = MagicMock()
     t.id = target_id
@@ -98,14 +94,26 @@ def _make_stack_schema(
     target_id: str = "local",
 ) -> StackWithServices:
     from app.schemas.compute import ServiceWithMetrics
+
     return StackWithServices(
-        id=stack_id, name=name, technology="windflow",
-        target_id=target_id, target_name="Local Docker",
-        services_total=1, services_running=1, status="running",
-        services=[ServiceWithMetrics(
-            id="svc1", name="svc", image="nginx",
-            status="running", cpu_percent=0.0, memory_usage="0M",
-        )],
+        id=stack_id,
+        name=name,
+        technology="windflow",
+        target_id=target_id,
+        target_name="Local Docker",
+        services_total=1,
+        services_running=1,
+        status="running",
+        services=[
+            ServiceWithMetrics(
+                id="svc1",
+                name="svc",
+                image="nginx",
+                status="running",
+                cpu_percent=0.0,
+                memory_usage="0M",
+            )
+        ],
     )
 
 
@@ -115,10 +123,18 @@ def _make_discovered_schema(
     target_id: str = "local",
 ) -> DiscoveredItem:
     return DiscoveredItem(
-        id=item_id, name=name, type="composition", technology="docker-compose",
-        source_path=None, target_id=target_id, target_name="Local Docker",
-        services_total=1, services_running=1, detected_at="2026-01-01T00:00:00Z",
-        adoptable=True, services=[],
+        id=item_id,
+        name=name,
+        type="composition",
+        technology="docker-compose",
+        source_path=None,
+        target_id=target_id,
+        target_name="Local Docker",
+        services_total=1,
+        services_running=1,
+        detected_at="2026-01-01T00:00:00Z",
+        adoptable=True,
+        services=[],
     )
 
 
@@ -128,10 +144,17 @@ def _make_standalone_schema(
     target_id: str = "local",
 ) -> StandaloneContainer:
     return StandaloneContainer(
-        id=container_id, name=name, image="nginx",
-        target_id=target_id, target_name="Local Docker",
-        status="running", cpu_percent=0.0, memory_usage="0M",
-        uptime="Up 2 hours", ports=[], health_status=None,
+        id=container_id,
+        name=name,
+        image="nginx",
+        target_id=target_id,
+        target_name="Local Docker",
+        status="running",
+        cpu_percent=0.0,
+        memory_usage="0M",
+        uptime="Up 2 hours",
+        ports=[],
+        health_status=None,
     )
 
 
@@ -145,21 +168,35 @@ class TestGetLatestActiveDeployment:
         assert get_latest_active_deployment([]) is None
 
     def test_returns_most_recent_active(self) -> None:
-        d1 = _make_deployment("t1", DeploymentStatus.RUNNING, datetime(2026, 1, 1, tzinfo=timezone.utc))
-        d2 = _make_deployment("t2", DeploymentStatus.RUNNING, datetime(2026, 1, 10, tzinfo=timezone.utc))
+        d1 = _make_deployment(
+            "t1", DeploymentStatus.RUNNING, datetime(2026, 1, 1, tzinfo=timezone.utc)
+        )
+        d2 = _make_deployment(
+            "t2", DeploymentStatus.RUNNING, datetime(2026, 1, 10, tzinfo=timezone.utc)
+        )
         result = get_latest_active_deployment([d1, d2])
         assert result.target_id == "t2"
 
     def test_skips_stopped_and_failed(self) -> None:
-        d1 = _make_deployment("t1", DeploymentStatus.STOPPED, datetime(2026, 1, 10, tzinfo=timezone.utc))
-        d2 = _make_deployment("t2", DeploymentStatus.FAILED, datetime(2026, 1, 5, tzinfo=timezone.utc))
-        d3 = _make_deployment("t3", DeploymentStatus.RUNNING, datetime(2026, 1, 1, tzinfo=timezone.utc))
+        d1 = _make_deployment(
+            "t1", DeploymentStatus.STOPPED, datetime(2026, 1, 10, tzinfo=timezone.utc)
+        )
+        d2 = _make_deployment(
+            "t2", DeploymentStatus.FAILED, datetime(2026, 1, 5, tzinfo=timezone.utc)
+        )
+        d3 = _make_deployment(
+            "t3", DeploymentStatus.RUNNING, datetime(2026, 1, 1, tzinfo=timezone.utc)
+        )
         result = get_latest_active_deployment([d1, d2, d3])
         assert result.target_id == "t3"
 
     def test_fallback_to_most_recent_if_all_stopped(self) -> None:
-        d1 = _make_deployment("t1", DeploymentStatus.STOPPED, datetime(2026, 1, 1, tzinfo=timezone.utc))
-        d2 = _make_deployment("t2", DeploymentStatus.STOPPED, datetime(2026, 1, 15, tzinfo=timezone.utc))
+        d1 = _make_deployment(
+            "t1", DeploymentStatus.STOPPED, datetime(2026, 1, 1, tzinfo=timezone.utc)
+        )
+        d2 = _make_deployment(
+            "t2", DeploymentStatus.STOPPED, datetime(2026, 1, 15, tzinfo=timezone.utc)
+        )
         result = get_latest_active_deployment([d1, d2])
         assert result.target_id == "t2"
 
@@ -177,15 +214,23 @@ class TestBuildManagedStacks:
 
     @pytest.mark.asyncio
     async def test_single_stack_with_containers(self) -> None:
-        stack = _make_db_stack("s1", "My Stack", deployments=[
-            _make_deployment("t1", DeploymentStatus.RUNNING),
-        ])
+        stack = _make_db_stack(
+            "s1",
+            "My Stack",
+            deployments=[
+                _make_deployment("t1", DeploymentStatus.RUNNING),
+            ],
+        )
         target = _make_target("t1", "My Target")
         c1 = _make_container_info("c1", "svc1", state="running")
         c2 = _make_container_info("c2", "svc2", state="running")
 
         result = await build_managed_stacks(
-            [stack], {"s1": [c1, c2]}, {"t1": target}, "local", "Local Docker",
+            [stack],
+            {"s1": [c1, c2]},
+            {"t1": target},
+            "local",
+            "Local Docker",
         )
 
         assert len(result) == 1
@@ -203,7 +248,9 @@ class TestBuildManagedStacks:
         c1 = _make_container_info("c1", state="running")
         c2 = _make_container_info("c2", state="exited")
 
-        result = await build_managed_stacks([stack], {"s1": [c1, c2]}, {"t1": _make_target()}, "local", "Local")
+        result = await build_managed_stacks(
+            [stack], {"s1": [c1, c2]}, {"t1": _make_target()}, "local", "Local"
+        )
 
         assert result[0].status == "partial"
         assert result[0].services_running == 1
@@ -211,7 +258,9 @@ class TestBuildManagedStacks:
     @pytest.mark.asyncio
     async def test_stopped_when_no_containers(self) -> None:
         stack = _make_db_stack("s1", deployments=[_make_deployment("t1")])
-        result = await build_managed_stacks([stack], {}, {"t1": _make_target()}, "local", "Local")
+        result = await build_managed_stacks(
+            [stack], {}, {"t1": _make_target()}, "local", "Local"
+        )
         assert result[0].status == "stopped"
         assert result[0].services_total == 0
 
@@ -239,12 +288,20 @@ class TestBuildManagedStacks:
         """Les champs uptime et ports sont extraits depuis ContainerInfo."""
         stack = _make_db_stack("s1", deployments=[_make_deployment("t1")])
         c1 = _make_container_info(
-            "c1", state="running", status="Up 5 minutes",
-            ports=[{"IP": "0.0.0.0", "PublicPort": 80, "PrivatePort": 80, "Type": "tcp"}],
+            "c1",
+            state="running",
+            status="Up 5 minutes",
+            ports=[
+                {"IP": "0.0.0.0", "PublicPort": 80, "PrivatePort": 80, "Type": "tcp"}
+            ],
         )
 
         result = await build_managed_stacks(
-            [stack], {"s1": [c1]}, {"t1": _make_target()}, "local", "Local",
+            [stack],
+            {"s1": [c1]},
+            {"t1": _make_target()},
+            "local",
+            "Local",
         )
 
         svc = result[0].services[0]
@@ -261,17 +318,24 @@ class TestBuildManagedStacks:
 class TestBuildDiscoveredItems:
     @pytest.mark.asyncio
     async def test_empty(self) -> None:
-        result = await build_discovered_items({}, "local", "Local Docker", "2026-01-01T00:00:00Z")
+        result = await build_discovered_items(
+            {}, "local", "Local Docker", "2026-01-01T00:00:00Z"
+        )
         assert result == []
 
     @pytest.mark.asyncio
     async def test_single_project(self) -> None:
         c1 = _make_container_info("c1", "app-web", state="running")
-        c1.labels = {"com.docker.compose.project.config_files": "/opt/app/docker-compose.yml"}
+        c1.labels = {
+            "com.docker.compose.project.config_files": "/opt/app/docker-compose.yml"
+        }
         c2 = _make_container_info("c2", "app-db", state="running")
 
         result = await build_discovered_items(
-            {"myapp": [c1, c2]}, "local", "Local Docker", "2026-03-28T00:00:00Z",
+            {"myapp": [c1, c2]},
+            "local",
+            "Local Docker",
+            "2026-03-28T00:00:00Z",
         )
 
         assert len(result) == 1
@@ -293,7 +357,10 @@ class TestBuildDiscoveredItems:
         c2 = _make_container_info("c2")
 
         result = await build_discovered_items(
-            {"proj-a": [c1], "proj-b": [c2]}, "local", "Local", "2026-01-01T00:00:00Z",
+            {"proj-a": [c1], "proj-b": [c2]},
+            "local",
+            "Local",
+            "2026-01-01T00:00:00Z",
         )
 
         assert len(result) == 2
@@ -305,19 +372,28 @@ class TestBuildDiscoveredItems:
         c1 = _make_container_info("c1")
         c1.labels = {}  # Pas de config_files label
 
-        result = await build_discovered_items({"proj": [c1]}, "local", "Local", "2026-01-01T00:00:00Z")
+        result = await build_discovered_items(
+            {"proj": [c1]}, "local", "Local", "2026-01-01T00:00:00Z"
+        )
         assert result[0].source_path is None
 
     @pytest.mark.asyncio
     async def test_service_uptime_and_ports_populated(self) -> None:
         """Les champs uptime et ports sont extraits depuis ContainerInfo."""
         c1 = _make_container_info(
-            "c1", state="running", status="Up 3 hours",
-            ports=[{"IP": "0.0.0.0", "PublicPort": 443, "PrivatePort": 443, "Type": "tcp"}],
+            "c1",
+            state="running",
+            status="Up 3 hours",
+            ports=[
+                {"IP": "0.0.0.0", "PublicPort": 443, "PrivatePort": 443, "Type": "tcp"}
+            ],
         )
 
         result = await build_discovered_items(
-            {"myproj": [c1]}, "local", "Local", "2026-01-01T00:00:00Z",
+            {"myproj": [c1]},
+            "local",
+            "Local",
+            "2026-01-01T00:00:00Z",
         )
 
         svc = result[0].services[0]
@@ -341,7 +417,9 @@ class TestBuildStandaloneContainers:
     async def test_docker_not_available(self) -> None:
         """Docker indisponible → pas d'inspection health."""
         c1 = _make_container_info("c1", "my-app", state="running", status="Up 2 hours")
-        c1.ports = [{"IP": "0.0.0.0", "PublicPort": 8080, "PrivatePort": 80, "Type": "tcp"}]
+        c1.ports = [
+            {"IP": "0.0.0.0", "PublicPort": 8080, "PrivatePort": 80, "Type": "tcp"}
+        ]
 
         result = await build_standalone_containers([c1], "local", "Local Docker", False)
 
@@ -355,7 +433,9 @@ class TestBuildStandaloneContainers:
 
     @pytest.mark.asyncio
     async def test_exited_container_no_uptime(self) -> None:
-        c1 = _make_container_info("c1", state="exited", status="Exited (0) 3 minutes ago")
+        c1 = _make_container_info(
+            "c1", state="exited", status="Exited (0) 3 minutes ago"
+        )
 
         result = await build_standalone_containers([c1], "local", "Local", False)
 

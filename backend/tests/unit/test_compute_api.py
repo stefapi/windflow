@@ -20,7 +20,6 @@ from app.schemas.compute import (
     TargetMetrics,
 )
 
-
 # =============================================================================
 # Fixture module-level : désactiver le mode dev (disable_auth=False)
 # pour que les tests d'authentification fonctionnent correctement.

@@ -310,13 +310,13 @@ onMounted(() => {
 
 .capabilities-section {
   padding: 20px;
+  margin: 10px 0;
   background-color: var(--color-bg-secondary);
   border-radius: 4px;
-  margin: 10px 0;
 }
 
 .capabilities-title {
-  margin: 0 0 15px 0;
+  margin: 0 0 15px;
   font-size: 16px;
   font-weight: 600;
   color: var(--color-text-primary);

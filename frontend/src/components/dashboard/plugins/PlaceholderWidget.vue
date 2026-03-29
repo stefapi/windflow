@@ -131,9 +131,9 @@ const memory = ref(128)
 
 .stat-value {
   font-size: var(--text-lg, 1.125rem);
-  font-weight: 600;
-  color: var(--color-text-primary);
   font-family: var(--font-mono, monospace);
+  color: var(--color-text-primary);
+  font-weight: 600;
 }
 
 .stat-label {

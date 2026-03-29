@@ -12,20 +12,15 @@ from .deployment_monitor import DeploymentMonitorPlugin
 from .subscription import SubscriptionHandler
 
 # List of default event plugins to register automatically (SERVER → CLIENT)
-default_plugins = [
-    AuditLoggerPlugin(),
-    DeploymentMonitorPlugin()
-]
+default_plugins = [AuditLoggerPlugin(), DeploymentMonitorPlugin()]
 
 # List of default message handlers to register automatically (CLIENT → SERVER)
-default_message_handlers = [
-    SubscriptionHandler()
-]
+default_message_handlers = [SubscriptionHandler()]
 
 __all__ = [
-    'AuditLoggerPlugin',
-    'DeploymentMonitorPlugin',
-    'SubscriptionHandler',
-    'default_plugins',
-    'default_message_handlers'
+    "AuditLoggerPlugin",
+    "DeploymentMonitorPlugin",
+    "SubscriptionHandler",
+    "default_plugins",
+    "default_message_handlers",
 ]

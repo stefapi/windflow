@@ -9,7 +9,6 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 
@@ -120,7 +119,7 @@ async def general_websocket_endpoint(websocket: WebSocket):
         token_data = decode_access_token(token)
         logger.info(f"Token decoded: {token_data is not None}")
         if token_data is None or token_data.user_id is None:
-            logger.error(f"Invalid token - could not decode token")
+            logger.error("Invalid token - could not decode token")
             await websocket.close(code=1008, reason="Invalid token - could not decode")
             return
 
@@ -262,7 +261,7 @@ async def general_websocket_endpoint(websocket: WebSocket):
         logger.error(f"General WebSocket error: {e}")
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
-        except:
+        except Exception:
             pass
 
     finally:

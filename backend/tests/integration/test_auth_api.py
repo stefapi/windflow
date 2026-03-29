@@ -14,10 +14,7 @@ class TestAuthAPI:
         """Test de login réussi."""
         response = await client.post(
             "/api/v1/auth/login",
-            data={
-                "username": test_user.username,
-                "password": "testpassword123"
-            }
+            data={"username": test_user.username, "password": "testpassword123"},
         )
 
         assert response.status_code == 200
@@ -30,10 +27,7 @@ class TestAuthAPI:
         """Test de login avec mauvais mot de passe."""
         response = await client.post(
             "/api/v1/auth/login",
-            data={
-                "username": test_user.username,
-                "password": "wrongpassword"
-            }
+            data={"username": test_user.username, "password": "wrongpassword"},
         )
 
         assert response.status_code == 401
@@ -43,10 +37,7 @@ class TestAuthAPI:
         """Test de login avec utilisateur inexistant."""
         response = await client.post(
             "/api/v1/auth/login",
-            data={
-                "username": "nonexistent",
-                "password": "password123"
-            }
+            data={"username": "nonexistent", "password": "password123"},
         )
 
         assert response.status_code == 401
@@ -54,17 +45,11 @@ class TestAuthAPI:
 
     async def test_login_missing_credentials(self, client: AsyncClient):
         """Test de login avec credentials manquantes."""
-        response = await client.post(
-            "/api/v1/auth/login",
-            data={}
-        )
+        response = await client.post("/api/v1/auth/login", data={})
 
         assert response.status_code == 422  # Validation error
 
-    async def test_authenticated_request(
-        self,
-        authenticated_client: AsyncClient
-    ):
+    async def test_authenticated_request(self, authenticated_client: AsyncClient):
         """Test d'une requête authentifiée."""
         response = await authenticated_client.get("/api/v1/users/me")
 

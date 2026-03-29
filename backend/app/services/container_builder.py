@@ -8,6 +8,7 @@ StandaloneContainer, TargetGroup) à partir des données brutes DB + Docker.
 import logging
 from typing import Optional
 
+from ..helper.compute_helpers import extract_uptime, parse_ports
 from ..models.deployment import Deployment, DeploymentStatus
 from ..models.target import Target
 from ..schemas.compute import (
@@ -18,14 +19,8 @@ from ..schemas.compute import (
     TargetGroup,
     TargetMetrics,
 )
-from ..services.docker_client_service import DockerClientService, ContainerInfo
-from ..services.container_classifier import (
-    LABEL_COMPOSE_PROJECT,
-    LABEL_COMPOSE_CONFIG_FILES,
-    LOCAL_TARGET_ID,
-    LOCAL_TARGET_NAME,
-)
-from ..helper.compute_helpers import extract_uptime, parse_ports
+from ..services.container_classifier import LABEL_COMPOSE_CONFIG_FILES
+from ..services.docker_client_service import ContainerInfo, DockerClientService
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +86,8 @@ def get_latest_active_deployment(
         Le déploiement le plus récent actif, ou None.
     """
     active = [
-        d for d in deployments
+        d
+        for d in deployments
         if d.status not in (DeploymentStatus.STOPPED, DeploymentStatus.FAILED)
     ]
     if not active:
@@ -217,8 +213,7 @@ async def build_discovered_items(
             source_path = containers[0].labels.get(LABEL_COMPOSE_CONFIG_FILES)
 
         services = [
-            await _build_service_with_metrics(c, docker_for_health)
-            for c in containers
+            await _build_service_with_metrics(c, docker_for_health) for c in containers
         ]
 
         discovered_items.append(

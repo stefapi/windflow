@@ -5,8 +5,9 @@ Fournit les structures de données pour l'endpoint consolidé du dashboard.
 """
 
 from datetime import datetime
-from typing import List, Dict, Optional, Literal
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Dict, List, Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TargetHealthItem(BaseModel):
@@ -25,10 +26,14 @@ class AlertItem(BaseModel):
     """Alerte ou notification du dashboard."""
 
     id: str = Field(..., description="ID de l'alerte")
-    severity: Literal["critical", "warning", "info"] = Field(..., description="Sévérité")
+    severity: Literal["critical", "warning", "info"] = Field(
+        ..., description="Sévérité"
+    )
     title: str = Field(..., description="Titre de l'alerte")
     message: str = Field(..., description="Message détaillé")
-    source: str = Field(..., description="Source de l'alerte (target, deployment, system)")
+    source: str = Field(
+        ..., description="Source de l'alerte (target, deployment, system)"
+    )
     timestamp: datetime = Field(..., description="Date de l'alerte")
     acknowledged: bool = Field(False, description="Alerte acquittée")
 
@@ -83,7 +88,7 @@ class ResourceMetrics(BaseModel):
     uptime_seconds: int = Field(0, description="Uptime en secondes")
     history: List[ResourceMetricPoint] = Field(
         default_factory=list,
-        description="Historique des métriques (dernières 60 minutes)"
+        description="Historique des métriques (dernières 60 minutes)",
     )
 
 
@@ -99,54 +104,50 @@ class DashboardStats(BaseModel):
 
     # Compteurs ressources par statut (STORY-432)
     containers: ResourceCounter = Field(
-        default_factory=ResourceCounter,
-        description="Compteur de containers (running/stopped/total)"
+        default_factory=ResourceCounter,  # type: ignore[arg-type]
+        description="Compteur de containers (running/stopped/total)",
     )
     vms: ResourceCounter = Field(
-        default_factory=ResourceCounter,
-        description="Compteur de VMs (running/stopped/total)"
+        default_factory=ResourceCounter,  # type: ignore[arg-type]
+        description="Compteur de VMs (running/stopped/total)",
     )
     stacks: ResourceCounter = Field(
-        default_factory=ResourceCounter,
-        description="Compteur de stacks (active/inactive/total)"
+        default_factory=ResourceCounter,  # type: ignore[arg-type]
+        description="Compteur de stacks (active/inactive/total)",
     )
 
     # Indicateur de disponibilité VMs
     vms_available: bool = Field(
-        False,
-        description="True si EPIC-002 livrée, False affiche 'Bientôt disponible'"
+        False, description="True si EPIC-002 livrée, False affiche 'Bientôt disponible'"
     )
 
     # Santé des targets
     target_health: Dict[str, int] = Field(
         default_factory=dict,
-        description="Répartition des statuts targets (online, offline, error, maintenance)"
+        description="Répartition des statuts targets (online, offline, error, maintenance)",
     )
     targets_detail: List[TargetHealthItem] = Field(
-        default_factory=list,
-        description="Détail de santé par target"
+        default_factory=list, description="Détail de santé par target"
     )
 
     # Métriques déploiements
     deployment_metrics: DeploymentMetrics = Field(
-        default_factory=DeploymentMetrics,
-        description="Métriques de performance des déploiements"
+        default_factory=DeploymentMetrics,  # type: ignore[arg-type]
+        description="Métriques de performance des déploiements",
     )
 
     # Métriques ressources système
     resource_metrics: ResourceMetrics = Field(
-        default_factory=ResourceMetrics,
+        default_factory=ResourceMetrics,  # type: ignore[arg-type]
         description="Métriques CPU/RAM du système"
     )
 
     # Activité récente
     recent_activity: List[ActivityFeedItem] = Field(
-        default_factory=list,
-        description="Flux d'activité récente"
+        default_factory=list, description="Flux d'activité récente"
     )
 
     # Alertes et notifications
     alerts: List[AlertItem] = Field(
-        default_factory=list,
-        description="Alertes et notifications actives"
+        default_factory=list, description="Alertes et notifications actives"
     )

@@ -55,11 +55,11 @@ const pluginWidgetStore = usePluginWidgetStore()
 .plugin-widget-zone__title {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: var(--text-lg, 1.125rem);
-  font-weight: 600;
-  color: var(--color-text-primary);
   margin-bottom: 1rem;
+  font-size: var(--text-lg, 1.125rem);
+  color: var(--color-text-primary);
+  gap: 0.5rem;
+  font-weight: 600;
 }
 
 .plugin-widget-zone__grid {
@@ -69,7 +69,7 @@ const pluginWidgetStore = usePluginWidgetStore()
 }
 
 /* Tablet: 1 column */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .plugin-widget-zone__grid {
     grid-template-columns: 1fr;
   }

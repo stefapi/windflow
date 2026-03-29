@@ -5,13 +5,13 @@ Provides extensible architecture for handling WebSocket events
 through a plugin-based approach.
 """
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Set, Optional, Any, Callable
+from typing import Any, Callable, Dict, List, Optional, Set
+
 from fastapi import WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
-import logging
-from datetime import datetime
 
 from ..models.user import User
 from ..schemas.websocket_events import WebSocketEventType
@@ -91,14 +91,10 @@ class WebSocketPlugin(ABC):
         Args:
             context: Plugin context with application services
         """
-        pass
 
     @abstractmethod
     async def handle_event(
-        self,
-        event: WebSocketEventType,
-        data: Dict[str, Any],
-        context: PluginContext
+        self, event: WebSocketEventType, data: Dict[str, Any], context: PluginContext
     ) -> None:
         """
         Handle a WebSocket event.
@@ -110,7 +106,6 @@ class WebSocketPlugin(ABC):
             data: Event data payload
             context: Plugin context with application services
         """
-        pass
 
     async def cleanup(self) -> None:
         """
@@ -121,7 +116,6 @@ class WebSocketPlugin(ABC):
         - Flushing buffers
         - Releasing resources
         """
-        pass
 
 
 class WebSocketMessageHandler(ABC):
@@ -151,13 +145,10 @@ class WebSocketMessageHandler(ABC):
         Args:
             context: Plugin context with application services
         """
-        pass
 
     @abstractmethod
     async def handle_message(
-        self,
-        message: Dict[str, Any],
-        context: PluginContext
+        self, message: Dict[str, Any], context: PluginContext
     ) -> Optional[Dict[str, Any]]:
         """
         Handle an incoming client message.
@@ -169,11 +160,9 @@ class WebSocketMessageHandler(ABC):
         Returns:
             Optional response to send back to client (or None)
         """
-        pass
 
     async def cleanup(self) -> None:
         """Clean up handler resources on disconnection."""
-        pass
 
 
 class WebSocketPluginManager:
@@ -300,8 +289,7 @@ class WebSocketPluginManager:
                 context.logger.debug(f"Plugin '{plugin.name}' initialized")
             except Exception as e:
                 context.logger.error(
-                    f"Failed to initialize plugin '{plugin.name}': {e}",
-                    exc_info=True
+                    f"Failed to initialize plugin '{plugin.name}': {e}", exc_info=True
                 )
 
         # Initialize message handlers
@@ -312,14 +300,11 @@ class WebSocketPluginManager:
             except Exception as e:
                 context.logger.error(
                     f"Failed to initialize message handler '{handler.name}': {e}",
-                    exc_info=True
+                    exc_info=True,
                 )
 
     async def dispatch(
-        self,
-        event: WebSocketEventType,
-        data: Dict[str, Any],
-        context: PluginContext
+        self, event: WebSocketEventType, data: Dict[str, Any], context: PluginContext
     ) -> None:
         """
         Dispatch an event to all plugins that listen for it.
@@ -348,18 +333,15 @@ class WebSocketPluginManager:
             except Exception as e:
                 context.logger.error(
                     f"Error in plugin '{plugin.name}' handling event '{event}': {e}",
-                    exc_info=True
+                    exc_info=True,
                 )
 
         await asyncio.gather(
-            *[handle_with_plugin(plugin) for plugin in handlers],
-            return_exceptions=True
+            *[handle_with_plugin(plugin) for plugin in handlers], return_exceptions=True
         )
 
     async def handle_client_message(
-        self,
-        message: Dict[str, Any],
-        context: PluginContext
+        self, message: Dict[str, Any], context: PluginContext
     ) -> Optional[Dict[str, Any]]:
         """
         Dispatch a client message to appropriate handlers.
@@ -381,7 +363,6 @@ class WebSocketPluginManager:
             return None
 
         # Execute first handler that returns a response
-        import asyncio
 
         for handler in handlers:
             try:
@@ -391,12 +372,9 @@ class WebSocketPluginManager:
             except Exception as e:
                 context.logger.error(
                     f"Error in handler '{handler.name}' for message type '{message_type}': {e}",
-                    exc_info=True
+                    exc_info=True,
                 )
-                return {
-                    "type": "error",
-                    "message": f"Handler error: {str(e)}"
-                }
+                return {"type": "error", "message": f"Handler error: {str(e)}"}
 
         return None
 
@@ -408,8 +386,7 @@ class WebSocketPluginManager:
                 await plugin.cleanup()
             except Exception as e:
                 self._logger.error(
-                    f"Failed to cleanup plugin '{plugin.name}': {e}",
-                    exc_info=True
+                    f"Failed to cleanup plugin '{plugin.name}': {e}", exc_info=True
                 )
 
         # Cleanup message handlers
@@ -418,8 +395,7 @@ class WebSocketPluginManager:
                 await handler.cleanup()
             except Exception as e:
                 self._logger.error(
-                    f"Failed to cleanup handler '{handler.name}': {e}",
-                    exc_info=True
+                    f"Failed to cleanup handler '{handler.name}': {e}", exc_info=True
                 )
 
 

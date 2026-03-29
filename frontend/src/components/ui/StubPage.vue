@@ -64,38 +64,38 @@ const rawIcon = markRaw(props.icon)
 }
 
 .stub-card {
-  max-width: 480px;
   width: 100%;
+  max-width: 480px;
   background-color: var(--color-bg-card);
   border-color: var(--color-border);
 }
 
 .stub-content {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
   padding: 40px 20px;
+  text-align: center;
+  flex-direction: column;
 }
 
 .stub-icon {
-  color: var(--color-text-muted);
   margin-bottom: 24px;
+  color: var(--color-text-muted);
   opacity: 0.6;
 }
 
 .stub-title {
+  margin: 0 0 12px;
   font-size: var(--text-2xl);
-  font-weight: var(--font-semibold);
   color: var(--color-text-primary);
-  margin: 0 0 12px 0;
+  font-weight: var(--font-semibold);
 }
 
 .stub-description {
+  max-width: 320px;
+  margin: 0 0 20px;
   font-size: var(--text-base);
   color: var(--color-text-secondary);
-  margin: 0 0 20px 0;
-  max-width: 320px;
   line-height: var(--leading-relaxed);
 }
 

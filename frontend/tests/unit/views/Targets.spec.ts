@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import Targets from '@/views/Targets.vue'
-import type { Target } from '@/types/api'
 
 // Mock stores
 vi.mock('@/stores', () => ({
@@ -46,7 +43,8 @@ describe('Targets.vue', () => {
     setActivePinia(createPinia())
   })
 
-  const mockTarget: Target = {
+   
+  const _mockTarget = {
     id: 'target-1',
     name: 'Test Target',
     host: 'localhost',

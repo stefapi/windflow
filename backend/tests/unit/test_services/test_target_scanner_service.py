@@ -8,11 +8,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.schemas.target import TargetType
 from app.schemas.target_scan import (
     DockerCapabilities,
     DockerComposeInfo,
-    DockerSwarmInfo,
     ScanResult,
     ToolInfo,
 )
@@ -136,9 +134,7 @@ class TestBuildCapabilitiesPayload:
                 running=True,
                 socket_accessible=True,
                 compose=DockerComposeInfo(
-                    available=True,
-                    version="2.24.0",
-                    plugin_based=True
+                    available=True, version="2.24.0", plugin_based=True
                 ),
                 swarm=None,
             ),
@@ -169,5 +165,3 @@ class TestBuildCapabilitiesPayload:
 
         capabilities = service.build_capabilities_payload(scan_result)
         assert len(capabilities) == 0
-
-

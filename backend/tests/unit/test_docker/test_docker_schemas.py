@@ -4,29 +4,30 @@ Unit tests for Docker schemas (Pydantic models).
 These tests validate the Pydantic schemas used in the Docker API.
 """
 
-import pytest
 from datetime import datetime, timezone
+
+import pytest
 from pydantic import ValidationError
 
 from app.schemas.docker import (
-    ContainerResponse,
-    ContainerDetailResponse,
     ContainerCreateRequest,
+    ContainerDetailResponse,
     ContainerLogsRequest,
     ContainerLogsResponse,
-    ImageResponse,
+    ContainerResponse,
+    ContainerStatsResponse,
+    DockerErrorResponse,
     ImagePullRequest,
     ImagePullResponse,
-    VolumeResponse,
-    VolumeCreateRequest,
+    ImageResponse,
+    MountPoint,
     NetworkResponse,
+    PingResponse,
+    PortBinding,
     SystemInfoResponse,
     SystemVersionResponse,
-    PingResponse,
-    DockerErrorResponse,
-    ContainerStatsResponse,
-    PortBinding,
-    MountPoint,
+    VolumeCreateRequest,
+    VolumeResponse,
 )
 
 
@@ -35,10 +36,7 @@ class TestContainerCreateRequest:
 
     def test_valid_request(self):
         """Test valid container creation request."""
-        req = ContainerCreateRequest(
-            name="my-container",
-            image="nginx:latest"
-        )
+        req = ContainerCreateRequest(name="my-container", image="nginx:latest")
         assert req.name == "my-container"
         assert req.image == "nginx:latest"
 
@@ -61,17 +59,11 @@ class TestContainerCreateRequest:
     def test_invalid_name(self):
         """Test invalid container name."""
         with pytest.raises(ValidationError):
-            ContainerCreateRequest(
-                name="-invalid-name",
-                image="nginx:latest"
-            )
+            ContainerCreateRequest(name="-invalid-name", image="nginx:latest")
 
     def test_default_values(self):
         """Test default values."""
-        req = ContainerCreateRequest(
-            name="my-container",
-            image="nginx:latest"
-        )
+        req = ContainerCreateRequest(name="my-container", image="nginx:latest")
         assert req.restart_policy == "no"
         assert req.network_mode == "bridge"
         assert req.privileged is False

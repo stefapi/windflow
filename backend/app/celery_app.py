@@ -4,8 +4,10 @@ Configuration Celery avec Beat pour les tâches planifiées.
 Usage:
     celery -A backend.app.celery_app worker --beat --loglevel=info
 """
-import os
+
 import logging
+import os
+
 from celery import Celery
 from celery.schedules import crontab
 
@@ -53,22 +55,24 @@ celery_app.conf.beat_schedule = {
 
 # --- Définition des tâches Celery ---
 
+
 @celery_app.task(name="windflow.tasks.cleanup_logs")
 def cleanup_logs():
     """Nettoyage des logs anciens."""
     logger.info("Exécution tâche planifiée : nettoyage des logs")
     # Import tardif pour éviter les imports circulaires
     import asyncio
+    from datetime import datetime, timedelta
+
     from .database import db as database
     from .models.deployment import Deployment
-    from sqlalchemy import delete
-    from datetime import datetime, timedelta
 
     async def _cleanup():
         async with database.session_factory() as db:
             cutoff = datetime.utcnow() - timedelta(days=30)
             # Nettoyage des logs de déploiements anciens
             from sqlalchemy import update
+
             await db.execute(
                 update(Deployment)
                 .where(Deployment.created_at < cutoff)
@@ -87,6 +91,7 @@ def health_check_targets():
     """Vérification de la santé des targets."""
     logger.info("Exécution tâche planifiée : vérification santé targets")
     import asyncio
+
     from .database import db as database
     from .services.target_service import TargetService
 
@@ -112,6 +117,7 @@ def retry_pending_deployments():
     """Relance des déploiements en attente."""
     logger.info("Exécution tâche planifiée : retry déploiements pending")
     import asyncio
+
     from .tasks.background_tasks import retry_pending_deployments_async
 
     asyncio.run(retry_pending_deployments_async())

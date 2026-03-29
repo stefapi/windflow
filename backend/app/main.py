@@ -14,33 +14,36 @@ print("=== LOADING backend.app.main MODULE ===", flush=True)
 import logging
 from contextlib import asynccontextmanager
 
+import redis.asyncio as redis
 from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from pydantic import ValidationError
-from scalar_fastapi import get_scalar_api_reference
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 # Rate limiting
 from fastapi_limiter import FastAPILimiter
-import redis.asyncio as redis
+from pydantic import ValidationError
+from scalar_fastapi import get_scalar_api_reference
 
+from .api.v1 import api_router
 from .config import settings
 from .database import db
-from .api.v1 import api_router
 from .middleware import (
-    security_headers_middleware,
     correlation_middleware,
-    timing_middleware,
-    logging_middleware,
     error_handler_middleware,
+    logging_middleware,
+    security_headers_middleware,
+    timing_middleware,
 )
 
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, settings.log_level),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s' if settings.log_format == "text"
-            else '{"timestamp": "%(asctime)s", "logger": "%(name)s", "level": "%(levelname)s", "message": "%(message)s"}'
+    format=(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        if settings.log_format == "text"
+        else '{"timestamp": "%(asctime)s", "logger": "%(name)s", "level": "%(levelname)s", "message": "%(message)s"}'
+    ),
 )
 logger = logging.getLogger(__name__)
 
@@ -74,6 +77,7 @@ async def lifespan(app: FastAPI):
 
     # Setup Event Bridge
     from .websocket.event_bridge import setup_event_bridge
+
     setup_event_bridge()
     logger.info("✓ Event bridge initialized")
 
@@ -81,29 +85,34 @@ async def lifespan(app: FastAPI):
     if settings.rate_limit_enabled and settings.rate_limit_storage_url:
         try:
             redis_client = redis.from_url(
-                settings.rate_limit_storage_url,
-                encoding="utf-8",
-                decode_responses=True
+                settings.rate_limit_storage_url, encoding="utf-8", decode_responses=True
             )
             await FastAPILimiter.init(redis_client)
-            logger.info(f"✓ Rate limiter initialized (Redis: {settings.rate_limit_storage_url})")
+            logger.info(
+                f"✓ Rate limiter initialized (Redis: {settings.rate_limit_storage_url})"
+            )
         except Exception as e:
             logger.warning(f"✗ Rate limiter initialization failed: {e}")
             logger.warning("  Continuing without rate limiting")
     elif settings.rate_limit_enabled:
-        logger.warning("✗ Rate limiting enabled but RATE_LIMIT_STORAGE_URL not configured")
-        logger.warning("  For production, configure Redis: RATE_LIMIT_STORAGE_URL=redis://localhost:6379/0")
+        logger.warning(
+            "✗ Rate limiting enabled but RATE_LIMIT_STORAGE_URL not configured"
+        )
+        logger.warning(
+            "  For production, configure Redis: RATE_LIMIT_STORAGE_URL=redis://localhost:6379/0"
+        )
 
     # Recover pending deployments
     try:
         from .services.deployment_orchestrator import DeploymentOrchestrator
 
         stats = await DeploymentOrchestrator.recover_pending_deployments(
-            max_age_minutes=0,
-            timeout_minutes=60
+            max_age_minutes=0, timeout_minutes=60
         )
 
-        logger.info(f"✓ Deployment recovery: {stats['retried']} retried, {stats['failed']} failed")
+        logger.info(
+            f"✓ Deployment recovery: {stats['retried']} retried, {stats['failed']} failed"
+        )
     except Exception as e:
         logger.error(f"✗ Deployment recovery failed: {e}")
 
@@ -165,7 +174,11 @@ WindFlow uses JWT-based authentication:
 - API Reference: /redoc
 - Health Check: /health
 - GitHub: https://github.com/stefapi/windflow
-    """.format(rate_limit=settings.rate_limit_default if settings.rate_limit_enabled else "Unlimited"),
+    """.format(
+        rate_limit=(
+            settings.rate_limit_default if settings.rate_limit_enabled else "Unlimited"
+        )
+    ),
     servers=settings.build_server_urls(),
     lifespan=lifespan,
     debug=settings.debug,
@@ -175,41 +188,20 @@ WindFlow uses JWT-based authentication:
     contact={
         "name": "WindFlow Support",
         "email": "support@windflow.io",
-        "url": "https://windflow.io/support"
+        "url": "https://windflow.io/support",
     },
-    license_info={
-        "name": "MIT License",
-        "url": "https://opensource.org/licenses/MIT"
-    },
+    license_info={"name": "MIT License", "url": "https://opensource.org/licenses/MIT"},
     openapi_tags=[
-        {
-            "name": "auth",
-            "description": "Authentication and authorization endpoints"
-        },
-        {
-            "name": "deployments",
-            "description": "Docker deployment management"
-        },
-        {
-            "name": "stacks",
-            "description": "Application stack templates"
-        },
+        {"name": "auth", "description": "Authentication and authorization endpoints"},
+        {"name": "deployments", "description": "Docker deployment management"},
+        {"name": "stacks", "description": "Application stack templates"},
         {
             "name": "organizations",
-            "description": "Multi-tenant organization management"
+            "description": "Multi-tenant organization management",
         },
-        {
-            "name": "users",
-            "description": "User account management"
-        },
-        {
-            "name": "health",
-            "description": "Health checks and monitoring"
-        },
-        {
-            "name": "websocket",
-            "description": "Real-time WebSocket connections"
-        }
+        {"name": "users", "description": "User account management"},
+        {"name": "health", "description": "Health checks and monitoring"},
+        {"name": "websocket", "description": "Real-time WebSocket connections"},
     ],
     swagger_ui_parameters={
         "syntaxHighlight.theme": "monokai",
@@ -217,7 +209,7 @@ WindFlow uses JWT-based authentication:
         "filter": True,
         "defaultModelsExpandDepth": 1,
         "persistAuthorization": True,
-    }
+    },
 )
 
 # === MIDDLEWARE CONFIGURATION ===
@@ -261,6 +253,7 @@ app.include_router(api_router)
 
 # === ROOT ENDPOINTS ===
 
+
 @app.get("/", include_in_schema=False)
 async def root():
     """Root endpoint with API information."""
@@ -273,10 +266,10 @@ async def root():
             "scalar": "/docs",
             "swagger": "/swagger",
             "redoc": "/redoc",
-            "openapi": "/openapi.json"
+            "openapi": "/openapi.json",
         },
         "api": "/api/v1",
-        "health": "/health"
+        "health": "/health",
     }
 
 
@@ -292,14 +285,14 @@ async def health_check():
         "status": "healthy",
         "version": settings.app_version,
         "environment": settings.environment,
-        "services": {}
+        "services": {},
     }
 
     # Check database
     db_healthy = await db.health_check()
     health_status["services"]["database"] = {
         "status": "healthy" if db_healthy else "unhealthy",
-        "type": "sqlite" if "sqlite" in settings.database_url else "postgresql"
+        "type": "sqlite" if "sqlite" in settings.database_url else "postgresql",
     }
 
     # Check rate limiter
@@ -323,6 +316,7 @@ async def health_check():
 
 # === SCALAR API DOCUMENTATION ===
 
+
 @app.get("/docs", include_in_schema=False)
 async def scalar_docs():
     """
@@ -343,14 +337,14 @@ async def scalar_docs():
 
 # === EXCEPTION HANDLERS ===
 
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle FastAPI validation errors."""
     correlation_id = getattr(request.state, "correlation_id", None)
 
     logger.warning(
-        f"Validation error: {exc.errors()}",
-        extra={"correlation_id": correlation_id}
+        f"Validation error: {exc.errors()}", extra={"correlation_id": correlation_id}
     )
 
     return JSONResponse(
@@ -358,8 +352,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={
             "error": "Validation Error",
             "detail": exc.errors(),
-            "correlation_id": correlation_id
-        }
+            "correlation_id": correlation_id,
+        },
     )
 
 
@@ -370,7 +364,7 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
 
     logger.warning(
         f"Pydantic validation error: {exc.errors()}",
-        extra={"correlation_id": correlation_id}
+        extra={"correlation_id": correlation_id},
     )
 
     return JSONResponse(
@@ -378,8 +372,8 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
         content={
             "error": "Validation Error",
             "detail": exc.errors(),
-            "correlation_id": correlation_id
-        }
+            "correlation_id": correlation_id,
+        },
     )
 
 
@@ -391,5 +385,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=settings.debug,
-        log_level=settings.log_level.lower()
+        log_level=settings.log_level.lower(),
     )

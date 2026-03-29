@@ -90,6 +90,38 @@ exclude_lines = [
     "if TYPE_CHECKING:",
 ]
 
+[tool.isort]
+profile = "black"
+known_first_party = ["app", "backend"]
+
+[tool.mypy]
+explicit_package_bases = true
+ignore_missing_imports = false
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    "bcrypt",
+    "celery.*",
+    "redis.*",
+    "prometheus_client",
+    "prometheus_client.*",
+    "docker",
+    "docker.*",
+    "libvirt",
+    "asyncssh",
+    "litellm",
+    "litellm.*",
+    "croniter",
+    "passlib.*",
+    "python_jose.*",
+    "argon2",
+    "argon2.*",
+]
+ignore_missing_imports = true
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"

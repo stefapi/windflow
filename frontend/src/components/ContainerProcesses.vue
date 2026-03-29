@@ -277,11 +277,11 @@ function clearError(): void {
 
 .processes-loading {
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 8px;
+  align-items: center;
   height: 200px;
   color: var(--color-text-secondary);
+  gap: 8px;
 }
 
 .processes-timestamp {
@@ -295,8 +295,8 @@ function clearError(): void {
 }
 
 .command-cell {
-  font-family: monospace;
   font-size: 12px;
+  font-family: monospace;
   color: var(--color-text-primary);
   word-break: break-all;
 }
@@ -306,7 +306,7 @@ function clearError(): void {
 }
 
 /* Responsive adjustments */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .processes-header {
     flex-direction: column;
     align-items: flex-start;
@@ -314,8 +314,8 @@ function clearError(): void {
   }
 
   .processes-controls {
-    width: 100%;
     justify-content: space-between;
+    width: 100%;
   }
 }
 </style>

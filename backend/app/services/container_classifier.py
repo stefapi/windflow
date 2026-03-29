@@ -11,7 +11,6 @@ Stratégie de classification (par labels Docker) :
 """
 
 from collections import defaultdict
-from typing import Optional
 
 from ..services.docker_client_service import ContainerInfo
 
@@ -64,7 +63,7 @@ def classify_containers(
 ) -> tuple[
     dict[str, list[ContainerInfo]],  # managed: {stack_id: [containers]}
     dict[str, list[ContainerInfo]],  # discovered: {project_name: [containers]}
-    list[ContainerInfo],             # standalone: [containers]
+    list[ContainerInfo],  # standalone: [containers]
 ]:
     """
     Classe les containers Docker en 3 catégories.

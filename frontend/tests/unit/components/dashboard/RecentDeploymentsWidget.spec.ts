@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { ref, nextTick } from 'vue'
+import { nextTick } from 'vue'
 import RecentDeploymentsWidget from '@/components/dashboard/RecentDeploymentsWidget.vue'
 import type { Deployment } from '@/types/api'
 

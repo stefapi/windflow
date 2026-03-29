@@ -10,8 +10,8 @@ from typing import Optional
 from ..schemas.compute import (
     ContainerPortMapping,
     DiscoveredItem,
-    StandaloneContainer,
     StackWithServices,
+    StandaloneContainer,
 )
 
 
@@ -134,7 +134,9 @@ def apply_filters(
     if search:
         search_lower = search.lower()
         managed_stacks = [s for s in managed_stacks if search_lower in s.name.lower()]
-        discovered_items = [d for d in discovered_items if search_lower in d.name.lower()]
+        discovered_items = [
+            d for d in discovered_items if search_lower in d.name.lower()
+        ]
         standalone_list = [c for c in standalone_list if search_lower in c.name.lower()]
 
     # Filtre par statut
@@ -145,8 +147,12 @@ def apply_filters(
     # Filtre par target
     if target_id_filter:
         managed_stacks = [s for s in managed_stacks if s.target_id == target_id_filter]
-        discovered_items = [d for d in discovered_items if d.target_id == target_id_filter]
-        standalone_list = [c for c in standalone_list if c.target_id == target_id_filter]
+        discovered_items = [
+            d for d in discovered_items if d.target_id == target_id_filter
+        ]
+        standalone_list = [
+            c for c in standalone_list if c.target_id == target_id_filter
+        ]
 
     # Filtre par technologie
     if technology:

@@ -2,19 +2,24 @@
 Routes de gestion des organisations.
 """
 
-from typing import List, Tuple
-from uuid import UUID
 import logging
+from typing import List
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...database import get_db
-from ...schemas.organization import OrganizationResponse, OrganizationCreate, OrganizationUpdate
-from ...services.organization_service import OrganizationService
 from ...auth.dependencies import get_current_active_user, require_superuser
-from ...models.user import User
 from ...core.rate_limit import conditional_rate_limiter
+from ...database import get_db
+from ...models.user import User
+from ...schemas.organization import (
+    OrganizationCreate,
+    OrganizationResponse,
+    OrganizationUpdate,
+)
+from ...services.organization_service import OrganizationService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -23,11 +28,13 @@ logger = logging.getLogger(__name__)
 # Schema for bulk operations
 class BulkDeleteOrgRequest(BaseModel):
     """Request schema for bulk organization deletion."""
+
     organization_ids: List[str]
 
 
 class BulkOperationResponse(BaseModel):
     """Response schema for bulk operations."""
+
     success: List[str]
     failed: List[str]
     message: str
@@ -71,7 +78,7 @@ List all organizations in the system.
                             "description": "Leading technology company",
                             "is_active": True,
                             "created_at": "2024-01-15T10:30:00Z",
-                            "updated_at": "2024-01-15T10:30:00Z"
+                            "updated_at": "2024-01-15T10:30:00Z",
                         },
                         {
                             "id": "660e8400-e29b-41d4-a716-446655440001",
@@ -79,31 +86,23 @@ List all organizations in the system.
                             "description": "Innovative startup",
                             "is_active": True,
                             "created_at": "2024-02-20T14:20:00Z",
-                            "updated_at": "2024-02-20T14:20:00Z"
-                        }
+                            "updated_at": "2024-02-20T14:20:00Z",
+                        },
                     ]
                 }
-            }
+            },
         },
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
         },
         403: {
             "description": "Insufficient permissions - superuser required",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Superuser access required"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Superuser access required"}}
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -113,26 +112,24 @@ List all organizations in the system.
                         "detail": "Rate limit exceeded. Try again in 60 seconds."
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "An unexpected error occurred"
-                    }
+                    "example": {"detail": "An unexpected error occurred"}
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 )
 async def list_organizations(
     request: Request,
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(require_superuser),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Liste toutes les organisations (superuser uniquement).
@@ -154,8 +151,8 @@ async def list_organizations(
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
             "skip": skip,
-            "limit": limit
-        }
+            "limit": limit,
+        },
     )
 
     organizations = await OrganizationService.list_all(session, skip, limit)
@@ -202,30 +199,24 @@ Returns complete organization information including:
                         "description": "Leading technology company specializing in cloud solutions",
                         "is_active": True,
                         "created_at": "2024-01-15T10:30:00Z",
-                        "updated_at": "2024-01-15T10:30:00Z"
+                        "updated_at": "2024-01-15T10:30:00Z",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
         },
         403: {
             "description": "Access denied - user does not belong to this organization",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "Accès refusé à cette organisation"
-                    }
+                    "example": {"detail": "Accès refusé à cette organisation"}
                 }
-            }
+            },
         },
         404: {
             "description": "Organization not found",
@@ -235,7 +226,7 @@ Returns complete organization information including:
                         "detail": "Organisation 550e8400-e29b-41d4-a716-446655440000 non trouvée"
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -245,25 +236,23 @@ Returns complete organization information including:
                         "detail": "Rate limit exceeded. Try again in 60 seconds."
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "An unexpected error occurred"
-                    }
+                    "example": {"detail": "An unexpected error occurred"}
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 )
 async def get_organization(
     request: Request,
     organization_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Récupère une organisation par son ID.
@@ -283,21 +272,26 @@ async def get_organization(
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Getting organization {organization_id}",
-        extra={"correlation_id": correlation_id, "organization_id": str(organization_id)}
+        extra={
+            "correlation_id": correlation_id,
+            "organization_id": str(organization_id),
+        },
     )
     # Vérifier que l'utilisateur appartient à l'organisation ou est superuser
     # Comparer en convertissant les deux côtés en string (organization_id en base est String(36))
-    if not current_user.is_superuser and current_user.organization_id != str(organization_id):
+    if not current_user.is_superuser and current_user.organization_id != str(
+        organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette organisation"
+            detail="Accès refusé à cette organisation",
         )
 
     organization = await OrganizationService.get_by_id(session, organization_id)
     if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {organization_id} non trouvée"
+            detail=f"Organisation {organization_id} non trouvée",
         )
     return organization
 
@@ -346,8 +340,8 @@ After creating an organization, you typically need to:
                             "description": "Minimal organization with required fields only",
                             "value": {
                                 "name": "Acme Corporation",
-                                "description": "Leading technology company"
-                            }
+                                "description": "Leading technology company",
+                            },
                         },
                         "detailed_organization": {
                             "summary": "Detailed organization",
@@ -355,8 +349,8 @@ After creating an organization, you typically need to:
                             "value": {
                                 "name": "TechStart Inc",
                                 "description": "Innovative startup specializing in cloud solutions and DevOps automation",
-                                "is_active": True
-                            }
+                                "is_active": True,
+                            },
                         },
                         "inactive_organization": {
                             "summary": "Inactive organization",
@@ -364,16 +358,14 @@ After creating an organization, you typically need to:
                             "value": {
                                 "name": "Legacy Systems Ltd",
                                 "description": "Organization for migration purposes",
-                                "is_active": False
-                            }
+                                "is_active": False,
+                            },
                         },
                         "minimal_organization": {
                             "summary": "Minimal organization",
                             "description": "Only required name field",
-                            "value": {
-                                "name": "Simple Org"
-                            }
-                        }
+                            "value": {"name": "Simple Org"},
+                        },
                     }
                 }
             }
@@ -390,10 +382,10 @@ After creating an organization, you typically need to:
                         "description": "Leading technology company",
                         "is_active": True,
                         "created_at": "2024-01-15T10:30:00Z",
-                        "updated_at": "2024-01-15T10:30:00Z"
+                        "updated_at": "2024-01-15T10:30:00Z",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid request data",
@@ -403,27 +395,19 @@ After creating an organization, you typically need to:
                         "detail": "Validation error: name must be between 1 and 100 characters"
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
         },
         403: {
             "description": "Insufficient permissions - superuser required",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Superuser access required"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Superuser access required"}}
+            },
         },
         409: {
             "description": "Organization name already exists",
@@ -433,7 +417,7 @@ After creating an organization, you typically need to:
                         "detail": "Organisation avec le nom 'Acme Corporation' existe déjà"
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -443,25 +427,23 @@ After creating an organization, you typically need to:
                         "detail": "Rate limit exceeded. Try again in 60 seconds."
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "An unexpected error occurred"
-                    }
+                    "example": {"detail": "An unexpected error occurred"}
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 )
 async def create_organization(
     request: Request,
     organization_data: OrganizationCreate,
     current_user: User = Depends(require_superuser),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Crée une nouvelle organisation (superuser uniquement).
@@ -484,15 +466,15 @@ async def create_organization(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "org_name": organization_data.name
-        }
+            "org_name": organization_data.name,
+        },
     )
     # Vérifier que le nom n'existe pas déjà
     existing = await OrganizationService.get_by_name(session, organization_data.name)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Organisation avec le nom '{organization_data.name}' existe déjà"
+            detail=f"Organisation avec le nom '{organization_data.name}' existe déjà",
         )
 
     organization = await OrganizationService.create(session, organization_data)
@@ -547,23 +529,19 @@ Setting `is_active` to False will:
                         "update_name": {
                             "summary": "Update organization name",
                             "description": "Change only the organization name",
-                            "value": {
-                                "name": "Acme Corporation Rebranded"
-                            }
+                            "value": {"name": "Acme Corporation Rebranded"},
                         },
                         "update_description": {
                             "summary": "Update description",
                             "description": "Change only the description",
                             "value": {
                                 "description": "Updated company description with new focus areas"
-                            }
+                            },
                         },
                         "deactivate_organization": {
                             "summary": "Deactivate organization",
                             "description": "Set organization to inactive state",
-                            "value": {
-                                "is_active": False
-                            }
+                            "value": {"is_active": False},
                         },
                         "full_update": {
                             "summary": "Full update",
@@ -571,16 +549,14 @@ Setting `is_active` to False will:
                             "value": {
                                 "name": "New Organization Name",
                                 "description": "Completely updated description with new information",
-                                "is_active": True
-                            }
+                                "is_active": True,
+                            },
                         },
                         "reactivate_organization": {
                             "summary": "Reactivate organization",
                             "description": "Re-enable a previously deactivated organization",
-                            "value": {
-                                "is_active": True
-                            }
-                        }
+                            "value": {"is_active": True},
+                        },
                     }
                 }
             }
@@ -597,10 +573,10 @@ Setting `is_active` to False will:
                         "description": "Updated company description",
                         "is_active": True,
                         "created_at": "2024-01-15T10:30:00Z",
-                        "updated_at": "2024-02-20T15:45:00Z"
+                        "updated_at": "2024-02-20T15:45:00Z",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid request data",
@@ -610,27 +586,19 @@ Setting `is_active` to False will:
                         "detail": "Validation error: name must be between 1 and 100 characters"
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
         },
         403: {
             "description": "Insufficient permissions - superuser required",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Superuser access required"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Superuser access required"}}
+            },
         },
         404: {
             "description": "Organization not found",
@@ -640,7 +608,7 @@ Setting `is_active` to False will:
                         "detail": "Organisation 550e8400-e29b-41d4-a716-446655440000 non trouvée"
                     }
                 }
-            }
+            },
         },
         409: {
             "description": "Organization name already exists",
@@ -650,7 +618,7 @@ Setting `is_active` to False will:
                         "detail": "Organisation avec le nom 'Acme Corporation' existe déjà"
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -660,26 +628,24 @@ Setting `is_active` to False will:
                         "detail": "Rate limit exceeded. Try again in 60 seconds."
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "An unexpected error occurred"
-                    }
+                    "example": {"detail": "An unexpected error occurred"}
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 )
 async def update_organization(
     request: Request,
     organization_id: UUID,
     organization_data: OrganizationUpdate,
     current_user: User = Depends(require_superuser),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Met à jour une organisation (superuser uniquement).
@@ -703,27 +669,31 @@ async def update_organization(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "organization_id": str(organization_id)
-        }
+            "organization_id": str(organization_id),
+        },
     )
     # Vérifier que l'organisation existe
     existing_org = await OrganizationService.get_by_id(session, organization_id)
     if not existing_org:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {organization_id} non trouvée"
+            detail=f"Organisation {organization_id} non trouvée",
         )
 
     # Si changement de nom, vérifier qu'il n'existe pas déjà
     if organization_data.name and organization_data.name != existing_org.name:
-        existing_name = await OrganizationService.get_by_name(session, organization_data.name)
+        existing_name = await OrganizationService.get_by_name(
+            session, organization_data.name
+        )
         if existing_name:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Organisation avec le nom '{organization_data.name}' existe déjà"
+                detail=f"Organisation avec le nom '{organization_data.name}' existe déjà",
             )
 
-    organization = await OrganizationService.update(session, organization_id, organization_data)
+    organization = await OrganizationService.update(
+        session, organization_id, organization_data
+    )
     return organization
 
 
@@ -769,28 +739,18 @@ Instead of deletion, consider:
 """,
     dependencies=[Depends(conditional_rate_limiter(5, 60))],
     responses={
-        204: {
-            "description": "Organization deleted successfully (no content returned)"
-        },
+        204: {"description": "Organization deleted successfully (no content returned)"},
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
         },
         403: {
             "description": "Insufficient permissions - superuser required",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Superuser access required"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Superuser access required"}}
+            },
         },
         404: {
             "description": "Organization not found",
@@ -800,7 +760,7 @@ Instead of deletion, consider:
                         "detail": "Organisation 550e8400-e29b-41d4-a716-446655440000 non trouvée"
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -810,25 +770,23 @@ Instead of deletion, consider:
                         "detail": "Rate limit exceeded. Try again in 60 seconds."
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "An unexpected error occurred"
-                    }
+                    "example": {"detail": "An unexpected error occurred"}
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 )
 async def delete_organization(
     request: Request,
     organization_id: UUID,
     current_user: User = Depends(require_superuser),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Supprime une organisation (superuser uniquement).
@@ -848,15 +806,15 @@ async def delete_organization(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "organization_id": str(organization_id)
-        }
+            "organization_id": str(organization_id),
+        },
     )
     # Vérifier que l'organisation existe
     organization = await OrganizationService.get_by_id(session, organization_id)
     if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {organization_id} non trouvée"
+            detail=f"Organisation {organization_id} non trouvée",
         )
 
     await OrganizationService.delete(session, organization_id)
@@ -895,34 +853,28 @@ Delete multiple organizations in a single operation.
                     "example": {
                         "success": ["550e8400-e29b-41d4-a716-446655440000"],
                         "failed": [],
-                        "message": "1 organisation(s) supprimée(s), 0 échec(s)"
+                        "message": "1 organisation(s) supprimée(s), 0 échec(s)",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid request - too many organizations or empty list",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "Maximum 100 organisations par requête"
-                    }
+                    "example": {"detail": "Maximum 100 organisations par requête"}
                 }
-            }
+            },
         },
-        401: {
-            "description": "Not authenticated"
-        },
-        403: {
-            "description": "Not a superuser"
-        }
-    }
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not a superuser"},
+    },
 )
 async def bulk_delete_organizations(
     request: Request,
     bulk_data: BulkDeleteOrgRequest,
     current_user: User = Depends(require_superuser),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Delete multiple organizations in bulk."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -931,21 +883,21 @@ async def bulk_delete_organizations(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "org_count": len(bulk_data.organization_ids)
-        }
+            "org_count": len(bulk_data.organization_ids),
+        },
     )
 
     # Validate request
     if not bulk_data.organization_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La liste des organisations ne peut pas être vide"
+            detail="La liste des organisations ne peut pas être vide",
         )
 
     if len(bulk_data.organization_ids) > 100:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 100 organisations par requête"
+            detail="Maximum 100 organisations par requête",
         )
 
     # Perform bulk delete
@@ -965,12 +917,12 @@ async def bulk_delete_organizations(
         except Exception as e:
             logger.error(
                 f"Failed to delete organization {org_id}: {str(e)}",
-                extra={"correlation_id": correlation_id, "org_id": org_id}
+                extra={"correlation_id": correlation_id, "org_id": org_id},
             )
             failed.append(org_id)
 
     return BulkOperationResponse(
         success=success,
         failed=failed,
-        message=f"{len(success)} organisation(s) supprimée(s), {len(failed)} échec(s)"
+        message=f"{len(success)} organisation(s) supprimée(s), {len(failed)} échec(s)",
     )

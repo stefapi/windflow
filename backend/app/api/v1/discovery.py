@@ -9,7 +9,7 @@ Endpoints :
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_active_user

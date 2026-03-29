@@ -150,7 +150,7 @@ async def deployment_logs_websocket_endpoint(websocket: WebSocket, deployment_id
         logger.error(f"WebSocket error for deployment {deployment_id}: {e}")
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
-        except:
+        except Exception:
             pass
 
     finally:

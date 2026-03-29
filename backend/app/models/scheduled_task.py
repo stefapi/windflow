@@ -1,12 +1,16 @@
 """
 Modèle ScheduledTask pour les tâches planifiées (Celery Beat).
 """
+
 from datetime import datetime
-from uuid import uuid4
 from enum import Enum
-from sqlalchemy import String, DateTime, JSON, ForeignKey, Text, Boolean, Enum as SQLEnum
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING
+from uuid import uuid4
+
+from sqlalchemy import JSON, Boolean, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
 
@@ -16,6 +20,7 @@ if TYPE_CHECKING:
 
 class TaskType(str, Enum):
     """Types de tâches planifiées."""
+
     CLEANUP_LOGS = "cleanup_logs"
     HEALTH_CHECK = "health_check"
     GIT_SYNC = "git_sync"
@@ -29,6 +34,7 @@ class ScheduledTask(Base):
 
     Stocke la configuration des tâches récurrentes gérées par Celery Beat.
     """
+
     __tablename__ = "scheduled_tasks"
 
     id: Mapped[str] = mapped_column(

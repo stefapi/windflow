@@ -2,19 +2,25 @@
 Routes de gestion des déploiements.
 """
 
+import logging
+from datetime import datetime
 from typing import List
 from uuid import UUID
-from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
-import logging
 
-from ...database import get_db
-from ...schemas.deployment import DeploymentResponse, DeploymentCreate, DeploymentUpdate, DeploymentLogsResponse
-from ...services.deployment_service import DeploymentService
 from ...auth.dependencies import get_current_active_user
-from ...models.user import User
 from ...core.rate_limit import conditional_rate_limiter
+from ...database import get_db
+from ...models.user import User
+from ...schemas.deployment import (
+    DeploymentCreate,
+    DeploymentLogsResponse,
+    DeploymentResponse,
+    DeploymentUpdate,
+)
+from ...services.deployment_service import DeploymentService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -51,18 +57,18 @@ Deployments are returned in reverse chronological order (newest first).
                             "name": "production-api",
                             "status": "running",
                             "target_type": "docker",
-                            "created_at": "2026-01-02T22:30:00Z"
+                            "created_at": "2026-01-02T22:30:00Z",
                         },
                         {
                             "id": "880e8400-e29b-41d4-a716-446655440001",
                             "name": "staging-web",
                             "status": "pending",
                             "target_type": "docker-compose",
-                            "created_at": "2026-01-02T21:15:00Z"
-                        }
+                            "created_at": "2026-01-02T21:15:00Z",
+                        },
                     ]
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -70,10 +76,10 @@ Deployments are returned in reverse chronological order (newest first).
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -82,49 +88,43 @@ Deployments are returned in reverse chronological order (newest first).
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "An unexpected error occurred",
-                        "correlation_id": "abc-126"
+                        "correlation_id": "abc-126",
                     }
                 }
-            }
-        }
+            },
+        },
     },
     tags=["deployments"],
-    dependencies=[Depends(conditional_rate_limiter(100, 60))]
+    dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
 async def list_deployments(
     request: Request,
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """List all deployments in organization."""
     correlation_id = getattr(request.state, "correlation_id", None)
 
     logger.info(
-        f"Listing deployments for organization",
+        "Listing deployments for organization",
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
             "organization_id": str(current_user.organization_id),
             "skip": skip,
-            "limit": limit
-        }
+            "limit": limit,
+        },
     )
 
     deployments = await DeploymentService.list_by_organization(
-        session,
-        current_user.organization_id,
-        skip,
-        limit
+        session, current_user.organization_id, skip, limit
     )
 
     logger.info(
         f"Retrieved {len(deployments)} deployments",
-        extra={
-            "correlation_id": correlation_id,
-            "count": len(deployments)
-        }
+        extra={"correlation_id": correlation_id, "count": len(deployments)},
     )
 
     return deployments
@@ -166,15 +166,12 @@ Users can only access deployments within their organization.
                         "started_at": "2026-01-02T22:31:00Z",
                         "stack": {
                             "id": "550e8400-e29b-41d4-a716-446655440000",
-                            "name": "api-stack"
+                            "name": "api-stack",
                         },
-                        "configuration": {
-                            "replicas": 3,
-                            "memory": "512Mi"
-                        }
+                        "configuration": {"replicas": 3, "memory": "512Mi"},
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -182,10 +179,10 @@ Users can only access deployments within their organization.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied",
@@ -193,10 +190,10 @@ Users can only access deployments within their organization.
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Access denied to this deployment"
+                        "detail": "Access denied to this deployment",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Deployment not found",
@@ -204,10 +201,10 @@ Users can only access deployments within their organization.
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Deployment 990e8400-... not found"
+                        "detail": "Deployment 990e8400-... not found",
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -216,19 +213,19 @@ Users can only access deployments within their organization.
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "An unexpected error occurred",
-                        "correlation_id": "abc-127"
+                        "correlation_id": "abc-127",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["deployments"]
+    tags=["deployments"],
 )
 async def get_deployment(
     request: Request,
     deployment_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Retrieve deployment by ID."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -238,19 +235,22 @@ async def get_deployment(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "deployment_id": str(deployment_id)
-        }
+            "deployment_id": str(deployment_id),
+        },
     )
 
     deployment = await DeploymentService.get_by_id(session, str(deployment_id))
     if not deployment:
         logger.warning(
             f"Deployment not found: {deployment_id}",
-            extra={"correlation_id": correlation_id, "deployment_id": str(deployment_id)}
+            extra={
+                "correlation_id": correlation_id,
+                "deployment_id": str(deployment_id),
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Déploiement {deployment_id} non trouvé"
+            detail=f"Déploiement {deployment_id} non trouvé",
         )
 
     # Vérifier que le déploiement appartient à la même organisation
@@ -260,12 +260,12 @@ async def get_deployment(
             extra={
                 "correlation_id": correlation_id,
                 "user_id": str(current_user.id),
-                "deployment_id": str(deployment_id)
-            }
+                "deployment_id": str(deployment_id),
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à ce déploiement"
+            detail="Accès refusé à ce déploiement",
         )
 
     return deployment
@@ -304,10 +304,10 @@ Users can only access logs for deployments within their organization.
                     "example": {
                         "deployment_id": "990e8400-e29b-41d4-a716-446655440000",
                         "logs": "[2026-01-02 22:30:00] Starting deployment...\n[2026-01-02 22:30:05] Pulling image nginx:latest\n[2026-01-02 22:30:15] Container started successfully",
-                        "updated_at": "2026-01-02T22:30:15Z"
+                        "updated_at": "2026-01-02T22:30:15Z",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -315,10 +315,10 @@ Users can only access logs for deployments within their organization.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied",
@@ -326,10 +326,10 @@ Users can only access logs for deployments within their organization.
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Access denied to this deployment"
+                        "detail": "Access denied to this deployment",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Deployment not found",
@@ -337,10 +337,10 @@ Users can only access logs for deployments within their organization.
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Deployment 990e8400-... not found"
+                        "detail": "Deployment 990e8400-... not found",
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -349,19 +349,19 @@ Users can only access logs for deployments within their organization.
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "An unexpected error occurred",
-                        "correlation_id": "abc-128"
+                        "correlation_id": "abc-128",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["deployments"]
+    tags=["deployments"],
 )
 async def get_deployment_logs(
     request: Request,
     deployment_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Retrieve deployment logs."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -371,19 +371,22 @@ async def get_deployment_logs(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "deployment_id": str(deployment_id)
-        }
+            "deployment_id": str(deployment_id),
+        },
     )
 
     deployment = await DeploymentService.get_by_id(session, str(deployment_id))
     if not deployment:
         logger.warning(
             f"Deployment not found: {deployment_id}",
-            extra={"correlation_id": correlation_id, "deployment_id": str(deployment_id)}
+            extra={
+                "correlation_id": correlation_id,
+                "deployment_id": str(deployment_id),
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Déploiement {deployment_id} non trouvé"
+            detail=f"Déploiement {deployment_id} non trouvé",
         )
 
     # Vérifier que le déploiement appartient à la même organisation
@@ -393,18 +396,18 @@ async def get_deployment_logs(
             extra={
                 "correlation_id": correlation_id,
                 "user_id": str(current_user.id),
-                "deployment_id": str(deployment_id)
-            }
+                "deployment_id": str(deployment_id),
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à ce déploiement"
+            detail="Accès refusé à ce déploiement",
         )
 
     return DeploymentLogsResponse(
         deployment_id=deployment.id,
         logs=deployment.logs,
-        updated_at=deployment.updated_at
+        updated_at=deployment.updated_at,
     )
 
 
@@ -453,8 +456,8 @@ for real-time deployment status updates.
                                 "name": "my-nginx",
                                 "stack_id": "550e8400-e29b-41d4-a716-446655440000",
                                 "target_type": "docker",
-                                "environment_id": "prod-env-1"
-                            }
+                                "environment_id": "prod-env-1",
+                            },
                         },
                         "with_ai_optimization": {
                             "summary": "Deployment with AI optimization",
@@ -465,10 +468,8 @@ for real-time deployment status updates.
                                 "target_type": "docker",
                                 "environment_id": "staging-env",
                                 "enable_ai_optimization": True,
-                                "configuration": {
-                                    "optimization_level": "balanced"
-                                }
-                            }
+                                "configuration": {"optimization_level": "balanced"},
+                            },
                         },
                         "docker_compose": {
                             "summary": "Docker Compose stack",
@@ -477,13 +478,8 @@ for real-time deployment status updates.
                                 "name": "full-stack-app",
                                 "stack_id": "770e8400-e29b-41d4-a716-446655440002",
                                 "target_type": "docker-compose",
-                                "configuration": {
-                                    "scale": {
-                                        "web": 3,
-                                        "api": 2
-                                    }
-                                }
-                            }
+                                "configuration": {"scale": {"web": 3, "api": 2}},
+                            },
                         },
                         "kubernetes": {
                             "summary": "Kubernetes deployment",
@@ -494,10 +490,10 @@ for real-time deployment status updates.
                                 "target_type": "kubernetes",
                                 "configuration": {
                                     "namespace": "production",
-                                    "replicas": 5
-                                }
-                            }
-                        }
+                                    "replicas": 5,
+                                },
+                            },
+                        },
                     }
                 }
             }
@@ -516,11 +512,11 @@ for real-time deployment status updates.
                         "created_at": "2026-01-02T22:30:00Z",
                         "stack": {
                             "id": "550e8400-e29b-41d4-a716-446655440000",
-                            "name": "nginx-stack"
-                        }
+                            "name": "nginx-stack",
+                        },
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid request",
@@ -532,20 +528,20 @@ for real-time deployment status updates.
                             "value": {
                                 "error": "Stack Not Found",
                                 "detail": "Stack with ID 550e8400-... does not exist",
-                                "correlation_id": "abc-123"
-                            }
+                                "correlation_id": "abc-123",
+                            },
                         },
                         "invalid_config": {
                             "summary": "Invalid configuration",
                             "value": {
                                 "error": "Configuration Error",
                                 "detail": "Missing required field: image",
-                                "correlation_id": "abc-124"
-                            }
-                        }
+                                "correlation_id": "abc-124",
+                            },
+                        },
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -553,10 +549,10 @@ for real-time deployment status updates.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Insufficient permissions",
@@ -564,10 +560,10 @@ for real-time deployment status updates.
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "User does not have permission to create deployments"
+                        "detail": "User does not have permission to create deployments",
                     }
                 }
-            }
+            },
         },
         409: {
             "description": "Conflict - deployment name already exists",
@@ -575,10 +571,10 @@ for real-time deployment status updates.
                 "application/json": {
                     "example": {
                         "error": "Conflict",
-                        "detail": "Deployment with name 'my-nginx' already exists in organization"
+                        "detail": "Deployment with name 'my-nginx' already exists in organization",
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -587,10 +583,10 @@ for real-time deployment status updates.
                     "example": {
                         "error": "Too Many Requests",
                         "detail": "Rate limit exceeded. Maximum 10 requests per minute.",
-                        "retry_after": 30
+                        "retry_after": 30,
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -599,19 +595,19 @@ for real-time deployment status updates.
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "An unexpected error occurred",
-                        "correlation_id": "abc-125"
+                        "correlation_id": "abc-125",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["deployments"]
+    tags=["deployments"],
 )
 async def create_deployment(
     request: Request,
     deployment_data: DeploymentCreate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Create a new deployment (implementation)."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -621,33 +617,35 @@ async def create_deployment(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "stack_id": str(deployment_data.stack_id) if hasattr(deployment_data, 'stack_id') else None
-        }
+            "stack_id": (
+                str(deployment_data.stack_id)
+                if hasattr(deployment_data, "stack_id")
+                else None
+            ),
+        },
     )
 
     # Vérifier que le nom n'existe pas déjà dans l'organisation (seulement si fourni)
     if deployment_data.name:
         existing = await DeploymentService.get_by_name(
-            session,
-            current_user.organization_id,
-            deployment_data.name
+            session, current_user.organization_id, deployment_data.name
         )
         if existing:
             logger.warning(
                 f"Deployment name conflict: {deployment_data.name}",
-                extra={"correlation_id": correlation_id, "user_id": str(current_user.id)}
+                extra={
+                    "correlation_id": correlation_id,
+                    "user_id": str(current_user.id),
+                },
             )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Déploiement avec le nom '{deployment_data.name}' existe déjà"
+                detail=f"Déploiement avec le nom '{deployment_data.name}' existe déjà",
             )
 
     try:
         deployment = await DeploymentService.create(
-            session,
-            deployment_data,
-            current_user.organization_id,
-            current_user.id
+            session, deployment_data, current_user.organization_id, current_user.id
         )
 
         logger.info(
@@ -655,20 +653,17 @@ async def create_deployment(
             extra={
                 "correlation_id": correlation_id,
                 "deployment_id": str(deployment.id),
-                "user_id": str(current_user.id)
-            }
+                "user_id": str(current_user.id),
+            },
         )
 
         return deployment
     except ValueError as e:
         logger.error(
             f"Failed to create deployment: {str(e)}",
-            extra={"correlation_id": correlation_id, "user_id": str(current_user.id)}
+            extra={"correlation_id": correlation_id, "user_id": str(current_user.id)},
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.put(
@@ -702,29 +697,22 @@ in the same organization.
                     "examples": {
                         "update_name": {
                             "summary": "Update deployment name",
-                            "value": {
-                                "name": "production-api-v2"
-                            }
+                            "value": {"name": "production-api-v2"},
                         },
                         "update_config": {
                             "summary": "Update configuration",
                             "value": {
-                                "configuration": {
-                                    "replicas": 5,
-                                    "memory": "1Gi"
-                                }
-                            }
+                                "configuration": {"replicas": 5, "memory": "1Gi"}
+                            },
                         },
                         "full_update": {
                             "summary": "Update multiple fields",
                             "value": {
                                 "name": "staging-api",
                                 "environment_id": "staging-env-2",
-                                "configuration": {
-                                    "replicas": 2
-                                }
-                            }
-                        }
+                                "configuration": {"replicas": 2},
+                            },
+                        },
                     }
                 }
             }
@@ -739,10 +727,10 @@ in the same organization.
                         "id": "990e8400-e29b-41d4-a716-446655440000",
                         "name": "production-api-v2",
                         "status": "running",
-                        "updated_at": "2026-01-02T23:00:00Z"
+                        "updated_at": "2026-01-02T23:00:00Z",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid request",
@@ -750,10 +738,10 @@ in the same organization.
                 "application/json": {
                     "example": {
                         "error": "Bad Request",
-                        "detail": "Cannot update deployment while it is deploying"
+                        "detail": "Cannot update deployment while it is deploying",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -761,10 +749,10 @@ in the same organization.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied",
@@ -772,10 +760,10 @@ in the same organization.
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Access denied to this deployment"
+                        "detail": "Access denied to this deployment",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Deployment not found",
@@ -783,10 +771,10 @@ in the same organization.
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Deployment 990e8400-... not found"
+                        "detail": "Deployment 990e8400-... not found",
                     }
                 }
-            }
+            },
         },
         409: {
             "description": "Name conflict",
@@ -794,10 +782,10 @@ in the same organization.
                 "application/json": {
                     "example": {
                         "error": "Conflict",
-                        "detail": "Deployment with name 'production-api-v2' already exists"
+                        "detail": "Deployment with name 'production-api-v2' already exists",
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -806,20 +794,20 @@ in the same organization.
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "An unexpected error occurred",
-                        "correlation_id": "abc-129"
+                        "correlation_id": "abc-129",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["deployments"]
+    tags=["deployments"],
 )
 async def update_deployment(
     request: Request,
     deployment_id: UUID,
     deployment_data: DeploymentUpdate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Update deployment configuration."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -829,8 +817,8 @@ async def update_deployment(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "deployment_id": str(deployment_id)
-        }
+            "deployment_id": str(deployment_id),
+        },
     )
 
     # Vérifier que le déploiement existe
@@ -838,11 +826,14 @@ async def update_deployment(
     if not existing_deployment:
         logger.warning(
             f"Deployment not found: {deployment_id}",
-            extra={"correlation_id": correlation_id, "deployment_id": str(deployment_id)}
+            extra={
+                "correlation_id": correlation_id,
+                "deployment_id": str(deployment_id),
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Déploiement {deployment_id} non trouvé"
+            detail=f"Déploiement {deployment_id} non trouvé",
         )
 
     # Vérifier les permissions
@@ -852,40 +843,43 @@ async def update_deployment(
             extra={
                 "correlation_id": correlation_id,
                 "user_id": str(current_user.id),
-                "deployment_id": str(deployment_id)
-            }
+                "deployment_id": str(deployment_id),
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à ce déploiement"
+            detail="Accès refusé à ce déploiement",
         )
 
     # Si changement de nom, vérifier qu'il n'existe pas déjà
     if deployment_data.name and deployment_data.name != existing_deployment.name:
         existing_name = await DeploymentService.get_by_name(
-            session,
-            current_user.organization_id,
-            deployment_data.name
+            session, current_user.organization_id, deployment_data.name
         )
         if existing_name:
             logger.warning(
                 f"Deployment name conflict during update: {deployment_data.name}",
-                extra={"correlation_id": correlation_id, "user_id": str(current_user.id)}
+                extra={
+                    "correlation_id": correlation_id,
+                    "user_id": str(current_user.id),
+                },
             )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Déploiement avec le nom '{deployment_data.name}' existe déjà"
+                detail=f"Déploiement avec le nom '{deployment_data.name}' existe déjà",
             )
 
-    deployment = await DeploymentService.update(session, str(deployment_id), deployment_data)
+    deployment = await DeploymentService.update(
+        session, str(deployment_id), deployment_data
+    )
 
     logger.info(
         f"Deployment updated successfully: {deployment_id}",
         extra={
             "correlation_id": correlation_id,
             "deployment_id": str(deployment_id),
-            "user_id": str(current_user.id)
-        }
+            "user_id": str(current_user.id),
+        },
     )
 
     return deployment
@@ -926,10 +920,10 @@ Only deployments with the following statuses can be retried:
                         "id": "990e8400-e29b-41d4-a716-446655440000",
                         "name": "production-api",
                         "status": "pending",
-                        "updated_at": "2026-01-02T23:15:00Z"
+                        "updated_at": "2026-01-02T23:15:00Z",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid deployment status",
@@ -937,10 +931,10 @@ Only deployments with the following statuses can be retried:
                 "application/json": {
                     "example": {
                         "error": "Bad Request",
-                        "detail": "Deployment must be in 'failed' or 'pending' status to be retried (current: running)"
+                        "detail": "Deployment must be in 'failed' or 'pending' status to be retried (current: running)",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -948,10 +942,10 @@ Only deployments with the following statuses can be retried:
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied",
@@ -959,10 +953,10 @@ Only deployments with the following statuses can be retried:
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Access denied to this deployment"
+                        "detail": "Access denied to this deployment",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Deployment not found",
@@ -970,10 +964,10 @@ Only deployments with the following statuses can be retried:
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Deployment 990e8400-... not found"
+                        "detail": "Deployment 990e8400-... not found",
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Retry failed",
@@ -982,19 +976,19 @@ Only deployments with the following statuses can be retried:
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "Failed to retry deployment",
-                        "correlation_id": "abc-130"
+                        "correlation_id": "abc-130",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["deployments"]
+    tags=["deployments"],
 )
 async def retry_deployment(
     request: Request,
     deployment_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Retry a failed deployment."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1004,8 +998,8 @@ async def retry_deployment(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "deployment_id": str(deployment_id)
-        }
+            "deployment_id": str(deployment_id),
+        },
     )
 
     # Récupérer le déploiement échoué
@@ -1013,11 +1007,14 @@ async def retry_deployment(
     if not deployment:
         logger.warning(
             f"Deployment not found: {deployment_id}",
-            extra={"correlation_id": correlation_id, "deployment_id": str(deployment_id)}
+            extra={
+                "correlation_id": correlation_id,
+                "deployment_id": str(deployment_id),
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Déploiement {deployment_id} non trouvé"
+            detail=f"Déploiement {deployment_id} non trouvé",
         )
 
     # Vérifier les permissions
@@ -1027,12 +1024,12 @@ async def retry_deployment(
             extra={
                 "correlation_id": correlation_id,
                 "user_id": str(current_user.id),
-                "deployment_id": str(deployment_id)
-            }
+                "deployment_id": str(deployment_id),
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à ce déploiement"
+            detail="Accès refusé à ce déploiement",
         )
 
     # Vérifier que le déploiement est en statut FAILED ou PENDING
@@ -1042,29 +1039,30 @@ async def retry_deployment(
             extra={
                 "correlation_id": correlation_id,
                 "deployment_id": str(deployment_id),
-                "status": deployment.status.value
-            }
+                "status": deployment.status.value,
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Le déploiement doit être en statut 'failed' ou 'pending' pour être réessayé (statut actuel: {deployment.status.value})"
+            detail=f"Le déploiement doit être en statut 'failed' ou 'pending' pour être réessayé (statut actuel: {deployment.status.value})",
         )
 
     # Relancer le déploiement existant
     success = await DeploymentService.retry_deployment(
-        session,
-        str(deployment_id),
-        str(current_user.id)
+        session, str(deployment_id), str(current_user.id)
     )
 
     if not success:
         logger.error(
             f"Failed to retry deployment: {deployment_id}",
-            extra={"correlation_id": correlation_id, "deployment_id": str(deployment_id)}
+            extra={
+                "correlation_id": correlation_id,
+                "deployment_id": str(deployment_id),
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Échec de la relance du déploiement"
+            detail="Échec de la relance du déploiement",
         )
 
     # Récupérer le déploiement mis à jour
@@ -1075,8 +1073,8 @@ async def retry_deployment(
         extra={
             "correlation_id": correlation_id,
             "deployment_id": str(deployment_id),
-            "user_id": str(current_user.id)
-        }
+            "user_id": str(current_user.id),
+        },
     )
 
     return updated_deployment
@@ -1119,10 +1117,10 @@ Only deployments with the following statuses can be cancelled:
                         "id": "990e8400-e29b-41d4-a716-446655440000",
                         "name": "production-api",
                         "status": "stopped",
-                        "stopped_at": "2026-01-02T23:20:00Z"
+                        "stopped_at": "2026-01-02T23:20:00Z",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Cannot cancel deployment",
@@ -1130,10 +1128,10 @@ Only deployments with the following statuses can be cancelled:
                 "application/json": {
                     "example": {
                         "error": "Bad Request",
-                        "detail": "Deployment cannot be cancelled (current status: running)"
+                        "detail": "Deployment cannot be cancelled (current status: running)",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -1141,10 +1139,10 @@ Only deployments with the following statuses can be cancelled:
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied",
@@ -1152,10 +1150,10 @@ Only deployments with the following statuses can be cancelled:
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Access denied to this deployment"
+                        "detail": "Access denied to this deployment",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Deployment not found",
@@ -1163,10 +1161,10 @@ Only deployments with the following statuses can be cancelled:
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Deployment 990e8400-... not found"
+                        "detail": "Deployment 990e8400-... not found",
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Cancellation failed",
@@ -1175,19 +1173,19 @@ Only deployments with the following statuses can be cancelled:
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "Failed to cancel deployment",
-                        "correlation_id": "abc-131"
+                        "correlation_id": "abc-131",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["deployments"]
+    tags=["deployments"],
 )
 async def cancel_deployment(
     request: Request,
     deployment_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Cancel a running deployment."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1197,8 +1195,8 @@ async def cancel_deployment(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "deployment_id": str(deployment_id)
-        }
+            "deployment_id": str(deployment_id),
+        },
     )
 
     # Récupérer le déploiement
@@ -1206,11 +1204,14 @@ async def cancel_deployment(
     if not deployment:
         logger.warning(
             f"Deployment not found: {deployment_id}",
-            extra={"correlation_id": correlation_id, "deployment_id": str(deployment_id)}
+            extra={
+                "correlation_id": correlation_id,
+                "deployment_id": str(deployment_id),
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Déploiement {deployment_id} non trouvé"
+            detail=f"Déploiement {deployment_id} non trouvé",
         )
 
     # Vérifier les permissions
@@ -1220,12 +1221,12 @@ async def cancel_deployment(
             extra={
                 "correlation_id": correlation_id,
                 "user_id": str(current_user.id),
-                "deployment_id": str(deployment_id)
-            }
+                "deployment_id": str(deployment_id),
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à ce déploiement"
+            detail="Accès refusé à ce déploiement",
         )
 
     # Vérifier que le déploiement peut être annulé
@@ -1235,17 +1236,17 @@ async def cancel_deployment(
             extra={
                 "correlation_id": correlation_id,
                 "deployment_id": str(deployment_id),
-                "status": deployment.status.value
-            }
+                "status": deployment.status.value,
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Le déploiement ne peut pas être annulé (statut actuel: {deployment.status.value})"
+            detail=f"Le déploiement ne peut pas être annulé (statut actuel: {deployment.status.value})",
         )
 
     # Annuler le déploiement via l'orchestrateur
-    from ...services.deployment_orchestrator import DeploymentOrchestrator
     from ...models.deployment import DeploymentStatus
+    from ...services.deployment_orchestrator import DeploymentOrchestrator
 
     # Annuler la tâche si elle existe
     await DeploymentOrchestrator.cancel_deployment(str(deployment_id))
@@ -1266,8 +1267,8 @@ async def cancel_deployment(
         extra={
             "correlation_id": correlation_id,
             "deployment_id": str(deployment_id),
-            "user_id": str(current_user.id)
-        }
+            "user_id": str(current_user.id),
+        },
     )
 
     return deployment
@@ -1302,19 +1303,17 @@ Delete a deployment permanently.
 **Authentication Required**
 """,
     responses={
-        204: {
-            "description": "Deployment deleted successfully (no content)"
-        },
+        204: {"description": "Deployment deleted successfully (no content)"},
         400: {
             "description": "Cannot delete running deployment",
             "content": {
                 "application/json": {
                     "example": {
                         "error": "Bad Request",
-                        "detail": "Cannot delete deployment while it is running. Cancel it first."
+                        "detail": "Cannot delete deployment while it is running. Cancel it first.",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -1322,10 +1321,10 @@ Delete a deployment permanently.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied",
@@ -1333,10 +1332,10 @@ Delete a deployment permanently.
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Access denied to this deployment"
+                        "detail": "Access denied to this deployment",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Deployment not found",
@@ -1344,10 +1343,10 @@ Delete a deployment permanently.
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Deployment 990e8400-... not found"
+                        "detail": "Deployment 990e8400-... not found",
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Deletion failed",
@@ -1356,19 +1355,19 @@ Delete a deployment permanently.
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "Failed to delete deployment",
-                        "correlation_id": "abc-132"
+                        "correlation_id": "abc-132",
                     }
                 }
-            }
-        }
+            },
+        },
     },
-    tags=["deployments"]
+    tags=["deployments"],
 )
 async def delete_deployment(
     request: Request,
     deployment_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Delete a deployment permanently."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1378,8 +1377,8 @@ async def delete_deployment(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "deployment_id": str(deployment_id)
-        }
+            "deployment_id": str(deployment_id),
+        },
     )
 
     # Vérifier que le déploiement existe
@@ -1387,11 +1386,14 @@ async def delete_deployment(
     if not deployment:
         logger.warning(
             f"Deployment not found: {deployment_id}",
-            extra={"correlation_id": correlation_id, "deployment_id": str(deployment_id)}
+            extra={
+                "correlation_id": correlation_id,
+                "deployment_id": str(deployment_id),
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Déploiement {deployment_id} non trouvé"
+            detail=f"Déploiement {deployment_id} non trouvé",
         )
 
     # Vérifier les permissions
@@ -1401,12 +1403,12 @@ async def delete_deployment(
             extra={
                 "correlation_id": correlation_id,
                 "user_id": str(current_user.id),
-                "deployment_id": str(deployment_id)
-            }
+                "deployment_id": str(deployment_id),
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à ce déploiement"
+            detail="Accès refusé à ce déploiement",
         )
 
     await DeploymentService.delete(session, str(deployment_id))
@@ -1416,6 +1418,6 @@ async def delete_deployment(
         extra={
             "correlation_id": correlation_id,
             "deployment_id": str(deployment_id),
-            "user_id": str(current_user.id)
-        }
+            "user_id": str(current_user.id),
+        },
     )

@@ -95,10 +95,10 @@ function formatDate(timestamp: string): string {
 
 .alerts-list {
   display: flex;
+  overflow-y: auto;
+  max-height: 400px;
   flex-direction: column;
   gap: 12px;
-  max-height: 400px;
-  overflow-y: auto;
 }
 
 .alert-item {
@@ -147,15 +147,15 @@ function formatDate(timestamp: string): string {
 }
 
 .alert-title {
-  font-weight: 600;
-  font-size: 14px;
   margin-bottom: 4px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .alert-message {
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
   margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
 }
 
 .alert-meta {
@@ -165,7 +165,7 @@ function formatDate(timestamp: string): string {
 }
 
 .alert-time {
-  color: var(--el-text-color-placeholder);
   font-size: 12px;
+  color: var(--el-text-color-placeholder);
 }
 </style>

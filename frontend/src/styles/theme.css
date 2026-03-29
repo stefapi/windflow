@@ -11,9 +11,10 @@
  */
 
 /* ===== Font Faces (Self-hosted) ===== */
+
 /* Inter - UI font */
 @font-face {
-  font-family: 'Inter';
+  font-family: Inter;
   src: url('@/assets/fonts/inter/Inter-Regular.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
@@ -21,7 +22,7 @@
 }
 
 @font-face {
-  font-family: 'Inter';
+  font-family: Inter;
   src: url('@/assets/fonts/inter/Inter-Medium.woff2') format('woff2');
   font-weight: 500;
   font-style: normal;
@@ -29,7 +30,7 @@
 }
 
 @font-face {
-  font-family: 'Inter';
+  font-family: Inter;
   src: url('@/assets/fonts/inter/Inter-SemiBold.woff2') format('woff2');
   font-weight: 600;
   font-style: normal;
@@ -56,7 +57,7 @@
 /* ===== Typography Tokens ===== */
 :root {
   /* Font families */
-  --font-sans: 'Inter', 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Inter', 'IBM Plex Sans', system-ui, -apple-system, blinkmacsystemfont, 'Segoe UI', roboto, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace;
 
   /* Font sizes */
@@ -91,7 +92,7 @@
   --color-bg-primary: #0f1117;
   --color-bg-secondary: #151821;
   --color-bg-card: #1a1d27;
-  --color-bg-card-alpha: rgba(26, 29, 39, 0.85);
+  --color-bg-card-alpha: rgb(26, 29, 39, 0.85);
   --color-bg-elevated: #1c1f2b;
   --color-bg-hover: #252838;
   --color-bg-input: #1c1f2b;
@@ -110,29 +111,29 @@
   /* Accent (Primary actions/links) */
   --color-accent: #3b82f6;
   --color-accent-hover: #60a5fa;
-  --color-accent-light: rgba(59, 130, 246, 0.15);
+  --color-accent-light: rgb(59, 130, 246, 0.15);
 
   /* Status colors */
   --color-success: #22c55e;
-  --color-success-light: rgba(34, 197, 94, 0.15);
-  --color-success-border: rgba(34, 197, 94, 0.3);
+  --color-success-light: rgb(34, 197, 94, 0.15);
+  --color-success-border: rgb(34, 197, 94, 0.3);
   --color-error: #ef4444;
-  --color-error-light: rgba(239, 68, 68, 0.15);
-  --color-error-border: rgba(239, 68, 68, 0.3);
+  --color-error-light: rgb(239, 68, 68, 0.15);
+  --color-error-border: rgb(239, 68, 68, 0.3);
   --color-warning: #f59e0b;
-  --color-warning-light: rgba(245, 158, 11, 0.15);
-  --color-warning-border: rgba(245, 158, 11, 0.3);
+  --color-warning-light: rgb(245, 158, 11, 0.15);
+  --color-warning-border: rgb(245, 158, 11, 0.3);
   --color-info: #9ca3af;
-  --color-info-light: rgba(107, 114, 128, 0.15);
-  --color-info-border: rgba(107, 114, 128, 0.3);
-  --color-accent-border: rgba(59, 130, 246, 0.3);
+  --color-info-light: rgb(107, 114, 128, 0.15);
+  --color-info-border: rgb(107, 114, 128, 0.3);
+  --color-accent-border: rgb(59, 130, 246, 0.3);
 
   /* Terminal colors - VS Code Dark style */
   --color-terminal-bg: #0c0c0c;
-  --color-terminal-fg: #cccccc;
-  --color-terminal-cursor: #ffffff;
+  --color-terminal-fg: #ccc;
+  --color-terminal-cursor: #fff;
   --color-terminal-selection: #264f78;
-  --color-terminal-black: #000000;
+  --color-terminal-black: #000;
   --color-terminal-red: #cd3131;
   --color-terminal-green: #0dbc79;
   --color-terminal-yellow: #e5e510;
@@ -140,14 +141,14 @@
   --color-terminal-magenta: #bc3fbc;
   --color-terminal-cyan: #11a8cd;
   --color-terminal-white: #e5e5e5;
-  --color-terminal-bright-black: #666666;
+  --color-terminal-bright-black: #666;
   --color-terminal-bright-red: #f14c4c;
   --color-terminal-bright-green: #23d18b;
   --color-terminal-bright-yellow: #f5f543;
   --color-terminal-bright-blue: #3b8eea;
   --color-terminal-bright-magenta: #d670d6;
   --color-terminal-bright-cyan: #29b8db;
-  --color-terminal-bright-white: #ffffff;
+  --color-terminal-bright-white: #fff;
 
   /* Log colors */
   --color-log-error: #f48771;
@@ -157,9 +158,9 @@
   --color-log-line-number: #858585;
 
   /* Log overlays (semi-transparent backgrounds) */
-  --color-log-error-bg: rgba(244, 135, 113, 0.15);
-  --color-log-warning-bg: rgba(220, 200, 170, 0.15);
-  --color-log-hover-bg: rgba(255, 255, 255, 0.05);
+  --color-log-error-bg: rgb(244, 135, 113, 0.15);
+  --color-log-warning-bg: rgb(220, 200, 170, 0.15);
+  --color-log-hover-bg: rgb(255, 255, 255, 0.05);
 
   /* Code blocks */
   --color-code-bg: #1e1e1e;
@@ -221,12 +222,12 @@
   --el-tag-text-color: var(--color-text-primary);
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 2px rgb(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgb(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgb(0, 0, 0, 0.5);
 
   /* Overlay */
-  --color-overlay: rgba(0, 0, 0, 0.5);
+  --color-overlay: rgb(0, 0, 0, 0.5);
 }
 
 /* ===== Light Theme ===== */
@@ -235,7 +236,7 @@
   --color-bg-primary: #f0f4ff;
   --color-bg-secondary: #e8eeff;
   --color-bg-card: #f5f8ff;
-  --color-bg-card-alpha: rgba(245, 248, 255, 0.92);
+  --color-bg-card-alpha: rgb(245, 248, 255, 0.92);
   --color-bg-elevated: #dce6fb;
   --color-bg-hover: #c7d7f7;
   --color-bg-input: #f8faff;
@@ -254,44 +255,44 @@
   /* Accent (Primary actions/links) */
   --color-accent: #1d4ed8;
   --color-accent-hover: #1e40af;
-  --color-accent-light: rgba(29, 78, 216, 0.12);
+  --color-accent-light: rgb(29, 78, 216, 0.12);
 
   /* Status colors */
   --color-success: #16a34a;
-  --color-success-light: rgba(22, 163, 74, 0.1);
-  --color-success-border: rgba(22, 163, 74, 0.3);
+  --color-success-light: rgb(22, 163, 74, 0.1);
+  --color-success-border: rgb(22, 163, 74, 0.3);
   --color-error: #dc2626;
-  --color-error-light: rgba(220, 38, 38, 0.1);
-  --color-error-border: rgba(220, 38, 38, 0.3);
+  --color-error-light: rgb(220, 38, 38, 0.1);
+  --color-error-border: rgb(220, 38, 38, 0.3);
   --color-warning: #d97706;
-  --color-warning-light: rgba(217, 119, 6, 0.1);
-  --color-warning-border: rgba(217, 119, 6, 0.3);
+  --color-warning-light: rgb(217, 119, 6, 0.1);
+  --color-warning-border: rgb(217, 119, 6, 0.3);
   --color-info: #6b7280;
-  --color-info-light: rgba(107, 114, 128, 0.1);
-  --color-info-border: rgba(107, 114, 128, 0.2);
-  --color-accent-border: rgba(37, 99, 235, 0.3);
+  --color-info-light: rgb(107, 114, 128, 0.1);
+  --color-info-border: rgb(107, 114, 128, 0.2);
+  --color-accent-border: rgb(37, 99, 235, 0.3);
 
   /* Terminal colors - Light theme adapted */
-  --color-terminal-bg: #ffffff;
-  --color-terminal-fg: #333333;
-  --color-terminal-cursor: #000000;
+  --color-terminal-bg: #fff;
+  --color-terminal-fg: #333;
+  --color-terminal-cursor: #000;
   --color-terminal-selection: #add6ff;
-  --color-terminal-black: #000000;
+  --color-terminal-black: #000;
   --color-terminal-red: #cd3131;
   --color-terminal-green: #008000;
   --color-terminal-yellow: #795e26;
-  --color-terminal-blue: #0000ff;
+  --color-terminal-blue: #00f;
   --color-terminal-magenta: #af00db;
   --color-terminal-cyan: #0598bc;
-  --color-terminal-white: #666666;
-  --color-terminal-bright-black: #666666;
+  --color-terminal-white: #666;
+  --color-terminal-bright-black: #666;
   --color-terminal-bright-red: #cd3131;
   --color-terminal-bright-green: #008000;
   --color-terminal-bright-yellow: #795e26;
-  --color-terminal-bright-blue: #0000ff;
+  --color-terminal-bright-blue: #00f;
   --color-terminal-bright-magenta: #af00db;
   --color-terminal-bright-cyan: #0598bc;
-  --color-terminal-bright-white: #333333;
+  --color-terminal-bright-white: #333;
 
   /* Log colors */
   --color-log-error: #cd3131;
@@ -301,13 +302,13 @@
   --color-log-line-number: #6b7280;
 
   /* Log overlays (semi-transparent backgrounds) */
-  --color-log-error-bg: rgba(205, 49, 49, 0.1);
-  --color-log-warning-bg: rgba(121, 94, 38, 0.1);
-  --color-log-hover-bg: rgba(0, 0, 0, 0.03);
+  --color-log-error-bg: rgb(205, 49, 49, 0.1);
+  --color-log-warning-bg: rgb(121, 94, 38, 0.1);
+  --color-log-hover-bg: rgb(0, 0, 0, 0.03);
 
   /* Code blocks */
   --color-code-bg: #f5f5f5;
-  --color-code-fg: #333333;
+  --color-code-fg: #333;
 
   /* Element Plus overrides - Light mode */
   --el-bg-color: var(--color-bg-primary);
@@ -365,12 +366,12 @@
   --el-tag-text-color: var(--color-text-primary);
 
   /* Shadows — teinte bleue légère */
-  --shadow-sm: 0 1px 3px rgba(15, 40, 100, 0.08);
-  --shadow-md: 0 4px 8px rgba(15, 40, 100, 0.12);
-  --shadow-lg: 0 10px 20px rgba(15, 40, 100, 0.16);
+  --shadow-sm: 0 1px 3px rgb(15, 40, 100, 0.08);
+  --shadow-md: 0 4px 8px rgb(15, 40, 100, 0.12);
+  --shadow-lg: 0 10px 20px rgb(15, 40, 100, 0.16);
 
   /* Overlay */
-  --color-overlay: rgba(10, 20, 60, 0.45);
+  --color-overlay: rgb(10, 20, 60, 0.45);
 }
 
 /* ===== Global Reset ===== */
@@ -381,18 +382,20 @@ html {
 }
 
 body {
-  font-family: var(--font-sans);
   font-size: var(--text-base);
-  line-height: var(--leading-normal);
+  font-family: var(--font-sans);
   color: var(--color-text-primary);
   background-color: var(--color-bg-primary);
   transition: background-color 0.3s ease, color 0.3s ease;
+  line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 /* ===== Element Plus Dark Mode Fixes ===== */
+
 /* Fix el-table in dark mode */
+
 /* NOTE: Variables must be set on .el-table element (not :root) to beat EL+'s bundled CSS cascade */
 .el-table {
   --el-table-bg-color: var(--color-bg-card);
@@ -400,6 +403,7 @@ body {
   --el-table-header-bg-color: var(--color-bg-elevated);
   --el-table-row-hover-bg-color: var(--color-bg-hover);
   --el-table-border-color: var(--color-border);
+
   /* Fixes striped rows: EL+ uses this var internally, must override at element level */
   --el-fill-color-lighter: var(--color-bg-secondary);
 
@@ -438,6 +442,7 @@ body {
 /* Fix el-card in dark mode */
 .el-card {
   --el-card-bg-color: var(--color-bg-card);
+
   color: var(--color-text-primary);
   background-color: var(--color-bg-card) !important;
   border-color: var(--color-border);
@@ -466,11 +471,11 @@ body {
 }
 
 .el-dialog__header {
-  background-color: var(--color-bg-elevated);
-  border-bottom: 1px solid var(--color-border);
   padding: 16px 20px;
-  margin: -20px -20px 20px -20px;
+  margin: -20px -20px 20px;
+  background-color: var(--color-bg-elevated);
   border-radius: 8px 8px 0 0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .el-dialog__title {
@@ -638,6 +643,7 @@ body {
 /* Fix el-drawer in dark mode */
 .el-drawer {
   --el-drawer-bg-color: var(--color-bg-card);
+
   color: var(--color-text-primary);
   background-color: var(--color-bg-card);
 }
@@ -679,9 +685,9 @@ body {
 }
 
 /* Also cover button with no explicit type (renders as default) */
-.el-button:not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger):not(.el-button--info):not(.el-button--text):not(.el-button--link):not([class*="is-"]) {
-  background-color: var(--color-bg-elevated) !important;
+.el-button:not(.el-button--primary, .el-button--success, .el-button--warning, .el-button--danger, .el-button--info, .el-button--text, .el-button--link, [class*="is-"]) {
   color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-elevated) !important;
   border-color: var(--color-border) !important;
 }
 
@@ -766,7 +772,7 @@ body {
 
 /* el-tag dark variant (Element Plus uses this for contrast) */
 .el-tag--dark {
-  color: #ffffff !important;
+  color: #fff !important;
 }
 
 .el-tag--dark.el-tag--success {
@@ -908,7 +914,7 @@ body {
 }
 
 [data-theme='light'] .el-loading-mask {
-  background-color: rgba(240, 244, 255, 0.92);
+  background-color: rgb(240, 244, 255, 0.92);
 }
 
 /* Fix el-empty in dark mode */
@@ -1098,6 +1104,7 @@ body {
 }
 
 /* ===== el-icon Dark Mode Fixes ===== */
+
 /* Base icon styling - ensure visibility in dark mode */
 .el-icon {
   color: inherit;
@@ -1165,6 +1172,7 @@ body {
 }
 
 /* ===== el-input Dark Mode Comprehensive Fixes ===== */
+
 /* Input wrapper - the main container */
 .el-input__wrapper {
   background-color: var(--color-bg-input) !important;
@@ -1194,8 +1202,8 @@ body {
 /* Input with prefix/suffix icons */
 .el-input--prefix .el-input__inner,
 .el-input--suffix .el-input__inner {
-  padding-left: 30px;
   padding-right: 30px;
+  padding-left: 30px;
 }
 
 /* Input disabled state */
@@ -1245,13 +1253,14 @@ body {
 
 /* Disabled textarea */
 .el-textarea.is-disabled .el-textarea__inner {
+  color: var(--color-text-muted) !important;
   background-color: var(--color-bg-secondary) !important;
   border-color: var(--color-border-light) !important;
-  color: var(--color-text-muted) !important;
   cursor: not-allowed;
 }
 
 /* ===== el-switch Dark Mode Comprehensive Fixes ===== */
+
 /* Switch core - the track */
 .el-switch {
   --el-switch-off-color: var(--color-bg-elevated);
@@ -1276,7 +1285,7 @@ body {
 }
 
 .el-switch.is-checked .el-switch__action {
-  background-color: #ffffff !important;
+  background-color: #fff !important;
 }
 
 /* Switch disabled state */
@@ -1297,7 +1306,7 @@ body {
 }
 
 .el-switch.is-checked .el-switch__inner {
-  color: #ffffff;
+  color: #fff;
 }
 
 /* Switch label */
@@ -1310,6 +1319,7 @@ body {
 }
 
 /* ===== el-option Dark Mode Comprehensive Fixes ===== */
+
 /* Select dropdown popper */
 .el-select-dropdown {
   background-color: var(--color-bg-card) !important;
@@ -1342,12 +1352,12 @@ body {
 /* Option group header */
 .el-select-group__title {
   padding-left: 10px;
-  background-color: var(--color-bg-secondary) !important;
   font-size: var(--text-xs);
+  color: var(--color-text-muted) !important;
+  background-color: var(--color-bg-secondary) !important;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-muted) !important;
 }
 
 /* Empty text in select */
@@ -1357,6 +1367,7 @@ body {
 }
 
 /* ===== el-select Popper Teleported ===== */
+
 /* Select dropdown when teleported to body */
 .el-popper.is-light {
   background-color: var(--color-bg-card) !important;
@@ -1369,7 +1380,7 @@ body {
 }
 
 /* Arrow for popper */
-.el-popper[data-popper-arrow]:before {
+.el-popper[data-popper-arrow]::before {
   background-color: var(--color-bg-card) !important;
   border-color: var(--color-border) !important;
 }
@@ -1433,6 +1444,7 @@ body {
 }
 
 /* ===== el-progress Dark Mode Fixes ===== */
+
 /* Progress bar container */
 .el-progress {
   --el-progress-default-color: var(--color-accent);
@@ -1491,22 +1503,22 @@ body {
 
 /* Progress inside text (when text is inside the bar) */
 .el-progress-bar__innerText {
-  color: #ffffff !important;
+  color: #fff !important;
 }
 
 /* Progress striped variant */
 .el-progress-bar__inner--striped {
   background-image: linear-gradient(
     45deg,
-    rgba(255, 255, 255, 0.15) 25%,
+    rgb(255, 255, 255, 0.15) 25%,
     transparent 25%,
     transparent 50%,
-    rgba(255, 255, 255, 0.15) 50%,
+    rgb(255, 255, 255, 0.15) 50%,
     transparent 50%,
     transparent 75%,
-    rgba(255, 255, 255, 0.15) 75%,
+    rgb(255, 255, 255, 0.15) 75%,
     transparent 75%,
-    rgba(255, 255, 255, 0.15)
+    rgb(255, 255, 255, 0.15)
   ) !important;
   background-size: 40px 40px !important;
 }
@@ -1516,6 +1528,7 @@ body {
   0% {
     background-position: 100% 50%;
   }
+
   100% {
     background-position: 0 50%;
   }
@@ -1526,6 +1539,7 @@ body {
 }
 
 /* ===== el-skeleton Dark Mode Fixes ===== */
+
 /* Skeleton base */
 .el-skeleton {
   --el-skeleton-color: var(--color-bg-elevated);
@@ -1604,6 +1618,7 @@ body {
   0% {
     background-position: 100% 50%;
   }
+
   100% {
     background-position: 0 50%;
   }
@@ -1640,6 +1655,7 @@ body {
 }
 
 /* ===== el-checkbox Dark Mode Comprehensive Fixes ===== */
+
 /* Checkbox base */
 .el-checkbox {
   --el-checkbox-bg-color: var(--color-bg-input);
@@ -1670,7 +1686,7 @@ body {
 
 /* Checkbox checkmark icon */
 .el-checkbox__inner::after {
-  border-color: #ffffff !important;
+  border-color: #fff !important;
 }
 
 /* Checkbox indeterminate state */
@@ -1705,6 +1721,7 @@ body {
 }
 
 /* ===== el-alert Dark Mode Comprehensive Fixes ===== */
+
 /* Alert base + container */
 .el-alert {
   --el-alert-bg-color: var(--color-bg-card);
@@ -1786,7 +1803,7 @@ body {
 
 /* Alert with dark background variant */
 .el-alert.is-dark {
-  color: #ffffff !important;
+  color: #fff !important;
 }
 
 .el-alert.is-dark.el-alert--info {
@@ -1811,11 +1828,12 @@ body {
 }
 
 /* ===== Bulk Actions Bar Dark Mode Fixes ===== */
+
 /* Bulk actions bar - custom component class */
 .bulk-actions-bar {
+  color: var(--color-text-primary) !important;
   background-color: var(--color-bg-elevated) !important;
   border-color: var(--color-border) !important;
-  color: var(--color-text-primary) !important;
 }
 
 /* Bulk actions bar text */
@@ -1826,9 +1844,9 @@ body {
 
 /* Bulk actions bar buttons */
 .bulk-actions-bar .el-button {
+  color: var(--color-text-primary) !important;
   background-color: var(--color-bg-hover) !important;
   border-color: var(--color-border) !important;
-  color: var(--color-text-primary) !important;
 }
 
 .bulk-actions-bar .el-button:hover {
@@ -1873,6 +1891,7 @@ body {
 }
 
 /* ===== el-collapse Dark Mode Fixes ===== */
+
 /* Collapse container */
 .el-collapse {
   --el-collapse-bg-color: var(--color-bg-card);
@@ -1887,8 +1906,8 @@ body {
 
 /* Collapse item header - styled like el-card header */
 .el-collapse-item__header {
-  background-color: var(--color-bg-elevated) !important;
   color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-elevated) !important;
   border-color: var(--color-border) !important;
   font-weight: 500;
 }
@@ -1920,9 +1939,9 @@ body {
 
 /* Collapse content body - styled like el-card body */
 .el-collapse-item__content {
+  padding: 16px 20px;
   color: var(--color-text-primary);
   background-color: var(--color-bg-card);
-  padding: 16px 20px;
 }
 
 /* Collapse item itself */

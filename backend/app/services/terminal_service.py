@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ShellInfo:
     """Informations sur un shell disponible."""
+
     path: str
     label: str
     available: bool
@@ -36,6 +37,7 @@ class ShellInfo:
 @dataclass
 class ExecSession:
     """Session exec active dans un conteneur."""
+
     exec_id: str
     container_id: str
     shell: str
@@ -130,6 +132,7 @@ class TerminalService:
 
         # Générer un ID de session unique
         import uuid
+
         exec_id = str(uuid.uuid4())[:8]
 
         # Construire la commande docker exec
@@ -137,10 +140,14 @@ class TerminalService:
         # -t: allocate a pseudo-TTY
         # -w: working dir
         cmd = [
-            "docker", "exec",
-            "-i", "-t",
-            "-w", "/",
-            "-e", f"TERM=xterm-256color",
+            "docker",
+            "exec",
+            "-i",
+            "-t",
+            "-w",
+            "/",
+            "-e",
+            "TERM=xterm-256color",
         ]
 
         # Ajouter l'utilisateur si différent de root
@@ -191,7 +198,9 @@ class TerminalService:
             logger.error(f"Failed to create terminal session: {e}")
             raise RuntimeError(f"Failed to create terminal session: {e}")
 
-    async def stream_output(self, session: ExecSession) -> AsyncIterator[tuple[bytes, bool]]:
+    async def stream_output(
+        self, session: ExecSession
+    ) -> AsyncIterator[tuple[bytes, bool]]:
         """
         Stream la sortie du terminal via le master PTY fd.
 
@@ -325,10 +334,7 @@ class TerminalService:
                 if session.process.returncode is None:
                     session.process.terminate()
                     try:
-                        await asyncio.wait_for(
-                            session.process.wait(),
-                            timeout=5.0
-                        )
+                        await asyncio.wait_for(session.process.wait(), timeout=5.0)
                     except asyncio.TimeoutError:
                         # Forcer la terminaison si nécessaire
                         session.process.kill()
@@ -374,11 +380,13 @@ class TerminalService:
             except Exception:
                 available = False
 
-            shells.append(ShellInfo(
-                path=shell_path,
-                label=shell_def["label"],
-                available=available,
-            ))
+            shells.append(
+                ShellInfo(
+                    path=shell_path,
+                    label=shell_def["label"],
+                    available=available,
+                )
+            )
 
         return shells
 

@@ -6,15 +6,16 @@ Fournit des fonctionnalités d'optimisation, génération de configurations,
 et diagnostic d'erreurs assisté par IA.
 """
 
-from typing import Optional, Dict, Any, List
 import logging
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class LLMProvider(str, Enum):
     """Providers LLM supportés."""
+
     OPENAI = "openai"
     CLAUDE = "claude"
     OLLAMA = "ollama"
@@ -35,7 +36,7 @@ class LiteLLMService:
         anthropic_api_key: Optional[str] = None,
         ollama_base_url: str = "http://localhost:11434",
         default_provider: LLMProvider = LLMProvider.OLLAMA,
-        default_model: str = "llama2"
+        default_model: str = "llama2",
     ):
         """
         Initialise le service LiteLLM.
@@ -79,7 +80,7 @@ class LiteLLMService:
         self,
         description: str,
         requirements: Optional[Dict[str, Any]] = None,
-        provider: Optional[LLMProvider] = None
+        provider: Optional[LLMProvider] = None,
     ) -> Dict[str, Any]:
         """
         Génère une configuration Docker Compose assistée par IA.
@@ -115,7 +116,7 @@ class LiteLLMService:
         self,
         compose_config: Dict[str, Any],
         target_type: str,
-        provider: Optional[LLMProvider] = None
+        provider: Optional[LLMProvider] = None,
     ) -> Dict[str, Any]:
         """
         Optimise les ressources d'une configuration selon la cible.
@@ -147,7 +148,7 @@ class LiteLLMService:
         self,
         error_message: str,
         context: Optional[Dict[str, Any]] = None,
-        provider: Optional[LLMProvider] = None
+        provider: Optional[LLMProvider] = None,
     ) -> Dict[str, Any]:
         """
         Diagnostic d'erreur assisté par IA.
@@ -176,9 +177,7 @@ class LiteLLMService:
         return response
 
     async def suggest_improvements(
-        self,
-        compose_config: Dict[str, Any],
-        provider: Optional[LLMProvider] = None
+        self, compose_config: Dict[str, Any], provider: Optional[LLMProvider] = None
     ) -> List[Dict[str, Any]]:
         """
         Suggère des améliorations pour une configuration.
@@ -207,9 +206,7 @@ class LiteLLMService:
         return self._parse_suggestions(response)
 
     def _build_compose_prompt(
-        self,
-        description: str,
-        requirements: Optional[Dict[str, Any]]
+        self, description: str, requirements: Optional[Dict[str, Any]]
     ) -> str:
         """Construit le prompt pour la génération de Docker Compose."""
         prompt = f"""Generate a Docker Compose configuration for the following:
@@ -223,9 +220,7 @@ Description: {description}
         return prompt
 
     def _build_optimization_prompt(
-        self,
-        compose_config: Dict[str, Any],
-        target_type: str
+        self, compose_config: Dict[str, Any], target_type: str
     ) -> str:
         """Construit le prompt pour l'optimisation de ressources."""
         return f"""Optimize the following Docker Compose configuration for {target_type}:
@@ -242,9 +237,7 @@ Focus on:
 Provide the optimized configuration."""
 
     def _build_diagnostic_prompt(
-        self,
-        error_message: str,
-        context: Optional[Dict[str, Any]]
+        self, error_message: str, context: Optional[Dict[str, Any]]
     ) -> str:
         """Construit le prompt pour le diagnostic d'erreurs."""
         prompt = f"""Diagnose the following error:
@@ -277,11 +270,7 @@ Focus on:
 
 Provide specific, actionable suggestions."""
 
-    async def _call_llm(
-        self,
-        prompt: str,
-        provider: LLMProvider
-    ) -> Dict[str, Any]:
+    async def _call_llm(self, prompt: str, provider: LLMProvider) -> Dict[str, Any]:
         """
         Appelle le LLM provider sélectionné.
 
@@ -319,7 +308,7 @@ Provide specific, actionable suggestions."""
             "model": self.default_model,
             "content": "Simulated LLM response - LiteLLM dependency not yet installed",
             "prompt": prompt[:100] + "...",
-            "cached": False
+            "cached": False,
         }
 
         # Mise en cache
@@ -332,7 +321,7 @@ Provide specific, actionable suggestions."""
         model_map = {
             LLMProvider.OPENAI: "gpt-4",
             LLMProvider.CLAUDE: "claude-3-opus-20240229",
-            LLMProvider.OLLAMA: f"ollama/{self.default_model}"
+            LLMProvider.OLLAMA: f"ollama/{self.default_model}",
         }
         return model_map.get(provider, self.default_model)
 
@@ -344,7 +333,7 @@ Provide specific, actionable suggestions."""
                 "category": "simulated",
                 "priority": "high",
                 "description": "Simulated suggestion",
-                "implementation": response.get("content", "")
+                "implementation": response.get("content", ""),
             }
         ]
 
@@ -355,11 +344,11 @@ Provide specific, actionable suggestions."""
 
     def get_available_providers(self) -> List[str]:
         """Retourne la liste des providers disponibles."""
-        available = []
+        available: List[str] = []
         if self.openai_api_key:
-            available.append(LLMProvider.OPENAI)
+            available.append(LLMProvider.OPENAI.value)
         if self.anthropic_api_key:
-            available.append(LLMProvider.CLAUDE)
+            available.append(LLMProvider.CLAUDE.value)
         # Ollama est toujours disponible (local)
-        available.append(LLMProvider.OLLAMA)
+        available.append(LLMProvider.OLLAMA.value)
         return available

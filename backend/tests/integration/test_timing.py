@@ -49,8 +49,9 @@ async def test_process_time_on_different_endpoints(client: AsyncClient):
 
     for endpoint in endpoints:
         response = await client.get(endpoint)
-        assert "X-Process-Time" in response.headers, \
-            f"Missing X-Process-Time on {endpoint}"
+        assert (
+            "X-Process-Time" in response.headers
+        ), f"Missing X-Process-Time on {endpoint}"
 
 
 @pytest.mark.asyncio

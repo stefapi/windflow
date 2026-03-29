@@ -186,10 +186,10 @@ onMounted(async () => {
 }
 
 .node-palette {
-  margin-top: 20px;
   padding: 10px;
-  background-color: var(--color-bg-elevated);
+  margin-top: 20px;
   color: var(--color-text-primary);
+  background-color: var(--color-bg-elevated);
   border-radius: 4px;
 }
 

@@ -226,8 +226,8 @@ defineExpose({
 
 .view-all-link {
   font-size: 0.875rem;
-  color: var(--el-color-primary);
   text-decoration: none;
+  color: var(--el-color-primary);
 }
 
 .view-all-link:hover {
@@ -249,8 +249,8 @@ defineExpose({
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem;
-  border-radius: 0.5rem;
   background-color: var(--el-fill-color-light);
+  border-radius: 0.5rem;
   transition: all 0.2s ease;
 }
 
@@ -278,12 +278,12 @@ defineExpose({
 }
 
 .deployment-name {
-  font-weight: 500;
-  color: var(--el-text-color-primary);
   overflow: hidden;
+  max-width: 200px;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 200px;
+  color: var(--el-text-color-primary);
+  font-weight: 500;
 }
 
 .deployment-row__meta {

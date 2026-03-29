@@ -231,11 +231,11 @@ function formatContainerId(id: string): string {
 
 <style scoped>
 .terminal-page {
-  padding: 20px;
   display: flex;
+  height: calc(100vh - 100px);
+  padding: 20px;
   flex-direction: column;
   gap: 16px;
-  height: calc(100vh - 100px);
 }
 
 .page-header {
@@ -257,9 +257,9 @@ function formatContainerId(id: string): string {
 }
 
 .page-title {
+  margin: 0;
   font-size: 24px;
   font-weight: 600;
-  margin: 0;
 }
 
 .selector-card {
@@ -292,17 +292,17 @@ function formatContainerId(id: string): string {
 }
 
 .terminal-card {
-  flex: 1;
-  min-height: 0;
   display: flex;
+  min-height: 0;
+  flex: 1;
   flex-direction: column;
 }
 
 .terminal-card :deep(.el-card__body) {
-  flex: 1;
-  padding: 0;
   display: flex;
   min-height: 400px;
+  padding: 0;
+  flex: 1;
 }
 
 .help-card {
@@ -314,8 +314,8 @@ function formatContainerId(id: string): string {
 }
 
 .help-content ul {
-  margin: 8px 0 0 0;
   padding-left: 20px;
+  margin: 8px 0 0;
 }
 
 .help-content li {
@@ -323,9 +323,9 @@ function formatContainerId(id: string): string {
 }
 
 .help-content code {
-  background-color: var(--el-fill-color-light);
   padding: 2px 6px;
-  border-radius: 4px;
   font-size: 12px;
+  background-color: var(--el-fill-color-light);
+  border-radius: 4px;
 }
 </style>

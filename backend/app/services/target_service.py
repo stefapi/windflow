@@ -28,25 +28,19 @@ class TargetService:
 
     @staticmethod
     async def get_by_name(
-        db: AsyncSession,
-        organization_id: str,
-        name: str
+        db: AsyncSession, organization_id: str, name: str
     ) -> Optional[Target]:
         """Récupère une cible par son nom dans une organisation."""
         result = await db.execute(
             select(Target).where(
-                Target.organization_id == organization_id,
-                Target.name == name
+                Target.organization_id == organization_id, Target.name == name
             )
         )
         return result.scalar_one_or_none()
 
     @staticmethod
     async def list_by_organization(
-        db: AsyncSession,
-        organization_id: str,
-        skip: int = 0,
-        limit: int = 100
+        db: AsyncSession, organization_id: str, skip: int = 0, limit: int = 100
     ) -> List[Target]:
         """Liste les cibles d'une organisation."""
         result = await db.execute(
@@ -61,7 +55,7 @@ class TargetService:
     async def create(
         db: AsyncSession,
         target_data: TargetCreate,
-        organization_id: Optional[str] = None
+        organization_id: Optional[str] = None,
     ) -> Target:
         """Crée une nouvelle cible."""
         payload = target_data.model_dump()
@@ -76,9 +70,7 @@ class TargetService:
 
     @staticmethod
     async def update(
-        db: AsyncSession,
-        target_id: str,
-        target_data: TargetUpdate
+        db: AsyncSession, target_id: str, target_data: TargetUpdate
     ) -> Optional[Target]:
         """Met à jour les informations d'une cible."""
         target = await TargetService.get_by_id(db, target_id)
@@ -110,10 +102,7 @@ class TargetService:
         return True
 
     @staticmethod
-    async def mark_scan_in_progress(
-        db: AsyncSession,
-        target: Target
-    ) -> Target:
+    async def mark_scan_in_progress(db: AsyncSession, target: Target) -> Target:
         """Indique qu'un scan est en cours pour la cible."""
         target.scan_success = None
         target.updated_at = datetime.utcnow()
@@ -125,9 +114,7 @@ class TargetService:
 
     @staticmethod
     async def mark_scan_failed(
-        db: AsyncSession,
-        target: Target,
-        scan_date: Optional[datetime] = None
+        db: AsyncSession, target: Target, scan_date: Optional[datetime] = None
     ) -> Target:
         """Indique qu'un scan a échoué pour la cible."""
         scan_time = scan_date or datetime.utcnow()
@@ -147,7 +134,7 @@ class TargetService:
     async def list_capabilities(
         db: AsyncSession,
         target_id: str,
-        capability_type: Optional[CapabilityType] = None
+        capability_type: Optional[CapabilityType] = None,
     ) -> List[TargetCapability]:
         """Récupère les capacités persistées pour une cible."""
         stmt = select(TargetCapability).where(TargetCapability.target_id == target_id)
@@ -166,7 +153,7 @@ class TargetService:
         scan_date: datetime,
         success: bool,
         platform_info: Optional[Dict[str, Any]] = None,
-        os_info: Optional[Dict[str, Any]] = None
+        os_info: Optional[Dict[str, Any]] = None,
     ) -> Target:
         """Persiste le résultat d'un scan de capacités."""
         target.scan_date = scan_date

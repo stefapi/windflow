@@ -36,20 +36,17 @@ class TargetCapabilityBase(BaseModel):
     """Schéma de base pour représenter une capacité détectée."""
 
     capability_type: CapabilityType = Field(
-        ...,
-        description="Type de capacité détectée sur la cible"
+        ..., description="Type de capacité détectée sur la cible"
     )
     is_available: bool = Field(
-        default=False,
-        description="Indique si la capacité est disponible sur la cible"
+        default=False, description="Indique si la capacité est disponible sur la cible"
     )
     version: Optional[str] = Field(
-        default=None,
-        description="Version de l'outil détectée lorsque disponible"
+        default=None, description="Version de l'outil détectée lorsque disponible"
     )
     details: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Informations supplémentaires retournées par le scanner"
+        description="Informations supplémentaires retournées par le scanner",
     )
 
 

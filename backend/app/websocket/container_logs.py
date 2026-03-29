@@ -122,7 +122,7 @@ async def container_logs_websocket_endpoint(
                         "message": "Log stream ended (container may have stopped)",
                     }
                 )
-            except:
+            except Exception:
                 pass
 
         except asyncio.CancelledError:
@@ -138,7 +138,7 @@ async def container_logs_websocket_endpoint(
                 await websocket.send_json(
                     {"type": "error", "message": f"Log streaming error: {str(e)}"}
                 )
-            except:
+            except Exception:
                 pass
 
     async def check_container_status():
@@ -163,7 +163,7 @@ async def container_logs_websocket_endpoint(
                                     "message": f"Container is {container_info.state.get('Status')}",
                                 }
                             )
-                        except:
+                        except Exception:
                             pass
                         streaming_active = False
                         break
@@ -224,7 +224,7 @@ async def container_logs_websocket_endpoint(
                     await websocket.send_json(
                         {"type": "ping", "timestamp": datetime.utcnow().isoformat()}
                     )
-                except:
+                except Exception:
                     streaming_active = False
                     break
 
@@ -250,7 +250,7 @@ async def container_logs_websocket_endpoint(
         streaming_active = False
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
-        except:
+        except Exception:
             pass
 
     finally:

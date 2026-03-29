@@ -7,8 +7,9 @@ pour une documentation OpenAPI complète.
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class OrganizationBase(BaseModel):
@@ -19,7 +20,7 @@ class OrganizationBase(BaseModel):
         min_length=1,
         max_length=255,
         description="Nom de l'organisation",
-        json_schema_extra={"example": "Acme Corp"}
+        json_schema_extra={"example": "Acme Corp"},
     )
     slug: Optional[str] = Field(
         None,
@@ -27,18 +28,18 @@ class OrganizationBase(BaseModel):
         max_length=100,
         pattern=r"^[a-z0-9-]+$",
         description="Slug unique (minuscules, chiffres et tirets uniquement). Généré automatiquement depuis le nom si non fourni.",
-        json_schema_extra={"example": "acme-corp"}
+        json_schema_extra={"example": "acme-corp"},
     )
     domain: Optional[str] = Field(
         None,
         max_length=255,
         description="Domaine de l'organisation",
-        json_schema_extra={"example": "acme.com"}
+        json_schema_extra={"example": "acme.com"},
     )
     description: Optional[str] = Field(
         None,
         description="Description de l'organisation",
-        json_schema_extra={"example": "Leading cloud deployment company"}
+        json_schema_extra={"example": "Leading cloud deployment company"},
     )
 
 
@@ -57,12 +58,12 @@ class OrganizationCreate(OrganizationBase):
             "examples": [
                 {
                     "name": "Acme Corp",
-                    "description": "Leading cloud deployment company"
+                    "description": "Leading cloud deployment company",
                 },
                 {
                     "name": "Startup Labs",
                     "slug": "startup-labs",
-                    "description": "Small startup team"
+                    "description": "Small startup team",
                 },
                 {
                     "name": "DevOps Team",
@@ -70,9 +71,9 @@ class OrganizationCreate(OrganizationBase):
                     "domain": "devops.internal",
                     "settings": {
                         "notifications_enabled": True,
-                        "default_target": "docker"
-                    }
-                }
+                        "default_target": "docker",
+                    },
+                },
             ]
         }
     )
@@ -80,7 +81,9 @@ class OrganizationCreate(OrganizationBase):
     settings: Optional[Dict[str, Any]] = Field(
         default_factory=dict,
         description="Configuration JSON",
-        json_schema_extra={"example": {"max_deployments": 100, "allowed_targets": ["docker"]}}
+        json_schema_extra={
+            "example": {"max_deployments": 100, "allowed_targets": ["docker"]}
+        },
     )
 
 
@@ -95,17 +98,9 @@ class OrganizationUpdate(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "examples": [
-                {
-                    "name": "Acme Corporation",
-                    "description": "Updated description"
-                },
-                {
-                    "settings": {"max_deployments": 200, "notifications_enabled": True}
-                },
-                {
-                    "domain": "new-domain.com",
-                    "slug": "acme-corporation"
-                }
+                {"name": "Acme Corporation", "description": "Updated description"},
+                {"settings": {"max_deployments": 200, "notifications_enabled": True}},
+                {"domain": "new-domain.com", "slug": "acme-corporation"},
             ]
         }
     )
@@ -115,7 +110,7 @@ class OrganizationUpdate(BaseModel):
         min_length=1,
         max_length=255,
         description="Nouveau nom",
-        json_schema_extra={"example": "Acme Corporation"}
+        json_schema_extra={"example": "Acme Corporation"},
     )
     slug: Optional[str] = Field(
         None,
@@ -123,23 +118,23 @@ class OrganizationUpdate(BaseModel):
         max_length=100,
         pattern=r"^[a-z0-9-]+$",
         description="Nouveau slug",
-        json_schema_extra={"example": "acme-corporation"}
+        json_schema_extra={"example": "acme-corporation"},
     )
     domain: Optional[str] = Field(
         None,
         max_length=255,
         description="Nouveau domaine",
-        json_schema_extra={"example": "new-domain.com"}
+        json_schema_extra={"example": "new-domain.com"},
     )
     description: Optional[str] = Field(
         None,
         description="Nouvelle description",
-        json_schema_extra={"example": "Updated organization description"}
+        json_schema_extra={"example": "Updated organization description"},
     )
     settings: Optional[Dict[str, Any]] = Field(
         None,
         description="Nouvelle configuration JSON",
-        json_schema_extra={"example": {"max_deployments": 200}}
+        json_schema_extra={"example": {"max_deployments": 200}},
     )
 
 
@@ -162,22 +157,22 @@ class OrganizationResponse(BaseModel):
                 "description": "Leading cloud deployment company",
                 "settings": {"max_deployments": 100},
                 "created_at": "2026-01-02T10:00:00Z",
-                "updated_at": "2026-01-02T10:00:00Z"
+                "updated_at": "2026-01-02T10:00:00Z",
             }
-        }
+        },
     )
 
     id: str = Field(
         ...,
         description="ID unique de l'organisation",
-        json_schema_extra={"example": "org-550e8400"}
+        json_schema_extra={"example": "org-550e8400"},
     )
     name: str = Field(
         ...,
         min_length=1,
         max_length=255,
         description="Nom de l'organisation",
-        json_schema_extra={"example": "Acme Corp"}
+        json_schema_extra={"example": "Acme Corp"},
     )
     slug: str = Field(
         ...,
@@ -185,31 +180,31 @@ class OrganizationResponse(BaseModel):
         max_length=100,
         pattern=r"^[a-z0-9-]+$",
         description="Slug unique de l'organisation",
-        json_schema_extra={"example": "acme-corp"}
+        json_schema_extra={"example": "acme-corp"},
     )
     domain: Optional[str] = Field(
         None,
         max_length=255,
         description="Domaine de l'organisation",
-        json_schema_extra={"example": "acme.com"}
+        json_schema_extra={"example": "acme.com"},
     )
     description: Optional[str] = Field(
         None,
         description="Description de l'organisation",
-        json_schema_extra={"example": "Leading cloud deployment company"}
+        json_schema_extra={"example": "Leading cloud deployment company"},
     )
     settings: Dict[str, Any] = Field(
         default_factory=dict,
         description="Configuration JSON",
-        json_schema_extra={"example": {"max_deployments": 100}}
+        json_schema_extra={"example": {"max_deployments": 100}},
     )
     created_at: datetime = Field(
         ...,
         description="Date de création",
-        json_schema_extra={"example": "2026-01-02T10:00:00Z"}
+        json_schema_extra={"example": "2026-01-02T10:00:00Z"},
     )
     updated_at: datetime = Field(
         ...,
         description="Date de mise à jour",
-        json_schema_extra={"example": "2026-01-02T10:00:00Z"}
+        json_schema_extra={"example": "2026-01-02T10:00:00Z"},
     )

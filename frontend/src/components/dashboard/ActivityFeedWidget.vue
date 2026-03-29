@@ -87,8 +87,8 @@ function formatDate(timestamp: string): string {
 }
 
 .activity-details {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
   margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 </style>

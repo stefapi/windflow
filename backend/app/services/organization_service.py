@@ -6,8 +6,9 @@ Implémente le pattern Repository avec SQLAlchemy 2.0 async.
 
 import re
 import unicodedata
-from typing import Optional, List, Union
+from typing import List, Optional, Union
 from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,21 +32,21 @@ def generate_slug(name: str) -> str:
         Slug généré
     """
     # Normalisation Unicode (supprime les accents)
-    normalized = unicodedata.normalize('NFKD', name)
-    ascii_text = normalized.encode('ASCII', 'ignore').decode('ASCII')
+    normalized = unicodedata.normalize("NFKD", name)
+    ascii_text = normalized.encode("ASCII", "ignore").decode("ASCII")
 
     # Conversion en minuscules
     slug = ascii_text.lower()
 
     # Remplacement des caractères non alphanumériques par des tirets
-    slug = re.sub(r'[^a-z0-9]+', '-', slug)
+    slug = re.sub(r"[^a-z0-9]+", "-", slug)
 
     # Suppression des tirets en début et fin
-    slug = slug.strip('-')
+    slug = slug.strip("-")
 
     # Si le slug est vide, utiliser un fallback
     if not slug:
-        slug = 'organization'
+        slug = "organization"
 
     return slug
 
@@ -54,7 +55,9 @@ class OrganizationService:
     """Service de gestion des organisations (multi-tenant)."""
 
     @staticmethod
-    async def get_by_id(db: AsyncSession, org_id: Union[UUID, str]) -> Optional[Organization]:
+    async def get_by_id(
+        db: AsyncSession, org_id: Union[UUID, str]
+    ) -> Optional[Organization]:
         """Récupère une organisation par son ID."""
         # Convertir UUID en string car le modèle stocke l'ID comme String(36)
         org_id_str = str(org_id) if isinstance(org_id, UUID) else org_id
@@ -66,16 +69,12 @@ class OrganizationService:
     @staticmethod
     async def get_by_name(db: AsyncSession, name: str) -> Optional[Organization]:
         """Récupère une organisation par son nom."""
-        result = await db.execute(
-            select(Organization).where(Organization.name == name)
-        )
+        result = await db.execute(select(Organization).where(Organization.name == name))
         return result.scalar_one_or_none()
 
     @staticmethod
     async def list_all(
-        db: AsyncSession,
-        skip: int = 0,
-        limit: int = 100
+        db: AsyncSession, skip: int = 0, limit: int = 100
     ) -> List[Organization]:
         """
         Liste toutes les organisations avec pagination.
@@ -88,19 +87,13 @@ class OrganizationService:
         Returns:
             Liste d'organisations
         """
-        result = await db.execute(
-            select(Organization)
-            .offset(skip)
-            .limit(limit)
-        )
+        result = await db.execute(select(Organization).offset(skip).limit(limit))
         return list(result.scalars().all())
 
     @staticmethod
     async def get_by_slug(db: AsyncSession, slug: str) -> Optional[Organization]:
         """Récupère une organisation par son slug."""
-        result = await db.execute(
-            select(Organization).where(Organization.slug == slug)
-        )
+        result = await db.execute(select(Organization).where(Organization.slug == slug))
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -138,11 +131,13 @@ class OrganizationService:
         data = org_data.model_dump()
 
         # Générer le slug automatiquement si non fourni
-        if not data.get('slug'):
-            data['slug'] = await OrganizationService._generate_unique_slug(db, data['name'])
+        if not data.get("slug"):
+            data["slug"] = await OrganizationService._generate_unique_slug(
+                db, data["name"]
+            )
         else:
             # Vérifier l'unicité du slug fourni
-            existing = await OrganizationService.get_by_slug(db, data['slug'])
+            existing = await OrganizationService.get_by_slug(db, data["slug"])
             if existing:
                 raise ValueError(f"Le slug '{data['slug']}' est déjà utilisé")
 
@@ -154,9 +149,7 @@ class OrganizationService:
 
     @staticmethod
     async def update(
-        db: AsyncSession,
-        org_id: Union[UUID, str],
-        org_data: OrganizationUpdate
+        db: AsyncSession, org_id: Union[UUID, str], org_data: OrganizationUpdate
     ) -> Optional[Organization]:
         """
         Met à jour une organisation.

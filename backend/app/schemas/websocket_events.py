@@ -74,6 +74,7 @@ class WebSocketEventType(str, Enum):
 # Types helpers pour la construction des messages
 class NotificationLevel(str, Enum):
     """Niveaux de notification."""
+
     INFO = "info"
     SUCCESS = "success"
     WARNING = "warning"
@@ -82,6 +83,7 @@ class NotificationLevel(str, Enum):
 
 class DeploymentStatus(str, Enum):
     """Statuts de déploiement."""
+
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"

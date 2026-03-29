@@ -6,8 +6,8 @@ et cache optionnel avec Redis.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, AsyncContextManager
 from contextlib import asynccontextmanager
+from typing import Any, AsyncContextManager, AsyncIterator, Optional
 
 
 class DatabaseManager(ABC):
@@ -21,28 +21,24 @@ class DatabaseManager(ABC):
     @abstractmethod
     async def connect(self) -> None:
         """Établit la connexion à la base de données."""
-        pass
 
     @abstractmethod
     async def disconnect(self) -> None:
         """Ferme la connexion à la base de données."""
-        pass
 
     @abstractmethod
     async def create_tables(self) -> None:
         """Crée les tables de la base de données."""
-        pass
 
     @abstractmethod
-    @asynccontextmanager
-    async def session(self) -> AsyncContextManager:
+    @asynccontextmanager  # type: ignore[arg-type,misc]
+    async def session(self) -> AsyncIterator[Any]:
         """
         Context manager pour une session de base de données.
 
         Yields:
             AsyncSession: Session SQLAlchemy async
         """
-        pass
 
     @abstractmethod
     async def health_check(self) -> bool:
@@ -52,7 +48,6 @@ class DatabaseManager(ABC):
         Returns:
             bool: True si la connexion est saine
         """
-        pass
 
 
 class CacheManager(ABC):
@@ -74,15 +69,9 @@ class CacheManager(ABC):
         Returns:
             Optional[Any]: Valeur ou None si non trouvée
         """
-        pass
 
     @abstractmethod
-    async def set(
-        self,
-        key: str,
-        value: Any,
-        ttl: Optional[int] = None
-    ) -> bool:
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """
         Stocke une valeur dans le cache.
 
@@ -94,7 +83,6 @@ class CacheManager(ABC):
         Returns:
             bool: True si le stockage a réussi
         """
-        pass
 
     @abstractmethod
     async def delete(self, key: str) -> bool:
@@ -107,7 +95,6 @@ class CacheManager(ABC):
         Returns:
             bool: True si la suppression a réussi
         """
-        pass
 
     @abstractmethod
     async def clear(self) -> bool:
@@ -117,7 +104,6 @@ class CacheManager(ABC):
         Returns:
             bool: True si le cache a été vidé
         """
-        pass
 
     @abstractmethod
     async def exists(self, key: str) -> bool:
@@ -130,7 +116,6 @@ class CacheManager(ABC):
         Returns:
             bool: True si la clé existe
         """
-        pass
 
     @abstractmethod
     async def health_check(self) -> bool:
@@ -140,4 +125,3 @@ class CacheManager(ABC):
         Returns:
             bool: True si le cache est disponible
         """
-        pass

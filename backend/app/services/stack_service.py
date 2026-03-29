@@ -4,9 +4,10 @@ Service métier pour gestion des stacks Docker Compose.
 Implémente le pattern Repository avec SQLAlchemy 2.0 async.
 """
 
-from typing import Optional, List
 from pathlib import Path
-from sqlalchemy import select, or_
+from typing import List, Optional
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.stack import Stack
@@ -20,32 +21,24 @@ class StackService:
     @staticmethod
     async def get_by_id(db: AsyncSession, stack_id: str) -> Optional[Stack]:
         """Récupère un stack par son ID."""
-        result = await db.execute(
-            select(Stack).where(Stack.id == stack_id)
-        )
+        result = await db.execute(select(Stack).where(Stack.id == stack_id))
         return result.scalar_one_or_none()
 
     @staticmethod
     async def get_by_name(
-        db: AsyncSession,
-        name: str,
-        organization_id: str
+        db: AsyncSession, name: str, organization_id: str
     ) -> Optional[Stack]:
         """Récupère un stack par son nom et organisation."""
         result = await db.execute(
             select(Stack).where(
-                Stack.name == name,
-                Stack.organization_id == organization_id
+                Stack.name == name, Stack.organization_id == organization_id
             )
         )
         return result.scalar_one_or_none()
 
     @staticmethod
     async def list_by_organization(
-        db: AsyncSession,
-        organization_id: str,
-        skip: int = 0,
-        limit: int = 100
+        db: AsyncSession, organization_id: str, skip: int = 0, limit: int = 100
     ) -> List[Stack]:
         """Liste les stacks d'une organisation."""
         result = await db.execute(
@@ -67,9 +60,7 @@ class StackService:
 
     @staticmethod
     async def update(
-        db: AsyncSession,
-        stack_id: str,
-        stack_update: StackUpdate
+        db: AsyncSession, stack_id: str, stack_update: StackUpdate
     ) -> Optional[Stack]:
         """Met à jour un stack existant."""
         stack = await StackService.get_by_id(db, stack_id)
@@ -87,9 +78,7 @@ class StackService:
 
     @staticmethod
     async def import_from_yaml(
-        db: AsyncSession,
-        yaml_path: Path,
-        organization_id: str
+        db: AsyncSession, yaml_path: Path, organization_id: str
     ) -> Stack:
         """
         Importe un stack depuis une définition YAML.
@@ -118,7 +107,7 @@ class StackService:
         db: AsyncSession,
         yaml_path: Path,
         organization_id: str,
-        force_update: bool = False
+        force_update: bool = False,
     ) -> tuple[Stack, bool]:
         """
         Crée ou met à jour un stack depuis une définition YAML.
@@ -138,9 +127,7 @@ class StackService:
 
         # Vérifier si le stack existe déjà
         existing = await StackService.get_by_name(
-            db,
-            stack_create.name,
-            organization_id
+            db, stack_create.name, organization_id
         )
 
         if existing:
@@ -153,7 +140,7 @@ class StackService:
                     version=stack_create.version,
                     category=stack_create.category,
                     tags=stack_create.tags,
-                    is_public=stack_create.is_public
+                    is_public=stack_create.is_public,
                 )
                 updated_stack = await StackService.update(db, existing.id, stack_update)
                 return updated_stack, False
@@ -170,7 +157,7 @@ class StackService:
         db: AsyncSession,
         directory: Path,
         organization_id: str,
-        force_update: bool = False
+        force_update: bool = False,
     ) -> dict:
         """
         Importe tous les stacks d'un répertoire.
@@ -184,17 +171,11 @@ class StackService:
         Returns:
             dict: Statistiques d'import (created, updated, errors)
         """
-        stats = {
-            "created": 0,
-            "updated": 0,
-            "skipped": 0,
-            "errors": []
-        }
+        stats = {"created": 0, "updated": 0, "skipped": 0, "errors": []}
 
         # Charger tous les stacks du répertoire
         stack_creates = StackLoaderService.load_all_from_directory(
-            directory,
-            organization_id
+            directory, organization_id
         )
 
         # Importer chaque stack
@@ -202,9 +183,7 @@ class StackService:
             try:
                 # Vérifier si existe déjà
                 existing = await StackService.get_by_name(
-                    db,
-                    stack_create.name,
-                    organization_id
+                    db, stack_create.name, organization_id
                 )
 
                 if existing:
@@ -217,7 +196,7 @@ class StackService:
                             version=stack_create.version,
                             category=stack_create.category,
                             tags=stack_create.tags,
-                            is_public=stack_create.is_public
+                            is_public=stack_create.is_public,
                         )
                         await StackService.update(db, existing.id, stack_update)
                         stats["updated"] += 1
@@ -232,10 +211,7 @@ class StackService:
                     print(f"  ✓ Créé: {stack_create.name}")
 
             except Exception as e:
-                stats["errors"].append({
-                    "stack": stack_create.name,
-                    "error": str(e)
-                })
+                stats["errors"].append({"stack": stack_create.name, "error": str(e)})
                 print(f"  ✗ Erreur pour {stack_create.name}: {e}")
 
         return stats

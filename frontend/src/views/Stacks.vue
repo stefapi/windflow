@@ -830,21 +830,22 @@ onMounted(() => {
 }
 
 .yaml-editor {
+  overflow: hidden;
   border: 1px solid var(--el-border-color);
   border-radius: 4px;
-  overflow: hidden;
 }
 
 .yaml-textarea {
+  overflow: auto;
+
   /* Propriétés layout - couleurs gérées par la classe code-block UnoCSS */
   width: 100%;
   min-height: 400px;
+  white-space: pre;
   border: none;
   outline: none;
   resize: vertical;
   tab-size: 2;
-  white-space: pre;
-  overflow: auto;
 }
 
 .yaml-textarea:read-only {

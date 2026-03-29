@@ -1,9 +1,12 @@
 import bcrypt
-from ..core import auth
+
+from ..auth import jwt as auth
+
 
 # Hashage
 def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
 
 # Vérification
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -11,6 +14,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
     except (ValueError, bcrypt.exceptions.SaltValidationError):
         return False
+
 
 # Création d'un token de réinitialisation de mot de passe
 def create_password_reset_token(user_id: int) -> str:
@@ -23,4 +27,4 @@ def create_password_reset_token(user_id: int) -> str:
     Returns:
         Le token de réinitialisation
     """
-    return auth.create_token(data={"sub": str(user_id)}, token_type="password_reset")
+    return auth.create_access_token(data={"sub": str(user_id)})

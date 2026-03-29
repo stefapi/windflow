@@ -2,22 +2,27 @@
 Routes de gestion des stacks Docker Compose.
 """
 
-from typing import List
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from typing import List
 
-from ...database import get_db
-from ...schemas.stack import StackResponse, StackCreate, StackUpdate, StackSummaryResponse
-from ...schemas.stack_version import StackVersionResponse, StackVersionCreate
-from ...services.stack_service import StackService
-from ...models.stack_version import StackVersion
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from ...auth.dependencies import get_current_active_user
-from ...models.user import User
-from ...helper.template_renderer import TemplateRenderer
-from ...helper.jinja_functions import JinjaFunctions
 from ...core.rate_limit import conditional_rate_limiter
+from ...database import get_db
+from ...helper.template_renderer import TemplateRenderer
+from ...models.stack_version import StackVersion
+from ...models.user import User
+from ...schemas.stack import (
+    StackCreate,
+    StackResponse,
+    StackSummaryResponse,
+    StackUpdate,
+)
+from ...schemas.stack_version import StackVersionCreate, StackVersionResponse
+from ...services.stack_service import StackService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -49,7 +54,7 @@ def _render_stack_variables(stack) -> StackResponse:
     renderer = TemplateRenderer()
 
     # Pattern pour détecter les macros Jinja {{ ... }}
-    macro_pattern = re.compile(r'\{\{.*?\}\}')
+    macro_pattern = re.compile(r"\{\{.*?\}\}")
 
     # Parcourir les variables pour détecter les macros
     variables_to_render = {}
@@ -62,17 +67,15 @@ def _render_stack_variables(stack) -> StackResponse:
         var_to_render = var_dict.copy()
 
         # Vérifier si la valeur par défaut contient une macro
-        default_value = var_dict.get('default')
-        if default_value and isinstance(default_value, str) and macro_pattern.search(default_value):
-            macro_info[var_name] = {
-                'has_macro': True,
-                'macro_template': default_value
-            }
+        default_value = var_dict.get("default")
+        if (
+            default_value
+            and isinstance(default_value, str)
+            and macro_pattern.search(default_value)
+        ):
+            macro_info[var_name] = {"has_macro": True, "macro_template": default_value}
         else:
-            macro_info[var_name] = {
-                'has_macro': False,
-                'macro_template': None
-            }
+            macro_info[var_name] = {"has_macro": False, "macro_template": None}
 
         variables_to_render[var_name] = var_to_render
 
@@ -86,15 +89,21 @@ def _render_stack_variables(stack) -> StackResponse:
 
     # Créer une copie du stack avec les variables rendues
     stack_dict = stack_response.model_dump()
-    stack_dict['variables'] = rendered_variables
+    stack_dict["variables"] = rendered_variables
 
     # Rendre le nom de déploiement par défaut si présent
     if stack.deployment_name:
         # Extraire les valeurs par défaut des variables pour le contexte
-        context = {var_name: var_def.get('default') for var_name, var_def in rendered_variables.items() if 'default' in var_def}
-        stack_dict['default_name'] = renderer.render_string(stack.deployment_name, context)
+        context = {
+            var_name: var_def.get("default")
+            for var_name, var_def in rendered_variables.items()
+            if "default" in var_def
+        }
+        stack_dict["default_name"] = renderer.render_string(
+            stack.deployment_name, context
+        )
     else:
-        stack_dict['default_name'] = None
+        stack_dict["default_name"] = None
 
     return StackResponse(**stack_dict)
 
@@ -135,11 +144,11 @@ List all Docker Compose stacks available in the current user's organization.
                             "license": "MIT",
                             "rating": 4.8,
                             "tags": ["web", "server"],
-                            "downloads": 150
+                            "downloads": 150,
                         }
                     ]
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -147,10 +156,10 @@ List all Docker Compose stacks available in the current user's organization.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -159,21 +168,21 @@ List all Docker Compose stacks available in the current user's organization.
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "An unexpected error occurred",
-                        "correlation_id": "abc-125"
+                        "correlation_id": "abc-125",
                     }
                 }
-            }
-        }
+            },
+        },
     },
     tags=["stacks"],
-    dependencies=[Depends(conditional_rate_limiter(100, 60))]
+    dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
 async def list_stacks(
     request: Request,
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Liste les stacks Docker Compose de l'organisation.
@@ -198,15 +207,12 @@ async def list_stacks(
             "user_id": str(current_user.id),
             "organization_id": str(current_user.organization_id),
             "skip": skip,
-            "limit": limit
-        }
+            "limit": limit,
+        },
     )
 
     stacks = await StackService.list_by_organization(
-        session,
-        current_user.organization_id,
-        skip,
-        limit
+        session, current_user.organization_id, skip, limit
     )
 
     return stacks
@@ -258,25 +264,25 @@ This allows users to get fresh values without modifying the stack template.
                                 "default": "xK9$mP2#nL7@qR5!wT8&",
                                 "description": "Database password (auto-generated)",
                                 "has_macro": True,
-                                "macro_template": "{{ generate_password(24) }}"
+                                "macro_template": "{{ generate_password(24) }}",
                             },
                             "POSTGRES_USER": {
                                 "default": "windflow",
                                 "description": "Database username",
-                                "has_macro": False
+                                "has_macro": False,
                             },
                             "DB_PORT": {
                                 "default": "5433",
                                 "description": "Database port (auto-assigned)",
                                 "has_macro": True,
-                                "macro_template": "{{ get_valid_port() }}"
-                            }
+                                "macro_template": "{{ get_valid_port() }}",
+                            },
                         },
                         "created_at": "2026-01-02T10:00:00Z",
-                        "updated_at": "2026-01-02T10:00:00Z"
+                        "updated_at": "2026-01-02T10:00:00Z",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -284,10 +290,10 @@ This allows users to get fresh values without modifying the stack template.
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied to this stack",
@@ -295,10 +301,10 @@ This allows users to get fresh values without modifying the stack template.
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Access denied to this stack"
+                        "detail": "Access denied to this stack",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Stack not found",
@@ -306,10 +312,10 @@ This allows users to get fresh values without modifying the stack template.
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Stack 550e8400-e29b-41d4-a716-446655440000 not found"
+                        "detail": "Stack 550e8400-e29b-41d4-a716-446655440000 not found",
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -318,20 +324,20 @@ This allows users to get fresh values without modifying the stack template.
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "An unexpected error occurred",
-                        "correlation_id": "abc-125"
+                        "correlation_id": "abc-125",
                     }
                 }
-            }
-        }
+            },
+        },
     },
     tags=["stacks"],
-    dependencies=[Depends(conditional_rate_limiter(100, 60))]
+    dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
 async def get_stack(
     request: Request,
     stack_id: str,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Récupère une stack par son ID.
@@ -354,21 +360,20 @@ async def get_stack(
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Getting stack {stack_id}",
-        extra={"correlation_id": correlation_id, "stack_id": stack_id}
+        extra={"correlation_id": correlation_id, "stack_id": stack_id},
     )
 
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack {stack_id} non trouvée"
+            detail=f"Stack {stack_id} non trouvée",
         )
 
     # Vérifier que la stack appartient à la même organisation
     if stack.organization_id != current_user.organization_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette stack"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette stack"
         )
 
     # Rendre les macros dans les variables avant de retourner
@@ -434,10 +439,10 @@ services:
                                 "variables": {
                                     "PORT": {
                                         "default": "8080",
-                                        "description": "HTTP port for the web server"
+                                        "description": "HTTP port for the web server",
                                     }
-                                }
-                            }
+                                },
+                            },
                         },
                         "postgres_with_macros": {
                             "summary": "PostgreSQL database with auto-generated password",
@@ -463,22 +468,22 @@ volumes:
                                 "variables": {
                                     "POSTGRES_PASSWORD": {
                                         "default": "{{ generate_password(24) }}",
-                                        "description": "Database password (auto-generated)"
+                                        "description": "Database password (auto-generated)",
                                     },
                                     "POSTGRES_USER": {
                                         "default": "windflow",
-                                        "description": "Database username"
+                                        "description": "Database username",
                                     },
                                     "POSTGRES_DB": {
                                         "default": "windflow_db",
-                                        "description": "Database name"
+                                        "description": "Database name",
                                     },
                                     "DB_PORT": {
                                         "default": "{{ get_valid_port() }}",
-                                        "description": "Database port (auto-assigned)"
-                                    }
-                                }
-                            }
+                                        "description": "Database port (auto-assigned)",
+                                    },
+                                },
+                            },
                         },
                         "fullstack_app": {
                             "summary": "Full-stack application (frontend + backend + database)",
@@ -528,30 +533,30 @@ volumes:
                                 "variables": {
                                     "FRONTEND_PORT": {
                                         "default": "3000",
-                                        "description": "Frontend port"
+                                        "description": "Frontend port",
                                     },
                                     "BACKEND_PORT": {
                                         "default": "3001",
-                                        "description": "Backend API port"
+                                        "description": "Backend API port",
                                     },
                                     "DB_USER": {
                                         "default": "appuser",
-                                        "description": "Database username"
+                                        "description": "Database username",
                                     },
                                     "DB_PASSWORD": {
                                         "default": "{{ generate_password(32) }}",
-                                        "description": "Database password"
+                                        "description": "Database password",
                                     },
                                     "DB_NAME": {
                                         "default": "appdb",
-                                        "description": "Database name"
+                                        "description": "Database name",
                                     },
                                     "JWT_SECRET": {
                                         "default": "{{ random_string(64) }}",
-                                        "description": "JWT signing secret"
-                                    }
-                                }
-                            }
+                                        "description": "JWT signing secret",
+                                    },
+                                },
+                            },
                         },
                         "kubernetes_deployment": {
                             "summary": "Kubernetes deployment manifest",
@@ -599,27 +604,27 @@ spec:
                                 "variables": {
                                     "APP_NAME": {
                                         "default": "my-app",
-                                        "description": "Application name"
+                                        "description": "Application name",
                                     },
                                     "NAMESPACE": {
                                         "default": "production",
-                                        "description": "Kubernetes namespace"
+                                        "description": "Kubernetes namespace",
                                     },
                                     "REPLICAS": {
                                         "default": "3",
-                                        "description": "Number of replicas"
+                                        "description": "Number of replicas",
                                     },
                                     "IMAGE": {
                                         "default": "myapp:latest",
-                                        "description": "Container image"
+                                        "description": "Container image",
                                     },
                                     "DATABASE_URL": {
                                         "default": "postgresql://user:pass@db:5432/mydb",
-                                        "description": "Database connection string"
-                                    }
-                                }
-                            }
-                        }
+                                        "description": "Database connection string",
+                                    },
+                                },
+                            },
+                        },
                     }
                 }
             }
@@ -640,14 +645,14 @@ spec:
                         "variables": {
                             "PORT": {
                                 "default": "8080",
-                                "description": "HTTP port for the web server"
+                                "description": "HTTP port for the web server",
                             }
                         },
                         "created_at": "2026-01-02T22:30:00Z",
-                        "updated_at": "2026-01-02T22:30:00Z"
+                        "updated_at": "2026-01-02T22:30:00Z",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid request",
@@ -659,20 +664,20 @@ spec:
                             "value": {
                                 "error": "Validation Error",
                                 "detail": "Invalid Docker Compose YAML syntax",
-                                "correlation_id": "abc-123"
-                            }
+                                "correlation_id": "abc-123",
+                            },
                         },
                         "missing_field": {
                             "summary": "Missing required field",
                             "value": {
                                 "error": "Validation Error",
                                 "detail": "Field 'name' is required",
-                                "correlation_id": "abc-124"
-                            }
-                        }
+                                "correlation_id": "abc-124",
+                            },
+                        },
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -680,10 +685,10 @@ spec:
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         409: {
             "description": "Stack name already exists",
@@ -691,10 +696,10 @@ spec:
                 "application/json": {
                     "example": {
                         "error": "Conflict",
-                        "detail": "Stack with name 'nginx-webserver' already exists in organization"
+                        "detail": "Stack with name 'nginx-webserver' already exists in organization",
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -703,20 +708,20 @@ spec:
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "An unexpected error occurred",
-                        "correlation_id": "abc-125"
+                        "correlation_id": "abc-125",
                     }
                 }
-            }
-        }
+            },
+        },
     },
     tags=["stacks"],
-    dependencies=[Depends(conditional_rate_limiter(20, 60))]
+    dependencies=[Depends(conditional_rate_limiter(20, 60))],
 )
 async def create_stack(
     request: Request,
     stack_data: StackCreate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Crée une nouvelle stack Docker Compose.
@@ -740,19 +745,17 @@ async def create_stack(
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
             "organization_id": str(current_user.organization_id),
-            "stack_name": stack_data.name
-        }
+            "stack_name": stack_data.name,
+        },
     )
     # Vérifier que le nom n'existe pas déjà dans l'organisation
     existing = await StackService.get_by_name(
-        session,
-        current_user.organization_id,
-        stack_data.name
+        session, current_user.organization_id, stack_data.name
     )
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Stack avec le nom '{stack_data.name}' existe déjà"
+            detail=f"Stack avec le nom '{stack_data.name}' existe déjà",
         )
 
     stack = await StackService.create(session, stack_data, current_user.organization_id)
@@ -803,16 +806,14 @@ You can add or update variables with Jinja macros:
                         "update_name": {
                             "summary": "Update stack name only",
                             "description": "Change the stack's display name",
-                            "value": {
-                                "name": "nginx-webserver-v2"
-                            }
+                            "value": {"name": "nginx-webserver-v2"},
                         },
                         "update_description": {
                             "summary": "Update description",
                             "description": "Improve stack documentation",
                             "value": {
                                 "description": "Nginx web server with SSL support and caching"
-                            }
+                            },
                         },
                         "add_variable": {
                             "summary": "Add new variable with macro",
@@ -821,24 +822,23 @@ You can add or update variables with Jinja macros:
                                 "variables": {
                                     "PORT": {
                                         "default": "8080",
-                                        "description": "HTTP port"
+                                        "description": "HTTP port",
                                     },
                                     "SSL_PORT": {
                                         "default": "8443",
-                                        "description": "HTTPS port"
+                                        "description": "HTTPS port",
                                     },
                                     "SSL_CERT_PASSWORD": {
                                         "default": "{{ generate_password(32) }}",
-                                        "description": "SSL certificate password"
-                                    }
+                                        "description": "SSL certificate password",
+                                    },
                                 }
-                            }
+                            },
                         },
                         "update_compose": {
                             "summary": "Update Docker Compose configuration",
                             "description": "Modify services or add new ones",
-                            "value": {
-                                "compose_content": """version: '3.8'
+                            "value": {"compose_content": """version: '3.8'
 services:
   web:
     image: nginx:alpine
@@ -850,9 +850,8 @@ services:
       - ./ssl:/etc/nginx/ssl
     environment:
       - NGINX_HOST=${DOMAIN}
-      - NGINX_PORT=80"""
-                            }
-                        }
+      - NGINX_PORT=80"""},
+                        },
                     }
                 }
             }
@@ -871,20 +870,17 @@ services:
                         "organization_id": "org-123",
                         "compose_content": "version: '3.8'\nservices:\n  web:\n    image: nginx:alpine",
                         "variables": {
-                            "PORT": {
-                                "default": "8080",
-                                "description": "HTTP port"
-                            },
+                            "PORT": {"default": "8080", "description": "HTTP port"},
                             "SSL_PORT": {
                                 "default": "8443",
-                                "description": "HTTPS port"
-                            }
+                                "description": "HTTPS port",
+                            },
                         },
                         "created_at": "2026-01-02T10:00:00Z",
-                        "updated_at": "2026-01-02T22:45:00Z"
+                        "updated_at": "2026-01-02T22:45:00Z",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid request",
@@ -893,10 +889,10 @@ services:
                     "example": {
                         "error": "Validation Error",
                         "detail": "Invalid Docker Compose YAML syntax",
-                        "correlation_id": "abc-123"
+                        "correlation_id": "abc-123",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -904,10 +900,10 @@ services:
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied to this stack",
@@ -915,10 +911,10 @@ services:
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Access denied to this stack"
+                        "detail": "Access denied to this stack",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Stack not found",
@@ -926,10 +922,10 @@ services:
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Stack 550e8400-e29b-41d4-a716-446655440000 not found"
+                        "detail": "Stack 550e8400-e29b-41d4-a716-446655440000 not found",
                     }
                 }
-            }
+            },
         },
         409: {
             "description": "Stack name already exists",
@@ -937,10 +933,10 @@ services:
                 "application/json": {
                     "example": {
                         "error": "Conflict",
-                        "detail": "Stack with name 'nginx-webserver-v2' already exists in organization"
+                        "detail": "Stack with name 'nginx-webserver-v2' already exists in organization",
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -949,21 +945,21 @@ services:
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "An unexpected error occurred",
-                        "correlation_id": "abc-125"
+                        "correlation_id": "abc-125",
                     }
                 }
-            }
-        }
+            },
+        },
     },
     tags=["stacks"],
-    dependencies=[Depends(conditional_rate_limiter(30, 60))]
+    dependencies=[Depends(conditional_rate_limiter(30, 60))],
 )
 async def update_stack(
     request: Request,
     stack_id: str,
     stack_data: StackUpdate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Met à jour une stack Docker Compose.
@@ -987,42 +983,42 @@ async def update_stack(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "stack_id": stack_id
-        }
+            "stack_id": stack_id,
+        },
     )
     # Vérifier que la stack existe
     existing_stack = await StackService.get_by_id(session, stack_id)
     if not existing_stack:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack {stack_id} non trouvée"
+            detail=f"Stack {stack_id} non trouvée",
         )
 
     # Vérifier les permissions
     if existing_stack.organization_id != current_user.organization_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette stack"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette stack"
         )
 
     # Si changement de nom, vérifier qu'il n'existe pas déjà
     if stack_data.name and stack_data.name != existing_stack.name:
         existing_name = await StackService.get_by_name(
-            session,
-            current_user.organization_id,
-            stack_data.name
+            session, current_user.organization_id, stack_data.name
         )
         if existing_name:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Stack avec le nom '{stack_data.name}' existe déjà"
+                detail=f"Stack avec le nom '{stack_data.name}' existe déjà",
             )
 
     # Créer une version automatique si le compose_content change
-    if stack_data.compose_content and stack_data.compose_content != existing_stack.compose_content:
-        max_version_stmt = select(func.coalesce(func.max(StackVersion.version_number), 0)).where(
-            StackVersion.stack_id == stack_id
-        )
+    if (
+        stack_data.compose_content
+        and stack_data.compose_content != existing_stack.compose_content
+    ):
+        max_version_stmt = select(
+            func.coalesce(func.max(StackVersion.version_number), 0)
+        ).where(StackVersion.stack_id == stack_id)
         max_version = (await session.execute(max_version_stmt)).scalar() or 0
 
         # Sauvegarder l'état actuel avant modification
@@ -1031,7 +1027,7 @@ async def update_stack(
             version_number=max_version + 1,
             compose_content=existing_stack.compose_content,
             variables=existing_stack.variables or {},
-            change_summary=f"Auto-saved before update",
+            change_summary="Auto-saved before update",
             created_by=str(current_user.id),
         )
         session.add(version)
@@ -1069,19 +1065,17 @@ This operation is **irreversible**. The stack definition will be permanently del
 **Authentication Required**
 """,
     responses={
-        204: {
-            "description": "Stack deleted successfully (no content returned)"
-        },
+        204: {"description": "Stack deleted successfully (no content returned)"},
         401: {
             "description": "Authentication required",
             "content": {
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied to this stack",
@@ -1089,10 +1083,10 @@ This operation is **irreversible**. The stack definition will be permanently del
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Access denied to this stack"
+                        "detail": "Access denied to this stack",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Stack not found",
@@ -1100,10 +1094,10 @@ This operation is **irreversible**. The stack definition will be permanently del
                 "application/json": {
                     "example": {
                         "error": "Not Found",
-                        "detail": "Stack 550e8400-e29b-41d4-a716-446655440000 not found"
+                        "detail": "Stack 550e8400-e29b-41d4-a716-446655440000 not found",
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -1112,20 +1106,20 @@ This operation is **irreversible**. The stack definition will be permanently del
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "An unexpected error occurred",
-                        "correlation_id": "abc-125"
+                        "correlation_id": "abc-125",
                     }
                 }
-            }
-        }
+            },
+        },
     },
     tags=["stacks"],
-    dependencies=[Depends(conditional_rate_limiter(10, 60))]
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
 )
 async def delete_stack(
     request: Request,
     stack_id: str,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Supprime une stack Docker Compose.
@@ -1145,22 +1139,21 @@ async def delete_stack(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "stack_id": stack_id
-        }
+            "stack_id": stack_id,
+        },
     )
     # Vérifier que la stack existe
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack {stack_id} non trouvée"
+            detail=f"Stack {stack_id} non trouvée",
         )
 
     # Vérifier les permissions
     if stack.organization_id != current_user.organization_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette stack"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette stack"
         )
 
     await StackService.delete(session, stack_id)
@@ -1209,8 +1202,8 @@ Returns the newly generated value along with the original macro template for ref
                             "value": {
                                 "variable_name": "POSTGRES_PASSWORD",
                                 "new_value": "xK9$mP2#nL7@qR5!wT8&vZ3%",
-                                "macro_template": "{{ generate_password(24) }}"
-                            }
+                                "macro_template": "{{ generate_password(24) }}",
+                            },
                         },
                         "port_regenerated": {
                             "summary": "Port regenerated",
@@ -1218,8 +1211,8 @@ Returns the newly generated value along with the original macro template for ref
                             "value": {
                                 "variable_name": "DB_PORT",
                                 "new_value": "5433",
-                                "macro_template": "{{ get_valid_port() }}"
-                            }
+                                "macro_template": "{{ get_valid_port() }}",
+                            },
                         },
                         "random_string_regenerated": {
                             "summary": "Random string regenerated",
@@ -1227,12 +1220,12 @@ Returns the newly generated value along with the original macro template for ref
                             "value": {
                                 "variable_name": "API_KEY",
                                 "new_value": "aB3xY9mK2pL7wT8v",
-                                "macro_template": "{{ random_string(16) }}"
-                            }
-                        }
+                                "macro_template": "{{ random_string(16) }}",
+                            },
+                        },
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid request",
@@ -1243,19 +1236,19 @@ Returns the newly generated value along with the original macro template for ref
                             "summary": "Variable has no default value",
                             "value": {
                                 "error": "Bad Request",
-                                "detail": "Variable 'PORT' n'a pas de valeur par défaut"
-                            }
+                                "detail": "Variable 'PORT' n'a pas de valeur par défaut",
+                            },
                         },
                         "no_macro": {
                             "summary": "Variable does not contain a macro",
                             "value": {
                                 "error": "Bad Request",
-                                "detail": "Variable 'STATIC_VALUE' ne contient pas de macro à régénérer"
-                            }
-                        }
+                                "detail": "Variable 'STATIC_VALUE' ne contient pas de macro à régénérer",
+                            },
+                        },
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Authentication required",
@@ -1263,10 +1256,10 @@ Returns the newly generated value along with the original macro template for ref
                 "application/json": {
                     "example": {
                         "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token"
+                        "detail": "Missing or invalid authentication token",
                     }
                 }
-            }
+            },
         },
         403: {
             "description": "Access denied to this stack",
@@ -1274,10 +1267,10 @@ Returns the newly generated value along with the original macro template for ref
                 "application/json": {
                     "example": {
                         "error": "Forbidden",
-                        "detail": "Accès refusé à ce stack"
+                        "detail": "Accès refusé à ce stack",
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Stack or variable not found",
@@ -1288,19 +1281,19 @@ Returns the newly generated value along with the original macro template for ref
                             "summary": "Stack not found",
                             "value": {
                                 "error": "Not Found",
-                                "detail": "Stack 550e8400-e29b-41d4-a716-446655440000 non trouvé"
-                            }
+                                "detail": "Stack 550e8400-e29b-41d4-a716-446655440000 non trouvé",
+                            },
                         },
                         "variable_not_found": {
                             "summary": "Variable not found",
                             "value": {
                                 "error": "Not Found",
-                                "detail": "Variable 'UNKNOWN_VAR' non trouvée dans le stack"
-                            }
-                        }
+                                "detail": "Variable 'UNKNOWN_VAR' non trouvée dans le stack",
+                            },
+                        },
                     }
                 }
-            }
+            },
         },
         500: {
             "description": "Internal server error",
@@ -1309,21 +1302,21 @@ Returns the newly generated value along with the original macro template for ref
                     "example": {
                         "error": "Internal Server Error",
                         "detail": "Erreur lors de la régénération de la macro: Template syntax error",
-                        "correlation_id": "abc-125"
+                        "correlation_id": "abc-125",
                     }
                 }
-            }
-        }
+            },
+        },
     },
     tags=["stacks"],
-    dependencies=[Depends(conditional_rate_limiter(30, 60))]
+    dependencies=[Depends(conditional_rate_limiter(30, 60))],
 )
 async def regenerate_variable(
     request: Request,
     stack_id: str,
     variable_name: str,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Régénère la valeur d'une variable contenant une macro Jinja.
@@ -1352,49 +1345,48 @@ async def regenerate_variable(
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
             "stack_id": stack_id,
-            "variable_name": variable_name
-        }
+            "variable_name": variable_name,
+        },
     )
     # Vérifier que le stack existe
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack {stack_id} non trouvé"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Stack {stack_id} non trouvé"
         )
 
     # Vérifier les permissions
     if stack.organization_id != current_user.organization_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à ce stack"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à ce stack"
         )
 
     # Vérifier que la variable existe
     if not stack.variables or variable_name not in stack.variables:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Variable '{variable_name}' non trouvée dans le stack"
+            detail=f"Variable '{variable_name}' non trouvée dans le stack",
         )
 
     variable_def = stack.variables[variable_name]
 
     # Vérifier que la variable a une valeur par défaut
-    if 'default' not in variable_def:
+    if "default" not in variable_def:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Variable '{variable_name}' n'a pas de valeur par défaut"
+            detail=f"Variable '{variable_name}' n'a pas de valeur par défaut",
         )
 
-    default_value = variable_def['default']
+    default_value = variable_def["default"]
 
     # Vérifier que la valeur par défaut contient une macro
     import re
-    macro_pattern = re.compile(r'\{\{.*?\}\}')
+
+    macro_pattern = re.compile(r"\{\{.*?\}\}")
     if not isinstance(default_value, str) or not macro_pattern.search(default_value):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Variable '{variable_name}' ne contient pas de macro à régénérer"
+            detail=f"Variable '{variable_name}' ne contient pas de macro à régénérer",
         )
 
     # Régénérer la valeur en rendant le template
@@ -1404,12 +1396,12 @@ async def regenerate_variable(
         return {
             "variable_name": variable_name,
             "new_value": new_value,
-            "macro_template": default_value
+            "macro_template": default_value,
         }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la régénération de la macro: {str(e)}"
+            detail=f"Erreur lors de la régénération de la macro: {str(e)}",
         )
 
 
@@ -1488,7 +1480,11 @@ async def create_stack_version(
     version = StackVersion(
         stack_id=stack_id,
         version_number=max_version + 1,
-        compose_content=stack.compose_content if hasattr(stack, 'compose_content') else str(stack.template),
+        compose_content=(
+            stack.compose_content
+            if hasattr(stack, "compose_content")
+            else str(stack.template)
+        ),
         variables=stack.variables or {},
         change_summary=version_data.change_summary or "Manual snapshot",
         created_by=str(current_user.id),
@@ -1505,7 +1501,9 @@ async def create_stack_version(
         variables=version.variables or {},
         change_summary=version.change_summary,
         created_by=version.created_by,
-        author_name=current_user.username if hasattr(current_user, 'username') else None,
+        author_name=(
+            current_user.username if hasattr(current_user, "username") else None
+        ),
         created_at=version.created_at,
     )
 
@@ -1547,7 +1545,11 @@ async def restore_stack_version(
     current_snapshot = StackVersion(
         stack_id=stack_id,
         version_number=max_version + 1,
-        compose_content=stack.compose_content if hasattr(stack, 'compose_content') else str(stack.template),
+        compose_content=(
+            stack.compose_content
+            if hasattr(stack, "compose_content")
+            else str(stack.template)
+        ),
         variables=stack.variables or {},
         change_summary=f"Auto-saved before restore to v{version.version_number}",
         created_by=str(current_user.id),

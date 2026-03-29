@@ -6,12 +6,11 @@ acting as a bridge between the event-driven architecture and
 the real-time WebSocket communication system.
 """
 
-from typing import Dict
 import logging
+from typing import Dict
 
 from ..core.events import Event, EventType, event_bus
 from ..schemas.websocket_events import WebSocketEventType
-from ..schemas.deployment import DeploymentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -54,23 +53,19 @@ async def websocket_event_handler(event: Event) -> None:
         message = {
             "type": ws_event_type,
             "data": event.payload,
-            "timestamp": event.timestamp.isoformat()
+            "timestamp": event.timestamp.isoformat(),
         }
 
         logger.info(
             f"🌉 [STEP 2/4] Event Bridge received: {event.event_type} → {ws_event_type} "
             f"(deployment_id: {event.payload.get('deployment_id', 'N/A')})"
         )
-        logger.debug(
-            f"WebSocket message payload: {message}"
-        )
+        logger.debug(f"WebSocket message payload: {message}")
 
         # Broadcast to all WebSocket clients subscribed to this event type
         await broadcast_to_event_subscribers(ws_event_type, message)
 
-        logger.info(
-            f"✅ [STEP 2/4] Event successfully forwarded to broadcast layer"
-        )
+        logger.info("✅ [STEP 2/4] Event successfully forwarded to broadcast layer")
 
     except Exception as e:
         logger.error(
@@ -79,8 +74,8 @@ async def websocket_event_handler(event: Event) -> None:
             extra={
                 "event_type": event.event_type,
                 "event_id": event.event_id,
-                "payload": event.payload
-            }
+                "payload": event.payload,
+            },
         )
 
 

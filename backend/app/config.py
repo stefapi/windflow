@@ -6,8 +6,9 @@ avec support SQLite par défaut et PostgreSQL optionnel.
 """
 
 import json
-from typing import Optional, List, Union
-from pydantic import Field, field_validator
+from typing import List, Optional, Union
+
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,10 +28,14 @@ class Settings(BaseSettings):
     database_pool_recycle: int = 3600
 
     # JWT Authentication
-    jwt_secret_key: str = "dev-secret-key-change-in-production-please-use-a-long-random-string-minimum-32-characters"
+    jwt_secret_key: str = (
+        "dev-secret-key-change-in-production-please-use-a-long-random-string-minimum-32-characters"
+    )
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 15  # Short-lived access tokens for better security
-    jwt_refresh_token_expire_days: int = 7     # Longer refresh tokens for better UX
+    jwt_access_token_expire_minutes: int = (
+        15  # Short-lived access tokens for better security
+    )
+    jwt_refresh_token_expire_days: int = 7  # Longer refresh tokens for better UX
 
     # Keycloak SSO (optionnel - désactivé par défaut)
     keycloak_enabled: bool = False
@@ -53,36 +58,50 @@ class Settings(BaseSettings):
     api_public_url: Optional[str] = Field(
         default=None,
         description="Public URL for OpenAPI docs (e.g., https://api.windflow.io). "
-                   "If not set, uses http://{api_host}:{api_port}"
+        "If not set, uses http://{api_host}:{api_port}",
     )
 
     # === CORS Configuration ===
     cors_enabled: bool = Field(default=True, description="Enable CORS middleware")
     cors_origins: str = Field(
         default="http://localhost:5173,http://localhost:3000,http://localhost:8010",
-        description="Allowed CORS origins (comma-separated or JSON array)"
+        description="Allowed CORS origins (comma-separated or JSON array)",
     )
-    cors_credentials: bool = Field(default=True, description="Allow credentials in CORS")
-    cors_methods: str = Field(default="*", description="Allowed HTTP methods (comma-separated or JSON array)")
-    cors_headers: str = Field(default="*", description="Allowed headers (comma-separated or JSON array)")
+    cors_credentials: bool = Field(
+        default=True, description="Allow credentials in CORS"
+    )
+    cors_methods: str = Field(
+        default="*", description="Allowed HTTP methods (comma-separated or JSON array)"
+    )
+    cors_headers: str = Field(
+        default="*", description="Allowed headers (comma-separated or JSON array)"
+    )
 
     # === Security Headers (CSP) ===
-    csp_enabled: bool = Field(default=True, description="Enable Content Security Policy")
-    csp_default_src: str = Field(default="'self'", description="CSP default-src (comma-separated or JSON array)")
+    csp_enabled: bool = Field(
+        default=True, description="Enable Content Security Policy"
+    )
+    csp_default_src: str = Field(
+        default="'self'", description="CSP default-src (comma-separated or JSON array)"
+    )
     csp_script_src: str = Field(
         default="'self','unsafe-inline','unsafe-eval'",
-        description="CSP script-src (comma-separated or JSON array)"
+        description="CSP script-src (comma-separated or JSON array)",
     )
     csp_style_src: str = Field(
         default="'self','unsafe-inline'",
-        description="CSP style-src (comma-separated or JSON array)"
+        description="CSP style-src (comma-separated or JSON array)",
     )
     csp_img_src: str = Field(
         default="'self',data:,https:",
-        description="CSP img-src (comma-separated or JSON array)"
+        description="CSP img-src (comma-separated or JSON array)",
     )
-    csp_connect_src: str = Field(default="'self'", description="CSP connect-src (comma-separated or JSON array)")
-    csp_report_uri: Optional[str] = Field(default=None, description="CSP report-uri for violations")
+    csp_connect_src: str = Field(
+        default="'self'", description="CSP connect-src (comma-separated or JSON array)"
+    )
+    csp_report_uri: Optional[str] = Field(
+        default=None, description="CSP report-uri for violations"
+    )
 
     # === Propriétés calculées pour les listes ===
     @property
@@ -143,24 +162,40 @@ class Settings(BaseSettings):
         return [item.strip() for item in value.split(",")]
 
     # === HSTS Configuration ===
-    hsts_enabled: bool = Field(default=False, description="Enable HSTS (production only)")
-    hsts_max_age: int = Field(default=31536000, description="HSTS max-age in seconds (1 year)")
-    hsts_include_subdomains: bool = Field(default=True, description="Include subdomains in HSTS")
+    hsts_enabled: bool = Field(
+        default=False, description="Enable HSTS (production only)"
+    )
+    hsts_max_age: int = Field(
+        default=31536000, description="HSTS max-age in seconds (1 year)"
+    )
+    hsts_include_subdomains: bool = Field(
+        default=True, description="Include subdomains in HSTS"
+    )
     hsts_preload: bool = Field(default=False, description="Enable HSTS preload")
-    frame_options: str = Field(default="SAMEORIGIN", description="X-Frame-Options header")
+    frame_options: str = Field(
+        default="SAMEORIGIN", description="X-Frame-Options header"
+    )
 
     # === Rate Limiting ===
     rate_limit_enabled: bool = Field(default=True, description="Enable rate limiting")
-    rate_limit_default: str = Field(default="100/minute", description="Default rate limit")
+    rate_limit_default: str = Field(
+        default="100/minute", description="Default rate limit"
+    )
     rate_limit_storage_url: Optional[str] = Field(
         default=None,
-        description="Redis URL for distributed rate limiting (e.g., redis://localhost:6379/0)"
+        description="Redis URL for distributed rate limiting (e.g., redis://localhost:6379/0)",
     )
 
     # === Performance ===
-    enable_timing_middleware: bool = Field(default=True, description="Enable request timing middleware")
-    slow_request_threshold: float = Field(default=1.0, description="Threshold for slow request logging (seconds)")
-    enable_correlation_id: bool = Field(default=True, description="Enable correlation ID tracking")
+    enable_timing_middleware: bool = Field(
+        default=True, description="Enable request timing middleware"
+    )
+    slow_request_threshold: float = Field(
+        default=1.0, description="Threshold for slow request logging (seconds)"
+    )
+    enable_correlation_id: bool = Field(
+        default=True, description="Enable correlation ID tracking"
+    )
 
     # LiteLLM (optionnel - désactivé par défaut)
     litellm_enabled: bool = False
@@ -173,7 +208,9 @@ class Settings(BaseSettings):
     prometheus_multiproc_dir: Optional[str] = None
 
     # === Logging ===
-    log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
+    log_level: str = Field(
+        default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$"
+    )
     log_format: str = Field(default="json", pattern="^(json|text)$")
 
     # Initial Admin User (pour seeding de la base de données)
@@ -187,7 +224,9 @@ class Settings(BaseSettings):
     # Stack Definitions Auto-loading
     stack_definitions_path: str = "stacks_definitions"
     auto_load_stack_definitions: bool = True
-    stack_update_strategy: str = "update_if_newer"  # skip_existing | update_if_newer | force_update
+    stack_update_strategy: str = (
+        "update_if_newer"  # skip_existing | update_if_newer | force_update
+    )
 
     # Mode développement sans authentification
     # ⚠️ DANGER : Ne JAMAIS activer en production !
@@ -215,7 +254,7 @@ class Settings(BaseSettings):
             f"connect-src {' '.join(self.csp_connect_src_list)}",
             "frame-ancestors 'none'",
             "base-uri 'self'",
-            "form-action 'self'"
+            "form-action 'self'",
         ]
 
         if self.csp_report_uri:
@@ -228,23 +267,24 @@ class Settings(BaseSettings):
         servers = []
 
         if self.api_public_url:
-            servers.append({
-                "url": self.api_public_url,
-                "description": f"{self.environment.capitalize()} server"
-            })
+            servers.append(
+                {
+                    "url": self.api_public_url,
+                    "description": f"{self.environment.capitalize()} server",
+                }
+            )
         else:
-            servers.append({
-                "url": f"http://{self.api_host}:{self.api_port}",
-                "description": "Development server"
-            })
+            servers.append(
+                {
+                    "url": f"http://{self.api_host}:{self.api_port}",
+                    "description": "Development server",
+                }
+            )
 
         return servers
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore"
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
     )
 
 

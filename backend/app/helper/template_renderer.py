@@ -6,7 +6,8 @@ disponibles pour tous les types de déploiement (Docker, Docker Compose, etc.)
 """
 
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
+
 from jinja2 import Template, TemplateSyntaxError, UndefinedError
 
 from .jinja_functions import JINJA_FUNCTIONS
@@ -22,7 +23,7 @@ class TemplateRenderer:
     substitution de variables et accès aux fonctions utilitaires.
     """
 
-    def __init__(self, additional_functions: Dict[str, Any] = None):
+    def __init__(self, additional_functions: Dict[str, Any] | None = None):
         """
         Initialise le renderer avec toutes les fonctions disponibles.
 
@@ -36,12 +37,12 @@ class TemplateRenderer:
         if additional_functions:
             self.functions.update(additional_functions)
 
-        logger.debug(f"TemplateRenderer initialisé avec {len(self.functions)} fonctions")
+        logger.debug(
+            f"TemplateRenderer initialisé avec {len(self.functions)} fonctions"
+        )
 
     def render_dict(
-        self,
-        template: Dict[str, Any],
-        variables: Dict[str, Any]
+        self, template: Dict[str, Any], variables: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Rend un dictionnaire avec substitution Jinja2 récursive.
@@ -76,11 +77,7 @@ class TemplateRenderer:
         # Rendre récursivement
         return self._render_value(template, context)
 
-    def render_string(
-        self,
-        template_str: str,
-        variables: Dict[str, Any]
-    ) -> str:
+    def render_string(self, template_str: str, variables: Dict[str, Any]) -> str:
         """
         Rend une string avec substitution Jinja2.
 
@@ -142,17 +139,11 @@ class TemplateRenderer:
         """
         if isinstance(value, dict):
             # Dictionnaire : rendre récursivement chaque valeur
-            return {
-                key: self._render_value(val, context)
-                for key, val in value.items()
-            }
+            return {key: self._render_value(val, context) for key, val in value.items()}
 
         elif isinstance(value, list):
             # Liste : rendre récursivement chaque élément
-            return [
-                self._render_value(item, context)
-                for item in value
-            ]
+            return [self._render_value(item, context) for item in value]
 
         elif isinstance(value, str):
             # String : appliquer la substitution Jinja2
@@ -193,15 +184,13 @@ class TemplateRenderer:
         for name, func in self.functions.items():
             doc = func.__doc__ or "Pas de documentation disponible"
             # Prendre seulement la première ligne de la docstring
-            first_line = doc.strip().split('\n')[0]
+            first_line = doc.strip().split("\n")[0]
             functions_doc[name] = first_line
 
         return functions_doc
 
     def validate_template(
-        self,
-        template: Any,
-        check_undefined: bool = True
+        self, template: Any, check_undefined: bool = True
     ) -> tuple[bool, list[str]]:
         """
         Valide un template sans le rendre.
@@ -247,8 +236,7 @@ default_renderer = TemplateRenderer()
 
 
 def render_template(
-    template: Dict[str, Any],
-    variables: Dict[str, Any]
+    template: Dict[str, Any], variables: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
     Fonction utilitaire pour rendre un template avec le renderer par défaut.
@@ -263,10 +251,7 @@ def render_template(
     return default_renderer.render_dict(template, variables)
 
 
-def render_string(
-    template_str: str,
-    variables: Dict[str, Any]
-) -> str:
+def render_string(template_str: str, variables: Dict[str, Any]) -> str:
     """
     Fonction utilitaire pour rendre une string avec le renderer par défaut.
 

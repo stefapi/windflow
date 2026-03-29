@@ -168,9 +168,7 @@ async def docker_container_logs_websocket(
 @router.websocket(
     "/docker/containers/{container_id}/stats", name="docker_container_stats_websocket"
 )
-async def docker_container_stats_websocket(
-    websocket: WebSocket, container_id: str
-):
+async def docker_container_stats_websocket(websocket: WebSocket, container_id: str):
     """
     Stream Docker container stats in real-time.
 

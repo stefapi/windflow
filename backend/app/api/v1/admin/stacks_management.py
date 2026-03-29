@@ -5,21 +5,22 @@ Endpoints pour l'administration et la gestion des stacks WindFlow.
 Remplace les scripts seed_stacks.py et check_stacks.py.
 """
 
-from typing import List, Optional, Dict, Any
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from typing import Any, Dict, List, Optional
 
-from ....database import get_db
-from ....models.stack import Stack
-from ....models.organization import Organization
-from ....models.deployment import Deployment
-from ....schemas.stack import StackCreate, StackUpdate, StackResponse
-from ....services.stack_service import StackService
-from ....services.stack_loader_service import StackLoaderService
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from ....auth.dependencies import get_current_superadmin
+from ....database import get_db
+from ....models.deployment import Deployment
+from ....models.organization import Organization
+from ....models.stack import Stack
+from ....schemas.stack import StackCreate, StackResponse
+from ....services.stack_loader_service import StackLoaderService
+from ....services.stack_service import StackService
 
 router = APIRouter()
 
@@ -27,6 +28,7 @@ router = APIRouter()
 # ============================================================================
 # SCHEMAS
 # ============================================================================
+
 
 class StackDefinitionInfo(BaseModel):
     """Informations sur une définition YAML de stack."""
@@ -102,9 +104,10 @@ class StacksOverview(BaseModel):
 # 1. GESTION DES DÉFINITIONS YAML
 # ============================================================================
 
+
 @router.get("/definitions", response_model=List[StackDefinitionInfo])
 async def list_stack_definitions(
-    current_user = Depends(get_current_superadmin)
+    current_user=Depends(get_current_superadmin),
 ) -> List[StackDefinitionInfo]:
     """
     Liste toutes les définitions YAML de stacks disponibles.
@@ -116,7 +119,7 @@ async def list_stack_definitions(
     if not stacks_dir.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Répertoire stacks_definitions non trouvé: {stacks_dir}"
+            detail=f"Répertoire stacks_definitions non trouvé: {stacks_dir}",
         )
 
     definitions = []
@@ -139,39 +142,43 @@ async def list_stack_definitions(
                 is_valid = False
                 validation_errors.append(str(e))
 
-            definitions.append(StackDefinitionInfo(
-                filename=yaml_file.name,
-                name=metadata.get("name", "N/A"),
-                version=metadata.get("version", "N/A"),
-                category=metadata.get("category", "N/A"),
-                description=metadata.get("description", ""),
-                is_public=metadata.get("is_public", False),
-                tags=metadata.get("tags", []),
-                variables_count=len(data.get("variables", {})),
-                is_valid=is_valid,
-                validation_errors=validation_errors if validation_errors else None
-            ))
+            definitions.append(
+                StackDefinitionInfo(
+                    filename=yaml_file.name,
+                    name=metadata.get("name", "N/A"),
+                    version=metadata.get("version", "N/A"),
+                    category=metadata.get("category", "N/A"),
+                    description=metadata.get("description", ""),
+                    is_public=metadata.get("is_public", False),
+                    tags=metadata.get("tags", []),
+                    variables_count=len(data.get("variables", {})),
+                    is_valid=is_valid,
+                    validation_errors=validation_errors if validation_errors else None,
+                )
+            )
 
         except Exception as e:
-            definitions.append(StackDefinitionInfo(
-                filename=yaml_file.name,
-                name="ERROR",
-                version="N/A",
-                category="N/A",
-                description="",
-                is_public=False,
-                tags=[],
-                variables_count=0,
-                is_valid=False,
-                validation_errors=[str(e)]
-            ))
+            definitions.append(
+                StackDefinitionInfo(
+                    filename=yaml_file.name,
+                    name="ERROR",
+                    version="N/A",
+                    category="N/A",
+                    description="",
+                    is_public=False,
+                    tags=[],
+                    variables_count=0,
+                    is_valid=False,
+                    validation_errors=[str(e)],
+                )
+            )
 
     return definitions
 
 
 @router.post("/validate")
 async def validate_stack_definitions(
-    current_user = Depends(get_current_superadmin)
+    current_user=Depends(get_current_superadmin),
 ) -> Dict[str, Any]:
     """
     Valide toutes les définitions YAML sans les importer.
@@ -183,7 +190,7 @@ async def validate_stack_definitions(
     if not stacks_dir.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Répertoire stacks_definitions non trouvé"
+            detail="Répertoire stacks_definitions non trouvé",
         )
 
     yaml_files = list(stacks_dir.glob("*.yaml"))
@@ -199,26 +206,27 @@ async def validate_stack_definitions(
             StackLoaderService.validate_stack_definition(data)
             valid_count += 1
         except Exception as e:
-            errors.append({
-                "file": yaml_file.name,
-                "error": str(e)
-            })
+            errors.append({"file": yaml_file.name, "error": str(e)})
 
     return {
         "total_files": len(yaml_files),
         "valid": valid_count,
         "invalid": len(errors),
         "all_valid": len(errors) == 0,
-        "errors": errors
+        "errors": errors,
     }
 
 
 @router.post("/import", response_model=ImportStats)
 async def import_stacks(
-    stack_name: Optional[str] = Body(None, description="Nom du stack à importer (sans .yaml)"),
-    force_update: bool = Body(False, description="Forcer la mise à jour des stacks existants"),
+    stack_name: Optional[str] = Body(
+        None, description="Nom du stack à importer (sans .yaml)"
+    ),
+    force_update: bool = Body(
+        False, description="Forcer la mise à jour des stacks existants"
+    ),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_superadmin)
+    current_user=Depends(get_current_superadmin),
 ) -> ImportStats:
     """
     Importe un ou tous les stacks depuis les définitions YAML.
@@ -235,7 +243,7 @@ async def import_stacks(
     if not org:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aucune organisation trouvée. Initialisez d'abord la base de données."
+            detail="Aucune organisation trouvée. Initialisez d'abord la base de données.",
         )
 
     stacks_dir = Path(__file__).parent.parent.parent.parent / "stacks_definitions"
@@ -243,7 +251,7 @@ async def import_stacks(
     if not stacks_dir.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Répertoire stacks_definitions non trouvé"
+            detail="Répertoire stacks_definitions non trouvé",
         )
 
     results: List[ImportResult] = []
@@ -255,7 +263,7 @@ async def import_stacks(
         if not yaml_file.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Stack non trouvé: {stack_name}.yaml"
+                detail=f"Stack non trouvé: {stack_name}.yaml",
             )
 
         try:
@@ -263,21 +271,24 @@ async def import_stacks(
                 db, yaml_file, org.id, force_update=force_update
             )
 
-            status_str = "created" if created else ("updated" if force_update else "skipped")
-            results.append(ImportResult(
-                stack_id=stack.id,
-                stack_name=stack.name,
-                status=status_str,
-                message=f"Stack {status_str} successfully"
-            ))
+            status_str = (
+                "created" if created else ("updated" if force_update else "skipped")
+            )
+            results.append(
+                ImportResult(
+                    stack_id=stack.id,
+                    stack_name=stack.name,
+                    status=status_str,
+                    message=f"Stack {status_str} successfully",
+                )
+            )
 
         except Exception as e:
-            results.append(ImportResult(
-                stack_id="",
-                stack_name=stack_name,
-                status="error",
-                message=str(e)
-            ))
+            results.append(
+                ImportResult(
+                    stack_id="", stack_name=stack_name, status="error", message=str(e)
+                )
+            )
 
     else:
         # Import de tous les stacks
@@ -287,12 +298,14 @@ async def import_stacks(
 
         # Convertir les stats en résultats
         for error in stats.get("errors", []):
-            results.append(ImportResult(
-                stack_id="",
-                stack_name=error["stack"],
-                status="error",
-                message=error["error"]
-            ))
+            results.append(
+                ImportResult(
+                    stack_id="",
+                    stack_name=error["stack"],
+                    status="error",
+                    message=error["error"],
+                )
+            )
 
     # Calculer les statistiques finales
     created = sum(1 for r in results if r.status == "created")
@@ -306,7 +319,7 @@ async def import_stacks(
         updated=updated,
         skipped=skipped,
         errors=errors,
-        results=results
+        results=results,
     )
 
 
@@ -317,7 +330,7 @@ async def list_imported_stacks(
     category: Optional[str] = Query(None),
     is_public: Optional[bool] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_superadmin)
+    current_user=Depends(get_current_superadmin),
 ) -> List[StackResponse]:
     """
     Liste tous les stacks actuellement importés en base de données.
@@ -348,10 +361,10 @@ async def list_imported_stacks(
 # 2. SYNCHRONISATION ET COMPARAISON
 # ============================================================================
 
+
 @router.get("/sync/status", response_model=SyncStatus)
 async def get_sync_status(
-    db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_superadmin)
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_superadmin)
 ) -> SyncStatus:
     """
     Compare les définitions YAML avec les stacks en base de données.
@@ -385,11 +398,13 @@ async def get_sync_status(
     # Comparer
     new_stacks = [name for name in yaml_stacks if name not in db_stacks]
     modified_stacks = [
-        name for name in yaml_stacks
+        name
+        for name in yaml_stacks
         if name in db_stacks and yaml_stacks[name] != db_stacks[name]
     ]
     up_to_date = [
-        name for name in yaml_stacks
+        name
+        for name in yaml_stacks
         if name in db_stacks and yaml_stacks[name] == db_stacks[name]
     ]
     obsolete_stacks = [name for name in db_stacks if name not in yaml_stacks]
@@ -400,7 +415,7 @@ async def get_sync_status(
         new_stacks=new_stacks,
         modified_stacks=modified_stacks,
         up_to_date=up_to_date,
-        obsolete_stacks=obsolete_stacks
+        obsolete_stacks=obsolete_stacks,
     )
 
 
@@ -410,7 +425,7 @@ async def auto_sync_stacks(
     import_new: bool = Body(True, description="Importer les nouveaux stacks"),
     delete_obsolete: bool = Body(False, description="Supprimer les stacks obsolètes"),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_superadmin)
+    current_user=Depends(get_current_superadmin),
 ) -> ImportStats:
     """
     Synchronisation automatique des stacks.
@@ -429,8 +444,7 @@ async def auto_sync_stacks(
 
     if not org:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aucune organisation trouvée"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Aucune organisation trouvée"
         )
 
     stacks_dir = Path(__file__).parent.parent.parent.parent / "stacks_definitions"
@@ -444,19 +458,23 @@ async def auto_sync_stacks(
                 stack, _ = await StackService.upsert_from_yaml(
                     db, yaml_file, org.id, force_update=False
                 )
-                results.append(ImportResult(
-                    stack_id=stack.id,
-                    stack_name=stack.name,
-                    status="created",
-                    message="New stack imported"
-                ))
+                results.append(
+                    ImportResult(
+                        stack_id=stack.id,
+                        stack_name=stack.name,
+                        status="created",
+                        message="New stack imported",
+                    )
+                )
             except Exception as e:
-                results.append(ImportResult(
-                    stack_id="",
-                    stack_name=stack_name,
-                    status="error",
-                    message=str(e)
-                ))
+                results.append(
+                    ImportResult(
+                        stack_id="",
+                        stack_name=stack_name,
+                        status="error",
+                        message=str(e),
+                    )
+                )
 
     # Mettre à jour les stacks modifiés
     if update_modified:
@@ -466,60 +484,69 @@ async def auto_sync_stacks(
                 stack, _ = await StackService.upsert_from_yaml(
                     db, yaml_file, org.id, force_update=True
                 )
-                results.append(ImportResult(
-                    stack_id=stack.id,
-                    stack_name=stack.name,
-                    status="updated",
-                    message="Stack updated to new version"
-                ))
+                results.append(
+                    ImportResult(
+                        stack_id=stack.id,
+                        stack_name=stack.name,
+                        status="updated",
+                        message="Stack updated to new version",
+                    )
+                )
             except Exception as e:
-                results.append(ImportResult(
-                    stack_id="",
-                    stack_name=stack_name,
-                    status="error",
-                    message=str(e)
-                ))
+                results.append(
+                    ImportResult(
+                        stack_id="",
+                        stack_name=stack_name,
+                        status="error",
+                        message=str(e),
+                    )
+                )
 
     # Supprimer les stacks obsolètes (optionnel et dangereux)
     if delete_obsolete:
         for stack_name in sync_status.obsolete_stacks:
             try:
-                result = await db.execute(
-                    select(Stack).where(Stack.name == stack_name)
-                )
+                result = await db.execute(select(Stack).where(Stack.name == stack_name))
                 stack = result.scalar_one_or_none()
 
                 if stack:
                     # Vérifier s'il y a des déploiements actifs
                     dep_result = await db.execute(
-                        select(func.count(Deployment.id))
-                        .where(Deployment.stack_id == stack.id)
+                        select(func.count(Deployment.id)).where(
+                            Deployment.stack_id == stack.id
+                        )
                     )
                     deployment_count = dep_result.scalar()
 
                     if deployment_count > 0:
-                        results.append(ImportResult(
-                            stack_id=stack.id,
-                            stack_name=stack.name,
-                            status="skipped",
-                            message=f"Cannot delete: {deployment_count} deployments exist"
-                        ))
+                        results.append(
+                            ImportResult(
+                                stack_id=stack.id,
+                                stack_name=stack.name,
+                                status="skipped",
+                                message=f"Cannot delete: {deployment_count} deployments exist",
+                            )
+                        )
                     else:
                         await db.delete(stack)
                         await db.commit()
-                        results.append(ImportResult(
-                            stack_id=stack.id,
-                            stack_name=stack.name,
-                            status="deleted",
-                            message="Obsolete stack deleted"
-                        ))
+                        results.append(
+                            ImportResult(
+                                stack_id=stack.id,
+                                stack_name=stack.name,
+                                status="deleted",
+                                message="Obsolete stack deleted",
+                            )
+                        )
             except Exception as e:
-                results.append(ImportResult(
-                    stack_id="",
-                    stack_name=stack_name,
-                    status="error",
-                    message=str(e)
-                ))
+                results.append(
+                    ImportResult(
+                        stack_id="",
+                        stack_name=stack_name,
+                        status="error",
+                        message=str(e),
+                    )
+                )
 
     # Calculer les statistiques
     created = sum(1 for r in results if r.status == "created")
@@ -533,7 +560,7 @@ async def auto_sync_stacks(
         updated=updated,
         skipped=skipped,
         errors=errors,
-        results=results
+        results=results,
     )
 
 
@@ -541,11 +568,12 @@ async def auto_sync_stacks(
 # 3. EXPORT ET BACKUP
 # ============================================================================
 
+
 @router.get("/{stack_id}/export")
 async def export_stack_yaml(
     stack_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_superadmin)
+    current_user=Depends(get_current_superadmin),
 ) -> Dict[str, Any]:
     """
     Exporte un stack en format YAML.
@@ -557,7 +585,7 @@ async def export_stack_yaml(
     if not stack:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack non trouvé: {stack_id}"
+            detail=f"Stack non trouvé: {stack_id}",
         )
 
     # Construire la structure YAML
@@ -568,10 +596,10 @@ async def export_stack_yaml(
             "description": stack.description,
             "category": stack.category,
             "tags": stack.tags,
-            "is_public": stack.is_public
+            "is_public": stack.is_public,
         },
         "template": stack.template,
-        "variables": stack.variables
+        "variables": stack.variables,
     }
 
     return yaml_data
@@ -582,7 +610,7 @@ async def export_multiple_stacks(
     stack_ids: List[str] = Body(..., description="Liste des IDs de stacks à exporter"),
     format: str = Body("yaml", description="Format d'export (yaml ou json)"),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_superadmin)
+    current_user=Depends(get_current_superadmin),
 ) -> Dict[str, Any]:
     """
     Exporte plusieurs stacks.
@@ -600,16 +628,16 @@ async def export_multiple_stacks(
                     "description": stack.description,
                     "category": stack.category,
                     "tags": stack.tags,
-                    "is_public": stack.is_public
+                    "is_public": stack.is_public,
                 },
                 "template": stack.template,
-                "variables": stack.variables
+                "variables": stack.variables,
             }
 
     return {
         "format": format,
         "total_stacks": len(exported_stacks),
-        "stacks": exported_stacks
+        "stacks": exported_stacks,
     }
 
 
@@ -617,11 +645,12 @@ async def export_multiple_stacks(
 # 4. ADMINISTRATION AVANCÉE
 # ============================================================================
 
+
 @router.patch("/{stack_id}/toggle-visibility")
 async def toggle_stack_visibility(
     stack_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_superadmin)
+    current_user=Depends(get_current_superadmin),
 ) -> StackResponse:
     """
     Bascule la visibilité d'un stack (public <-> privé).
@@ -631,7 +660,7 @@ async def toggle_stack_visibility(
     if not stack:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack non trouvé: {stack_id}"
+            detail=f"Stack non trouvé: {stack_id}",
         )
 
     stack.is_public = not stack.is_public
@@ -645,9 +674,11 @@ async def toggle_stack_visibility(
 async def duplicate_stack(
     stack_id: str,
     new_name: str = Body(..., description="Nom du nouveau stack"),
-    organization_id: Optional[str] = Body(None, description="ID de l'organisation cible"),
+    organization_id: Optional[str] = Body(
+        None, description="ID de l'organisation cible"
+    ),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_superadmin)
+    current_user=Depends(get_current_superadmin),
 ) -> StackResponse:
     """
     Duplique un stack existant.
@@ -657,7 +688,7 @@ async def duplicate_stack(
     if not original_stack:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack non trouvé: {stack_id}"
+            detail=f"Stack non trouvé: {stack_id}",
         )
 
     # Vérifier que le nouveau nom n'existe pas déjà
@@ -667,7 +698,7 @@ async def duplicate_stack(
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Un stack nommé '{new_name}' existe déjà"
+            detail=f"Un stack nommé '{new_name}' existe déjà",
         )
 
     # Créer la copie
@@ -680,7 +711,7 @@ async def duplicate_stack(
         category=original_stack.category,
         tags=original_stack.tags + ["duplicate"],
         is_public=False,  # Par défaut privé
-        organization_id=target_org_id
+        organization_id=target_org_id,
     )
 
     new_stack = await StackService.create(db, stack_data)
@@ -691,9 +722,11 @@ async def duplicate_stack(
 @router.delete("/{stack_id}")
 async def delete_stack(
     stack_id: str,
-    force: bool = Query(False, description="Forcer la suppression même avec déploiements"),
+    force: bool = Query(
+        False, description="Forcer la suppression même avec déploiements"
+    ),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_superadmin)
+    current_user=Depends(get_current_superadmin),
 ) -> Dict[str, str]:
     """
     Supprime un stack.
@@ -706,20 +739,19 @@ async def delete_stack(
     if not stack:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack non trouvé: {stack_id}"
+            detail=f"Stack non trouvé: {stack_id}",
         )
 
     # Vérifier s'il y a des déploiements
     result = await db.execute(
-        select(func.count(Deployment.id))
-        .where(Deployment.stack_id == stack_id)
+        select(func.count(Deployment.id)).where(Deployment.stack_id == stack_id)
     )
     deployment_count = result.scalar()
 
     if deployment_count > 0 and not force:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Impossible de supprimer: {deployment_count} déploiement(s) existent. Utilisez force=true pour forcer."
+            detail=f"Impossible de supprimer: {deployment_count} déploiement(s) existent. Utilisez force=true pour forcer.",
         )
 
     await db.delete(stack)
@@ -728,7 +760,7 @@ async def delete_stack(
     return {
         "message": f"Stack '{stack.name}' supprimé avec succès",
         "stack_id": stack_id,
-        "deployments_affected": str(deployment_count)
+        "deployments_affected": str(deployment_count),
     }
 
 
@@ -736,10 +768,10 @@ async def delete_stack(
 # 5. STATISTIQUES ET MONITORING
 # ============================================================================
 
+
 @router.get("/stats/overview", response_model=StacksOverview)
 async def get_stacks_overview(
-    db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_superadmin)
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_superadmin)
 ) -> StacksOverview:
     """
     Vue d'ensemble des statistiques des stacks.
@@ -756,17 +788,14 @@ async def get_stacks_overview(
 
     # Stacks par catégorie
     category_result = await db.execute(
-        select(Stack.category, func.count(Stack.id))
-        .group_by(Stack.category)
+        select(Stack.category, func.count(Stack.id)).group_by(Stack.category)
     )
     stacks_by_category = {cat: count for cat, count in category_result.all()}
 
     # Stacks les plus déployés
     most_deployed_result = await db.execute(
         select(
-            Stack.id,
-            Stack.name,
-            func.count(Deployment.id).label("deployment_count")
+            Stack.id, Stack.name, func.count(Deployment.id).label("deployment_count")
         )
         .join(Deployment, Stack.id == Deployment.stack_id, isouter=True)
         .group_by(Stack.id, Stack.name)
@@ -780,16 +809,14 @@ async def get_stacks_overview(
 
     # Stacks récemment ajoutés
     recently_added_result = await db.execute(
-        select(Stack)
-        .order_by(Stack.created_at.desc())
-        .limit(5)
+        select(Stack).order_by(Stack.created_at.desc()).limit(5)
     )
     recently_added = [
         {
             "stack_id": stack.id,
             "name": stack.name,
             "version": stack.version,
-            "created_at": stack.created_at.isoformat()
+            "created_at": stack.created_at.isoformat(),
         }
         for stack in recently_added_result.scalars().all()
     ]
@@ -800,7 +827,7 @@ async def get_stacks_overview(
         private_stacks=total_stacks - public_stacks,
         stacks_by_category=stacks_by_category,
         most_deployed=most_deployed,
-        recently_added=recently_added
+        recently_added=recently_added,
     )
 
 
@@ -808,7 +835,7 @@ async def get_stacks_overview(
 async def get_stack_usage(
     stack_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_superadmin)
+    current_user=Depends(get_current_superadmin),
 ) -> StackUsageStats:
     """
     Statistiques d'usage d'un stack spécifique.
@@ -818,36 +845,27 @@ async def get_stack_usage(
     if not stack:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack non trouvé: {stack_id}"
+            detail=f"Stack non trouvé: {stack_id}",
         )
 
     # Nombre total de déploiements
     total_result = await db.execute(
-        select(func.count(Deployment.id))
-        .where(Deployment.stack_id == stack_id)
+        select(func.count(Deployment.id)).where(Deployment.stack_id == stack_id)
     )
     total_deployments = total_result.scalar()
 
     # Déploiements réussis
     success_result = await db.execute(
-        select(func.count(Deployment.id))
-        .where(
-            and_(
-                Deployment.stack_id == stack_id,
-                Deployment.status == "success"
-            )
+        select(func.count(Deployment.id)).where(
+            and_(Deployment.stack_id == stack_id, Deployment.status == "success")
         )
     )
     successful_deployments = success_result.scalar()
 
     # Déploiements échoués
     failed_result = await db.execute(
-        select(func.count(Deployment.id))
-        .where(
-            and_(
-                Deployment.stack_id == stack_id,
-                Deployment.status == "failed"
-            )
+        select(func.count(Deployment.id)).where(
+            and_(Deployment.stack_id == stack_id, Deployment.status == "failed")
         )
     )
     failed_deployments = failed_result.scalar()
@@ -861,8 +879,9 @@ async def get_stack_usage(
 
     # Nombre d'organisations utilisant ce stack
     org_result = await db.execute(
-        select(func.count(func.distinct(Deployment.organization_id)))
-        .where(Deployment.stack_id == stack_id)
+        select(func.count(func.distinct(Deployment.organization_id))).where(
+            Deployment.stack_id == stack_id
+        )
     )
     organizations_using = org_result.scalar()
 
@@ -883,7 +902,7 @@ async def get_stack_usage(
         failed_deployments=failed_deployments,
         success_rate=success_rate,
         organizations_using=organizations_using,
-        last_deployment=last_deployment.isoformat() if last_deployment else None
+        last_deployment=last_deployment.isoformat() if last_deployment else None,
     )
 
 
@@ -891,10 +910,10 @@ async def get_stack_usage(
 # 6. RECHERCHE ET SANTÉ
 # ============================================================================
 
+
 @router.get("/health")
 async def get_stacks_health(
-    db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_superadmin)
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_superadmin)
 ) -> Dict[str, Any]:
     """
     Vérifie la santé des stacks et détecte les problèmes.
@@ -914,11 +933,13 @@ async def get_stacks_health(
                 data = StackLoaderService.load_from_yaml(yaml_file)
                 StackLoaderService.validate_stack_definition(data)
             except Exception as e:
-                issues.append({
-                    "type": "validation_error",
-                    "file": yaml_file.name,
-                    "message": str(e)
-                })
+                issues.append(
+                    {
+                        "type": "validation_error",
+                        "file": yaml_file.name,
+                        "message": str(e),
+                    }
+                )
 
     # Vérifier les stacks en DB sans définition YAML
     result = await db.execute(select(Stack))
@@ -937,19 +958,21 @@ async def get_stacks_health(
 
     for stack_name, stack in db_stacks.items():
         if stack_name not in yaml_stack_names:
-            warnings.append({
-                "type": "orphaned_stack",
-                "stack_id": stack.id,
-                "stack_name": stack_name,
-                "message": "Stack en DB sans définition YAML"
-            })
+            warnings.append(
+                {
+                    "type": "orphaned_stack",
+                    "stack_id": stack.id,
+                    "stack_name": stack_name,
+                    "message": "Stack en DB sans définition YAML",
+                }
+            )
 
     return {
         "status": "healthy" if not issues else "degraded",
         "total_issues": len(issues),
         "total_warnings": len(warnings),
         "issues": issues,
-        "warnings": warnings
+        "warnings": warnings,
     }
 
 
@@ -963,7 +986,7 @@ async def search_stacks(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_superadmin)
+    current_user=Depends(get_current_superadmin),
 ) -> Dict[str, Any]:
     """
     Recherche avancée de stacks.
@@ -976,11 +999,9 @@ async def search_stacks(
     if q:
         # Recherche texte dans nom ou description
         from sqlalchemy import or_
+
         filters.append(
-            or_(
-                Stack.name.ilike(f"%{q}%"),
-                Stack.description.ilike(f"%{q}%")
-            )
+            or_(Stack.name.ilike(f"%{q}%"), Stack.description.ilike(f"%{q}%"))
         )
 
     if category:
@@ -1012,5 +1033,5 @@ async def search_stacks(
         "total": total,
         "skip": skip,
         "limit": limit,
-        "results": [StackResponse.model_validate(stack) for stack in stacks]
+        "results": [StackResponse.model_validate(stack) for stack in stacks],
     }

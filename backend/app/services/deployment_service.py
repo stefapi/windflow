@@ -4,19 +4,18 @@ Service métier pour gestion des déploiements.
 Implémente le pattern Repository avec SQLAlchemy 2.0 async.
 """
 
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
-from sqlalchemy import select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
-from jinja2 import Template, TemplateSyntaxError
 import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..helper.template_renderer import TemplateRenderer
 from ..models.deployment import Deployment, DeploymentStatus
 from ..models.stack import Stack
 from ..schemas.deployment import DeploymentCreate, DeploymentUpdate
-from ..config import settings
 from .deployment_events import deployment_events
-from ..helper.template_renderer import TemplateRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -43,18 +42,20 @@ class DeploymentService:
         """
         group_values = {}
 
-        if 'variables' not in var_config:
+        if "variables" not in var_config:
             return group_values
 
-        for sub_var_name, sub_var_config in var_config['variables'].items():
+        for sub_var_name, sub_var_config in var_config["variables"].items():
             if not isinstance(sub_var_config, dict):
                 continue
 
             # Si c'est un sous-groupe, récursion
-            if sub_var_config.get('type') == 'group' and 'variables' in sub_var_config:
-                group_values[sub_var_name] = DeploymentService._extract_group_defaults(sub_var_config)
-            elif 'default' in sub_var_config:
-                group_values[sub_var_name] = sub_var_config['default']
+            if sub_var_config.get("type") == "group" and "variables" in sub_var_config:
+                group_values[sub_var_name] = DeploymentService._extract_group_defaults(
+                    sub_var_config
+                )
+            elif "default" in sub_var_config:
+                group_values[sub_var_name] = sub_var_config["default"]
 
         return group_values
 
@@ -68,7 +69,7 @@ class DeploymentService:
             key_path: Chemin avec notation pointée (ex: "performance.advanced.cache_size")
             value: Valeur à définir
         """
-        keys = key_path.split('.')
+        keys = key_path.split(".")
         current = data
 
         # Naviguer jusqu'à l'avant-dernier niveau
@@ -83,7 +84,9 @@ class DeploymentService:
         current[keys[-1]] = value
 
     @staticmethod
-    def _merge_variables(stack_variables: Dict[str, Any], user_variables: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def _merge_variables(
+        stack_variables: Dict[str, Any], user_variables: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Merge les variables par défaut du stack avec celles fournies par l'utilisateur.
 
@@ -104,11 +107,13 @@ class DeploymentService:
         for var_name, var_config in stack_variables.items():
             if isinstance(var_config, dict):
                 # Vérifier si c'est un groupe
-                if var_config.get('type') == 'group' and 'variables' in var_config:
+                if var_config.get("type") == "group" and "variables" in var_config:
                     # Extraire récursivement les valeurs par défaut du groupe
-                    merged[var_name] = DeploymentService._extract_group_defaults(var_config)
-                elif 'default' in var_config:
-                    merged[var_name] = var_config['default']
+                    merged[var_name] = DeploymentService._extract_group_defaults(
+                        var_config
+                    )
+                elif "default" in var_config:
+                    merged[var_name] = var_config["default"]
             else:
                 # Si pas de structure complexe, utiliser la valeur directement
                 merged[var_name] = var_config
@@ -117,7 +122,7 @@ class DeploymentService:
         if user_variables:
             for key, value in user_variables.items():
                 # Gérer les clés avec notation pointée (ex: "performance.shared_buffers" ou "performance.advanced.cache_size")
-                if '.' in key:
+                if "." in key:
                     DeploymentService._set_nested_value(merged, key, value)
                 else:
                     merged[key] = value
@@ -158,9 +163,7 @@ class DeploymentService:
     @staticmethod
     async def _get_stack(db: AsyncSession, stack_id: str) -> Optional[Stack]:
         """Récupère un stack par son ID."""
-        result = await db.execute(
-            select(Stack).where(Stack.id == stack_id)
-        )
+        result = await db.execute(select(Stack).where(Stack.id == stack_id))
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -173,10 +176,7 @@ class DeploymentService:
 
     @staticmethod
     async def list_by_organization(
-        db: AsyncSession,
-        organization_id: str,
-        skip: int = 0,
-        limit: int = 100
+        db: AsyncSession, organization_id: str, skip: int = 0, limit: int = 100
     ) -> List[Deployment]:
         """Liste les déploiements d'une organisation."""
         result = await db.execute(
@@ -189,16 +189,14 @@ class DeploymentService:
 
     @staticmethod
     async def get_by_name(
-        db: AsyncSession,
-        organization_id: str,
-        name: str
+        db: AsyncSession, organization_id: str, name: str
     ) -> Optional[Deployment]:
         """Récupère un déploiement par son nom dans une organisation."""
         result = await db.execute(
             select(Deployment).where(
                 and_(
                     Deployment.organization_id == organization_id,
-                    Deployment.name == name
+                    Deployment.name == name,
                 )
             )
         )
@@ -206,16 +204,10 @@ class DeploymentService:
 
     @staticmethod
     async def list_all(
-        db: AsyncSession,
-        skip: int = 0,
-        limit: int = 100
+        db: AsyncSession, skip: int = 0, limit: int = 100
     ) -> List[Deployment]:
         """Liste tous les déploiements."""
-        result = await db.execute(
-            select(Deployment)
-            .offset(skip)
-            .limit(limit)
-        )
+        result = await db.execute(select(Deployment).offset(skip).limit(limit))
         return list(result.scalars().all())
 
     @staticmethod
@@ -223,7 +215,7 @@ class DeploymentService:
         db: AsyncSession,
         deployment_data: DeploymentCreate,
         organization_id: str,
-        user_id: str
+        user_id: str,
     ) -> Deployment:
         """
         Crée un nouveau déploiement et déclenche le déploiement asynchrone.
@@ -258,34 +250,31 @@ class DeploymentService:
 
         # 3. Merger les variables (defaults du stack + overrides utilisateur)
         merged_variables = DeploymentService._merge_variables(
-            stack.variables or {},
-            deployment_data.variables
+            stack.variables or {}, deployment_data.variables
         )
 
         # 3.5. Rendre les variables mergées pour exécuter les macros (generate_password, etc.)
         # Cela garantit que le frontend reçoit les valeurs générées, pas les macros brutes
         rendered_variables = DeploymentService._render_template(
             merged_variables,
-            {}  # Pas de variables utilisateur supplémentaires pour le rendu des variables
+            {},  # Pas de variables utilisateur supplémentaires pour le rendu des variables
         )
 
         # 3.6. Ajouter deployment_name aux variables pour qu'il soit disponible dans les templates
-        rendered_variables['deployment_name'] = deployment_name
+        rendered_variables["deployment_name"] = deployment_name
 
         # 3.7. Rendre les target_parameters du stack avec les variables (pour snapshot)
         rendered_target_parameters = None
         if stack.target_parameters:
             rendered_target_parameters = DeploymentService._render_template(
-                stack.target_parameters,
-                rendered_variables
+                stack.target_parameters, rendered_variables
             )
 
         # 4. Générer le config en rendant le template avec les variables rendues
         config = deployment_data.config
         if not config:
             config = DeploymentService._render_template(
-                stack.template,
-                rendered_variables
+                stack.template, rendered_variables
             )
 
         # 5. Créer le déploiement avec statut initial PENDING
@@ -297,7 +286,7 @@ class DeploymentService:
             "variables": rendered_variables,
             "rendered_target_parameters": rendered_target_parameters,
             "organization_id": organization_id,
-            "status": DeploymentStatus.PENDING
+            "status": DeploymentStatus.PENDING,
         }
 
         deployment = Deployment(**deployment_dict)
@@ -314,12 +303,12 @@ class DeploymentService:
         await db.refresh(deployment)
 
         # Lancer la tâche asynchrone avec l'orchestrateur
-        task = await DeploymentOrchestrator.start_deployment(
+        await DeploymentOrchestrator.start_deployment(
             deployment_id=str(deployment.id),
             stack_id=str(deployment.stack_id),
             target_id=str(deployment.target_id),
             user_id=str(user_id),
-            configuration=rendered_variables
+            configuration=rendered_variables,
         )
 
         logger.info(
@@ -331,9 +320,7 @@ class DeploymentService:
 
     @staticmethod
     async def update(
-        db: AsyncSession,
-        deployment_id: str,
-        deployment_data: DeploymentUpdate
+        db: AsyncSession, deployment_id: str, deployment_data: DeploymentUpdate
     ) -> Optional[Deployment]:
         """Met à jour un déploiement."""
         deployment = await DeploymentService.get_by_id(db, deployment_id)
@@ -364,18 +351,27 @@ class DeploymentService:
             # Récupérer les target_parameters rendus du déploiement
             rendered_target_parameters = deployment.rendered_target_parameters
 
-            logger.debug(f"rendered_target_parameters pour {deployment.id}: {rendered_target_parameters}")
+            logger.debug(
+                f"rendered_target_parameters pour {deployment.id}: {rendered_target_parameters}"
+            )
 
-            if not rendered_target_parameters or 'volumes' not in rendered_target_parameters:
-                logger.debug(f"Pas de volumes définis dans rendered_target_parameters pour {deployment.id}")
+            if (
+                not rendered_target_parameters
+                or "volumes" not in rendered_target_parameters
+            ):
+                logger.debug(
+                    f"Pas de volumes définis dans rendered_target_parameters pour {deployment.id}"
+                )
                 return
 
-            volumes_list = rendered_target_parameters.get('volumes', [])
+            volumes_list = rendered_target_parameters.get("volumes", [])
             if not volumes_list:
                 logger.debug(f"Liste de volumes vide pour {deployment.id}")
                 return
 
-            logger.info(f"Suppression de {len(volumes_list)} volume(s) nommé(s) pour le déploiement {deployment.id}")
+            logger.info(
+                f"Suppression de {len(volumes_list)} volume(s) nommé(s) pour le déploiement {deployment.id}"
+            )
 
             # Parcourir chaque volume défini (déjà rendus avec Jinja)
             for volume_entry in volumes_list:
@@ -386,17 +382,22 @@ class DeploymentService:
 
                     logger.info(f"Suppression du volume nommé: {volume_name}")
                     success, message = await docker_service.remove_volume(
-                        volume_name=volume_name,
-                        force=False
+                        volume_name=volume_name, force=False
                     )
 
                     if success:
-                        logger.info(f"Volume {volume_name} supprimé avec succès: {message}")
+                        logger.info(
+                            f"Volume {volume_name} supprimé avec succès: {message}"
+                        )
                     else:
-                        logger.warning(f"Échec de la suppression du volume {volume_name}: {message}")
+                        logger.warning(
+                            f"Échec de la suppression du volume {volume_name}: {message}"
+                        )
 
         except Exception as e:
-            logger.error(f"Erreur lors de la suppression des volumes nommés pour {deployment.id}: {e}")
+            logger.error(
+                f"Erreur lors de la suppression des volumes nommés pour {deployment.id}: {e}"
+            )
 
     @staticmethod
     async def delete(db: AsyncSession, deployment_id: str) -> bool:
@@ -416,6 +417,7 @@ class DeploymentService:
             bool: True si la suppression a réussi, False sinon
         """
         from sqlalchemy.orm import selectinload
+
         from ..schemas.target import TargetType
 
         # Charger le déploiement avec ses relations (stack)
@@ -430,15 +432,20 @@ class DeploymentService:
             logger.warning(f"Déploiement {deployment_id} non trouvé pour suppression")
             return False
 
-        logger.info(f"Suppression du déploiement {deployment_id} (statut: {deployment.status.value}, stack: {deployment.stack.name}, target_type: {deployment.stack.target_type})")
+        logger.info(
+            f"Suppression du déploiement {deployment_id} (statut: {deployment.status.value}, stack: {deployment.stack.name}, target_type: {deployment.stack.target_type})"
+        )
 
         # 1. Annuler la tâche en cours si elle existe
         try:
             from .deployment_orchestrator import DeploymentOrchestrator
+
             await DeploymentOrchestrator.cancel_deployment(deployment_id)
             logger.info(f"Tâche de déploiement {deployment_id} annulée")
         except Exception as e:
-            logger.warning(f"Erreur lors de l'annulation de la tâche {deployment_id}: {e}")
+            logger.warning(
+                f"Erreur lors de l'annulation de la tâche {deployment_id}: {e}"
+            )
             # Continue même si l'annulation échoue (la tâche n'existe peut-être pas)
 
         # 2. Supprimer les ressources selon le type de stack
@@ -450,67 +457,85 @@ class DeploymentService:
                 # Router vers le bon service selon le type de stack
                 if deployment.stack.target_type == TargetType.DOCKER.value:
                     # === DOCKER NATIF ===
-                    logger.info(f"Suppression d'un container Docker natif: {deployment.name}")
+                    logger.info(
+                        f"Suppression d'un container Docker natif: {deployment.name}"
+                    )
                     from .docker_service import DockerService
+
                     docker_service = DockerService()
 
                     # Supprimer le container (force=True pour supprimer même si running)
                     success, output = await docker_service.remove_container(
-                        container_name=deployment.name,
-                        force=True,
-                        remove_volumes=True
+                        container_name=deployment.name, force=True, remove_volumes=True
                     )
 
                     if success:
-                        logger.info(f"Container Docker supprimé pour {deployment_id}: {output}")
+                        logger.info(
+                            f"Container Docker supprimé pour {deployment_id}: {output}"
+                        )
                         resources_deleted = True
 
                         # Supprimer les volumes nommés explicitement définis dans le template
                         await DeploymentService._remove_named_volumes(
-                            deployment=deployment,
-                            docker_service=docker_service
+                            deployment=deployment, docker_service=docker_service
                         )
                     else:
-                        deletion_error = f"Échec de la suppression du container Docker: {output}"
+                        deletion_error = (
+                            f"Échec de la suppression du container Docker: {output}"
+                        )
                         logger.error(deletion_error)
                 else:
                     # === DOCKER COMPOSE / AUTRES ===
-                    logger.info(f"Suppression d'un projet Docker Compose: {deployment.name}")
+                    logger.info(
+                        f"Suppression d'un projet Docker Compose: {deployment.name}"
+                    )
                     from .docker_compose_service import DockerComposeService
+
                     docker_compose_service = DockerComposeService()
 
                     # Supprimer complètement le projet (conteneurs + volumes)
                     success, output = await docker_compose_service.remove_compose(
-                        project_name=deployment.name,
-                        remove_volumes=True
+                        project_name=deployment.name, remove_volumes=True
                     )
 
                     if success:
-                        logger.info(f"Projet Docker Compose supprimé pour {deployment_id}: {output}")
+                        logger.info(
+                            f"Projet Docker Compose supprimé pour {deployment_id}: {output}"
+                        )
                         resources_deleted = True
                     else:
                         deletion_error = f"Échec de la suppression du projet Docker Compose: {output}"
                         logger.error(deletion_error)
 
             except Exception as e:
-                deletion_error = f"Erreur lors de la suppression des ressources: {str(e)}"
-                logger.error(f"Erreur lors de la suppression des ressources pour {deployment_id}: {e}")
+                deletion_error = (
+                    f"Erreur lors de la suppression des ressources: {str(e)}"
+                )
+                logger.error(
+                    f"Erreur lors de la suppression des ressources pour {deployment_id}: {e}"
+                )
         else:
             # Déploiement déjà arrêté ou en échec, pas de ressources à supprimer
-            logger.info(f"Déploiement {deployment_id} en statut {deployment.status.value}, pas de ressources actives à supprimer")
+            logger.info(
+                f"Déploiement {deployment_id} en statut {deployment.status.value}, pas de ressources actives à supprimer"
+            )
             resources_deleted = True
 
         # 3. Gérer le résultat de la suppression
         if not resources_deleted and deletion_error:
             # La suppression des ressources a échoué
             # Mettre le déploiement en statut FAILED au lieu de le supprimer
-            logger.warning(f"Impossible de supprimer les ressources pour {deployment_id}, mise en statut FAILED")
+            logger.warning(
+                f"Impossible de supprimer les ressources pour {deployment_id}, mise en statut FAILED"
+            )
             deployment.status = DeploymentStatus.FAILED
             deployment.error_message = deletion_error
             deployment.stopped_at = datetime.now(timezone.utc)
 
             # Ajouter aux logs
-            error_log = f"\n[ERROR] Échec de la suppression des ressources: {deletion_error}"
+            error_log = (
+                f"\n[ERROR] Échec de la suppression des ressources: {deletion_error}"
+            )
             if deployment.logs:
                 deployment.logs += error_log
             else:
@@ -522,7 +547,9 @@ class DeploymentService:
                 logger.info(f"Déploiement {deployment_id} marqué comme FAILED")
                 return False
             except Exception as e:
-                logger.error(f"Erreur lors de la mise à jour du statut FAILED pour {deployment_id}: {e}")
+                logger.error(
+                    f"Erreur lors de la mise à jour du statut FAILED pour {deployment_id}: {e}"
+                )
                 await db.rollback()
                 return False
 
@@ -533,7 +560,9 @@ class DeploymentService:
             logger.info(f"Déploiement {deployment_id} supprimé de la base de données")
             return True
         except Exception as e:
-            logger.error(f"Erreur lors de la suppression en base de données du déploiement {deployment_id}: {e}")
+            logger.error(
+                f"Erreur lors de la suppression en base de données du déploiement {deployment_id}: {e}"
+            )
             await db.rollback()
             return False
 
@@ -544,7 +573,7 @@ class DeploymentService:
         status: DeploymentStatus,
         error_message: Optional[str] = None,
         logs: Optional[str] = None,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
     ) -> Optional[Deployment]:
         """
         Met à jour le statut d'un déploiement avec logs et erreurs optionnels.
@@ -563,7 +592,9 @@ class DeploymentService:
         """
         deployment = await DeploymentService.get_by_id(db, deployment_id)
         if not deployment:
-            logger.warning(f"Déploiement {deployment_id} non trouvé pour mise à jour statut")
+            logger.warning(
+                f"Déploiement {deployment_id} non trouvé pour mise à jour statut"
+            )
             return None
 
         # Sauvegarder l'ancien statut pour l'événement
@@ -593,7 +624,9 @@ class DeploymentService:
 
             # Calculer la durée si possible
             if deployment.deployed_at:
-                duration = (deployment.stopped_at - deployment.deployed_at).total_seconds()
+                duration = (
+                    deployment.stopped_at - deployment.deployed_at
+                ).total_seconds()
                 deployment.deploy_duration_seconds = duration
                 logger.info(
                     f"Déploiement {deployment_id} terminé en {duration:.2f}s "
@@ -606,6 +639,7 @@ class DeploymentService:
         # Émettre événement de changement de statut via WebSocket
         try:
             from uuid import UUID
+
             await deployment_events.emit_status_change(
                 deployment_id=UUID(deployment_id),
                 new_status=status,
@@ -613,8 +647,8 @@ class DeploymentService:
                 user_id=UUID(user_id) if user_id else None,
                 additional_data={
                     "name": deployment.name,
-                    "error_message": error_message
-                }
+                    "error_message": error_message,
+                },
             )
         except Exception as e:
             logger.error(f"Erreur lors de l'émission de l'événement de statut: {e}")
@@ -623,11 +657,12 @@ class DeploymentService:
         if logs:
             try:
                 from uuid import UUID
+
                 await deployment_events.emit_logs_update(
                     deployment_id=UUID(deployment_id),
                     logs=logs,
                     user_id=UUID(user_id) if user_id else None,
-                    append=True
+                    append=True,
                 )
             except Exception as e:
                 logger.error(f"Erreur lors de l'émission de l'événement de logs: {e}")
@@ -640,7 +675,7 @@ class DeploymentService:
         organization_id: str,
         status: DeploymentStatus,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
     ) -> List[Deployment]:
         """
         Liste les déploiements par statut pour une organisation.
@@ -660,7 +695,7 @@ class DeploymentService:
             .where(
                 and_(
                     Deployment.organization_id == organization_id,
-                    Deployment.status == status
+                    Deployment.status == status,
                 )
             )
             .offset(skip)
@@ -670,8 +705,7 @@ class DeploymentService:
 
     @staticmethod
     async def get_stale_pending_deployments(
-        db: AsyncSession,
-        max_age_minutes: int = 2
+        db: AsyncSession, max_age_minutes: int = 2
     ) -> List[Deployment]:
         """
         Récupère les déploiements bloqués en PENDING depuis trop longtemps.
@@ -688,21 +722,17 @@ class DeploymentService:
         cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
 
         result = await db.execute(
-            select(Deployment)
-            .where(
+            select(Deployment).where(
                 and_(
                     Deployment.status == DeploymentStatus.PENDING,
-                    Deployment.created_at < cutoff_time
+                    Deployment.created_at < cutoff_time,
                 )
             )
         )
         return list(result.scalars().all())
 
     @staticmethod
-    async def mark_stale_as_failed(
-        db: AsyncSession,
-        max_age_minutes: int = 60
-    ) -> int:
+    async def mark_stale_as_failed(db: AsyncSession, max_age_minutes: int = 60) -> int:
         """
         Marque les déploiements PENDING trop anciens comme FAILED.
 
@@ -719,11 +749,10 @@ class DeploymentService:
 
         # Récupérer les déploiements à marquer
         result = await db.execute(
-            select(Deployment)
-            .where(
+            select(Deployment).where(
                 and_(
                     Deployment.status == DeploymentStatus.PENDING,
-                    Deployment.created_at < cutoff_time
+                    Deployment.created_at < cutoff_time,
                 )
             )
         )
@@ -757,9 +786,7 @@ class DeploymentService:
 
     @staticmethod
     async def retry_deployment(
-        db: AsyncSession,
-        deployment_id: str,
-        user_id: Optional[str] = None
+        db: AsyncSession, deployment_id: str, user_id: Optional[str] = None
     ) -> bool:
         """
         Réessaye un déploiement PENDING ou FAILED en relançant la tâche.
@@ -801,15 +828,17 @@ class DeploymentService:
             await db.refresh(deployment)
 
             # Lancer la tâche avec l'orchestrateur
-            task = await DeploymentOrchestrator.start_deployment(
+            await DeploymentOrchestrator.start_deployment(
                 deployment_id=str(deployment.id),
                 stack_id=str(deployment.stack_id),
                 target_id=str(deployment.target_id),
                 user_id=str(user_id) if user_id else "system",
-                configuration=deployment.variables or {}
+                configuration=deployment.variables or {},
             )
 
-            logger.info(f"Tâche de retry lancée avec DeploymentOrchestrator pour {deployment_id}")
+            logger.info(
+                f"Tâche de retry lancée avec DeploymentOrchestrator pour {deployment_id}"
+            )
             return True
 
         except Exception as e:
@@ -824,4 +853,3 @@ class DeploymentService:
 
             await db.commit()
             return False
-

@@ -10,13 +10,11 @@ This service focuses on deployment lifecycle events (status changes).
 """
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 from uuid import UUID
-from datetime import datetime
 
 from ..core.events import EventBus, EventType
 from ..schemas.deployment import DeploymentStatus
-
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +36,7 @@ class DeploymentEventsService:
             event_bus: Event bus instance (will use global instance if None)
         """
         from ..core.events import event_bus as global_event_bus
+
         self.event_bus = event_bus or global_event_bus
 
     async def emit_status_change(
@@ -46,7 +45,7 @@ class DeploymentEventsService:
         new_status: DeploymentStatus,
         old_status: Optional[DeploymentStatus] = None,
         user_id: Optional[UUID] = None,
-        additional_data: Optional[Dict[str, Any]] = None
+        additional_data: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Emit a deployment status change event.
@@ -60,8 +59,16 @@ class DeploymentEventsService:
         """
         event_data = {
             "deployment_id": str(deployment_id),
-            "new_status": new_status.value if isinstance(new_status, DeploymentStatus) else new_status,
-            "old_status": old_status.value if isinstance(old_status, DeploymentStatus) else old_status if old_status else None,
+            "new_status": (
+                new_status.value
+                if isinstance(new_status, DeploymentStatus)
+                else new_status
+            ),
+            "old_status": (
+                old_status.value
+                if isinstance(old_status, DeploymentStatus)
+                else old_status if old_status else None
+            ),
             "user_id": str(user_id) if user_id else None,
         }
 
@@ -69,7 +76,9 @@ class DeploymentEventsService:
             event_data.update(additional_data)
 
         # Map DeploymentStatus to EventType
-        status_str = new_status.value if isinstance(new_status, DeploymentStatus) else new_status
+        status_str = (
+            new_status.value if isinstance(new_status, DeploymentStatus) else new_status
+        )
         event_type_map = {
             "pending": EventType.DEPLOYMENT_CREATED,
             "deploying": EventType.DEPLOYMENT_STARTED,
@@ -84,25 +93,18 @@ class DeploymentEventsService:
         logger.info(
             f"📡 [STEP 1/4] Emitting status change event: {deployment_id} → {new_status} (EventType: {event_type})"
         )
-        logger.debug(
-            f"Event data: {event_data}"
-        )
+        logger.debug(f"Event data: {event_data}")
 
-        await self.event_bus.emit(
-            event_type,
-            event_data
-        )
+        await self.event_bus.emit(event_type, event_data)
 
-        logger.info(
-            f"✅ [STEP 1/4] Event emitted to EventBus successfully"
-        )
+        logger.info("✅ [STEP 1/4] Event emitted to EventBus successfully")
 
     async def emit_logs_update(
         self,
         deployment_id: UUID,
         logs: str,
         user_id: Optional[UUID] = None,
-        append: bool = True
+        append: bool = True,
     ) -> None:
         """
         Broadcast deployment logs update directly via WebSocket.
@@ -126,9 +128,7 @@ class DeploymentEventsService:
 
             # Broadcast directement via WebSocket
             await broadcast_deployment_log(
-                deployment_id=str(deployment_id),
-                message=logs,
-                level="info"
+                deployment_id=str(deployment_id), message=logs, level="info"
             )
 
         except Exception as e:

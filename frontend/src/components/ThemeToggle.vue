@@ -25,13 +25,13 @@ const themeStore = useThemeStore()
 
 <style scoped>
 .theme-toggle {
+  color: var(--color-text-secondary);
   background-color: var(--color-bg-elevated);
   border-color: var(--color-border);
-  color: var(--color-text-secondary);
 }
 
 .theme-toggle:hover {
-  background-color: var(--color-bg-hover);
   color: var(--color-accent);
+  background-color: var(--color-bg-hover);
 }
 </style>

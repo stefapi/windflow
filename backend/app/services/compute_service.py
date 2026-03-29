@@ -11,33 +11,28 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional, Union
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..helper.compute_helpers import apply_filters
 from ..models.stack import Stack
 from ..models.target import Target
-from ..schemas.compute import (
-    ComputeGlobalView,
-    ComputeStatsResponse,
-)
-from ..services.docker_client_service import DockerClientService
-from ..services.container_classifier import (
-    classify_containers,
-    LOCAL_TARGET_ID,
-    LOCAL_TARGET_NAME,
-)
+from ..schemas.compute import ComputeGlobalView, ComputeStatsResponse
 from ..services.container_builder import (
-    build_managed_stacks,
     build_discovered_items,
+    build_managed_stacks,
     build_standalone_containers,
     build_target_groups,
 )
-from ..helper.compute_helpers import apply_filters
 
 # Ré-export pour compatibilité (tests existants qui importent depuis compute_service)
-from ..services.container_classifier import classify_containers as _classify_containers
-from ..helper.compute_helpers import format_memory as _format_memory
+from ..services.container_classifier import (
+    LOCAL_TARGET_ID,
+    LOCAL_TARGET_NAME,
+    classify_containers,
+)
+from ..services.docker_client_service import DockerClientService
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +139,9 @@ async def get_compute_stats(
             await docker.close()
             logger.warning("Docker non disponible — compteurs containers à 0")
     except Exception as exc:
-        logger.warning(f"Impossible de contacter Docker : {exc} — compteurs containers à 0")
+        logger.warning(
+            f"Impossible de contacter Docker : {exc} — compteurs containers à 0"
+        )
 
     return ComputeStatsResponse(
         total_containers=total_containers,
@@ -192,10 +189,7 @@ async def get_compute_global(
         ComputeGlobalView ou list[TargetGroup] selon group_by
     """
     # 1. Récupérer les stacks DB avec leurs deployments actifs
-    stacks_stmt = (
-        select(Stack)
-        .options(selectinload(Stack.deployments))
-    )
+    stacks_stmt = select(Stack).options(selectinload(Stack.deployments))
     if org_id:
         stacks_stmt = stacks_stmt.where(Stack.organization_id == org_id)
     stacks_result = await db.execute(stacks_stmt)
@@ -215,7 +209,8 @@ async def get_compute_global(
     try:
         docker = DockerClientService()
         if await docker.ping():
-            from ..services.docker_client_service import ContainerInfo
+            pass
+
             docker_containers = await docker.list_containers(all=True)
             docker_available = True
         await docker.close()
@@ -249,18 +244,26 @@ async def get_compute_global(
 
     try:
         managed_stacks = await build_managed_stacks(
-            db_stacks, managed_by_stack_id, targets_by_id,
-            local_target_id, local_target_name,
+            db_stacks,
+            managed_by_stack_id,
+            targets_by_id,
+            local_target_id,
+            local_target_name,
             docker_for_health=docker_for_health,
         )
 
         discovered_items = await build_discovered_items(
-            discovered_by_project, local_target_id, local_target_name, now_iso,
+            discovered_by_project,
+            local_target_id,
+            local_target_name,
+            now_iso,
             docker_for_health=docker_for_health,
         )
 
         standalone_list = await build_standalone_containers(
-            standalone_containers_raw, local_target_id, local_target_name,
+            standalone_containers_raw,
+            local_target_id,
+            local_target_name,
             docker_available,
         )
     finally:
@@ -269,7 +272,9 @@ async def get_compute_global(
 
     # 5. Appliquer les filtres
     managed_stacks, discovered_items, standalone_list = apply_filters(
-        managed_stacks, discovered_items, standalone_list,
+        managed_stacks,
+        discovered_items,
+        standalone_list,
         type_filter=type_filter,
         technology=technology,
         target_id_filter=target_id_filter,
@@ -280,7 +285,10 @@ async def get_compute_global(
     # 6. Retourner selon group_by
     if group_by == "target":
         return build_target_groups(
-            managed_stacks, discovered_items, standalone_list, targets_by_id,
+            managed_stacks,
+            discovered_items,
+            standalone_list,
+            targets_by_id,
         )
 
     return ComputeGlobalView(

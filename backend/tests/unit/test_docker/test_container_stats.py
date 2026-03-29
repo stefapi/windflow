@@ -4,17 +4,13 @@ Tests unitaires pour le module container_stats.
 Teste les fonctions de calcul des statistiques Docker et le WebSocket endpoint.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-
-
 # Import des fonctions à tester
 from app.websocket.container_stats import (
+    _sum_blkio_entries,
+    calculate_block_io,
     calculate_cpu_percent,
     calculate_memory_percent,
     calculate_network_io,
-    calculate_block_io,
-    _sum_blkio_entries,
     format_stats_response,
 )
 
@@ -28,19 +24,19 @@ class TestCalculateCpuPercent:
             "cpu_stats": {
                 "cpu_usage": {
                     "total_usage": 1000000000,
-                    "percpu_usage": [250000000, 250000000, 250000000, 250000000]
+                    "percpu_usage": [250000000, 250000000, 250000000, 250000000],
                 },
                 "system_cpu_usage": 2000000000,
-                "online_cpus": 4
+                "online_cpus": 4,
             },
             "precpu_stats": {
                 "cpu_usage": {
                     "total_usage": 500000000,
-                    "percpu_usage": [125000000, 125000000, 125000000, 125000000]
+                    "percpu_usage": [125000000, 125000000, 125000000, 125000000],
                 },
                 "system_cpu_usage": 1000000000,
-                "online_cpus": 4
-            }
+                "online_cpus": 4,
+            },
         }
 
         result = calculate_cpu_percent(stats)
@@ -54,13 +50,13 @@ class TestCalculateCpuPercent:
             "cpu_stats": {
                 "cpu_usage": {"total_usage": 1000000000},
                 "system_cpu_usage": 2000000000,
-                "online_cpus": 4
+                "online_cpus": 4,
             },
             "precpu_stats": {
                 "cpu_usage": {"total_usage": 1000000000},
                 "system_cpu_usage": 2000000000,
-                "online_cpus": 4
-            }
+                "online_cpus": 4,
+            },
         }
 
         result = calculate_cpu_percent(stats)
@@ -72,13 +68,13 @@ class TestCalculateCpuPercent:
             "cpu_stats": {
                 "cpu_usage": {"total_usage": 1000000000},
                 "system_cpu_usage": 2000000000,
-                "online_cpus": 4
+                "online_cpus": 4,
             },
             "precpu_stats": {
                 "cpu_usage": {"total_usage": 500000000},
                 "system_cpu_usage": 2000000000,  # Même valeur = delta 0
-                "online_cpus": 4
-            }
+                "online_cpus": 4,
+            },
         }
 
         result = calculate_cpu_percent(stats)
@@ -96,13 +92,13 @@ class TestCalculateCpuPercent:
             "cpu_stats": {
                 "cpu_usage": {"total_usage": 2000000000},
                 "system_cpu_usage": 4000000000,
-                "online_cpus": 1
+                "online_cpus": 1,
             },
             "precpu_stats": {
                 "cpu_usage": {"total_usage": 1000000000},
                 "system_cpu_usage": 2000000000,
-                "online_cpus": 1
-            }
+                "online_cpus": 1,
+            },
         }
 
         result = calculate_cpu_percent(stats)
@@ -117,10 +113,7 @@ class TestCalculateMemoryPercent:
     def test_calculate_memory_percent_basic(self):
         """Test basique du calcul mémoire."""
         stats = {
-            "memory_stats": {
-                "usage": 536870912,  # 512 MB
-                "limit": 1073741824  # 1 GB
-            }
+            "memory_stats": {"usage": 536870912, "limit": 1073741824}  # 512 MB  # 1 GB
         }
 
         percent, used, limit = calculate_memory_percent(stats)
@@ -131,12 +124,7 @@ class TestCalculateMemoryPercent:
 
     def test_calculate_memory_percent_full(self):
         """Test avec mémoire pleine."""
-        stats = {
-            "memory_stats": {
-                "usage": 1073741824,
-                "limit": 1073741824
-            }
-        }
+        stats = {"memory_stats": {"usage": 1073741824, "limit": 1073741824}}
 
         percent, used, limit = calculate_memory_percent(stats)
         assert percent == 100.0
@@ -145,12 +133,7 @@ class TestCalculateMemoryPercent:
 
     def test_calculate_memory_percent_zero_limit(self):
         """Test avec limite à zéro (évite division par zéro)."""
-        stats = {
-            "memory_stats": {
-                "usage": 536870912,
-                "limit": 0
-            }
-        }
+        stats = {"memory_stats": {"usage": 536870912, "limit": 0}}
 
         percent, used, limit = calculate_memory_percent(stats)
         assert percent == 0.0
@@ -171,9 +154,7 @@ class TestCalculateMemoryPercent:
             "memory_stats": {
                 "usage": 536870912,  # 512 MB
                 "limit": 1073741824,  # 1 GB
-                "stats": {
-                    "cache": 134217728  # 128 MB
-                }
+                "stats": {"cache": 134217728},  # 128 MB
             }
         }
 
@@ -193,7 +174,7 @@ class TestCalculateMemoryPercent:
                 "stats": {
                     # Pas de champ "cache" sous cgroups v2
                     "inactive_file": 134217728  # 128 MB
-                }
+                },
             }
         }
 
@@ -213,7 +194,7 @@ class TestCalculateMemoryPercent:
                 "stats": {
                     # Ni cache ni inactive_file
                     "pgfault": 12345
-                }
+                },
             }
         }
 
@@ -228,7 +209,7 @@ class TestCalculateMemoryPercent:
             "memory_stats": {
                 "usage": 536870912,  # 512 MB
                 "cache": 268435456,  # 256 MB
-                "limit": 1073741824  # 1 GB
+                "limit": 1073741824,  # 1 GB
             }
         }
 
@@ -245,10 +226,7 @@ class TestCalculateNetworkIo:
         """Test basique du calcul réseau."""
         stats = {
             "networks": {
-                "eth0": {
-                    "rx_bytes": 1048576,  # 1 MB
-                    "tx_bytes": 2097152   # 2 MB
-                }
+                "eth0": {"rx_bytes": 1048576, "tx_bytes": 2097152}  # 1 MB  # 2 MB
             }
         }
 
@@ -260,14 +238,8 @@ class TestCalculateNetworkIo:
         """Test avec plusieurs interfaces réseau."""
         stats = {
             "networks": {
-                "eth0": {
-                    "rx_bytes": 1000000,
-                    "tx_bytes": 2000000
-                },
-                "eth1": {
-                    "rx_bytes": 500000,
-                    "tx_bytes": 300000
-                }
+                "eth0": {"rx_bytes": 1000000, "tx_bytes": 2000000},
+                "eth1": {"rx_bytes": 500000, "tx_bytes": 300000},
             }
         }
 
@@ -301,7 +273,7 @@ class TestCalculateBlockIo:
                     {"op": "read", "value": 1048576},
                     {"op": "write", "value": 2097152},
                     {"op": "read", "value": 524288},
-                    {"op": "write", "value": 262144}
+                    {"op": "write", "value": 262144},
                 ]
             }
         }
@@ -319,22 +291,14 @@ class TestCalculateBlockIo:
 
     def test_calculate_block_io_empty_list(self):
         """Test avec liste vide."""
-        stats = {
-            "blkio_stats": {
-                "io_service_bytes_recursive": []
-            }
-        }
+        stats = {"blkio_stats": {"io_service_bytes_recursive": []}}
         read_bytes, write_bytes = calculate_block_io(stats)
         assert read_bytes == 0
         assert write_bytes == 0
 
     def test_calculate_block_io_none(self):
         """Test avec io_service_bytes_recursive à None."""
-        stats = {
-            "blkio_stats": {
-                "io_service_bytes_recursive": None
-            }
-        }
+        stats = {"blkio_stats": {"io_service_bytes_recursive": None}}
         read_bytes, write_bytes = calculate_block_io(stats)
         assert read_bytes == 0
         assert write_bytes == 0
@@ -365,7 +329,7 @@ class TestCalculateBlockIo:
                 "throttle_io_service_bytes_recursive": [
                     {"op": "read", "value": 4096},
                     {"op": "write", "value": 8192},
-                ]
+                ],
             }
         }
         read_bytes, write_bytes = calculate_block_io(stats)
@@ -383,7 +347,7 @@ class TestCalculateBlockIo:
                 "throttle_io_service_bytes_recursive": [
                     {"op": "read", "value": 9999},
                     {"op": "write", "value": 9999},
-                ]
+                ],
             }
         }
         read_bytes, write_bytes = calculate_block_io(stats)
@@ -451,29 +415,21 @@ class TestFormatStatsResponse:
             "cpu_stats": {
                 "cpu_usage": {"total_usage": 2000000000},
                 "system_cpu_usage": 4000000000,
-                "online_cpus": 2
+                "online_cpus": 2,
             },
             "precpu_stats": {
                 "cpu_usage": {"total_usage": 1000000000},
                 "system_cpu_usage": 2000000000,
-                "online_cpus": 2
+                "online_cpus": 2,
             },
-            "memory_stats": {
-                "usage": 536870912,
-                "limit": 1073741824
-            },
-            "networks": {
-                "eth0": {
-                    "rx_bytes": 1000000,
-                    "tx_bytes": 2000000
-                }
-            },
+            "memory_stats": {"usage": 536870912, "limit": 1073741824},
+            "networks": {"eth0": {"rx_bytes": 1000000, "tx_bytes": 2000000}},
             "blkio_stats": {
                 "io_service_bytes_recursive": [
                     {"op": "read", "value": 500000},
-                    {"op": "write", "value": 300000}
+                    {"op": "write", "value": 300000},
                 ]
-            }
+            },
         }
 
         result = format_stats_response(container_id, stats)

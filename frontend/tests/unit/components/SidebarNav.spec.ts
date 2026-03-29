@@ -51,7 +51,7 @@ vi.mock('@/stores/pluginNav', () => ({
 }))
 
 // Helper to create mock sidebar state
-function createMockSidebar(overrides: Record<string, unknown> = {}) {
+function _createMockSidebar(overrides: Record<string, unknown> = {}) {
   return {
     isCollapsed: ref(overrides.isCollapsed ?? false),
     isMobileOpen: ref(overrides.isMobileOpen ?? false),

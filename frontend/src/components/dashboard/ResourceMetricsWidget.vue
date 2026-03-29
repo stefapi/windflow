@@ -332,10 +332,10 @@ const formatUptime = (seconds: number): string => {
 }
 
 .target-name {
+  padding: 0.125rem 0.5rem;
   font-size: var(--text-sm, 0.875rem);
   color: var(--color-text-secondary);
   background-color: var(--color-bg-secondary);
-  padding: 0.125rem 0.5rem;
   border-radius: 0.25rem;
 }
 
@@ -360,11 +360,11 @@ const formatUptime = (seconds: number): string => {
 .resource-metrics-widget__no-target {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
   padding: 1rem;
+  color: var(--color-text-secondary);
   background-color: var(--color-bg-secondary);
   border-radius: 0.375rem;
-  color: var(--color-text-secondary);
+  gap: 0.5rem;
 }
 
 .resource-metrics-widget__no-target a {
@@ -387,13 +387,13 @@ const formatUptime = (seconds: number): string => {
   gap: 1rem;
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .metrics-grid {
     grid-template-columns: 1fr;
   }
@@ -422,20 +422,20 @@ const formatUptime = (seconds: number): string => {
 
 .metric-value {
   font-size: var(--text-sm, 0.875rem);
+  font-family: var(--font-mono, monospace);
   color: var(--color-text-primary);
   font-weight: 600;
-  font-family: var(--font-mono, monospace);
 }
 
 .metric-card--uptime .uptime-value {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: var(--text-lg, 1.125rem);
-  color: var(--color-text-primary);
-  font-weight: 600;
-  font-family: var(--font-mono, monospace);
   padding: 0.25rem 0;
+  font-size: var(--text-lg, 1.125rem);
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text-primary);
+  gap: 0.5rem;
+  font-weight: 600;
 }
 
 .charts-section {
@@ -443,19 +443,19 @@ const formatUptime = (seconds: number): string => {
 }
 
 .history-chart {
-  height: 250px;
   width: 100%;
+  height: 250px;
 }
 
 .no-history {
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  align-items: center;
   padding: 2rem;
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-text-secondary);
   background-color: var(--color-bg-secondary);
   border-radius: 0.5rem;
-  color: var(--color-text-secondary);
-  font-size: var(--text-sm, 0.875rem);
+  gap: 0.5rem;
 }
 </style>

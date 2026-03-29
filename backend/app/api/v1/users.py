@@ -2,40 +2,45 @@
 Routes de gestion des utilisateurs.
 """
 
-from typing import List
-from uuid import UUID
 import logging
 import math
+from typing import List
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...database import get_db
-from ...schemas.user import UserResponse, UserCreate, UserUpdate, UserListResponse
-from ...services.user_service import UserService
 from ...auth.dependencies import get_current_active_user, require_superuser
-from ...models.user import User
-from ...services.organization_service import OrganizationService
 from ...core.rate_limit import conditional_rate_limiter
+from ...database import get_db
+from ...models.user import User
+from ...schemas.user import UserCreate, UserListResponse, UserResponse, UserUpdate
+from ...services.organization_service import OrganizationService
+from ...services.user_service import UserService
 
 
 # Schema for bulk operations
 class BulkDeleteRequest(BaseModel):
     """Request schema for bulk user deletion."""
+
     user_ids: List[str]
 
 
 class BulkAssignOrganizationRequest(BaseModel):
     """Request schema for bulk organization assignment."""
+
     user_ids: List[str]
     organization_id: str
 
 
 class BulkOperationResponse(BaseModel):
     """Response schema for bulk operations."""
+
     success: List[str]
     failed: List[str]
     message: str
+
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -84,7 +89,7 @@ Use `skip` and `limit` parameters for pagination:
                                 "is_superuser": True,
                                 "organization_id": "660e8400-e29b-41d4-a716-446655440001",
                                 "created_at": "2026-01-01T10:00:00Z",
-                                "updated_at": "2026-01-15T14:30:00Z"
+                                "updated_at": "2026-01-15T14:30:00Z",
                             },
                             {
                                 "id": "770e8400-e29b-41d4-a716-446655440002",
@@ -95,26 +100,22 @@ Use `skip` and `limit` parameters for pagination:
                                 "is_superuser": False,
                                 "organization_id": "660e8400-e29b-41d4-a716-446655440001",
                                 "created_at": "2026-01-10T09:15:00Z",
-                                "updated_at": "2026-01-20T11:45:00Z"
-                            }
+                                "updated_at": "2026-01-20T11:45:00Z",
+                            },
                         ],
                         "total": 2,
                         "page": 1,
                         "size": 100,
-                        "pages": 1
+                        "pages": 1,
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -124,16 +125,16 @@ Use `skip` and `limit` parameters for pagination:
                         "detail": "Rate limit exceeded. Try again in 60 seconds."
                     }
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 )
 async def list_users(
     request: Request,
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """List all users within the current user's organization."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -145,8 +146,8 @@ async def list_users(
             "organization_id": str(current_user.organization_id),
             "is_superuser": current_user.is_superuser,
             "skip": skip,
-            "limit": limit
-        }
+            "limit": limit,
+        },
     )
 
     # Superusers voient tous les utilisateurs de toutes les organisations
@@ -155,10 +156,7 @@ async def list_users(
     else:
         # Les utilisateurs normaux voient uniquement ceux de leur organisation
         users, total = await UserService.list_by_organization(
-            session,
-            current_user.organization_id,
-            skip,
-            limit
+            session, current_user.organization_id, skip, limit
         )
 
     # Calculer les métadonnées de pagination
@@ -166,11 +164,7 @@ async def list_users(
     pages = math.ceil(total / limit) if limit > 0 else 1
 
     return UserListResponse(
-        items=users,
-        total=total,
-        page=page,
-        size=limit,
-        pages=pages
+        items=users, total=total, page=page, size=limit, pages=pages
     )
 
 
@@ -191,29 +185,24 @@ Get the profile of the currently authenticated user.
 """,
     dependencies=[Depends(conditional_rate_limiter(60, 60))],
     responses={
-        200: {
-            "description": "User profile retrieved successfully"
-        },
+        200: {"description": "User profile retrieved successfully"},
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {
-                    "example": {"detail": "Not authenticated"}
-                }
-            }
-        }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
+        },
     },
-    tags=["users"]
+    tags=["users"],
 )
 async def get_current_user_me(
-    request: Request,
-    current_user: User = Depends(get_current_active_user)
+    request: Request, current_user: User = Depends(get_current_active_user)
 ):
     """Retourne le profil de l'utilisateur authentifié."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         "Getting current user profile",
-        extra={"correlation_id": correlation_id, "user_id": str(current_user.id)}
+        extra={"correlation_id": correlation_id, "user_id": str(current_user.id)},
     )
     return current_user
 
@@ -250,16 +239,13 @@ Retrieve detailed information about a specific user.
                 "in": "path",
                 "description": "UUID of the user to retrieve",
                 "required": True,
-                "schema": {
-                    "type": "string",
-                    "format": "uuid"
-                },
+                "schema": {"type": "string", "format": "uuid"},
                 "examples": {
                     "valid_user": {
                         "summary": "Valid user ID",
-                        "value": "550e8400-e29b-41d4-a716-446655440000"
+                        "value": "550e8400-e29b-41d4-a716-446655440000",
                     }
-                }
+                },
             }
         ]
     },
@@ -277,30 +263,24 @@ Retrieve detailed information about a specific user.
                         "is_superuser": False,
                         "organization_id": "660e8400-e29b-41d4-a716-446655440001",
                         "created_at": "2026-01-10T09:15:00Z",
-                        "updated_at": "2026-01-20T11:45:00Z"
+                        "updated_at": "2026-01-20T11:45:00Z",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
         },
         403: {
             "description": "Access denied - user from different organization",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "Accès refusé à cet utilisateur"
-                    }
+                    "example": {"detail": "Accès refusé à cet utilisateur"}
                 }
-            }
+            },
         },
         404: {
             "description": "User not found",
@@ -310,7 +290,7 @@ Retrieve detailed information about a specific user.
                         "detail": "Utilisateur 550e8400-e29b-41d4-a716-446655440000 non trouvé"
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -320,35 +300,38 @@ Retrieve detailed information about a specific user.
                         "detail": "Rate limit exceeded. Try again in 60 seconds."
                     }
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 )
 async def get_user(
     request: Request,
     user_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Retrieve detailed information about a specific user."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Getting user {user_id}",
-        extra={"correlation_id": correlation_id, "target_user_id": str(user_id)}
+        extra={"correlation_id": correlation_id, "target_user_id": str(user_id)},
     )
 
     user = await UserService.get_by_id(session, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Utilisateur {user_id} non trouvé"
+            detail=f"Utilisateur {user_id} non trouvé",
         )
 
     # Vérifier que l'utilisateur appartient à la même organisation ou est superuser
-    if not current_user.is_superuser and user.organization_id != current_user.organization_id:
+    if (
+        not current_user.is_superuser
+        and user.organization_id != current_user.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cet utilisateur"
+            detail="Accès refusé à cet utilisateur",
         )
 
     return user
@@ -403,8 +386,8 @@ Create a new user within an organization.
                                 "email": "john.doe@windflow.io",
                                 "password": "SecurePassword123!",
                                 "full_name": "John Doe",
-                                "is_active": True
-                            }
+                                "is_active": True,
+                            },
                         },
                         "with_organization": {
                             "summary": "User with specific organization (superuser only)",
@@ -415,8 +398,8 @@ Create a new user within an organization.
                                 "password": "AnotherSecure456!",
                                 "full_name": "Jane Smith",
                                 "is_active": True,
-                                "organization_id": "660e8400-e29b-41d4-a716-446655440001"
-                            }
+                                "organization_id": "660e8400-e29b-41d4-a716-446655440001",
+                            },
                         },
                         "admin_user": {
                             "summary": "Create admin user",
@@ -427,8 +410,8 @@ Create a new user within an organization.
                                 "password": "AdminPass789!",
                                 "full_name": "Admin User",
                                 "is_active": True,
-                                "is_superuser": True
-                            }
+                                "is_superuser": True,
+                            },
                         },
                         "inactive_user": {
                             "summary": "Create inactive user",
@@ -438,9 +421,9 @@ Create a new user within an organization.
                                 "email": "pending@windflow.io",
                                 "password": "TempPass123!",
                                 "full_name": "Pending User",
-                                "is_active": False
-                            }
-                        }
+                                "is_active": False,
+                            },
+                        },
                     }
                 }
             }
@@ -460,20 +443,16 @@ Create a new user within an organization.
                         "is_superuser": False,
                         "organization_id": "660e8400-e29b-41d4-a716-446655440001",
                         "created_at": "2026-02-02T21:57:00Z",
-                        "updated_at": "2026-02-02T21:57:00Z"
+                        "updated_at": "2026-02-02T21:57:00Z",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
         },
         403: {
             "description": "Access denied - trying to create user in different organization",
@@ -483,7 +462,7 @@ Create a new user within an organization.
                         "detail": "Vous ne pouvez créer un utilisateur que dans votre propre organisation"
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Organization not found",
@@ -493,7 +472,7 @@ Create a new user within an organization.
                         "detail": "Organisation '660e8400-e29b-41d4-a716-446655440001' non trouvée"
                     }
                 }
-            }
+            },
         },
         409: {
             "description": "Email already exists",
@@ -503,7 +482,7 @@ Create a new user within an organization.
                         "detail": "Utilisateur avec l'email 'john.doe@windflow.io' existe déjà"
                     }
                 }
-            }
+            },
         },
         422: {
             "description": "Validation error",
@@ -514,12 +493,12 @@ Create a new user within an organization.
                             {
                                 "loc": ["body", "email"],
                                 "msg": "value is not a valid email address",
-                                "type": "value_error.email"
+                                "type": "value_error.email",
                             }
                         ]
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -529,15 +508,15 @@ Create a new user within an organization.
                         "detail": "Rate limit exceeded. Try again in 60 seconds."
                     }
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 )
 async def create_user(
     request: Request,
     user_data: UserCreate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Create a new user within an organization."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -546,15 +525,15 @@ async def create_user(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "new_user_email": user_data.email
-        }
+            "new_user_email": user_data.email,
+        },
     )
     # Vérifier que l'email n'existe pas déjà
     existing = await UserService.get_by_email(session, user_data.email)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Utilisateur avec l'email '{user_data.email}' existe déjà"
+            detail=f"Utilisateur avec l'email '{user_data.email}' existe déjà",
         )
 
     # Déterminer l'organisation cible selon les règles métier
@@ -569,7 +548,7 @@ async def create_user(
             if not org:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Organisation '{provided_org_id}' non trouvée"
+                    detail=f"Organisation '{provided_org_id}' non trouvée",
                 )
         else:
             # Aucune organisation spécifiée: utiliser celle du superadmin
@@ -581,7 +560,7 @@ async def create_user(
             if provided_org_id != str(current_user.organization_id):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Vous ne pouvez créer un utilisateur que dans votre propre organisation"
+                    detail="Vous ne pouvez créer un utilisateur que dans votre propre organisation",
                 )
         user_data.organization_id = current_user.organization_id
 
@@ -635,16 +614,13 @@ Update an existing user's information.
                 "in": "path",
                 "description": "UUID of the user to update",
                 "required": True,
-                "schema": {
-                    "type": "string",
-                    "format": "uuid"
-                },
+                "schema": {"type": "string", "format": "uuid"},
                 "examples": {
                     "valid_user": {
                         "summary": "Valid user ID",
-                        "value": "550e8400-e29b-41d4-a716-446655440000"
+                        "value": "550e8400-e29b-41d4-a716-446655440000",
                     }
-                }
+                },
             }
         ],
         "requestBody": {
@@ -654,38 +630,30 @@ Update an existing user's information.
                         "update_email": {
                             "summary": "Update email address",
                             "description": "Change user's email address",
-                            "value": {
-                                "email": "newemail@windflow.io"
-                            }
+                            "value": {"email": "newemail@windflow.io"},
                         },
                         "update_profile": {
                             "summary": "Update profile information",
                             "description": "Update full name and other profile fields",
                             "value": {
                                 "full_name": "John Smith",
-                                "email": "john.smith@windflow.io"
-                            }
+                                "email": "john.smith@windflow.io",
+                            },
                         },
                         "disable_user": {
                             "summary": "Disable user account",
                             "description": "Set user account to inactive",
-                            "value": {
-                                "is_active": False
-                            }
+                            "value": {"is_active": False},
                         },
                         "reset_password": {
                             "summary": "Reset user password",
                             "description": "Change user's password",
-                            "value": {
-                                "password": "NewSecurePassword123!"
-                            }
+                            "value": {"password": "NewSecurePassword123!"},
                         },
                         "promote_to_admin": {
                             "summary": "Promote to superuser",
                             "description": "Grant superuser privileges (superuser only)",
-                            "value": {
-                                "is_superuser": True
-                            }
+                            "value": {"is_superuser": True},
                         },
                         "full_update": {
                             "summary": "Complete profile update",
@@ -694,13 +662,13 @@ Update an existing user's information.
                                 "email": "updated@windflow.io",
                                 "full_name": "Updated Name",
                                 "is_active": True,
-                                "password": "NewPassword456!"
-                            }
-                        }
+                                "password": "NewPassword456!",
+                            },
+                        },
                     }
                 }
             }
-        }
+        },
     },
     responses={
         200: {
@@ -716,30 +684,24 @@ Update an existing user's information.
                         "is_superuser": False,
                         "organization_id": "660e8400-e29b-41d4-a716-446655440001",
                         "created_at": "2026-01-10T09:15:00Z",
-                        "updated_at": "2026-02-02T21:57:00Z"
+                        "updated_at": "2026-02-02T21:57:00Z",
                     }
                 }
-            }
+            },
         },
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
         },
         403: {
             "description": "Access denied - user from different organization",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "Accès refusé à cet utilisateur"
-                    }
+                    "example": {"detail": "Accès refusé à cet utilisateur"}
                 }
-            }
+            },
         },
         404: {
             "description": "User not found",
@@ -749,7 +711,7 @@ Update an existing user's information.
                         "detail": "Utilisateur 550e8400-e29b-41d4-a716-446655440000 non trouvé"
                     }
                 }
-            }
+            },
         },
         409: {
             "description": "Email already exists",
@@ -759,7 +721,7 @@ Update an existing user's information.
                         "detail": "Utilisateur avec l'email 'newemail@windflow.io' existe déjà"
                     }
                 }
-            }
+            },
         },
         422: {
             "description": "Validation error",
@@ -770,12 +732,12 @@ Update an existing user's information.
                             {
                                 "loc": ["body", "email"],
                                 "msg": "value is not a valid email address",
-                                "type": "value_error.email"
+                                "type": "value_error.email",
                             }
                         ]
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -785,16 +747,16 @@ Update an existing user's information.
                         "detail": "Rate limit exceeded. Try again in 60 seconds."
                     }
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 )
 async def update_user(
     request: Request,
     user_id: UUID,
     user_data: UserUpdate,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Update an existing user's information."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -803,22 +765,25 @@ async def update_user(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "target_user_id": str(user_id)
-        }
+            "target_user_id": str(user_id),
+        },
     )
     # Vérifier que l'utilisateur existe
     existing_user = await UserService.get_by_id(session, user_id)
     if not existing_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Utilisateur {user_id} non trouvé"
+            detail=f"Utilisateur {user_id} non trouvé",
         )
 
     # Vérifier les permissions (même organisation ou superuser)
-    if not current_user.is_superuser and existing_user.organization_id != current_user.organization_id:
+    if (
+        not current_user.is_superuser
+        and existing_user.organization_id != current_user.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cet utilisateur"
+            detail="Accès refusé à cet utilisateur",
         )
 
     # Si changement d'email, vérifier qu'il n'existe pas déjà
@@ -827,7 +792,7 @@ async def update_user(
         if existing_email:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Utilisateur avec l'email '{user_data.email}' existe déjà"
+                detail=f"Utilisateur avec l'email '{user_data.email}' existe déjà",
             )
 
     user = await UserService.update(session, existing_user, user_data)
@@ -876,52 +841,39 @@ Permanently delete a user account.
                 "in": "path",
                 "description": "UUID of the user to delete",
                 "required": True,
-                "schema": {
-                    "type": "string",
-                    "format": "uuid"
-                },
+                "schema": {"type": "string", "format": "uuid"},
                 "examples": {
                     "valid_user": {
                         "summary": "Valid user ID",
-                        "value": "550e8400-e29b-41d4-a716-446655440000"
+                        "value": "550e8400-e29b-41d4-a716-446655440000",
                     }
-                }
+                },
             }
         ]
     },
     responses={
-        204: {
-            "description": "User deleted successfully (no content returned)"
-        },
+        204: {"description": "User deleted successfully (no content returned)"},
         400: {
             "description": "Bad request - attempting to delete own account",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "Impossible de supprimer son propre compte"
-                    }
+                    "example": {"detail": "Impossible de supprimer son propre compte"}
                 }
-            }
+            },
         },
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Not authenticated"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
         },
         403: {
             "description": "Access denied - user from different organization",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "Accès refusé à cet utilisateur"
-                    }
+                    "example": {"detail": "Accès refusé à cet utilisateur"}
                 }
-            }
+            },
         },
         404: {
             "description": "User not found",
@@ -931,7 +883,7 @@ Permanently delete a user account.
                         "detail": "Utilisateur 550e8400-e29b-41d4-a716-446655440000 non trouvé"
                     }
                 }
-            }
+            },
         },
         429: {
             "description": "Rate limit exceeded",
@@ -941,15 +893,15 @@ Permanently delete a user account.
                         "detail": "Rate limit exceeded. Try again in 60 seconds."
                     }
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 )
 async def delete_user(
     request: Request,
     user_id: UUID,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Permanently delete a user account."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -958,14 +910,14 @@ async def delete_user(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "target_user_id": str(user_id)
-        }
+            "target_user_id": str(user_id),
+        },
     )
     # Empêcher l'auto-suppression
     if user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Impossible de supprimer son propre compte"
+            detail="Impossible de supprimer son propre compte",
         )
 
     # Vérifier que l'utilisateur existe
@@ -973,14 +925,17 @@ async def delete_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Utilisateur {user_id} non trouvé"
+            detail=f"Utilisateur {user_id} non trouvé",
         )
 
     # Vérifier les permissions (même organisation ou superuser)
-    if not current_user.is_superuser and user.organization_id != current_user.organization_id:
+    if (
+        not current_user.is_superuser
+        and user.organization_id != current_user.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cet utilisateur"
+            detail="Accès refusé à cet utilisateur",
         )
 
     await UserService.delete(session, user)
@@ -1021,34 +976,28 @@ Delete multiple users in a single operation.
                     "example": {
                         "success": ["550e8400-e29b-41d4-a716-446655440000"],
                         "failed": [],
-                        "message": "1 utilisateur(s) supprimé(s), 0 échec(s)"
+                        "message": "1 utilisateur(s) supprimé(s), 0 échec(s)",
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid request - too many users or empty list",
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "Maximum 100 utilisateurs par requête"
-                    }
+                    "example": {"detail": "Maximum 100 utilisateurs par requête"}
                 }
-            }
+            },
         },
-        401: {
-            "description": "Not authenticated"
-        },
-        403: {
-            "description": "Not a superuser"
-        }
-    }
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not a superuser"},
+    },
 )
 async def bulk_delete_users(
     request: Request,
     bulk_data: BulkDeleteRequest,
     current_user: User = Depends(require_superuser),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Delete multiple users in bulk."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1057,34 +1006,32 @@ async def bulk_delete_users(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "user_count": len(bulk_data.user_ids)
-        }
+            "user_count": len(bulk_data.user_ids),
+        },
     )
 
     # Validate request
     if not bulk_data.user_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La liste des utilisateurs ne peut pas être vide"
+            detail="La liste des utilisateurs ne peut pas être vide",
         )
 
     if len(bulk_data.user_ids) > 100:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 100 utilisateurs par requête"
+            detail="Maximum 100 utilisateurs par requête",
         )
 
     # Perform bulk delete
     success, failed = await UserService.delete_many(
-        session,
-        bulk_data.user_ids,
-        str(current_user.id)
+        session, bulk_data.user_ids, str(current_user.id)
     )
 
     return BulkOperationResponse(
         success=success,
         failed=failed,
-        message=f"{len(success)} utilisateur(s) supprimé(s), {len(failed)} échec(s)"
+        message=f"{len(success)} utilisateur(s) supprimé(s), {len(failed)} échec(s)",
     )
 
 
@@ -1120,30 +1067,22 @@ Assign multiple users to a different organization in a single operation.
                     "example": {
                         "success": ["550e8400-e29b-41d4-a716-446655440000"],
                         "failed": [],
-                        "message": "1 utilisateur(s) réassigné(s), 0 échec(s)"
+                        "message": "1 utilisateur(s) réassigné(s), 0 échec(s)",
                     }
                 }
-            }
+            },
         },
-        400: {
-            "description": "Invalid request - too many users or empty list"
-        },
-        401: {
-            "description": "Not authenticated"
-        },
-        403: {
-            "description": "Not a superuser"
-        },
-        404: {
-            "description": "Organization not found"
-        }
-    }
+        400: {"description": "Invalid request - too many users or empty list"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not a superuser"},
+        404: {"description": "Organization not found"},
+    },
 )
 async def bulk_assign_organization(
     request: Request,
     bulk_data: BulkAssignOrganizationRequest,
     current_user: User = Depends(require_superuser),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ):
     """Assign multiple users to an organization in bulk."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1153,21 +1092,21 @@ async def bulk_assign_organization(
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
             "user_count": len(bulk_data.user_ids),
-            "target_organization": bulk_data.organization_id
-        }
+            "target_organization": bulk_data.organization_id,
+        },
     )
 
     # Validate request
     if not bulk_data.user_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La liste des utilisateurs ne peut pas être vide"
+            detail="La liste des utilisateurs ne peut pas être vide",
         )
 
     if len(bulk_data.user_ids) > 100:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 100 utilisateurs par requête"
+            detail="Maximum 100 utilisateurs par requête",
         )
 
     # Verify target organization exists
@@ -1175,18 +1114,16 @@ async def bulk_assign_organization(
     if not target_org:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation '{bulk_data.organization_id}' non trouvée"
+            detail=f"Organisation '{bulk_data.organization_id}' non trouvée",
         )
 
     # Perform bulk assignment
     success, failed = await UserService.update_organization_many(
-        session,
-        bulk_data.user_ids,
-        bulk_data.organization_id
+        session, bulk_data.user_ids, bulk_data.organization_id
     )
 
     return BulkOperationResponse(
         success=success,
         failed=failed,
-        message=f"{len(success)} utilisateur(s) réassigné(s), {len(failed)} échec(s)"
+        message=f"{len(success)} utilisateur(s) réassigné(s), {len(failed)} échec(s)",
     )

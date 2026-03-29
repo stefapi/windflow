@@ -397,14 +397,14 @@ onMounted(() => {
 }
 
 .settings-tabs {
+  padding: 16px;
   background-color: var(--color-bg-card);
   border-radius: 8px;
-  padding: 16px;
 }
 
 .access-denied {
-  text-align: center;
   padding: 40px;
+  text-align: center;
 }
 
 .access-denied .el-icon {

@@ -528,22 +528,22 @@ defineExpose({
 <style scoped>
 .terminal-wrapper {
   display: flex;
-  flex-direction: column;
+  overflow: hidden;
   height: 100%;
   min-height: 400px;
   background-color: var(--color-bg-card);
   border-radius: 4px;
-  overflow: hidden;
+  flex-direction: column;
 }
 
 .terminal-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
   padding: 8px 12px;
   background-color: var(--color-bg-elevated);
   border-bottom: 1px solid var(--color-border-light);
-  flex-shrink: 0;
   flex-wrap: wrap;
   gap: 8px;
 }
@@ -585,6 +585,7 @@ defineExpose({
   0%, 100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
@@ -592,17 +593,17 @@ defineExpose({
 
 .exec-id {
   font-size: 12px;
-  color: var(--color-text-secondary);
   font-family: monospace;
+  color: var(--color-text-secondary);
 }
 
 .shell-info {
-  font-size: 12px;
-  color: var(--color-text-secondary);
   padding: 2px 8px;
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--color-text-secondary);
   background-color: var(--color-bg-hover);
   border-radius: 4px;
-  font-family: monospace;
 }
 
 .shell-select {
@@ -627,10 +628,10 @@ defineExpose({
 }
 
 .terminal-container {
-  flex: 1;
-  padding: 8px;
   overflow: hidden;
+  padding: 8px;
   background-color: var(--color-terminal-bg);
+  flex: 1;
 }
 
 
@@ -643,17 +644,17 @@ defineExpose({
 }
 
 .error-message {
-  padding: 8px 12px;
   flex-shrink: 0;
+  padding: 8px 12px;
 }
 
 .not-connected-message {
   display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
-  gap: 12px;
+  align-items: center;
   padding: 40px;
+  flex-direction: column;
+  gap: 12px;
   flex: 1;
 }
 
@@ -665,9 +666,9 @@ defineExpose({
 .disconnect-bar {
   display: flex;
   justify-content: center;
+  flex-shrink: 0;
   padding: 6px 12px;
   background-color: var(--color-bg-elevated);
   border-top: 1px solid var(--color-border-light);
-  flex-shrink: 0;
 }
 </style>

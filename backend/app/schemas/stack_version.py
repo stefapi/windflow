@@ -4,7 +4,8 @@ Schemas Pydantic V2 pour le versioning des stacks.
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StackVersionResponse(BaseModel):
@@ -26,4 +27,6 @@ class StackVersionResponse(BaseModel):
 class StackVersionCreate(BaseModel):
     """Création manuelle d'une version (snapshot)."""
 
-    change_summary: Optional[str] = Field(None, max_length=500, description="Résumé des modifications")
+    change_summary: Optional[str] = Field(
+        None, max_length=500, description="Résumé des modifications"
+    )

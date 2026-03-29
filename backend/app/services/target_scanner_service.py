@@ -13,7 +13,17 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Protocol, Tuple, TypeVar
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    TypeVar,
+)
 
 import asyncssh
 from asyncssh import ConnectionLost
@@ -83,27 +93,22 @@ class CommandResult:
 class CommandExecutor(Protocol):
     """Protocol describing a command executor implementation."""
 
-    async def run(
-        self,
-        command: str,
-        timeout: int = 30,
-        require_success: bool = False
-    ) -> CommandResult:
-        ...
+    async def run(  # noqa: E704
+        self, command: str, timeout: int = 30, require_success: bool = False
+    ) -> CommandResult: ...
 
 
 class LocalCommandExecutor:
     """Execute commands on the local machine using subprocess."""
 
-    def __init__(self, sudo_user: Optional[str] = None, sudo_password: Optional[str] = None):
+    def __init__(
+        self, sudo_user: Optional[str] = None, sudo_password: Optional[str] = None
+    ):
         self._sudo_user = sudo_user
         self._sudo_password = sudo_password
 
     async def run(
-        self,
-        command: str,
-        timeout: int = 30,
-        require_success: bool = False
+        self, command: str, timeout: int = 30, require_success: bool = False
     ) -> CommandResult:
         wrapped_command = self._wrap_with_sudo(command) if self._sudo_user else command
         try:
@@ -121,15 +126,14 @@ class LocalCommandExecutor:
                     process.stdin.close()
 
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                process.communicate(),
-                timeout=timeout
+                process.communicate(), timeout=timeout
             )
         except asyncio.TimeoutError as exc:
             process.kill()
             raise CommandExecutionError(
                 command,
                 exit_status=124,
-                stderr=f"Command timed out after {timeout}s: {exc}"
+                stderr=f"Command timed out after {timeout}s: {exc}",
             ) from exc
 
         stdout = stdout_bytes.decode("utf-8", errors="ignore")
@@ -159,10 +163,7 @@ class SSHCommandExecutor:
         self._sudo_password = sudo_password
 
     async def run(
-        self,
-        command: str,
-        timeout: int = 30,
-        require_success: bool = False
+        self, command: str, timeout: int = 30, require_success: bool = False
     ) -> CommandResult:
         wrapped_command = self._wrap_with_sudo(command) if self._sudo_user else command
         input_payload = None
@@ -177,25 +178,21 @@ class SSHCommandExecutor:
                     check=False,
                     encoding="utf-8",
                 ),
-                timeout=timeout
+                timeout=timeout,
             )
         except asyncio.TimeoutError as exc:
             raise CommandExecutionError(
                 command,
                 exit_status=124,
-                stderr=f"Remote command timed out after {timeout}s"
+                stderr=f"Remote command timed out after {timeout}s",
             ) from exc
         except (asyncssh.Error, ConnectionLost) as exc:
             raise CommandExecutionError(
-                command,
-                exit_status=255,
-                stderr=f"SSH execution failed: {exc}"
+                command, exit_status=255, stderr=f"SSH execution failed: {exc}"
             ) from exc
 
         result = CommandResult(
-            completed.exit_status,
-            completed.stdout or "",
-            completed.stderr or ""
+            completed.exit_status, completed.stdout or "", completed.stderr or ""
         )
         if require_success and not result.success:
             raise CommandExecutionError(command, result.exit_status, result.stderr)
@@ -225,7 +222,9 @@ class ContainerEnvironmentDetector:
         try:
             with open("/proc/1/cgroup", encoding="utf-8") as cgroup_file:
                 content = cgroup_file.read().lower()
-            return any(token in content for token in ("docker", "containerd", "kubepods"))
+            return any(
+                token in content for token in ("docker", "containerd", "kubepods")
+            )
         except FileNotFoundError:  # pragma: no cover - uncommon
             return False
 
@@ -283,7 +282,11 @@ class DockerSocketClient:
 
             return DockerCapabilities(
                 installed=True,
-                version=version_info.get("Version") if isinstance(version_info, dict) else None,
+                version=(
+                    version_info.get("Version")
+                    if isinstance(version_info, dict)
+                    else None
+                ),
                 running=True,
                 socket_accessible=True,
                 compose=None,
@@ -296,7 +299,9 @@ class DockerSocketClient:
                 client.close()
 
     @staticmethod
-    def _build_swarm_info(swarm_info: Optional[Dict[str, Any]]) -> Optional[DockerSwarmInfo]:
+    def _build_swarm_info(
+        swarm_info: Optional[Dict[str, Any]],
+    ) -> Optional[DockerSwarmInfo]:
         if not swarm_info:
             return None
 
@@ -308,10 +313,7 @@ class DockerSocketClient:
             node_role = "manager" if swarm_info.get("ControlAvailable") else "worker"
 
         return DockerSwarmInfo(
-            available=available,
-            active=active,
-            node_role=node_role,
-            details=swarm_info
+            available=available, active=active, node_role=node_role, details=swarm_info
         )
 
 
@@ -321,7 +323,7 @@ class LibvirtSocketClient:
     def __init__(
         self,
         socket_path: str = "/var/run/libvirt/libvirt-sock",
-        uri: str = "qemu:///system"
+        uri: str = "qemu:///system",
     ):
         self.socket_path = socket_path
         self.uri = uri
@@ -457,16 +459,10 @@ class TargetScannerService:
                 return await self._run_scan(executor, host=scan_request.host)
         except (OSError, asyncssh.Error) as exc:
             raise CommandExecutionError(
-                "ssh-connect",
-                exit_status=255,
-                stderr=f"SSH connection failed: {exc}"
+                "ssh-connect", exit_status=255, stderr=f"SSH connection failed: {exc}"
             ) from exc
 
-    async def scan_and_update_target(
-        self,
-        target: Target,
-        db: AsyncSession
-    ) -> Target:
+    async def scan_and_update_target(self, target: Target, db: AsyncSession) -> Target:
         """
         Scan a stored target and persist discovered capabilities.
 
@@ -514,9 +510,7 @@ class TargetScannerService:
                 else None
             )
             os_payload = (
-                scan_result.os.model_dump(mode="json")
-                if scan_result.os
-                else None
+                scan_result.os.model_dump(mode="json") if scan_result.os else None
             )
 
             await TargetService.apply_scan_result(
@@ -533,30 +527,20 @@ class TargetScannerService:
             await TargetService.mark_scan_failed(db, target)
             raise
 
-    async def _run_scan(
-        self,
-        executor: CommandExecutor,
-        host: str
-    ) -> ScanResult:
+    async def _run_scan(self, executor: CommandExecutor, host: str) -> ScanResult:
         errors: list[str] = []
-        platform_info = await self._safe_execute(self._detect_platform, executor, errors)
+        platform_info = await self._safe_execute(
+            self._detect_platform, executor, errors
+        )
         os_info = await self._safe_execute(self._detect_os, executor, errors)
         virtualization = await self._safe_execute(
-            self._detect_virtualization,
-            executor,
-            errors,
-            default={}
+            self._detect_virtualization, executor, errors, default={}
         )
         docker_info = await self._safe_execute(
-            lambda exec_: self._detect_docker(exec_, host=host),
-            executor,
-            errors
+            lambda exec_: self._detect_docker(exec_, host=host), executor, errors
         )
         kubernetes = await self._safe_execute(
-            self._detect_kubernetes,
-            executor,
-            errors,
-            default={}
+            self._detect_kubernetes, executor, errors, default={}
         )
 
         success = not errors
@@ -578,7 +562,7 @@ class TargetScannerService:
         func: Callable[[CommandExecutor], Awaitable[T]],
         executor: CommandExecutor,
         errors: list[str],
-        default: Optional[T] = None
+        default: Optional[T] = None,
     ) -> Optional[T]:
         try:
             return await func(executor)
@@ -629,9 +613,9 @@ class TargetScannerService:
                 try:
                     memory_kb = float(result.stripped_stdout())
                     if "memsize" in cmd:
-                        total_memory_gb = round(memory_kb / (1024 ** 3), 2)
+                        total_memory_gb = round(memory_kb / (1024**3), 2)
                     else:
-                        total_memory_gb = round(memory_kb / (1024 ** 1) / 1024, 2)
+                        total_memory_gb = round(memory_kb / (1024**1) / 1024, 2)
                     break
                 except ValueError:
                     continue
@@ -657,7 +641,9 @@ class TargetScannerService:
         if kernel_result.success and kernel_result.stripped_stdout():
             kernel = kernel_result.stripped_stdout()
 
-        os_release_result = await executor.run("cat /etc/os-release", timeout=self._DEFAULT_TIMEOUT)
+        os_release_result = await executor.run(
+            "cat /etc/os-release", timeout=self._DEFAULT_TIMEOUT
+        )
         if os_release_result.success and os_release_result.stdout:
             for line in os_release_result.stdout.splitlines():
                 if line.startswith("NAME="):
@@ -666,7 +652,9 @@ class TargetScannerService:
                     version = self._strip_quotes(line.split("=", 1)[1])
 
         if not distribution:
-            lsb_result = await executor.run("lsb_release -ds", timeout=self._DEFAULT_TIMEOUT)
+            lsb_result = await executor.run(
+                "lsb_release -ds", timeout=self._DEFAULT_TIMEOUT
+            )
             if lsb_result.success and lsb_result.stripped_stdout():
                 distribution = self._strip_quotes(lsb_result.stripped_stdout())
 
@@ -677,17 +665,22 @@ class TargetScannerService:
             kernel=kernel,
         )
 
-    async def _detect_virtualization(self, executor: CommandExecutor) -> Dict[str, ToolInfo]:
+    async def _detect_virtualization(
+        self, executor: CommandExecutor
+    ) -> Dict[str, ToolInfo]:
         virtualization: Dict[str, ToolInfo] = {}
 
         # libvirt socket detection (KVM/QEMU)
         libvirt_client = LibvirtSocketClient()
-        if ContainerEnvironmentDetector.has_libvirt_socket() and await libvirt_client.is_available():
+        if (
+            ContainerEnvironmentDetector.has_libvirt_socket()
+            and await libvirt_client.is_available()
+        ):
             libvirt_details = await libvirt_client.collect_details()
             virtualization["libvirt"] = ToolInfo(
                 available=True,
                 version=libvirt_details.get("version"),
-                details=libvirt_details or None
+                details=libvirt_details or None,
             )
 
         checks: Dict[str, Tuple[str, Optional[Parser]]] = {
@@ -704,47 +697,53 @@ class TargetScannerService:
                 virtualization[tool] = ToolInfo(
                     available=True,
                     version=details.get("version") if details else None,
-                    details=details
+                    details=details,
                 )
             else:
                 virtualization.setdefault(tool, ToolInfo(available=False))
 
-        podman_version_result = await executor.run("podman --version", timeout=self._DEFAULT_TIMEOUT)
+        podman_version_result = await executor.run(
+            "podman --version", timeout=self._DEFAULT_TIMEOUT
+        )
         if podman_version_result.success:
             version_info = self._parse_version_only(podman_version_result.stdout)
             podman_details: Dict[str, Any] | None = None
             podman_info_result = await executor.run(
-                "podman info --format json",
-                timeout=self._DEFAULT_TIMEOUT
+                "podman info --format json", timeout=self._DEFAULT_TIMEOUT
             )
             if podman_info_result.success and podman_info_result.stripped_stdout():
                 try:
                     podman_details = json.loads(podman_info_result.stripped_stdout())
                 except json.JSONDecodeError:
-                    podman_details = {"raw_output": podman_info_result.stripped_stdout()}
+                    podman_details = {
+                        "raw_output": podman_info_result.stripped_stdout()
+                    }
             virtualization["podman"] = ToolInfo(
                 available=True,
                 version=version_info.get("version") if version_info else None,
-                details=podman_details
+                details=podman_details,
             )
         else:
             virtualization.setdefault("podman", ToolInfo(available=False))
 
-        kvm_result = await executor.run("test -e /dev/kvm && echo 'present'", timeout=self._DEFAULT_TIMEOUT)
+        kvm_result = await executor.run(
+            "test -e /dev/kvm && echo 'present'", timeout=self._DEFAULT_TIMEOUT
+        )
         if "present" in kvm_result.stdout:
             virtualization.setdefault("qemu_kvm", ToolInfo(available=True)).details = {
                 **(virtualization.get("qemu_kvm").details or {}),
-                "kvm_device": True
+                "kvm_device": True,
             }
         return virtualization
 
     async def _detect_docker(
-        self,
-        executor: CommandExecutor,
-        host: str
+        self, executor: CommandExecutor, host: str
     ) -> Optional[DockerCapabilities]:
         docker_socket_client = DockerSocketClient()
-        is_local_execution = isinstance(executor, LocalCommandExecutor) and host in {"localhost", "127.0.0.1"}
+        is_local_execution = isinstance(executor, LocalCommandExecutor) and host in {
+            "localhost",
+            "127.0.0.1",
+        }
 
         if is_local_execution and await docker_socket_client.is_available():
             capabilities = await docker_socket_client.collect_capabilities()
@@ -754,7 +753,9 @@ class TargetScannerService:
                 capabilities.compose = compose_info
                 return capabilities
 
-        docker_version_result = await executor.run("docker --version", timeout=self._DEFAULT_TIMEOUT)
+        docker_version_result = await executor.run(
+            "docker --version", timeout=self._DEFAULT_TIMEOUT
+        )
         if not docker_version_result.success:
             return None
 
@@ -764,7 +765,9 @@ class TargetScannerService:
         socket_accessible = False
         swarm_info = None
 
-        info_result = await executor.run("docker info --format '{{json .}}'", timeout=self._DEFAULT_TIMEOUT)
+        info_result = await executor.run(
+            "docker info --format '{{json .}}'", timeout=self._DEFAULT_TIMEOUT
+        )
         if info_result.success and info_result.stripped_stdout():
             try:
                 info_data = json.loads(info_result.stripped_stdout())
@@ -782,23 +785,25 @@ class TargetScannerService:
                 available=swarm_info.get("LocalNodeState") not in {None, "inactive"},
                 active=swarm_info.get("LocalNodeState") == "active",
                 node_role=swarm_info.get("ControlAvailable") and "manager" or "worker",
-                details=swarm_info
+                details=swarm_info,
             )
         else:
-            info_result_plain = await executor.run("docker info", timeout=self._DEFAULT_TIMEOUT)
-            if info_result_plain.success and "Swarm: active" in info_result_plain.stdout:
+            info_result_plain = await executor.run(
+                "docker info", timeout=self._DEFAULT_TIMEOUT
+            )
+            if (
+                info_result_plain.success
+                and "Swarm: active" in info_result_plain.stdout
+            ):
                 swarm_details = DockerSwarmInfo(
-                    available=True,
-                    active=True,
-                    node_role=None,
-                    details=None
+                    available=True, active=True, node_role=None, details=None
                 )
-            elif info_result_plain.success and "Swarm: inactive" in info_result_plain.stdout:
+            elif (
+                info_result_plain.success
+                and "Swarm: inactive" in info_result_plain.stdout
+            ):
                 swarm_details = DockerSwarmInfo(
-                    available=True,
-                    active=False,
-                    node_role=None,
-                    details=None
+                    available=True, active=False, node_role=None, details=None
                 )
 
         return DockerCapabilities(
@@ -810,32 +815,44 @@ class TargetScannerService:
             swarm=swarm_details,
         )
 
-    async def _detect_docker_compose(self, executor: CommandExecutor) -> Optional[DockerComposeInfo]:
-        compose_plugin_result = await executor.run("docker compose version", timeout=self._DEFAULT_TIMEOUT)
+    async def _detect_docker_compose(
+        self, executor: CommandExecutor
+    ) -> Optional[DockerComposeInfo]:
+        compose_plugin_result = await executor.run(
+            "docker compose version", timeout=self._DEFAULT_TIMEOUT
+        )
         if compose_plugin_result.success:
-            version = self._parse_version_only(compose_plugin_result.stdout).get("version")
-            return DockerComposeInfo(
-                available=True,
-                version=version,
-                plugin_based=True
+            version = self._parse_version_only(compose_plugin_result.stdout).get(
+                "version"
             )
+            return DockerComposeInfo(available=True, version=version, plugin_based=True)
 
-        compose_binary_result = await executor.run("docker-compose --version", timeout=self._DEFAULT_TIMEOUT)
+        compose_binary_result = await executor.run(
+            "docker-compose --version", timeout=self._DEFAULT_TIMEOUT
+        )
         if compose_binary_result.success:
-            version = self._parse_version_only(compose_binary_result.stdout).get("version")
+            version = self._parse_version_only(compose_binary_result.stdout).get(
+                "version"
+            )
             return DockerComposeInfo(
-                available=True,
-                version=version,
-                plugin_based=False
+                available=True, version=version, plugin_based=False
             )
         return None
 
-    async def _detect_kubernetes(self, executor: CommandExecutor) -> Dict[str, ToolInfo]:
+    async def _detect_kubernetes(
+        self, executor: CommandExecutor
+    ) -> Dict[str, ToolInfo]:
         kube_tools: Dict[str, Tuple[str, Optional[Parser]]] = {
-            "kubectl": ("kubectl version --client -o json", self._parse_kubectl_version),
+            "kubectl": (
+                "kubectl version --client -o json",
+                self._parse_kubectl_version,
+            ),
             "kubeadm": ("kubeadm version -o json", self._parse_kubeadm_version),
             "k3s": ("k3s --version", self._parse_version_only),
-            "microk8s": ("microk8s.kubectl version --output=json", self._parse_kubectl_version),
+            "microk8s": (
+                "microk8s.kubectl version --output=json",
+                self._parse_kubectl_version,
+            ),
         }
 
         kubernetes: Dict[str, ToolInfo] = {}
@@ -853,7 +870,9 @@ class TargetScannerService:
                 kubernetes[tool] = ToolInfo(available=False)
         return kubernetes
 
-    def build_capabilities_payload(self, scan_result: ScanResult) -> List[Dict[str, Any]]:
+    def build_capabilities_payload(
+        self, scan_result: ScanResult
+    ) -> List[Dict[str, Any]]:
         """Construit la liste normalisée des capacités détectées.
 
         Ne crée des entrées que pour les capacités réellement disponibles.
@@ -865,7 +884,7 @@ class TargetScannerService:
             capability_type: CapabilityType,
             available: bool,
             version: Optional[str],
-            details: Optional[Dict[str, Any]]
+            details: Optional[Dict[str, Any]],
         ) -> None:
             # Ne créer une entrée que si la capacité est disponible
             if available:
@@ -941,8 +960,7 @@ class TargetScannerService:
         return capabilities
 
     def _map_virtualization_key_to_capability(
-        self,
-        key: str
+        self, key: str
     ) -> Optional[CapabilityType]:
         mapping = {
             "libvirt": CapabilityType.LIBVIRT,
@@ -954,10 +972,7 @@ class TargetScannerService:
         }
         return mapping.get(key.lower())
 
-    def _map_kubernetes_key_to_capability(
-        self,
-        key: str
-    ) -> Optional[CapabilityType]:
+    def _map_kubernetes_key_to_capability(self, key: str) -> Optional[CapabilityType]:
         mapping = {
             "kubectl": CapabilityType.KUBECTL,
             "kubeadm": CapabilityType.KUBEADM,
@@ -967,8 +982,7 @@ class TargetScannerService:
         return mapping.get(key.lower())
 
     def _extract_tool_info(
-        self,
-        info: Any
+        self, info: Any
     ) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
         if isinstance(info, ToolInfo):
             return info.available, info.version, info.details
@@ -999,7 +1013,7 @@ class TargetScannerService:
     @staticmethod
     def _strip_quotes(value: str) -> str:
         stripped = value.strip()
-        if stripped.startswith(("\"", "'")) and stripped.endswith(("\"", "'")):
+        if stripped.startswith(('"', "'")) and stripped.endswith(('"', "'")):
             return stripped[1:-1]
         return stripped
 

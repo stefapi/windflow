@@ -8,29 +8,24 @@ avec mocks de DockerClientService et de la DB.
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timezone
 
 import pytest
 
 from app.schemas.adoption import (
     AdoptionEnvVar,
+    AdoptionPortMapping,
     AdoptionRequest,
     AdoptionServiceData,
     AdoptionVolume,
-    AdoptionNetwork,
-    AdoptionPortMapping,
-    VolumeStrategy,
-    NetworkStrategy,
 )
 from app.services.adoption_service import (
+    _generate_compose_preview,
     _is_secret_env,
     _parse_env_from_inspect,
-    _parse_volumes_from_inspect,
     _parse_networks_from_inspect,
     _parse_ports_from_inspect,
-    _generate_compose_preview,
+    _parse_volumes_from_inspect,
 )
-
 
 # =============================================================================
 # Helpers purs — _is_secret_env
@@ -40,7 +35,14 @@ from app.services.adoption_service import (
 class TestIsSecretEnv:
     @pytest.mark.parametrize(
         "key",
-        ["PASSWORD", "DB_PASSWORD", "SECRET_KEY", "API_TOKEN", "PRIVATE_KEY", "ACCESS_KEY"],
+        [
+            "PASSWORD",
+            "DB_PASSWORD",
+            "SECRET_KEY",
+            "API_TOKEN",
+            "PRIVATE_KEY",
+            "ACCESS_KEY",
+        ],
     )
     def test_detects_secrets(self, key: str) -> None:
         assert _is_secret_env(key) is True
@@ -98,7 +100,14 @@ class TestParseVolumesFromInspect:
         assert _parse_volumes_from_inspect([]) == []
 
     def test_bind_mount(self) -> None:
-        mounts = [{"Type": "bind", "Source": "/host/path", "Destination": "/container/path", "RW": True}]
+        mounts = [
+            {
+                "Type": "bind",
+                "Source": "/host/path",
+                "Destination": "/container/path",
+                "RW": True,
+            }
+        ]
         result = _parse_volumes_from_inspect(mounts)
         assert len(result) == 1
         assert result[0].type == "bind"
@@ -107,12 +116,16 @@ class TestParseVolumesFromInspect:
         assert result[0].mode == "rw"
 
     def test_readonly(self) -> None:
-        mounts = [{"Type": "bind", "Source": "/host", "Destination": "/data", "RW": False}]
+        mounts = [
+            {"Type": "bind", "Source": "/host", "Destination": "/data", "RW": False}
+        ]
         result = _parse_volumes_from_inspect(mounts)
         assert result[0].mode == "ro"
 
     def test_named_volume(self) -> None:
-        mounts = [{"Type": "volume", "Name": "mydata", "Destination": "/data", "RW": True}]
+        mounts = [
+            {"Type": "volume", "Name": "mydata", "Destination": "/data", "RW": True}
+        ]
         result = _parse_volumes_from_inspect(mounts)
         assert result[0].type == "volume"
         assert result[0].source == "mydata"
@@ -168,7 +181,14 @@ class TestParsePortsFromInspect:
         assert result[0].protocol == "tcp"
 
     def test_multiple_bindings(self) -> None:
-        ns = {"Ports": {"443/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8443"}, {"HostIp": "127.0.0.1", "HostPort": "9443"}]}}
+        ns = {
+            "Ports": {
+                "443/tcp": [
+                    {"HostIp": "0.0.0.0", "HostPort": "8443"},
+                    {"HostIp": "127.0.0.1", "HostPort": "9443"},
+                ]
+            }
+        }
         result = _parse_ports_from_inspect(ns)
         assert len(result) == 2
 
@@ -189,7 +209,14 @@ class TestGenerateComposePreview:
                 name="web",
                 image="nginx:latest",
                 status="running",
-                ports=[AdoptionPortMapping(host_ip="0.0.0.0", host_port=8080, container_port=80, protocol="tcp")],
+                ports=[
+                    AdoptionPortMapping(
+                        host_ip="0.0.0.0",
+                        host_port=8080,
+                        container_port=80,
+                        protocol="tcp",
+                    )
+                ],
             )
         ]
         result = _generate_compose_preview(services)
@@ -203,7 +230,9 @@ class TestGenerateComposePreview:
                 name="app",
                 image="myapp:latest",
                 status="running",
-                env_vars=[AdoptionEnvVar(key="NODE_ENV", value="production", is_secret=False)],
+                env_vars=[
+                    AdoptionEnvVar(key="NODE_ENV", value="production", is_secret=False)
+                ],
             )
         ]
         result = _generate_compose_preview(services)
@@ -216,7 +245,14 @@ class TestGenerateComposePreview:
                 name="db",
                 image="postgres:15",
                 status="running",
-                volumes=[AdoptionVolume(source="pgdata", destination="/var/lib/postgresql/data", mode="rw", type="volume")],
+                volumes=[
+                    AdoptionVolume(
+                        source="pgdata",
+                        destination="/var/lib/postgresql/data",
+                        mode="rw",
+                        type="volume",
+                    )
+                ],
             )
         ]
         result = _generate_compose_preview(services)
@@ -233,8 +269,9 @@ class TestGetAdoptionData:
     @pytest.mark.asyncio
     async def test_docker_unavailable(self) -> None:
         """Retourne 503 si Docker n'est pas accessible."""
-        from app.services.adoption_service import get_adoption_data
         from fastapi import HTTPException
+
+        from app.services.adoption_service import get_adoption_data
 
         mock_db = MagicMock()
 
@@ -245,14 +282,17 @@ class TestGetAdoptionData:
             MockDocker.return_value = mock_docker
 
             with pytest.raises(HTTPException) as exc_info:
-                await get_adoption_data(mock_db, "org1", "composition", "compose:myproject@local")
+                await get_adoption_data(
+                    mock_db, "org1", "composition", "compose:myproject@local"
+                )
             assert exc_info.value.status_code == 503
 
     @pytest.mark.asyncio
     async def test_composition_not_found(self) -> None:
         """Retourne 404 si le projet compose n'existe pas."""
-        from app.services.adoption_service import get_adoption_data
         from fastapi import HTTPException
+
+        from app.services.adoption_service import get_adoption_data
 
         mock_db = MagicMock()
 
@@ -264,7 +304,9 @@ class TestGetAdoptionData:
             MockDocker.return_value = mock_docker
 
             with pytest.raises(HTTPException) as exc_info:
-                await get_adoption_data(mock_db, "org1", "composition", "compose:nonexistent@local")
+                await get_adoption_data(
+                    mock_db, "org1", "composition", "compose:nonexistent@local"
+                )
             assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
@@ -293,7 +335,9 @@ class TestGetAdoptionData:
             mock_docker.close = AsyncMock()
             MockDocker.return_value = mock_docker
 
-            result = await get_adoption_data(mock_db, "org1", "composition", "compose:myproject@local")
+            result = await get_adoption_data(
+                mock_db, "org1", "composition", "compose:myproject@local"
+            )
             assert result.name == "myproject"
             assert result.type == "composition"
             assert len(result.services) == 1
@@ -310,8 +354,9 @@ class TestAdoptDiscoveredItem:
     @pytest.mark.asyncio
     async def test_duplicate_name(self) -> None:
         """Retourne 409 si le nom de stack existe déjà."""
-        from app.services.adoption_service import adopt_discovered_item
         from fastapi import HTTPException
+
+        from app.services.adoption_service import adopt_discovered_item
 
         mock_db = AsyncMock()
         # Simuler une stack existante

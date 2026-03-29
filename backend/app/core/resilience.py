@@ -5,26 +5,28 @@ Implémente Circuit Breaker, Retry Policies, et Health Checks multi-niveau
 pour assurer la robustesse du système.
 """
 
-from typing import Optional, Callable, Any, Dict, List
-from datetime import datetime, timedelta
-from enum import Enum
 import asyncio
 import logging
-from functools import wraps
 import time
+from datetime import datetime, timedelta
+from enum import Enum
+from functools import wraps
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class CircuitState(str, Enum):
     """États du Circuit Breaker."""
-    CLOSED = "closed"      # Fonctionnement normal
-    OPEN = "open"          # Circuit ouvert, requêtes bloquées
+
+    CLOSED = "closed"  # Fonctionnement normal
+    OPEN = "open"  # Circuit ouvert, requêtes bloquées
     HALF_OPEN = "half_open"  # Test de récupération
 
 
 class HealthStatus(str, Enum):
     """Statuts de santé des composants."""
+
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
@@ -45,7 +47,7 @@ class CircuitBreaker:
         failure_threshold: int = 5,
         success_threshold: int = 2,
         timeout: int = 60,
-        half_open_timeout: int = 30
+        half_open_timeout: int = 30,
     ):
         """
         Initialise le Circuit Breaker.
@@ -117,7 +119,9 @@ class CircuitBreaker:
                 self.last_state_change = datetime.utcnow()
 
         elif self.state == CircuitState.HALF_OPEN:
-            logger.warning(f"Circuit {self.name}: Reopening due to failure in HALF_OPEN")
+            logger.warning(
+                f"Circuit {self.name}: Reopening due to failure in HALF_OPEN"
+            )
             self.state = CircuitState.OPEN
             self.last_state_change = datetime.utcnow()
 
@@ -138,6 +142,10 @@ class CircuitBreaker:
             Exception: Exception originale de la fonction
         """
         if not self._should_attempt_call():
+            if self.last_failure_time is None:
+                raise RuntimeError(
+                    f"Circuit breaker {self.name} is OPEN. Service unavailable."
+                )
             raise RuntimeError(
                 f"Circuit breaker {self.name} is OPEN. "
                 f"Service unavailable until {self.last_failure_time + timedelta(seconds=self.timeout)}"
@@ -164,16 +172,14 @@ class CircuitBreaker:
             "state": self.state.value,
             "failure_count": self.failure_count,
             "success_count": self.success_count,
-            "last_failure_time": self.last_failure_time.isoformat() if self.last_failure_time else None,
+            "last_failure_time": (
+                self.last_failure_time.isoformat() if self.last_failure_time else None
+            ),
             "last_state_change": self.last_state_change.isoformat(),
         }
 
 
-def circuit_breaker(
-    name: str,
-    failure_threshold: int = 5,
-    timeout: int = 60
-):
+def circuit_breaker(name: str, failure_threshold: int = 5, timeout: int = 60):
     """
     Décorateur pour appliquer un circuit breaker à une fonction.
 
@@ -194,6 +200,7 @@ def circuit_breaker(
         @wraps(func)
         async def wrapper(*args, **kwargs):
             return await cb.call(func, *args, **kwargs)
+
         return wrapper
 
     return decorator
@@ -213,7 +220,7 @@ class RetryPolicy:
         initial_delay: float = 1.0,
         max_delay: float = 60.0,
         exponential_base: float = 2.0,
-        jitter: bool = True
+        jitter: bool = True,
     ):
         """
         Initialise la politique de retry.
@@ -234,12 +241,12 @@ class RetryPolicy:
     def _calculate_delay(self, attempt: int) -> float:
         """Calcule le délai pour une tentative donnée."""
         delay = min(
-            self.initial_delay * (self.exponential_base ** attempt),
-            self.max_delay
+            self.initial_delay * (self.exponential_base**attempt), self.max_delay
         )
 
         if self.jitter:
             import random
+
             delay = delay * (0.5 + random.random())
 
         return delay
@@ -249,7 +256,7 @@ class RetryPolicy:
         func: Callable,
         *args,
         retryable_exceptions: tuple = (Exception,),
-        **kwargs
+        **kwargs,
     ) -> Any:
         """
         Exécute une fonction avec retry automatique.
@@ -266,7 +273,7 @@ class RetryPolicy:
         Raises:
             Exception: Dernière exception après épuisement des retries
         """
-        last_exception = None
+        last_exception: Optional[BaseException] = None
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -297,7 +304,7 @@ def retry(
     max_retries: int = 3,
     initial_delay: float = 1.0,
     max_delay: float = 60.0,
-    retryable_exceptions: tuple = (Exception,)
+    retryable_exceptions: tuple = (Exception,),
 ):
     """
     Décorateur pour appliquer une politique de retry.
@@ -315,20 +322,16 @@ def retry(
             pass
     """
     policy = RetryPolicy(
-        max_retries=max_retries,
-        initial_delay=initial_delay,
-        max_delay=max_delay
+        max_retries=max_retries, initial_delay=initial_delay, max_delay=max_delay
     )
 
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs):
             return await policy.execute(
-                func,
-                *args,
-                retryable_exceptions=retryable_exceptions,
-                **kwargs
+                func, *args, retryable_exceptions=retryable_exceptions, **kwargs
             )
+
         return wrapper
 
     return decorator
@@ -347,7 +350,7 @@ class HealthCheck:
         name: str,
         check_func: Callable,
         timeout: float = 5.0,
-        critical: bool = False
+        critical: bool = False,
     ):
         """
         Initialise un health check.
@@ -377,10 +380,7 @@ class HealthCheck:
 
         try:
             # Exécuter avec timeout
-            result = await asyncio.wait_for(
-                self.check_func(),
-                timeout=self.timeout
-            )
+            result = await asyncio.wait_for(self.check_func(), timeout=self.timeout)
 
             duration = time.time() - start_time
             self.last_status = HealthStatus.HEALTHY
@@ -393,7 +393,7 @@ class HealthCheck:
                 "critical": self.critical,
                 "duration_ms": round(duration * 1000, 2),
                 "timestamp": self.last_check.isoformat(),
-                "details": result if isinstance(result, dict) else {}
+                "details": result if isinstance(result, dict) else {},
             }
 
         except asyncio.TimeoutError:
@@ -410,7 +410,7 @@ class HealthCheck:
                 "critical": self.critical,
                 "duration_ms": round(duration * 1000, 2),
                 "timestamp": self.last_check.isoformat(),
-                "error": self.last_error
+                "error": self.last_error,
             }
 
         except Exception as e:
@@ -427,7 +427,7 @@ class HealthCheck:
                 "critical": self.critical,
                 "duration_ms": round(duration * 1000, 2),
                 "timestamp": self.last_check.isoformat(),
-                "error": self.last_error
+                "error": self.last_error,
             }
 
 
@@ -471,7 +471,7 @@ class HealthCheckRegistry:
         Returns:
             Résultat global avec statut et détails de chaque check
         """
-        results = []
+        results: List[Dict[str, Any]] = []
 
         # Exécuter tous les checks en parallèle
         tasks = [check.check() for check in self.checks.values()]
@@ -480,11 +480,13 @@ class HealthCheckRegistry:
         for result in check_results:
             if isinstance(result, Exception):
                 logger.error(f"Health check crashed: {result}")
-                results.append({
-                    "name": "unknown",
-                    "status": HealthStatus.UNHEALTHY.value,
-                    "error": str(result)
-                })
+                results.append(
+                    {
+                        "name": "unknown",
+                        "status": HealthStatus.UNHEALTHY.value,
+                        "error": str(result),
+                    }
+                )
             else:
                 results.append(result)
 
@@ -494,7 +496,7 @@ class HealthCheckRegistry:
         return {
             "status": overall_status.value,
             "timestamp": datetime.utcnow().isoformat(),
-            "checks": results
+            "checks": results,
         }
 
     def _determine_overall_status(self, results: List[Dict[str, Any]]) -> HealthStatus:
@@ -504,7 +506,10 @@ class HealthCheckRegistry:
 
         # Si un check critique est UNHEALTHY, tout le système est UNHEALTHY
         for result in results:
-            if result.get("critical") and result.get("status") == HealthStatus.UNHEALTHY.value:
+            if (
+                result.get("critical")
+                and result.get("status") == HealthStatus.UNHEALTHY.value
+            ):
                 return HealthStatus.UNHEALTHY
 
         # Si tous les checks sont HEALTHY

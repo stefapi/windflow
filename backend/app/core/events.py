@@ -5,12 +5,11 @@ Implémente Event Sourcing, CQRS pattern, et Pub/Sub messaging
 avec support Redis Streams (optionnel).
 """
 
-from typing import Optional, Dict, Any, List, Callable, Awaitable
+import logging
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from dataclasses import dataclass, field
-import json
-import logging
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 from uuid import UUID, uuid4
 
 logger = logging.getLogger(__name__)
@@ -18,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class EventType(str, Enum):
     """Types d'événements système."""
+
     # Déploiement
     DEPLOYMENT_CREATED = "deployment.created"
     DEPLOYMENT_STARTED = "deployment.started"
@@ -58,6 +58,7 @@ class Event:
 
     Représente un fait qui s'est produit dans le système.
     """
+
     event_id: UUID = field(default_factory=uuid4)
     event_type: EventType = EventType.SYSTEM_ERROR
     aggregate_id: Optional[UUID] = None
@@ -79,7 +80,7 @@ class Event:
             "metadata": self.metadata,
             "timestamp": self.timestamp.isoformat(),
             "version": self.version,
-            "user_id": str(self.user_id) if self.user_id else None
+            "user_id": str(self.user_id) if self.user_id else None,
         }
 
     @classmethod
@@ -88,13 +89,15 @@ class Event:
         return cls(
             event_id=UUID(data["event_id"]),
             event_type=EventType(data["event_type"]),
-            aggregate_id=UUID(data["aggregate_id"]) if data.get("aggregate_id") else None,
+            aggregate_id=(
+                UUID(data["aggregate_id"]) if data.get("aggregate_id") else None
+            ),
             aggregate_type=data.get("aggregate_type"),
             payload=data.get("payload", {}),
             metadata=data.get("metadata", {}),
             timestamp=datetime.fromisoformat(data["timestamp"]),
             version=data.get("version", 1),
-            user_id=UUID(data["user_id"]) if data.get("user_id") else None
+            user_id=UUID(data["user_id"]) if data.get("user_id") else None,
         )
 
 
@@ -207,10 +210,7 @@ class EventBus:
             # Ajouter le type original dans les métadonnées
             event_data = {**event_data, "_original_event_type": str(event_type)}
 
-        event = Event(
-            event_type=evt_type,
-            payload=event_data
-        )
+        event = Event(event_type=evt_type, payload=event_data)
         await self.publish(event)
 
     async def _publish_to_redis(self, event: Event) -> None:
@@ -228,9 +228,7 @@ class EventBus:
             logger.error(f"Failed to publish to Redis: {e}")
 
     async def replay_events(
-        self,
-        aggregate_id: UUID,
-        event_types: Optional[List[EventType]] = None
+        self, aggregate_id: UUID, event_types: Optional[List[EventType]] = None
     ) -> List[Event]:
         """
         Rejoue les événements pour un agrégat (Event Sourcing).
@@ -258,7 +256,7 @@ class EventBus:
                 event_type.value: len(handlers)
                 for event_type, handlers in self._handlers.items()
             },
-            "total_handlers": sum(len(h) for h in self._handlers.values())
+            "total_handlers": sum(len(h) for h in self._handlers.values()),
         }
 
 
@@ -270,11 +268,7 @@ class EventStore:
     de l'état des agrégats.
     """
 
-    def __init__(
-        self,
-        redis_enabled: bool = False,
-        redis_url: Optional[str] = None
-    ):
+    def __init__(self, redis_enabled: bool = False, redis_url: Optional[str] = None):
         """
         Initialise l'Event Store.
 
@@ -317,14 +311,13 @@ class EventStore:
     async def _append_to_redis(self, event: Event) -> None:
         """Persiste l'événement dans Redis."""
         # TODO: Implémenter avec Redis
-        pass
 
     async def get_events(
         self,
         aggregate_id: Optional[UUID] = None,
         event_types: Optional[List[EventType]] = None,
         since: Optional[datetime] = None,
-        limit: int = 100
+        limit: int = 100,
     ) -> List[Event]:
         """
         Récupère des événements selon des critères.
@@ -348,7 +341,7 @@ class EventStore:
         aggregate_id: Optional[UUID],
         event_types: Optional[List[EventType]],
         since: Optional[datetime],
-        limit: int
+        limit: int,
     ) -> List[Event]:
         """Récupère les événements depuis la mémoire."""
         events = self._in_memory_store
@@ -369,7 +362,7 @@ class EventStore:
         aggregate_id: Optional[UUID],
         event_types: Optional[List[EventType]],
         since: Optional[datetime],
-        limit: int
+        limit: int,
     ) -> List[Event]:
         """Récupère les événements depuis Redis."""
         # TODO: Implémenter la lecture depuis Redis
@@ -397,7 +390,7 @@ class EventStore:
             "aggregate_id": str(aggregate_id),
             "event_count": len(events),
             "last_event": events[-1].to_dict() if events else None,
-            "version": events[-1].version if events else 0
+            "version": events[-1].version if events else 0,
         }
 
         return state
@@ -408,8 +401,7 @@ _event_bus: Optional[EventBus] = None
 
 
 def get_event_bus(
-    redis_enabled: bool = False,
-    redis_url: Optional[str] = None
+    redis_enabled: bool = False, redis_url: Optional[str] = None
 ) -> EventBus:
     """
     Retourne l'instance globale du bus d'événements (singleton).

@@ -434,12 +434,12 @@ function handleUserCommand(command: string): void {
 <style scoped>
 .sidebar-nav {
   display: flex;
-  flex-direction: column;
-  height: 100%;
-  background-color: var(--color-bg-primary);
-  color: var(--color-text-primary);
   width: 220px;
+  height: 100%;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-primary);
   transition: width 0.3s ease;
+  flex-direction: column;
 }
 
 /* Collapsed state */
@@ -450,25 +450,25 @@ function handleUserCommand(command: string): void {
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 20px;
-  border-bottom: 1px solid var(--color-border);
   min-height: 64px;
+  padding: 20px;
+  gap: 10px;
+  border-bottom: 1px solid var(--color-border);
 }
 
 /* Toggle button */
 .toggle-btn {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 4px;
   margin-left: auto;
+  color: var(--color-text-secondary);
   background: transparent;
   border: none;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  padding: 4px;
   border-radius: 4px;
   transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  cursor: pointer;
 }
 
 .toggle-btn:hover {
@@ -477,10 +477,9 @@ function handleUserCommand(command: string): void {
 }
 
 .sidebar-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden auto;
   padding: 10px 0;
+  flex: 1;
 }
 
 .nav-section {
@@ -488,29 +487,29 @@ function handleUserCommand(command: string): void {
 }
 
 .section-title {
+  overflow: hidden;
   padding: 8px 20px 4px;
   font-size: 11px;
-  font-weight: 600;
+  white-space: nowrap;
   color: var(--color-text-secondary);
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  white-space: nowrap;
-  overflow: hidden;
 }
 
 .nav-list {
-  list-style: none;
   padding: 0;
   margin: 0;
+  list-style: none;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
   padding: 10px 20px;
-  cursor: pointer;
-  transition: background-color 0.2s;
   color: var(--color-text-primary);
+  transition: background-color 0.2s;
+  cursor: pointer;
 }
 
 .nav-item:hover {
@@ -518,15 +517,15 @@ function handleUserCommand(command: string): void {
 }
 
 .nav-item.active {
-  background-color: var(--color-bg-elevated);
   color: var(--color-accent);
+  background-color: var(--color-bg-elevated);
 }
 
 .nav-item.plugin-title {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
   padding: 6px 20px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
   cursor: default;
 }
 
@@ -543,15 +542,15 @@ function handleUserCommand(command: string): void {
 }
 
 .nav-icon {
-  font-size: 18px;
   flex-shrink: 0;
+  font-size: 18px;
 }
 
 .nav-label {
-  flex: 1;
+  overflow: hidden;
   font-size: 14px;
   white-space: nowrap;
-  overflow: hidden;
+  flex: 1;
 }
 
 /* Collapsed state adjustments */
@@ -562,8 +561,8 @@ function handleUserCommand(command: string): void {
 }
 
 .sidebar-nav.collapsed .toggle-btn {
-  margin-left: 0;
   width: 100%;
+  margin-left: 0;
 }
 
 .sidebar-nav.collapsed .nav-item {
@@ -588,13 +587,13 @@ function handleUserCommand(command: string): void {
 .target-selector {
   display: flex;
   align-items: center;
-  gap: 8px;
   padding: 8px 12px;
+  margin-bottom: 8px;
   background-color: var(--color-bg-secondary);
   border-radius: 8px;
-  cursor: pointer;
-  margin-bottom: 8px;
   transition: background-color 0.2s;
+  gap: 8px;
+  cursor: pointer;
 }
 
 .target-selector:hover {
@@ -602,15 +601,15 @@ function handleUserCommand(command: string): void {
 }
 
 .target-indicator {
-  font-size: 12px;
   flex-shrink: 0;
+  font-size: 12px;
 }
 
 .target-name {
-  font-size: 13px;
-  color: var(--color-text-primary);
-  white-space: nowrap;
   overflow: hidden;
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--color-text-primary);
 }
 
 /* Collapsed footer */
@@ -637,17 +636,17 @@ function handleUserCommand(command: string): void {
 }
 
 .user-icon {
+  flex-shrink: 0;
   font-size: 16px;
   color: var(--color-text-secondary);
-  flex-shrink: 0;
 }
 
 .user-name {
-  flex: 1;
-  font-size: 13px;
-  color: var(--color-text-primary);
-  white-space: nowrap;
   overflow: hidden;
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  flex: 1;
 }
 
 .user-menu-trigger {
@@ -672,15 +671,15 @@ function handleUserCommand(command: string): void {
 }
 
 /* Responsive: Mobile overlay sidebar */
-@media (max-width: 767px) {
+@media (width <= 767px) {
   .sidebar-nav {
     position: fixed;
-    left: 0;
     top: 0;
-    height: 100vh;
+    left: 0;
     z-index: 1000;
-    transform: translateX(-100%);
     width: 220px !important;
+    height: 100vh;
+    transform: translateX(-100%);
   }
 
   .sidebar-nav:not(.collapsed) {

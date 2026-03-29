@@ -2,14 +2,14 @@
 Modèles de données SQLAlchemy pour WindFlow.
 """
 
-from .user import User
-from .organization import Organization
-from .target import Target
-from .stack import Stack
 from .deployment import Deployment
-from .stack_version import StackVersion
-from .target_capability import TargetCapability
+from .organization import Organization
 from .scheduled_task import ScheduledTask
+from .stack import Stack
+from .stack_version import StackVersion
+from .target import Target
+from .target_capability import TargetCapability
+from .user import User
 
 __all__ = [
     "User",

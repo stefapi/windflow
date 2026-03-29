@@ -1,6 +1,5 @@
 """Test simple pour valider le rendu des templates Jinja2 avec fonctions personnalisées."""
 
-import pytest
 from app.services.deployment_service import DeploymentService
 
 
@@ -10,13 +9,11 @@ def test_render_template_with_generate_password():
         "database": {
             "host": "localhost",
             "password": "{{ generate_password(24) }}",
-            "user": "{{ db_user }}"
+            "user": "{{ db_user }}",
         }
     }
 
-    variables = {
-        "db_user": "admin"
-    }
+    variables = {"db_user": "admin"}
 
     result = DeploymentService._render_template(template, variables)
 
@@ -32,11 +29,7 @@ def test_render_template_with_generate_password():
 
 def test_render_template_with_generate_secret():
     """Test que generate_secret() est correctement rendu dans les templates."""
-    template = {
-        "app": {
-            "secret_key": "{{ generate_secret(32) }}"
-        }
-    }
+    template = {"app": {"secret_key": "{{ generate_secret(32) }}"}}
 
     result = DeploymentService._render_template(template, {})
 
@@ -45,7 +38,7 @@ def test_render_template_with_generate_secret():
     # Vérifier que le secret a la bonne longueur
     assert len(result["app"]["secret_key"]) == 32
     # Vérifier que c'est bien de l'hexadécimal
-    assert all(c in '0123456789abcdef' for c in result["app"]["secret_key"])
+    assert all(c in "0123456789abcdef" for c in result["app"]["secret_key"])
 
 
 def test_render_template_with_multiple_passwords():
@@ -53,7 +46,7 @@ def test_render_template_with_multiple_passwords():
     template = {
         "passwords": {
             "admin": "{{ generate_password(16) }}",
-            "user": "{{ generate_password(16) }}"
+            "user": "{{ generate_password(16) }}",
         }
     }
 
@@ -73,20 +66,14 @@ def test_render_template_with_nested_structures():
             "postgres": {
                 "environment": {
                     "POSTGRES_PASSWORD": "{{ generate_password(24) }}",
-                    "POSTGRES_USER": "{{ db_user }}"
+                    "POSTGRES_USER": "{{ db_user }}",
                 }
             },
-            "redis": {
-                "environment": {
-                    "REDIS_PASSWORD": "{{ generate_password(32) }}"
-                }
-            }
+            "redis": {"environment": {"REDIS_PASSWORD": "{{ generate_password(32) }}"}},
         }
     }
 
-    variables = {
-        "db_user": "postgres"
-    }
+    variables = {"db_user": "postgres"}
 
     result = DeploymentService._render_template(template, variables)
 
@@ -123,7 +110,7 @@ def test_render_template_list():
     template = [
         "{{ generate_password(8) }}",
         "{{ generate_password(8) }}",
-        "static_value"
+        "static_value",
     ]
 
     result = DeploymentService._render_template(template, {})

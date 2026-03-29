@@ -5,10 +5,11 @@ Stocke l'historique des modifications d'un stack (compose content, variables, et
 """
 
 from datetime import datetime
-from uuid import uuid4
-from sqlalchemy import String, DateTime, JSON, ForeignKey, Text, Integer
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING
+from uuid import uuid4
+
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
 

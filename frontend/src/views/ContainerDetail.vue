@@ -708,12 +708,12 @@ onMounted(() => {
 
 .loading-container {
   display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
+  align-items: center;
   padding: 40px;
-  gap: 12px;
   color: var(--color-text-secondary);
+  flex-direction: column;
+  gap: 12px;
 }
 
 .is-loading {
@@ -724,6 +724,7 @@ onMounted(() => {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -742,15 +743,15 @@ onMounted(() => {
 }
 
 .id-with-copy code {
-  font-family: monospace;
   font-size: 13px;
+  font-family: monospace;
 }
 
 .command-text {
-  font-family: monospace;
-  font-size: 13px;
-  background-color: var(--color-bg-hover);
   padding: 4px 8px;
+  font-size: 13px;
+  font-family: monospace;
+  background-color: var(--color-bg-hover);
   border-radius: 4px;
 }
 
@@ -777,8 +778,8 @@ onMounted(() => {
 }
 
 .value-cell code {
-  font-family: monospace;
   font-size: 12px;
+  font-family: monospace;
   word-break: break-all;
 }
 
@@ -800,20 +801,21 @@ onMounted(() => {
 
 /* Inspect Drawer */
 .inspect-container {
-  height: 100%;
   display: flex;
+  height: 100%;
   flex-direction: column;
 }
 
 .inspect-textarea :deep(textarea) {
+  font-size: 11px;
+
   /* Propriétés font uniquement - couleurs gérées par la classe code-block UnoCSS */
   font-family: monospace;
-  font-size: 11px;
   line-height: 1.4;
 }
 
 /* Responsive adjustments for mobile */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .header-content {
     flex-direction: column;
     align-items: flex-start;

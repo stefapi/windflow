@@ -156,28 +156,28 @@ const badgeClasses = computed(() => [
 
 /* Status color variants using design tokens */
 .status-badge--success {
-  background-color: var(--color-success-light);
   color: var(--color-success);
+  background-color: var(--color-success-light);
 }
 
 .status-badge--info {
-  background-color: var(--color-info-light);
   color: var(--color-info);
+  background-color: var(--color-info-light);
 }
 
 .status-badge--error {
-  background-color: var(--color-error-light);
   color: var(--color-error);
+  background-color: var(--color-error-light);
 }
 
 .status-badge--warning {
-  background-color: var(--color-warning-light);
   color: var(--color-warning);
+  background-color: var(--color-warning-light);
 }
 
 .status-badge--neutral {
-  background-color: var(--color-bg-elevated);
   color: var(--color-text-secondary);
+  background-color: var(--color-bg-elevated);
 }
 
 /* Icon styling */
@@ -194,6 +194,7 @@ const badgeClasses = computed(() => [
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }

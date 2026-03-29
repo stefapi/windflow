@@ -5,13 +5,13 @@ Permet de charger et parser des définitions de stacks depuis des fichiers
 YAML pour les importer dans la bibliothèque de stacks WindFlow.
 """
 
-import yaml
+import re
 import secrets
 import string
-import re
 from pathlib import Path
-from typing import Dict, Any, Optional, List
-from jinja2 import Template
+from typing import Any, Dict, List
+
+import yaml
 
 from ..schemas.stack import StackCreate
 
@@ -31,7 +31,7 @@ class StackLoaderService:
             str: Mot de passe généré
         """
         alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
-        password = ''.join(secrets.choice(alphabet) for _ in range(length))
+        password = "".join(secrets.choice(alphabet) for _ in range(length))
         return password
 
     @staticmethod
@@ -46,7 +46,7 @@ class StackLoaderService:
             str: Clé secrète générée
         """
         alphabet = string.ascii_letters + string.digits
-        secret = ''.join(secrets.choice(alphabet) for _ in range(length))
+        secret = "".join(secrets.choice(alphabet) for _ in range(length))
         return secret
 
     @staticmethod
@@ -74,13 +74,13 @@ class StackLoaderService:
 
         # Traitement des fonctions de génération
         if "generate_password" in default_value:
-            match = re.search(r'generate_password\((\d+)\)', default_value)
+            match = re.search(r"generate_password\((\d+)\)", default_value)
             if match:
                 length = int(match.group(1))
                 return StackLoaderService.generate_password(length)
 
         if "generate_secret" in default_value:
-            match = re.search(r'generate_secret\((\d+)\)', default_value)
+            match = re.search(r"generate_secret\((\d+)\)", default_value)
             if match:
                 length = int(match.group(1))
                 return StackLoaderService.generate_secret(length)
@@ -115,7 +115,7 @@ class StackLoaderService:
                 "label": var_config.get("label", var_name),
                 "description": var_config.get("description", ""),
                 "default": processed_default,
-                "required": var_config.get("required", False)
+                "required": var_config.get("required", False),
             }
 
             # Ajouter les contraintes optionnelles
@@ -167,7 +167,7 @@ class StackLoaderService:
         if not yaml_path.exists():
             raise FileNotFoundError(f"Stack definition not found: {yaml_path}")
 
-        with open(yaml_path, 'r', encoding='utf-8') as f:
+        with open(yaml_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         # Validation de la structure
@@ -218,7 +218,14 @@ class StackLoaderService:
             if "type" not in var_config:
                 raise ValueError(f"Missing type for variable {var_name}")
 
-            valid_types = ["string", "number", "boolean", "password", "enum", "textarea"]
+            valid_types = [
+                "string",
+                "number",
+                "boolean",
+                "password",
+                "enum",
+                "textarea",
+            ]
             if var_config["type"] not in valid_types:
                 raise ValueError(
                     f"Invalid type '{var_config['type']}' for variable {var_name}. "
@@ -226,10 +233,7 @@ class StackLoaderService:
                 )
 
     @staticmethod
-    def to_stack_create(
-        data: Dict[str, Any],
-        organization_id: str
-    ) -> StackCreate:
+    def to_stack_create(data: Dict[str, Any], organization_id: str) -> StackCreate:
         """
         Convertit une définition YAML en schéma StackCreate.
 
@@ -265,15 +269,15 @@ class StackLoaderService:
             tags=metadata.get("tags", []),
             is_public=metadata.get("is_public", False),
             screenshots=metadata.get("screenshots", []),
-            organization_id=organization_id
+            organization_id=organization_id,
+            deployment_name=metadata.get("deployment_name"),
         )
 
         return stack_create
 
     @staticmethod
     def load_all_from_directory(
-        directory: Path,
-        organization_id: str
+        directory: Path, organization_id: str
     ) -> List[StackCreate]:
         """
         Charge tous les stacks d'un répertoire.
@@ -285,7 +289,7 @@ class StackLoaderService:
         Returns:
             List[StackCreate]: Liste des schémas de création
         """
-        stacks = []
+        stacks: List[StackCreate] = []
 
         if not directory.exists():
             return stacks
@@ -298,10 +302,7 @@ class StackLoaderService:
 
             try:
                 data = StackLoaderService.load_from_yaml(yaml_file)
-                stack_create = StackLoaderService.to_stack_create(
-                    data,
-                    organization_id
-                )
+                stack_create = StackLoaderService.to_stack_create(data, organization_id)
                 stacks.append(stack_create)
                 print(f"✓ Chargé: {yaml_file.name} - {stack_create.name}")
             except Exception as e:
@@ -323,6 +324,6 @@ class StackLoaderService:
         """
         # Convertir le nom en slug
         name = stack_create.name.lower()
-        name = re.sub(r'[^\w\s-]', '', name)
-        name = re.sub(r'[-\s]+', '-', name)
+        name = re.sub(r"[^\w\s-]", "", name)
+        name = re.sub(r"[-\s]+", "-", name)
         return f"{name}.yaml"

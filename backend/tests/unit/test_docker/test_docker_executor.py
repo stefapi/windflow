@@ -4,20 +4,18 @@ Unit tests for DockerExecutor.
 These tests mock subprocess and httpx to avoid real Docker operations.
 """
 
-import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.services.docker_executor import (
     CLIDockerExecutor,
-    SocketDockerExecutor,
-    DockerExecutor,
     ComposeExecutor,
+    DockerExecutor,
+    SocketDockerExecutor,
     get_docker_executor,
-    DockerExecutorBase,
 )
-from app.services.docker_client_service import DockerClientService
 
 
 class TestCLIDockerExecutor:
@@ -141,13 +139,10 @@ class TestCLIDockerExecutor:
         # Mock subprocess
         mock_process = MagicMock()
         mock_process.returncode = 0
-        mock_process.communicate = AsyncMock(
-            return_value=(b"abc123def456", b"")
-        )
+        mock_process.communicate = AsyncMock(return_value=(b"abc123def456", b""))
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, result = await executor.deploy_container(config)
@@ -169,8 +164,7 @@ class TestCLIDockerExecutor:
         )
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, result = await executor.deploy_container(config)
@@ -188,8 +182,7 @@ class TestCLIDockerExecutor:
         mock_process.communicate = AsyncMock(return_value=(b"", b""))
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, result = await executor.start_container("my-container")
@@ -207,8 +200,7 @@ class TestCLIDockerExecutor:
         mock_process.communicate = AsyncMock(return_value=(b"", b""))
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, result = await executor.stop_container("my-container")
@@ -225,8 +217,7 @@ class TestCLIDockerExecutor:
         mock_process.communicate = AsyncMock(return_value=(b"", b""))
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, result = await executor.restart_container("my-container")
@@ -243,8 +234,7 @@ class TestCLIDockerExecutor:
         mock_process.communicate = AsyncMock(return_value=(b"", b""))
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, result = await executor.remove_container("my-container")
@@ -261,13 +251,12 @@ class TestCLIDockerExecutor:
         mock_process.communicate = AsyncMock(
             return_value=(
                 b'[{"Id": "abc123", "Name": "/my-container", "Config": {"Image": "nginx"}, "State": {"Status": "running", "Running": true, "StartedAt": "2024-01-01"}, "RestartCount": 0}]',
-                b""
+                b"",
             )
         )
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, status = await executor.get_container_status("my-container")
@@ -288,8 +277,7 @@ class TestCLIDockerExecutor:
         )
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, logs = await executor.get_container_logs("my-container")
@@ -307,8 +295,7 @@ class TestCLIDockerExecutor:
         mock_process.communicate = AsyncMock(return_value=(b"", b""))
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, result = await executor.remove_volume("my-volume")
@@ -327,8 +314,7 @@ class TestCLIDockerExecutor:
         )
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             # Should still return True for "not found"
@@ -351,8 +337,7 @@ class TestSocketDockerExecutor:
         executor = SocketDockerExecutor()
 
         with patch(
-            "app.services.docker_executor.get_docker_client",
-            new_callable=AsyncMock
+            "app.services.docker_executor.get_docker_client", new_callable=AsyncMock
         ) as mock_get_client:
             mock_get_client.side_effect = Exception("Connection refused")
             client = await executor._get_client()
@@ -364,7 +349,7 @@ class TestSocketDockerExecutor:
         """Test deploy when client is unavailable."""
         executor = SocketDockerExecutor()
 
-        with patch.object(executor, '_get_client', new_callable=AsyncMock) as mock_get:
+        with patch.object(executor, "_get_client", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
             success, result = await executor.deploy_container({"image": "nginx"})
 
@@ -379,7 +364,7 @@ class TestSocketDockerExecutor:
         mock_client = MagicMock()
         mock_client.remove_volume = AsyncMock(side_effect=Exception("no such volume"))
 
-        with patch.object(executor, '_get_client', new_callable=AsyncMock) as mock_get:
+        with patch.object(executor, "_get_client", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_client
             success, result = await executor.remove_volume("nonexistent")
 
@@ -402,12 +387,13 @@ class TestDockerExecutor:
         executor = DockerExecutor(prefer_cli=True)
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_exec:
             mock_process = MagicMock()
             mock_process.returncode = 0
-            mock_process.communicate = AsyncMock(return_value=(b"Docker version 24.0.0", b""))
+            mock_process.communicate = AsyncMock(
+                return_value=(b"Docker version 24.0.0", b"")
+            )
             mock_exec.return_value = mock_process
 
             executor_obj = await executor._get_executor()
@@ -429,7 +415,9 @@ class TestDockerExecutor:
         """Test deploy_container delegates to executor."""
         executor = DockerExecutor(prefer_cli=False)
 
-        with patch.object(executor._socket, 'deploy_container', new_callable=AsyncMock) as mock_deploy:
+        with patch.object(
+            executor._socket, "deploy_container", new_callable=AsyncMock
+        ) as mock_deploy:
             mock_deploy.return_value = (True, "container_id")
             success, result = await executor.deploy_container({"image": "nginx"})
 
@@ -452,18 +440,14 @@ class TestComposeExecutor:
 
         mock_process = MagicMock()
         mock_process.returncode = 0
-        mock_process.communicate = AsyncMock(
-            return_value=(b"Container started", b"")
-        )
+        mock_process.communicate = AsyncMock(return_value=(b"Container started", b""))
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, result = await executor.deploy_compose(
-                Path("/tmp/docker-compose.yml"),
-                "my-project"
+                Path("/tmp/docker-compose.yml"), "my-project"
             )
 
         assert success is True
@@ -480,13 +464,11 @@ class TestComposeExecutor:
         )
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, result = await executor.deploy_compose(
-                Path("/tmp/docker-compose.yml"),
-                "my-project"
+                Path("/tmp/docker-compose.yml"), "my-project"
             )
 
         assert success is False
@@ -501,8 +483,7 @@ class TestComposeExecutor:
         mock_process.communicate = AsyncMock(return_value=(b"", b""))
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, result = await executor.stop_compose("my-project")
@@ -519,8 +500,7 @@ class TestComposeExecutor:
         mock_process.communicate = AsyncMock(return_value=(b"", b""))
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, result = await executor.remove_compose("my-project")
@@ -534,13 +514,10 @@ class TestComposeExecutor:
 
         mock_process = MagicMock()
         mock_process.returncode = 0
-        mock_process.communicate = AsyncMock(
-            return_value=(b"Service logs here", b"")
-        )
+        mock_process.communicate = AsyncMock(return_value=(b"Service logs here", b""))
 
         with patch(
-            "asyncio.create_subprocess_exec",
-            new_callable=AsyncMock
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock
         ) as mock_subprocess:
             mock_subprocess.return_value = mock_process
             success, logs = await executor.get_compose_logs("my-project")

@@ -5,8 +5,9 @@ Vérifie que les IDs de corrélation sont générés, préservés
 et transmis correctement dans les en-têtes HTTP.
 """
 
-import pytest
 import uuid
+
+import pytest
 from httpx import AsyncClient
 
 
@@ -26,10 +27,7 @@ async def test_correlation_id_preserved(client: AsyncClient):
     """Test qu'un correlation ID fourni est préservé."""
     test_id = "test-correlation-123"
 
-    response = await client.get(
-        "/health",
-        headers={"X-Correlation-ID": test_id}
-    )
+    response = await client.get("/health", headers={"X-Correlation-ID": test_id})
 
     assert response.headers["X-Correlation-ID"] == test_id
 
@@ -53,8 +51,9 @@ async def test_correlation_id_on_different_endpoints(client: AsyncClient):
 
     for endpoint in endpoints:
         response = await client.get(endpoint)
-        assert "X-Correlation-ID" in response.headers, \
-            f"Missing X-Correlation-ID on {endpoint}"
+        assert (
+            "X-Correlation-ID" in response.headers
+        ), f"Missing X-Correlation-ID on {endpoint}"
 
 
 @pytest.mark.asyncio

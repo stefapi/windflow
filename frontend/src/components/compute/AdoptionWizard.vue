@@ -489,13 +489,13 @@ function handleClose() {
 }
 
 .compose-code {
-  background: var(--el-fill-color-light);
-  padding: 12px;
-  border-radius: 4px;
-  font-size: 13px;
-  line-height: 1.5;
   overflow-x: auto;
   max-height: 300px;
+  padding: 12px;
+  font-size: 13px;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+  line-height: 1.5;
 }
 
 .wizard-footer {

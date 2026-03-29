@@ -6,16 +6,14 @@ Création et validation des tokens d'accès avec python-jose.
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+
 from jose import JWTError, jwt
 
 from ..config import settings
 from ..schemas.user import TokenData
 
 
-def create_access_token(
-    data: dict,
-    expires_delta: Optional[timedelta] = None
-) -> str:
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
     Crée un token JWT d'accès.
 
@@ -31,14 +29,14 @@ def create_access_token(
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.jwt_access_token_expire_minutes
+        )
 
     to_encode.update({"exp": expire, "type": "access"})
 
     encoded_jwt = jwt.encode(
-        to_encode,
-        settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm
+        to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
     )
 
     return encoded_jwt
@@ -55,14 +53,14 @@ def create_refresh_token(data: dict) -> str:
         Token JWT de rafraîchissement encodé
     """
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.jwt_refresh_token_expire_days)
+    expire = datetime.now(timezone.utc) + timedelta(
+        days=settings.jwt_refresh_token_expire_days
+    )
 
     to_encode.update({"exp": expire, "type": "refresh"})
 
     encoded_jwt = jwt.encode(
-        to_encode,
-        settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm
+        to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
     )
 
     return encoded_jwt
@@ -96,28 +94,26 @@ def decode_access_token(token: str) -> Optional[TokenData]:
     """
     try:
         payload = jwt.decode(
-            token,
-            settings.jwt_secret_key,
-            algorithms=[settings.jwt_algorithm]
+            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
         )
 
         # Vérifier que c'est bien un token d'accès
         if payload.get("type") != "access":
             return None
 
-        user_id: str = payload.get("sub")
-        username: str = payload.get("username")
-        organization_id: str = payload.get("organization_id")
-        is_superuser: bool = payload.get("is_superuser", False)
+        user_id = payload.get("sub")
+        username = payload.get("username")
+        organization_id = payload.get("organization_id")
+        is_superuser = payload.get("is_superuser", False)
 
         if user_id is None:
             return None
 
         token_data = TokenData(
-            user_id=user_id,
-            username=username,
-            organization_id=organization_id,
-            is_superuser=is_superuser
+            user_id=str(user_id),
+            username=str(username) if username is not None else None,
+            organization_id=str(organization_id) if organization_id is not None else None,
+            is_superuser=bool(is_superuser),
         )
 
         return token_data
@@ -138,28 +134,26 @@ def decode_refresh_token(token: str) -> Optional[TokenData]:
     """
     try:
         payload = jwt.decode(
-            token,
-            settings.jwt_secret_key,
-            algorithms=[settings.jwt_algorithm]
+            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
         )
 
         # Vérifier que c'est bien un token de refresh
         if payload.get("type") != "refresh":
             return None
 
-        user_id: str = payload.get("sub")
-        username: str = payload.get("username")
-        organization_id: str = payload.get("organization_id")
-        is_superuser: bool = payload.get("is_superuser", False)
+        user_id = payload.get("sub")
+        username = payload.get("username")
+        organization_id = payload.get("organization_id")
+        is_superuser = payload.get("is_superuser", False)
 
         if user_id is None:
             return None
 
         token_data = TokenData(
-            user_id=user_id,
-            username=username,
-            organization_id=organization_id,
-            is_superuser=is_superuser
+            user_id=str(user_id),
+            username=str(username) if username is not None else None,
+            organization_id=str(organization_id) if organization_id is not None else None,
+            is_superuser=bool(is_superuser),
         )
 
         return token_data
@@ -183,7 +177,7 @@ def get_token_expiration(token: str) -> Optional[datetime]:
             token,
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
-            options={"verify_exp": False}
+            options={"verify_exp": False},
         )
         exp_timestamp = payload.get("exp")
         if exp_timestamp:

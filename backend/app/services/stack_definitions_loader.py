@@ -4,21 +4,17 @@ Service de chargement des définitions de stacks depuis fichiers YAML.
 Scanne le répertoire stacks_definitions/ et charge les stacks dans la base de données.
 """
 
-import yaml
+import logging
 from pathlib import Path
-from typing import List, Tuple, Dict, Any
+from typing import Any, Dict, List, Tuple
+
+import yaml
+from packaging.version import InvalidVersion, Version
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import ValidationError
-from packaging.version import Version, InvalidVersion
 
-from ..schemas.stack_definition import (
-    StackDefinition,
-    StackDefinitionMetadata,
-    StackDefinitionVariable
-)
 from ..models.stack import Stack
-import logging
+from ..schemas.stack_definition import StackDefinition, StackDefinitionVariable
 
 logger = logging.getLogger(__name__)
 
@@ -54,20 +50,26 @@ class StackDefinitionsLoader:
         # Scanner tous les fichiers .yaml
         yaml_files = list(self.definitions_path.glob("*.yaml"))
 
-        logger.info(f"Scan de {len(yaml_files)} fichiers YAML dans {self.definitions_path}")
+        logger.info(
+            f"Scan de {len(yaml_files)} fichiers YAML dans {self.definitions_path}"
+        )
 
         for yaml_file in yaml_files:
             try:
                 definition = self._parse_yaml_file(yaml_file)
                 definitions.append(definition)
-                logger.debug(f"✓ {yaml_file.name}: {definition.metadata.name} v{definition.metadata.version}")
+                logger.debug(
+                    f"✓ {yaml_file.name}: {definition.metadata.name} v{definition.metadata.version}"
+                )
             except Exception as e:
                 error_msg = f"✗ {yaml_file.name}: {str(e)}"
                 errors.append(error_msg)
                 logger.error(error_msg)
 
         if errors:
-            logger.warning(f"{len(errors)} fichier(s) avec erreurs sur {len(yaml_files)}")
+            logger.warning(
+                f"{len(errors)} fichier(s) avec erreurs sur {len(yaml_files)}"
+            )
 
         return definitions
 
@@ -85,7 +87,7 @@ class StackDefinitionsLoader:
             ValidationError: Si le fichier est invalide
             yaml.YAMLError: Si le YAML est malformé
         """
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             raw_data = yaml.safe_load(f)
 
         if not raw_data:
@@ -100,7 +102,7 @@ class StackDefinitionsLoader:
         self,
         session: AsyncSession,
         organization_id: str,
-        strategy: str = "update_if_newer"
+        strategy: str = "update_if_newer",
     ) -> Tuple[int, int, List[str]]:
         """
         Charge les définitions dans la base de données.
@@ -125,10 +127,7 @@ class StackDefinitionsLoader:
         for definition in definitions:
             try:
                 result = await self._load_single_stack(
-                    session,
-                    definition,
-                    organization_id,
-                    strategy
+                    session, definition, organization_id, strategy
                 )
 
                 if result == "created":
@@ -148,7 +147,7 @@ class StackDefinitionsLoader:
         session: AsyncSession,
         definition: StackDefinition,
         organization_id: str,
-        strategy: str
+        strategy: str,
     ) -> str:
         """
         Charge un stack unique dans la base de données.
@@ -160,7 +159,7 @@ class StackDefinitionsLoader:
         stmt = select(Stack).where(
             Stack.name == definition.metadata.name,
             Stack.version == definition.metadata.version,
-            Stack.organization_id == organization_id
+            Stack.organization_id == organization_id,
         )
         result = await session.execute(stmt)
         existing_stack = result.scalar_one_or_none()
@@ -168,35 +167,44 @@ class StackDefinitionsLoader:
         if existing_stack:
             # Stack existe déjà
             if strategy == "skip_existing":
-                logger.debug(f"Stack {definition.metadata.name} v{definition.metadata.version} existe déjà, ignoré")
+                logger.debug(
+                    f"Stack {definition.metadata.name} v{definition.metadata.version} existe déjà, ignoré"
+                )
                 return "skipped"
 
             elif strategy == "update_if_newer":
                 # Comparer les versions
-                if self._is_version_newer(definition.metadata.version, existing_stack.version):
+                if self._is_version_newer(
+                    definition.metadata.version, existing_stack.version
+                ):
                     await self._update_stack(session, existing_stack, definition)
-                    logger.info(f"Stack {definition.metadata.name} mis à jour: v{existing_stack.version} → v{definition.metadata.version}")
+                    logger.info(
+                        f"Stack {definition.metadata.name} mis à jour: v{existing_stack.version} → v{definition.metadata.version}"
+                    )
                     return "updated"
                 else:
-                    logger.debug(f"Stack {definition.metadata.name} v{definition.metadata.version} pas plus récent, ignoré")
+                    logger.debug(
+                        f"Stack {definition.metadata.name} v{definition.metadata.version} pas plus récent, ignoré"
+                    )
                     return "skipped"
 
             elif strategy == "force_update":
                 await self._update_stack(session, existing_stack, definition)
-                logger.info(f"Stack {definition.metadata.name} v{definition.metadata.version} écrasé (force)")
+                logger.info(
+                    f"Stack {definition.metadata.name} v{definition.metadata.version} écrasé (force)"
+                )
                 return "updated"
 
         else:
             # Créer un nouveau stack
-            new_stack = await self._create_stack(session, definition, organization_id)
-            logger.info(f"Stack {definition.metadata.name} v{definition.metadata.version} créé")
+            await self._create_stack(session, definition, organization_id)
+            logger.info(
+                f"Stack {definition.metadata.name} v{definition.metadata.version} créé"
+            )
             return "created"
 
     async def _create_stack(
-        self,
-        session: AsyncSession,
-        definition: StackDefinition,
-        organization_id: str
+        self, session: AsyncSession, definition: StackDefinition, organization_id: str
     ) -> Stack:
         """Crée un nouveau stack dans la base de données."""
 
@@ -217,7 +225,7 @@ class StackDefinitionsLoader:
             author=definition.metadata.author,
             license=definition.metadata.license,
             deployment_name=definition.metadata.deployment_name,
-            organization_id=organization_id
+            organization_id=organization_id,
         )
 
         session.add(stack)
@@ -226,10 +234,7 @@ class StackDefinitionsLoader:
         return stack
 
     async def _update_stack(
-        self,
-        session: AsyncSession,
-        stack: Stack,
-        definition: StackDefinition
+        self, session: AsyncSession, stack: Stack, definition: StackDefinition
     ) -> None:
         """Met à jour un stack existant."""
 
@@ -252,8 +257,7 @@ class StackDefinitionsLoader:
         await session.flush()
 
     def _convert_variables_to_db_format(
-        self,
-        variables: Dict[str, StackDefinitionVariable]
+        self, variables: Dict[str, StackDefinitionVariable]
     ) -> Dict[str, Any]:
         """
         Convertit les variables Pydantic en format dict pour la DB.
@@ -273,12 +277,14 @@ class StackDefinitionsLoader:
         db_variables = {}
         for var_name, var_def in variables.items():
             # Utiliser mode='json' pour forcer la sérialisation des Enums en string
-            var_dict = var_def.model_dump(mode='json', exclude_none=True)
+            var_dict = var_def.model_dump(mode="json", exclude_none=True)
 
             # Pour les groupes, s'assurer que les sous-variables sont bien sérialisées
-            if var_def.type == 'group' and var_def.variables:
+            if var_def.type == "group" and var_def.variables:
                 # Récursion pour les sous-variables
-                var_dict['variables'] = self._convert_variables_to_db_format(var_def.variables)
+                var_dict["variables"] = self._convert_variables_to_db_format(
+                    var_def.variables
+                )
 
             db_variables[var_name] = var_dict
 

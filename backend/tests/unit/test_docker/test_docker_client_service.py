@@ -4,18 +4,16 @@ Unit tests for DockerClientService.
 These tests mock aiohttp to avoid real Docker connections.
 """
 
-import json
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from app.services.docker_client_service import (
     DEFAULT_DOCKER_SOCKET,
     DEFAULT_TIMEOUT,
     ContainerDetail,
     ContainerInfo,
     DockerClientService,
-    ExecResult,
     ImageInfo,
     NetworkInfo,
     PullProgressEvent,

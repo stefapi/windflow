@@ -10,10 +10,11 @@ Classes:
     UserConnectionManager: Gestion des connexions par utilisateur
 """
 
-from typing import Dict, Set, Optional
-from fastapi import WebSocket
 import asyncio
 import logging
+from typing import Dict, Optional, Set
+
+from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # BROADCAST MANAGER - Logique commune de broadcast
 # ============================================================================
+
 
 class BroadcastManager:
     """
@@ -32,9 +34,7 @@ class BroadcastManager:
 
     @staticmethod
     async def _broadcast_to_connections(
-        connections: Set[WebSocket],
-        message: dict,
-        context_description: str = ""
+        connections: Set[WebSocket], message: dict, context_description: str = ""
     ) -> tuple[int, Set[WebSocket]]:
         """
         Logique commune pour broadcaster un message à un ensemble de connexions.
@@ -55,18 +55,16 @@ class BroadcastManager:
                 await websocket.send_json(message)
                 sent_count += 1
             except Exception as e:
-                logger.error(f"Error broadcasting to WebSocket {context_description}: {e}")
+                logger.error(
+                    f"Error broadcasting to WebSocket {context_description}: {e}"
+                )
                 disconnected.add(websocket)
 
         return sent_count, disconnected
 
     @staticmethod
     def _log_broadcast(
-        message: dict,
-        sent_count: int,
-        total_count: int,
-        context: str,
-        icon: str = "📡"
+        message: dict, sent_count: int, total_count: int, context: str, icon: str = "📡"
     ) -> None:
         """
         Log standardisé pour les broadcasts.
@@ -80,8 +78,12 @@ class BroadcastManager:
         """
         if sent_count > 0:
             # Log debug pour détails, info uniquement pour événements importants
-            message_type = message.get('type', 'unknown')
-            if message_type in ['DEPLOYMENT_STATUS_CHANGED', 'DEPLOYMENT_COMPLETE', 'AUTH_LOGIN_SUCCESS']:
+            message_type = message.get("type", "unknown")
+            if message_type in [
+                "DEPLOYMENT_STATUS_CHANGED",
+                "DEPLOYMENT_COMPLETE",
+                "AUTH_LOGIN_SUCCESS",
+            ]:
                 logger.info(
                     f"{icon} WebSocket broadcast: {message_type} "
                     f"→ {sent_count}/{total_count} client(s) ({context})"
@@ -100,6 +102,7 @@ class BroadcastManager:
 # ============================================================================
 # CONNECTION MANAGER - Gestion des connexions par déploiement
 # ============================================================================
+
 
 class ConnectionManager:
     """
@@ -166,17 +169,12 @@ class ConnectionManager:
 
         # Utiliser la logique commune de broadcast
         sent_count, disconnected = await BroadcastManager._broadcast_to_connections(
-            connections,
-            message,
-            f"deployment {deployment_id}"
+            connections, message, f"deployment {deployment_id}"
         )
 
         # Log standardisé
         BroadcastManager._log_broadcast(
-            message,
-            sent_count,
-            connection_count,
-            f"deployment: {deployment_id}"
+            message, sent_count, connection_count, f"deployment: {deployment_id}"
         )
 
         # Nettoyer les connexions mortes
@@ -189,6 +187,7 @@ class ConnectionManager:
 # ============================================================================
 # USER CONNECTION MANAGER - Gestion des connexions par utilisateur
 # ============================================================================
+
 
 class UserConnectionManager:
     """
@@ -207,10 +206,15 @@ class UserConnectionManager:
         # deployment_id -> set of user_ids subscribed to deployment logs
         self.deployment_subscribers: Dict[str, Set[str]] = {}
         # user_id -> PluginContext for dispatching events to plugins
-        self.user_plugin_contexts: Dict[str, 'PluginContext'] = {}
+        self.user_plugin_contexts: Dict[str, "PluginContext"] = {}  # noqa: F821
         self._lock = asyncio.Lock()
 
-    async def add_connection(self, user_id: str, websocket: WebSocket, context: Optional['PluginContext'] = None):
+    async def add_connection(
+        self,
+        user_id: str,
+        websocket: WebSocket,
+        context: Optional["PluginContext"] = None,  # noqa: F821
+    ):
         """
         Ajoute une connexion utilisateur.
 
@@ -250,7 +254,9 @@ class UserConnectionManager:
                     if user_id in self.user_plugin_contexts:
                         del self.user_plugin_contexts[user_id]
 
-    async def subscribe_to_event(self, user_id: str, event_type: str, websocket: WebSocket):
+    async def subscribe_to_event(
+        self, user_id: str, event_type: str, websocket: WebSocket
+    ):
         """
         Abonne un utilisateur à un type d'événement.
 
@@ -264,7 +270,9 @@ class UserConnectionManager:
                 self.user_subscriptions[user_id] = set()
             self.user_subscriptions[user_id].add(event_type)
 
-    async def unsubscribe_from_event(self, user_id: str, event_type: str, websocket: WebSocket):
+    async def unsubscribe_from_event(
+        self, user_id: str, event_type: str, websocket: WebSocket
+    ):
         """
         Désabonne un utilisateur d'un type d'événement.
 
@@ -281,7 +289,9 @@ class UserConnectionManager:
                 if not self.user_subscriptions[user_id]:
                     del self.user_subscriptions[user_id]
 
-    async def subscribe_to_deployment_logs(self, user_id: str, deployment_id: str, websocket: WebSocket):
+    async def subscribe_to_deployment_logs(
+        self, user_id: str, deployment_id: str, websocket: WebSocket
+    ):
         """
         Abonne un utilisateur aux logs d'un déploiement.
 
@@ -312,17 +322,12 @@ class UserConnectionManager:
 
         # Utiliser la logique commune de broadcast
         sent_count, disconnected = await BroadcastManager._broadcast_to_connections(
-            connections,
-            message,
-            f"user {user_id}"
+            connections, message, f"user {user_id}"
         )
 
         # Log standardisé
         BroadcastManager._log_broadcast(
-            message,
-            sent_count,
-            connection_count,
-            f"user: {user_id}"
+            message, sent_count, connection_count, f"user: {user_id}"
         )
 
         # Nettoyer les connexions mortes
@@ -344,9 +349,7 @@ class UserConnectionManager:
         disconnected_users = set()
         subscriber_count = 0
 
-        logger.debug(
-            f"📢 Finding subscribers for event: {event_type}"
-        )
+        logger.debug(f"📢 Finding subscribers for event: {event_type}")
 
         async with self._lock:
             for user_id, subscriptions in self.user_subscriptions.items():
@@ -364,16 +367,18 @@ class UserConnectionManager:
 
         # Utiliser la logique commune de broadcast
         sent_count, disconnected = await BroadcastManager._broadcast_to_connections(
-            all_connections,
-            message,
-            f"event subscribers for {event_type}"
+            all_connections, message, f"event subscribers for {event_type}"
         )
 
         # Log standardisé avec info sur les subscribers
-        message_type = message.get('type', 'unknown')
+        message_type = message.get("type", "unknown")
         if sent_count > 0:
             # Log important uniquement pour certains événements
-            if message_type in ['DEPLOYMENT_STATUS_CHANGED', 'DEPLOYMENT_COMPLETE', 'AUTH_LOGIN_SUCCESS']:
+            if message_type in [
+                "DEPLOYMENT_STATUS_CHANGED",
+                "DEPLOYMENT_COMPLETE",
+                "AUTH_LOGIN_SUCCESS",
+            ]:
                 logger.info(
                     f"✅ WebSocket broadcast successful: {message_type} "
                     f"→ {sent_count} client(s) / {subscriber_count} subscriber(s) (event: {event_type})"
@@ -388,9 +393,7 @@ class UserConnectionManager:
                 f"⚠️ Event {event_type} has {subscriber_count} subscriber(s) but NO active connections!"
             )
         else:
-            logger.debug(
-                f"No subscribers found for event {event_type}"
-            )
+            logger.debug(f"No subscribers found for event {event_type}")
 
         # Nettoyer les connexions mortes
         if disconnected:
@@ -404,7 +407,9 @@ class UserConnectionManager:
             for user_id, ws in disconnected_users:
                 await self.remove_connection(user_id, ws)
 
-    async def broadcast_deployment_log_to_subscribers(self, deployment_id: str, message: dict):
+    async def broadcast_deployment_log_to_subscribers(
+        self, deployment_id: str, message: dict
+    ):
         """
         Envoie un log de déploiement à tous les abonnés.
 
@@ -428,9 +433,7 @@ class UserConnectionManager:
 
         # Utiliser la logique commune de broadcast
         sent_count, disconnected = await BroadcastManager._broadcast_to_connections(
-            all_connections,
-            message,
-            f"deployment log subscribers for {deployment_id}"
+            all_connections, message, f"deployment log subscribers for {deployment_id}"
         )
 
         # Log standardisé avec info sur les subscribers
@@ -446,7 +449,9 @@ class UserConnectionManager:
             async with self._lock:
                 for user_id in self.deployment_subscribers[deployment_id]:
                     if user_id in self.user_connections:
-                        user_disconnected = disconnected & self.user_connections[user_id]
+                        user_disconnected = (
+                            disconnected & self.user_connections[user_id]
+                        )
                         for ws in user_disconnected:
                             disconnected_users.add((user_id, ws))
 
@@ -474,8 +479,11 @@ class UserConnectionManager:
             from .plugin import plugin_manager
 
             await asyncio.gather(
-                *[plugin_manager.dispatch(event_type, event_data, ctx) for ctx in contexts],
-                return_exceptions=True
+                *[
+                    plugin_manager.dispatch(event_type, event_data, ctx)
+                    for ctx in contexts
+                ],
+                return_exceptions=True,
             )
         else:
             logger.debug(f"🔌 No plugin contexts to dispatch {event_type}")

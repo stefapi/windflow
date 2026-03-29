@@ -4,11 +4,12 @@ Middleware de gestion des erreurs personnalisées.
 Capture et formate les exceptions de manière cohérente.
 """
 
-from fastapi import Request, status
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
-from sqlalchemy.exc import SQLAlchemyError
 import logging
+
+from fastapi import Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +34,8 @@ async def error_handler_middleware(request: Request, call_next):
             content={
                 "error": "Validation Error",
                 "detail": exc.errors(),
-                "path": str(request.url)
-            }
+                "path": str(request.url),
+            },
         )
     except SQLAlchemyError as exc:
         logger.error(f"Database error: {exc}")
@@ -43,8 +44,8 @@ async def error_handler_middleware(request: Request, call_next):
             content={
                 "error": "Database Error",
                 "detail": "An error occurred while accessing the database",
-                "path": str(request.url)
-            }
+                "path": str(request.url),
+            },
         )
     except Exception as exc:
         logger.exception(f"Unhandled exception: {exc}")
@@ -52,7 +53,11 @@ async def error_handler_middleware(request: Request, call_next):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "error": "Internal Server Error",
-                "detail": str(exc) if logger.level <= logging.DEBUG else "An unexpected error occurred",
-                "path": str(request.url)
-            }
+                "detail": (
+                    str(exc)
+                    if logger.level <= logging.DEBUG
+                    else "An unexpected error occurred"
+                ),
+                "path": str(request.url),
+            },
         )

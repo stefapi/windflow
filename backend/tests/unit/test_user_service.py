@@ -3,10 +3,10 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.user_service import UserService
-from app.schemas.user import UserCreate, UserUpdate
-from app.models.user import User
 from app.models.organization import Organization
+from app.models.user import User
+from app.schemas.user import UserCreate, UserUpdate
+from app.services.user_service import UserService
 
 
 @pytest.mark.asyncio
@@ -42,7 +42,9 @@ class TestUserService:
         # Vérifier qu'un mot de passe tronqué ne fonctionne pas (argon2 utilise le mot de passe complet)
         assert not UserService.verify_password(long_password[:72], hashed)
 
-    async def test_create_user(self, db_session: AsyncSession, test_organization: Organization):
+    async def test_create_user(
+        self, db_session: AsyncSession, test_organization: Organization
+    ):
         """Test de création d'utilisateur."""
         user_data = UserCreate(
             email="newuser@example.com",
@@ -50,7 +52,7 @@ class TestUserService:
             full_name="New User",
             password="password123",
             organization_id=test_organization.id,
-            is_superuser=False
+            is_superuser=False,
         )
 
         user = await UserService.create(db_session, user_data)
@@ -87,17 +89,16 @@ class TestUserService:
 
     async def test_update_user(self, db_session: AsyncSession, test_user: User):
         """Test de mise à jour d'utilisateur."""
-        update_data = UserUpdate(
-            full_name="Updated Name",
-            email="updated@example.com"
-        )
+        update_data = UserUpdate(full_name="Updated Name", email="updated@example.com")
 
         updated_user = await UserService.update(db_session, test_user, update_data)
 
         assert updated_user.full_name == "Updated Name"
         assert updated_user.email == "updated@example.com"
 
-    async def test_delete_user(self, db_session: AsyncSession, test_organization: Organization):
+    async def test_delete_user(
+        self, db_session: AsyncSession, test_organization: Organization
+    ):
         """Test de suppression d'utilisateur."""
         user_data = UserCreate(
             email="todelete@example.com",
@@ -105,7 +106,7 @@ class TestUserService:
             full_name="To Delete",
             password="password123",
             organization_id=test_organization.id,
-            is_superuser=False
+            is_superuser=False,
         )
 
         user = await UserService.create(db_session, user_data)

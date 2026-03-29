@@ -15,11 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...auth.dependencies import get_current_active_user
 from ...database import get_db
 from ...models.user import User
-from ...schemas.compute import (
-    ComputeGlobalView,
-    ComputeStatsResponse,
-    TargetGroup,
-)
+from ...schemas.compute import ComputeGlobalView, ComputeStatsResponse, TargetGroup
 from ...services import compute_service
 
 router = APIRouter()
@@ -54,9 +50,7 @@ async def get_compute_stats(
     retournés à 0 (graceful degradation).
     """
     org_id = organization_id or current_user.organization_id
-    logger.info(
-        f"GET /compute/stats — user={current_user.username} org={org_id}"
-    )
+    logger.info(f"GET /compute/stats — user={current_user.username} org={org_id}")
     return await compute_service.get_compute_stats(db=db, org_id=org_id)
 
 

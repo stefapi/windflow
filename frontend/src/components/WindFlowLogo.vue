@@ -105,6 +105,7 @@ const strokeColor = computed(() => {
     transform: scale(1);
     opacity: 1;
   }
+
   50% {
     transform: scale(1.04);
     opacity: 0.85;
@@ -113,10 +114,10 @@ const strokeColor = computed(() => {
 
 /* Texte - utilise les variables CSS globales du thème */
 .windflow-logo__text {
-  font-weight: 500;
-  color: var(--color-text-primary);
-  white-space: nowrap;
   overflow: hidden;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  font-weight: 500;
   letter-spacing: 0.01em;
 }
 

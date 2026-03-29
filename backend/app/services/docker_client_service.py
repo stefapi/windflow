@@ -9,7 +9,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncIterator, Callable, Optional
 
 import aiohttp
 
@@ -369,7 +369,7 @@ class DockerClientService:
         if params is None:
             return None
 
-        sanitized = {}
+        sanitized: dict[str, str | int | float] = {}
         for key, value in params.items():
             if isinstance(value, bool):
                 sanitized[key] = str(value).lower()  # True -> "true", False -> "false"
@@ -872,7 +872,7 @@ class DockerClientService:
         self,
         name: str,
         tag: str = "latest",
-        on_progress: Optional["callable[[PullProgressEvent], None]"] = None,
+        on_progress: Optional[Callable[[PullProgressEvent], None]] = None,
     ) -> str:
         """
         Pull une image depuis un registry.

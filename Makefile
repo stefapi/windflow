@@ -142,7 +142,7 @@ backend-clean: clean-pyc clean-tests clean-frontend ## 🧹 Clean backend-specif
 	rm -fr .mypy_cache
 
 backend-typecheck: ## 🔍 Type check the backend code
-	$(POETRY) run mypy $(BACKEND_DIR)
+	cd $(BACKEND_DIR) && $(POETRY) run mypy app/
 
 backend-build: ## 🏗 Build backend package
 	$(POETRY) build
@@ -167,8 +167,8 @@ backend-lint: ## 🧹 Lint backend code
 	$(POETRY) run isort --check-only $(BACKEND_DIR)
 	$(POETRY) run black --check $(BACKEND_DIR)
 	$(POETRY) run flake8 $(BACKEND_DIR)
-	$(POETRY) run mypy $(BACKEND_DIR)
-	$(POETRY) run bandit -r $(BACKEND_DIR)
+	cd $(BACKEND_DIR) && $(POETRY) run mypy app/
+	$(POETRY) run bandit -r $(BACKEND_DIR) -ll
 
 backend-all: backend-format backend-lint backend-typecheck backend-test ## 🧪 Run all backend checks and tests
 

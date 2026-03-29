@@ -5,6 +5,7 @@ Routes d'administration réservées aux superadmins.
 """
 
 from fastapi import APIRouter
+
 from .stacks_management import router as stacks_management_router
 
 # Router principal admin

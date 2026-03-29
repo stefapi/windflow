@@ -212,11 +212,11 @@ const getOptionLabel = (option: any): string => {
 <style scoped>
 /* Header de groupe */
 .group-header {
-  margin: 20px 0 12px 0;
   padding: 12px 16px;
+  margin: 20px 0 12px;
   background: linear-gradient(135deg, var(--color-bg-secondary) 0%, var(--color-bg-elevated) 100%);
-  border-left: 4px solid var(--el-color-primary);
   border-radius: 4px;
+  border-left: 4px solid var(--el-color-primary);
 }
 
 .group-title {
@@ -227,7 +227,7 @@ const getOptionLabel = (option: any): string => {
 }
 
 .group-description {
-  margin: 6px 0 0 0;
+  margin: 6px 0 0;
   font-size: 13px;
   color: var(--color-text-secondary);
   line-height: 1.5;
@@ -236,15 +236,15 @@ const getOptionLabel = (option: any): string => {
 .field-description {
   display: flex;
   align-items: center;
-  gap: 4px;
-  color: var(--color-text-muted);
-  font-size: 13px;
   margin-top: 4px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  gap: 4px;
 }
 
 .description-icon {
-  font-size: 14px;
   flex-shrink: 0;
+  font-size: 14px;
 }
 
 /* Style pour le switch avec label */

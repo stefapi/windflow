@@ -5,14 +5,15 @@ Fournit les fonctions de dépendance pour protéger les routes API.
 """
 
 from typing import Optional
-from fastapi import Depends, HTTPException, status, WebSocket, Query
+
+from fastapi import Depends, HTTPException, Query, WebSocket, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import settings
 from ..database import get_db
 from ..models.user import User
 from ..services.user_service import UserService
-from ..config import settings
 from .jwt import decode_access_token
 
 # Schéma OAuth2 pour extraction du token
@@ -20,8 +21,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=F
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    session: AsyncSession = Depends(get_db)
+    token: str = Depends(oauth2_scheme), session: AsyncSession = Depends(get_db)
 ) -> User:
     """
     Récupère l'utilisateur courant à partir du token JWT.
@@ -45,7 +45,7 @@ async def get_current_user(
         if user is None:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No superadmin user found in database for development mode"
+                detail="No superadmin user found in database for development mode",
             )
         return user
 
@@ -57,7 +57,7 @@ async def get_current_user(
     )
 
     # Décoder le token
-    if token == None:
+    if token is None:
         raise credentials_exception
     token_data = decode_access_token(token)
     if token_data is None or token_data.user_id is None:
@@ -72,7 +72,7 @@ async def get_current_user(
 
 
 async def get_current_active_user(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ) -> User:
     """
     Vérifie que l'utilisateur est actif.
@@ -88,14 +88,13 @@ async def get_current_active_user(
     """
     if not current_user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
         )
     return current_user
 
 
 async def require_superuser(
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ) -> User:
     """
     Vérifie que l'utilisateur est un superutilisateur.
@@ -111,8 +110,7 @@ async def require_superuser(
     """
     if not current_user.is_superuser:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions"
         )
     return current_user
 
@@ -124,7 +122,7 @@ get_current_superadmin = require_superuser
 async def get_current_user_ws(
     websocket: WebSocket,
     token: Optional[str] = Query(None),
-    session: AsyncSession = Depends(get_db)
+    session: AsyncSession = Depends(get_db),
 ) -> Optional[User]:
     """
     Récupère l'utilisateur courant à partir du token JWT pour WebSocket.

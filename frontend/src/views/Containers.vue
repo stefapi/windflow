@@ -731,10 +731,10 @@ onMounted(() => {
 
 /* Logs Drawer */
 .logs-drawer :deep(.el-drawer__body) {
-  padding: 0;
   display: flex;
-  flex-direction: column;
   overflow: hidden;
+  padding: 0;
+  flex-direction: column;
 }
 
 /* Bulk Delete Dialog */
@@ -753,10 +753,10 @@ onMounted(() => {
 }
 
 .bulk-delete-list ul {
-  margin: 0;
-  padding-left: 20px;
-  max-height: 150px;
   overflow-y: auto;
+  max-height: 150px;
+  padding-left: 20px;
+  margin: 0;
 }
 
 .bulk-delete-list li {

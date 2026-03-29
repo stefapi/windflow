@@ -163,15 +163,15 @@ function handleAction(type: ActionType): void {
 }
 
 .action-buttons__btn {
+  color: var(--color-text-secondary);
   background-color: var(--color-bg-elevated);
   border-color: var(--color-border);
-  color: var(--color-text-secondary);
   transition: all 0.2s ease;
 }
 
 .action-buttons__btn:hover:not(:disabled) {
-  background-color: var(--color-bg-hover);
   color: var(--color-text-primary);
+  background-color: var(--color-bg-hover);
 }
 
 .action-buttons__btn:disabled {

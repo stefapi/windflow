@@ -1,24 +1,26 @@
 """Test pour valider que les variables avec macros sont rendues avant stockage."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.deployment_service import DeploymentService
-from app.schemas.deployment import DeploymentCreate
 from app.models.stack import Stack
 from app.models.target import Target
+from app.schemas.deployment import DeploymentCreate
+from app.services.deployment_service import DeploymentService
 
 
 @pytest.mark.asyncio
 class TestDeploymentVariablesRendering:
     """Tests pour le rendu des variables avant stockage."""
 
-    @patch('app.services.deployment_orchestrator.DeploymentOrchestrator.start_deployment', new_callable=AsyncMock)
+    @patch(
+        "app.services.deployment_orchestrator.DeploymentOrchestrator.start_deployment",
+        new_callable=AsyncMock,
+    )
     async def test_variables_with_macros_are_rendered_before_storage(
-        self,
-        mock_start_deployment: AsyncMock,
-        db_session: AsyncSession
+        self, mock_start_deployment: AsyncMock, db_session: AsyncSession
     ):
         """
         Test que les variables contenant des macros Jinja2 sont rendues
@@ -28,7 +30,8 @@ class TestDeploymentVariablesRendering:
         pas les macros brutes comme {{ generate_password(24) }}.
         """
         # Créer une target de test
-        from app.models.target import TargetType, TargetStatus
+        from app.models.target import TargetStatus, TargetType
+
         target = Target(
             name="Test Target",
             description="Target de test",
@@ -37,7 +40,7 @@ class TestDeploymentVariablesRendering:
             type=TargetType.DOCKER,
             status=TargetStatus.ONLINE,
             credentials={},
-            organization_id="test-org"
+            organization_id="test-org",
         )
         db_session.add(target)
         await db_session.commit()
@@ -53,22 +56,22 @@ class TestDeploymentVariablesRendering:
                         "image": "postgres:15",
                         "environment": {
                             "POSTGRES_PASSWORD": "{{ db_password }}",
-                            "POSTGRES_USER": "{{ db_user }}"
-                        }
+                            "POSTGRES_USER": "{{ db_user }}",
+                        },
                     }
                 }
             },
             variables={
                 "db_password": {
                     "default": "{{ generate_password(24) }}",
-                    "description": "Mot de passe PostgreSQL"
+                    "description": "Mot de passe PostgreSQL",
                 },
                 "db_user": {
                     "default": "postgres",
-                    "description": "Utilisateur PostgreSQL"
-                }
+                    "description": "Utilisateur PostgreSQL",
+                },
             },
-            organization_id="test-org"
+            organization_id="test-org",
         )
         db_session.add(stack)
         await db_session.commit()
@@ -79,14 +82,11 @@ class TestDeploymentVariablesRendering:
         deployment_data = DeploymentCreate(
             stack_id=str(stack.id),
             target_id=str(target.id),
-            variables={}  # Pas de variables utilisateur
+            variables={},  # Pas de variables utilisateur
         )
 
         deployment = await DeploymentService.create(
-            db_session,
-            deployment_data,
-            organization_id="test-org",
-            user_id="test-user"
+            db_session, deployment_data, organization_id="test-org", user_id="test-user"
         )
 
         # Vérifier que les variables stockées ont les macros RENDUES
@@ -106,18 +106,20 @@ class TestDeploymentVariablesRendering:
         # L'utilisateur doit être la valeur par défaut
         assert deployment.variables["db_user"] == "postgres"
 
-    @patch('app.services.deployment_orchestrator.DeploymentOrchestrator.start_deployment', new_callable=AsyncMock)
+    @patch(
+        "app.services.deployment_orchestrator.DeploymentOrchestrator.start_deployment",
+        new_callable=AsyncMock,
+    )
     async def test_user_provided_variables_override_defaults(
-        self,
-        mock_start_deployment: AsyncMock,
-        db_session: AsyncSession
+        self, mock_start_deployment: AsyncMock, db_session: AsyncSession
     ):
         """
         Test que les variables fournies par l'utilisateur
         overrident les defaults du stack.
         """
         # Créer une target de test
-        from app.models.target import TargetType, TargetStatus
+        from app.models.target import TargetStatus, TargetType
+
         target = Target(
             name="Test Target 2",
             description="Target de test",
@@ -126,7 +128,7 @@ class TestDeploymentVariablesRendering:
             type=TargetType.DOCKER,
             status=TargetStatus.ONLINE,
             credentials={},
-            organization_id="test-org"
+            organization_id="test-org",
         )
         db_session.add(target)
         await db_session.commit()
@@ -136,18 +138,14 @@ class TestDeploymentVariablesRendering:
         stack = Stack(
             name="App Test",
             description="Stack de test",
-            template={
-                "app": {
-                    "secret": "{{ app_secret }}"
-                }
-            },
+            template={"app": {"secret": "{{ app_secret }}"}},
             variables={
                 "app_secret": {
                     "default": "{{ generate_secret(32) }}",
-                    "description": "Secret de l'application"
+                    "description": "Secret de l'application",
                 }
             },
-            organization_id="test-org"
+            organization_id="test-org",
         )
         db_session.add(stack)
         await db_session.commit()
@@ -158,14 +156,11 @@ class TestDeploymentVariablesRendering:
         deployment_data = DeploymentCreate(
             stack_id=str(stack.id),
             target_id=str(target.id),
-            variables={"app_secret": user_secret}
+            variables={"app_secret": user_secret},
         )
 
         deployment = await DeploymentService.create(
-            db_session,
-            deployment_data,
-            organization_id="test-org",
-            user_id="test-user"
+            db_session, deployment_data, organization_id="test-org", user_id="test-user"
         )
 
         # Vérifier que la variable utilisateur a été utilisée
@@ -173,18 +168,20 @@ class TestDeploymentVariablesRendering:
         # Et PAS le default généré
         assert deployment.variables["app_secret"] != "{{ generate_secret(32) }}"
 
-    @patch('app.services.deployment_orchestrator.DeploymentOrchestrator.start_deployment', new_callable=AsyncMock)
+    @patch(
+        "app.services.deployment_orchestrator.DeploymentOrchestrator.start_deployment",
+        new_callable=AsyncMock,
+    )
     async def test_multiple_macros_generate_different_values(
-        self,
-        mock_start_deployment: AsyncMock,
-        db_session: AsyncSession
+        self, mock_start_deployment: AsyncMock, db_session: AsyncSession
     ):
         """
         Test que plusieurs macros generate_password() génèrent
         des valeurs différentes.
         """
         # Créer une target de test
-        from app.models.target import TargetType, TargetStatus
+        from app.models.target import TargetStatus, TargetType
+
         target = Target(
             name="Test Target 3",
             description="Target de test",
@@ -193,7 +190,7 @@ class TestDeploymentVariablesRendering:
             type=TargetType.DOCKER,
             status=TargetStatus.ONLINE,
             credentials={},
-            organization_id="test-org"
+            organization_id="test-org",
         )
         db_session.add(target)
         await db_session.commit()
@@ -205,17 +202,11 @@ class TestDeploymentVariablesRendering:
             description="Stack avec plusieurs mots de passe",
             template={},
             variables={
-                "admin_password": {
-                    "default": "{{ generate_password(16) }}"
-                },
-                "user_password": {
-                    "default": "{{ generate_password(16) }}"
-                },
-                "api_key": {
-                    "default": "{{ generate_secret(32) }}"
-                }
+                "admin_password": {"default": "{{ generate_password(16) }}"},
+                "user_password": {"default": "{{ generate_password(16) }}"},
+                "api_key": {"default": "{{ generate_secret(32) }}"},
             },
-            organization_id="test-org"
+            organization_id="test-org",
         )
         db_session.add(stack)
         await db_session.commit()
@@ -223,16 +214,11 @@ class TestDeploymentVariablesRendering:
 
         # Créer un déploiement
         deployment_data = DeploymentCreate(
-            stack_id=str(stack.id),
-            target_id=str(target.id),
-            variables={}
+            stack_id=str(stack.id), target_id=str(target.id), variables={}
         )
 
         deployment = await DeploymentService.create(
-            db_session,
-            deployment_data,
-            organization_id="test-org",
-            user_id="test-user"
+            db_session, deployment_data, organization_id="test-org", user_id="test-user"
         )
 
         # Vérifier que tous les mots de passe ont été générés

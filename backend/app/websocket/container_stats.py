@@ -233,9 +233,7 @@ def format_stats_response(container_id: str, stats_data: dict) -> dict:
     }
 
 
-async def container_stats_websocket_endpoint(
-    websocket: WebSocket, container_id: str
-):
+async def container_stats_websocket_endpoint(websocket: WebSocket, container_id: str):
     """
     Stream Docker container stats in real-time.
 
@@ -334,7 +332,7 @@ async def container_stats_websocket_endpoint(
                         "message": "Stats stream ended (container may have stopped)",
                     }
                 )
-            except:
+            except Exception:
                 pass
 
         except asyncio.CancelledError:
@@ -350,7 +348,7 @@ async def container_stats_websocket_endpoint(
                 await websocket.send_json(
                     {"type": "error", "message": f"Stats streaming error: {str(e)}"}
                 )
-            except:
+            except Exception:
                 pass
 
     async def check_container_status():
@@ -375,7 +373,7 @@ async def container_stats_websocket_endpoint(
                                     "message": f"Container is {container_info.state.get('Status')}",
                                 }
                             )
-                        except:
+                        except Exception:
                             pass
                         streaming_active = False
                         break
@@ -449,7 +447,7 @@ async def container_stats_websocket_endpoint(
                     await websocket.send_json(
                         {"type": "ping", "timestamp": datetime.utcnow().isoformat()}
                     )
-                except:
+                except Exception:
                     streaming_active = False
                     break
 
@@ -475,7 +473,7 @@ async def container_stats_websocket_endpoint(
         streaming_active = False
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
-        except:
+        except Exception:
             pass
 
     finally:

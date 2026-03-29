@@ -10,18 +10,16 @@ from typing import List, Optional
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import StreamingResponse
 
+from ...core.rate_limit import conditional_rate_limiter
 from ...schemas.docker import (
     ContainerCreateRequest,
     ContainerDetailResponse,
-    ContainerLogsRequest,
     ContainerLogsResponse,
-    ContainerProcessListResponse,
     ContainerProcess,
+    ContainerProcessListResponse,
     ContainerResponse,
     ContainerStatsResponse,
-    DockerErrorResponse,
     ImagePullRequest,
     ImagePullResponse,
     ImageResponse,
@@ -32,8 +30,7 @@ from ...schemas.docker import (
     VolumeCreateRequest,
     VolumeResponse,
 )
-from ...services.docker_client_service import DockerClientService, get_docker_client
-from ...core.rate_limit import conditional_rate_limiter
+from ...services.docker_client_service import get_docker_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -58,7 +55,10 @@ async def list_containers(
 ):
     """Liste tous les containers Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Listing Docker containers (all={all})", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Listing Docker containers (all={all})",
+        extra={"correlation_id": correlation_id},
+    )
 
     try:
         client = await get_docker_client()
@@ -112,7 +112,9 @@ async def get_container(
 ):
     """Récupère les détails d'un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Getting container {container_id}", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Getting container {container_id}", extra={"correlation_id": correlation_id}
+    )
 
     try:
         client = await get_docker_client()
@@ -166,7 +168,10 @@ async def create_container(
 ):
     """Crée un nouveau container Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Creating container {container_data.name}", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Creating container {container_data.name}",
+        extra={"correlation_id": correlation_id},
+    )
 
     try:
         client = await get_docker_client()
@@ -235,7 +240,9 @@ async def start_container(
 ):
     """Démarre un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Starting container {container_id}", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Starting container {container_id}", extra={"correlation_id": correlation_id}
+    )
 
     try:
         client = await get_docker_client()
@@ -279,7 +286,9 @@ async def stop_container(
 ):
     """Arrête un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Stopping container {container_id}", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Stopping container {container_id}", extra={"correlation_id": correlation_id}
+    )
 
     try:
         client = await get_docker_client()
@@ -323,7 +332,9 @@ async def restart_container(
 ):
     """Redémarre un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Restarting container {container_id}", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Restarting container {container_id}", extra={"correlation_id": correlation_id}
+    )
 
     try:
         client = await get_docker_client()
@@ -363,7 +374,10 @@ async def remove_container(
 ):
     """Supprime un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Removing container {container_id} (force={force})", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Removing container {container_id} (force={force})",
+        extra={"correlation_id": correlation_id},
+    )
 
     try:
         client = await get_docker_client()
@@ -408,7 +422,10 @@ async def get_container_shells(
     from ...services.terminal_service import TerminalService
 
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Detecting shells in container {container_id}", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Detecting shells in container {container_id}",
+        extra={"correlation_id": correlation_id},
+    )
 
     try:
         terminal_service = TerminalService()
@@ -416,11 +433,7 @@ async def get_container_shells(
         await terminal_service.close()
 
         return [
-            {
-                "path": shell.path,
-                "label": shell.label,
-                "available": shell.available
-            }
+            {"path": shell.path, "label": shell.label, "available": shell.available}
             for shell in shells
         ]
 
@@ -458,7 +471,10 @@ async def get_container_stats(
     from ...websocket.container_stats import format_stats_response
 
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Getting stats snapshot for container {container_id}", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Getting stats snapshot for container {container_id}",
+        extra={"correlation_id": correlation_id},
+    )
 
     try:
         client = await get_docker_client()
@@ -505,7 +521,10 @@ async def get_container_processes(
     from datetime import datetime, timezone
 
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Getting processes for container {container_id}", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Getting processes for container {container_id}",
+        extra={"correlation_id": correlation_id},
+    )
 
     try:
         client = await get_docker_client()
@@ -532,6 +551,7 @@ async def get_container_processes(
 
         processes = []
         for proc in processes_raw:
+
             def get_val(idx: int, default: str = "") -> str:
                 if 0 <= idx < len(proc):
                     return proc[idx]
@@ -549,14 +569,16 @@ async def get_container_processes(
                 except (ValueError, TypeError):
                     return 0
 
-            processes.append(ContainerProcess(
-                pid=parse_int(get_val(pid_idx, "0")),
-                user=get_val(user_idx),
-                cpu=parse_float(get_val(cpu_idx, "0")),
-                mem=parse_float(get_val(mem_idx, "0")),
-                time=get_val(time_idx),
-                command=get_val(cmd_idx),
-            ))
+            processes.append(
+                ContainerProcess(
+                    pid=parse_int(get_val(pid_idx, "0")),
+                    user=get_val(user_idx),
+                    cpu=parse_float(get_val(cpu_idx, "0")),
+                    mem=parse_float(get_val(mem_idx, "0")),
+                    time=get_val(time_idx),
+                    command=get_val(cmd_idx),
+                )
+            )
 
         return ContainerProcessListResponse(
             container_id=container_id,
@@ -598,7 +620,10 @@ async def get_container_logs(
 ):
     """Récupère les logs d'un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Getting logs for container {container_id}", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Getting logs for container {container_id}",
+        extra={"correlation_id": correlation_id},
+    )
 
     try:
         client = await get_docker_client()
@@ -658,7 +683,9 @@ async def list_images(
 ):
     """Liste toutes les images Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Listing Docker images (all={all})", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Listing Docker images (all={all})", extra={"correlation_id": correlation_id}
+    )
 
     try:
         client = await get_docker_client()
@@ -700,7 +727,10 @@ async def pull_image(
 ):
     """Pull une image Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Pulling image {pull_data.name}:{pull_data.tag}", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Pulling image {pull_data.name}:{pull_data.tag}",
+        extra={"correlation_id": correlation_id},
+    )
 
     last_status = ""
     last_id = None
@@ -746,7 +776,10 @@ async def remove_image(
 ):
     """Supprime une image Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Removing image {image_id} (force={force})", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Removing image {image_id} (force={force})",
+        extra={"correlation_id": correlation_id},
+    )
 
     try:
         client = await get_docker_client()
@@ -831,7 +864,9 @@ async def create_volume(
 ):
     """Crée un nouveau volume Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Creating volume {volume_data.name}", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Creating volume {volume_data.name}", extra={"correlation_id": correlation_id}
+    )
 
     try:
         client = await get_docker_client()
@@ -884,7 +919,10 @@ async def remove_volume(
 ):
     """Supprime un volume Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info(f"Removing volume {volume_name} (force={force})", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Removing volume {volume_name} (force={force})",
+        extra={"correlation_id": correlation_id},
+    )
 
     try:
         client = await get_docker_client()

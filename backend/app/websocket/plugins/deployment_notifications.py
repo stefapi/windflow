@@ -8,11 +8,11 @@ Handles real-time notifications for deployment events:
 """
 
 import logging
-from typing import Dict, Any
 from datetime import datetime
+from typing import Any, Dict
 
-from ..plugin import WebSocketPlugin, PluginContext
 from ...schemas.websocket_events import WebSocketEventType
+from ..plugin import PluginContext, WebSocketPlugin
 
 
 class DeploymentNotificationsPlugin(WebSocketPlugin):
@@ -41,10 +41,7 @@ class DeploymentNotificationsPlugin(WebSocketPlugin):
         self.logger.info("🚀 Deployment Notifications Plugin initialized")
 
     async def handle_event(
-        self,
-        event: WebSocketEventType,
-        data: Dict[str, Any],
-        context: PluginContext
+        self, event: WebSocketEventType, data: Dict[str, Any], context: PluginContext
     ) -> None:
         """
         Handle deployment events and broadcast to subscribers.
@@ -66,14 +63,11 @@ class DeploymentNotificationsPlugin(WebSocketPlugin):
 
         except Exception as e:
             context.logger.error(
-                f"Error handling deployment event {event}: {e}",
-                exc_info=True
+                f"Error handling deployment event {event}: {e}", exc_info=True
             )
 
     async def _handle_status_change(
-        self,
-        data: Dict[str, Any],
-        context: PluginContext
+        self, data: Dict[str, Any], context: PluginContext
     ) -> None:
         """
         Handle deployment status change events.
@@ -101,8 +95,8 @@ class DeploymentNotificationsPlugin(WebSocketPlugin):
                 "old_status": old_status,
                 "timestamp": datetime.utcnow().isoformat(),
                 "user_id": user_id,
-                **data  # Include any additional data
-            }
+                **data,  # Include any additional data
+            },
         }
 
         # Broadcast to specific user if available
@@ -111,15 +105,10 @@ class DeploymentNotificationsPlugin(WebSocketPlugin):
 
         # Broadcast to all deployment event subscribers
         if context.broadcast_to_event_subscribers:
-            await context.broadcast_to_event_subscribers(
-                "deployment_events",
-                message
-            )
+            await context.broadcast_to_event_subscribers("deployment_events", message)
 
     async def _handle_logs_update(
-        self,
-        data: Dict[str, Any],
-        context: PluginContext
+        self, data: Dict[str, Any], context: PluginContext
     ) -> None:
         """
         Handle deployment logs update events.
@@ -142,8 +131,8 @@ class DeploymentNotificationsPlugin(WebSocketPlugin):
                 "deployment_id": deployment_id,
                 "logs": logs,
                 "timestamp": datetime.utcnow().isoformat(),
-                "append": data.get("append", True)  # If false, replace all logs
-            }
+                "append": data.get("append", True),  # If false, replace all logs
+            },
         }
 
         # Broadcast to specific user
@@ -153,14 +142,11 @@ class DeploymentNotificationsPlugin(WebSocketPlugin):
         # Broadcast to deployment log subscribers
         if context.broadcast_deployment_log_to_subscribers:
             await context.broadcast_deployment_log_to_subscribers(
-                deployment_id,
-                message
+                deployment_id, message
             )
 
     async def _handle_progress_update(
-        self,
-        data: Dict[str, Any],
-        context: PluginContext
+        self, data: Dict[str, Any], context: PluginContext
     ) -> None:
         """
         Handle deployment progress update events.
@@ -185,8 +171,8 @@ class DeploymentNotificationsPlugin(WebSocketPlugin):
                 "progress": progress,
                 "current_step": current_step,
                 "total_steps": total_steps,
-                "timestamp": datetime.utcnow().isoformat()
-            }
+                "timestamp": datetime.utcnow().isoformat(),
+            },
         }
 
         # Broadcast to specific user
@@ -196,8 +182,7 @@ class DeploymentNotificationsPlugin(WebSocketPlugin):
         # Broadcast to deployment event subscribers
         if context.broadcast_to_event_subscribers:
             await context.broadcast_to_event_subscribers(
-                f"deployment_progress_{deployment_id}",
-                message
+                f"deployment_progress_{deployment_id}", message
             )
 
     async def cleanup(self) -> None:

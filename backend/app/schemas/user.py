@@ -8,7 +8,8 @@ pour une documentation OpenAPI complète.
 
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserBase(BaseModel):
@@ -17,20 +18,20 @@ class UserBase(BaseModel):
     email: EmailStr = Field(
         ...,
         description="Email de l'utilisateur",
-        json_schema_extra={"example": "user@example.com"}
+        json_schema_extra={"example": "user@example.com"},
     )
     username: str = Field(
         ...,
         min_length=3,
         max_length=100,
         description="Nom d'utilisateur unique",
-        json_schema_extra={"example": "johndoe"}
+        json_schema_extra={"example": "johndoe"},
     )
     full_name: Optional[str] = Field(
         None,
         max_length=255,
         description="Nom complet",
-        json_schema_extra={"example": "John Doe"}
+        json_schema_extra={"example": "John Doe"},
     )
 
 
@@ -53,20 +54,20 @@ class UserCreate(UserBase):
                     "username": "johndoe",
                     "full_name": "John Doe",
                     "password": "SecureP@ss123",
-                    "organization_id": "org-001"
+                    "organization_id": "org-001",
                 },
                 {
                     "email": "admin@windflow.io",
                     "username": "admin",
                     "full_name": "System Administrator",
                     "password": "Admin$ecure456",
-                    "is_superuser": True
+                    "is_superuser": True,
                 },
                 {
                     "email": "minimal@example.com",
                     "username": "minuser",
-                    "password": "password123"
-                }
+                    "password": "password123",
+                },
             ]
         }
     )
@@ -76,17 +77,17 @@ class UserCreate(UserBase):
         min_length=8,
         max_length=100,
         description="Mot de passe",
-        json_schema_extra={"example": "SecureP@ss123"}
+        json_schema_extra={"example": "SecureP@ss123"},
     )
     organization_id: Optional[str] = Field(
         None,
         description="ID de l'organisation (optionnel, utilise l'organisation du créateur par défaut)",
-        json_schema_extra={"example": "org-001"}
+        json_schema_extra={"example": "org-001"},
     )
     is_superuser: bool = Field(
         default=False,
         description="Superutilisateur",
-        json_schema_extra={"example": False}
+        json_schema_extra={"example": False},
     )
 
 
@@ -101,18 +102,9 @@ class UserUpdate(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "examples": [
-                {
-                    "full_name": "John D. Updated",
-                    "email": "john.updated@company.com"
-                },
-                {
-                    "password": "NewSecureP@ss456",
-                    "is_active": True
-                },
-                {
-                    "is_superuser": True,
-                    "is_active": True
-                }
+                {"full_name": "John D. Updated", "email": "john.updated@company.com"},
+                {"password": "NewSecureP@ss456", "is_active": True},
+                {"is_superuser": True, "is_active": True},
             ]
         }
     )
@@ -120,42 +112,40 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = Field(
         None,
         description="Nouvel email",
-        json_schema_extra={"example": "new.email@company.com"}
+        json_schema_extra={"example": "new.email@company.com"},
     )
     username: Optional[str] = Field(
         None,
         min_length=3,
         max_length=100,
         description="Nouveau nom d'utilisateur",
-        json_schema_extra={"example": "newusername"}
+        json_schema_extra={"example": "newusername"},
     )
     full_name: Optional[str] = Field(
         None,
         max_length=255,
         description="Nouveau nom complet",
-        json_schema_extra={"example": "John Doe Updated"}
+        json_schema_extra={"example": "John Doe Updated"},
     )
     password: Optional[str] = Field(
         None,
         min_length=8,
         max_length=100,
         description="Nouveau mot de passe",
-        json_schema_extra={"example": "NewSecureP@ss456"}
+        json_schema_extra={"example": "NewSecureP@ss456"},
     )
     is_active: Optional[bool] = Field(
-        None,
-        description="Statut actif",
-        json_schema_extra={"example": True}
+        None, description="Statut actif", json_schema_extra={"example": True}
     )
     is_superuser: Optional[bool] = Field(
         None,
         description="Statut superutilisateur",
-        json_schema_extra={"example": False}
+        json_schema_extra={"example": False},
     )
     organization_id: Optional[str] = Field(
         None,
         description="ID de l'organisation (superuser uniquement)",
-        json_schema_extra={"example": "org-001"}
+        json_schema_extra={"example": "org-001"},
     )
 
 
@@ -181,50 +171,44 @@ class UserResponse(UserBase):
                 "keycloak_id": None,
                 "created_at": "2026-01-02T10:00:00Z",
                 "updated_at": "2026-01-02T10:00:00Z",
-                "last_login": "2026-01-02T22:30:00Z"
+                "last_login": "2026-01-02T22:30:00Z",
             }
-        }
+        },
     )
 
     id: str = Field(
         ...,
         description="ID unique de l'utilisateur",
-        json_schema_extra={"example": "user-990e8400"}
+        json_schema_extra={"example": "user-990e8400"},
     )
     is_active: bool = Field(
-        ...,
-        description="Utilisateur actif",
-        json_schema_extra={"example": True}
+        ..., description="Utilisateur actif", json_schema_extra={"example": True}
     )
     is_superuser: bool = Field(
-        ...,
-        description="Superutilisateur",
-        json_schema_extra={"example": False}
+        ..., description="Superutilisateur", json_schema_extra={"example": False}
     )
     organization_id: str = Field(
         ...,
         description="ID de l'organisation",
-        json_schema_extra={"example": "org-001"}
+        json_schema_extra={"example": "org-001"},
     )
     keycloak_id: Optional[str] = Field(
-        None,
-        description="ID Keycloak SSO",
-        json_schema_extra={"example": None}
+        None, description="ID Keycloak SSO", json_schema_extra={"example": None}
     )
     created_at: datetime = Field(
         ...,
         description="Date de création",
-        json_schema_extra={"example": "2026-01-02T10:00:00Z"}
+        json_schema_extra={"example": "2026-01-02T10:00:00Z"},
     )
     updated_at: datetime = Field(
         ...,
         description="Date de mise à jour",
-        json_schema_extra={"example": "2026-01-02T10:00:00Z"}
+        json_schema_extra={"example": "2026-01-02T10:00:00Z"},
     )
     last_login: Optional[datetime] = Field(
         None,
         description="Dernière connexion",
-        json_schema_extra={"example": "2026-01-02T22:30:00Z"}
+        json_schema_extra={"example": "2026-01-02T22:30:00Z"},
     )
 
 
@@ -238,14 +222,8 @@ class UserLogin(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "examples": [
-                {
-                    "username": "johndoe",
-                    "password": "SecureP@ss123"
-                },
-                {
-                    "username": "john.doe@company.com",
-                    "password": "SecureP@ss123"
-                }
+                {"username": "johndoe", "password": "SecureP@ss123"},
+                {"username": "john.doe@company.com", "password": "SecureP@ss123"},
             ]
         }
     )
@@ -253,12 +231,10 @@ class UserLogin(BaseModel):
     username: str = Field(
         ...,
         description="Nom d'utilisateur ou email",
-        json_schema_extra={"example": "johndoe"}
+        json_schema_extra={"example": "johndoe"},
     )
     password: str = Field(
-        ...,
-        description="Mot de passe",
-        json_schema_extra={"example": "SecureP@ss123"}
+        ..., description="Mot de passe", json_schema_extra={"example": "SecureP@ss123"}
     )
 
 
@@ -270,7 +246,7 @@ class Token(BaseModel):
             "example": {
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
-                "expires_in": 3600
+                "expires_in": 3600,
             }
         }
     )
@@ -278,17 +254,17 @@ class Token(BaseModel):
     access_token: str = Field(
         ...,
         description="Token d'accès JWT",
-        json_schema_extra={"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}
+        json_schema_extra={"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."},
     )
     token_type: str = Field(
         default="bearer",
         description="Type de token",
-        json_schema_extra={"example": "bearer"}
+        json_schema_extra={"example": "bearer"},
     )
     expires_in: int = Field(
         ...,
         description="Durée de validité en secondes",
-        json_schema_extra={"example": 3600}
+        json_schema_extra={"example": 3600},
     )
 
 
@@ -306,7 +282,9 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str = Field(
         ...,
         description="Token de rafraîchissement",
-        json_schema_extra={"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh..."}
+        json_schema_extra={
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh..."
+        },
     )
 
 
@@ -333,8 +311,8 @@ class LoginResponse(BaseModel):
                     "full_name": "John Doe",
                     "is_active": True,
                     "is_superuser": False,
-                    "organization_id": "org-001"
-                }
+                    "organization_id": "org-001",
+                },
             }
         }
     )
@@ -342,27 +320,26 @@ class LoginResponse(BaseModel):
     access_token: str = Field(
         ...,
         description="Token d'accès JWT",
-        json_schema_extra={"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}
+        json_schema_extra={"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."},
     )
     refresh_token: str = Field(
         ...,
         description="Token de rafraîchissement",
-        json_schema_extra={"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh..."}
+        json_schema_extra={
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh..."
+        },
     )
     token_type: str = Field(
         default="bearer",
         description="Type de token",
-        json_schema_extra={"example": "bearer"}
+        json_schema_extra={"example": "bearer"},
     )
     expires_in: int = Field(
         ...,
         description="Durée de validité en secondes",
-        json_schema_extra={"example": 3600}
+        json_schema_extra={"example": 3600},
     )
-    user: UserResponse = Field(
-        ...,
-        description="Données de l'utilisateur"
-    )
+    user: UserResponse = Field(..., description="Données de l'utilisateur")
 
 
 class RefreshResponse(BaseModel):
@@ -378,7 +355,7 @@ class RefreshResponse(BaseModel):
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.new...",
                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.newrefresh...",
                 "token_type": "bearer",
-                "expires_in": 3600
+                "expires_in": 3600,
             }
         }
     )
@@ -386,22 +363,24 @@ class RefreshResponse(BaseModel):
     access_token: str = Field(
         ...,
         description="Nouveau token d'accès JWT",
-        json_schema_extra={"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.new..."}
+        json_schema_extra={"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.new..."},
     )
     refresh_token: str = Field(
         ...,
         description="Nouveau token de rafraîchissement",
-        json_schema_extra={"example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.newrefresh..."}
+        json_schema_extra={
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.newrefresh..."
+        },
     )
     token_type: str = Field(
         default="bearer",
         description="Type de token",
-        json_schema_extra={"example": "bearer"}
+        json_schema_extra={"example": "bearer"},
     )
     expires_in: int = Field(
         ...,
         description="Durée de validité en secondes",
-        json_schema_extra={"example": 3600}
+        json_schema_extra={"example": 3600},
     )
 
 
@@ -414,7 +393,7 @@ class TokenData(BaseModel):
                 "user_id": "user-990e8400",
                 "username": "johndoe",
                 "organization_id": "org-001",
-                "is_superuser": False
+                "is_superuser": False,
             }
         }
     )
@@ -422,22 +401,20 @@ class TokenData(BaseModel):
     user_id: Optional[str] = Field(
         None,
         description="ID de l'utilisateur",
-        json_schema_extra={"example": "user-990e8400"}
+        json_schema_extra={"example": "user-990e8400"},
     )
     username: Optional[str] = Field(
-        None,
-        description="Nom d'utilisateur",
-        json_schema_extra={"example": "johndoe"}
+        None, description="Nom d'utilisateur", json_schema_extra={"example": "johndoe"}
     )
     organization_id: Optional[str] = Field(
         None,
         description="ID de l'organisation",
-        json_schema_extra={"example": "org-001"}
+        json_schema_extra={"example": "org-001"},
     )
     is_superuser: bool = Field(
         default=False,
         description="Superutilisateur",
-        json_schema_extra={"example": False}
+        json_schema_extra={"example": False},
     )
 
 
@@ -464,38 +441,33 @@ class UserListResponse(BaseModel):
                         "keycloak_id": None,
                         "created_at": "2026-01-02T10:00:00Z",
                         "updated_at": "2026-01-02T10:00:00Z",
-                        "last_login": "2026-01-02T22:30:00Z"
+                        "last_login": "2026-01-02T22:30:00Z",
                     }
                 ],
                 "total": 25,
                 "page": 1,
                 "size": 100,
-                "pages": 1
+                "pages": 1,
             }
         }
     )
 
-    items: List[UserResponse] = Field(
-        ...,
-        description="Liste des utilisateurs"
-    )
+    items: List[UserResponse] = Field(..., description="Liste des utilisateurs")
     total: int = Field(
         ...,
         description="Nombre total d'utilisateurs",
-        json_schema_extra={"example": 25}
+        json_schema_extra={"example": 25},
     )
     page: int = Field(
         ...,
         description="Numéro de page actuel (commence à 1)",
-        json_schema_extra={"example": 1}
+        json_schema_extra={"example": 1},
     )
     size: int = Field(
         ...,
         description="Taille de page (nombre d'éléments par page)",
-        json_schema_extra={"example": 100}
+        json_schema_extra={"example": 100},
     )
     pages: int = Field(
-        ...,
-        description="Nombre total de pages",
-        json_schema_extra={"example": 1}
+        ..., description="Nombre total de pages", json_schema_extra={"example": 1}
     )

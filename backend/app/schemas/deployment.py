@@ -8,8 +8,9 @@ pour une documentation OpenAPI complète.
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DeploymentStatus(str, Enum):
@@ -22,6 +23,7 @@ class DeploymentStatus(str, Enum):
     - STOPPED: Déploiement arrêté manuellement
     - ROLLING_BACK: Retour en arrière en cours
     """
+
     PENDING = "pending"
     DEPLOYING = "deploying"
     RUNNING = "running"
@@ -32,7 +34,6 @@ class DeploymentStatus(str, Enum):
 
 class DeploymentBase(BaseModel):
     """Schema de base pour Deployment."""
-    pass
 
 
 class DeploymentCreate(DeploymentBase):
@@ -57,27 +58,19 @@ class DeploymentCreate(DeploymentBase):
                     "stack_id": "550e8400-e29b-41d4-a716-446655440000",
                     "target_id": "660e8400-e29b-41d4-a716-446655440001",
                     "name": "production-nginx",
-                    "variables": {
-                        "port": 8080,
-                        "domain": "app.example.com"
-                    }
+                    "variables": {"port": 8080, "domain": "app.example.com"},
                 },
                 {
                     "stack_id": "550e8400-e29b-41d4-a716-446655440000",
                     "target_id": "660e8400-e29b-41d4-a716-446655440001",
                     "name": "staging-api",
-                    "config": {
-                        "scale": {"web": 2}
-                    },
-                    "variables": {
-                        "environment": "staging",
-                        "debug": True
-                    }
+                    "config": {"scale": {"web": 2}},
+                    "variables": {"environment": "staging", "debug": True},
                 },
                 {
                     "stack_id": "770e8400-e29b-41d4-a716-446655440002",
-                    "target_id": "880e8400-e29b-41d4-a716-446655440003"
-                }
+                    "target_id": "880e8400-e29b-41d4-a716-446655440003",
+                },
             ]
         }
     )
@@ -85,29 +78,31 @@ class DeploymentCreate(DeploymentBase):
     stack_id: str = Field(
         ...,
         description="ID du stack à déployer",
-        json_schema_extra={"example": "550e8400-e29b-41d4-a716-446655440000"}
+        json_schema_extra={"example": "550e8400-e29b-41d4-a716-446655440000"},
     )
     target_id: str = Field(
         ...,
         description="ID de la cible de déploiement",
-        json_schema_extra={"example": "660e8400-e29b-41d4-a716-446655440001"}
+        json_schema_extra={"example": "660e8400-e29b-41d4-a716-446655440001"},
     )
     name: Optional[str] = Field(
         None,
         min_length=1,
         max_length=255,
         description="Nom du déploiement (auto-généré si absent)",
-        json_schema_extra={"example": "production-nginx"}
+        json_schema_extra={"example": "production-nginx"},
     )
     config: Optional[Dict[str, Any]] = Field(
         None,
         description="Configuration du déploiement (générée depuis le template si absente)",
-        json_schema_extra={"example": {"ports": [80, 443], "environment": {"NODE_ENV": "production"}}}
+        json_schema_extra={
+            "example": {"ports": [80, 443], "environment": {"NODE_ENV": "production"}}
+        },
     )
     variables: Optional[Dict[str, Any]] = Field(
         default_factory=dict,
         description="Variables à appliquer (utilise les defaults du stack si absent)",
-        json_schema_extra={"example": {"port": 8080, "domain": "app.example.com"}}
+        json_schema_extra={"example": {"port": 8080, "domain": "app.example.com"}},
     )
 
 
@@ -122,18 +117,13 @@ class DeploymentUpdate(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "examples": [
-                {
-                    "name": "production-nginx-v2",
-                    "variables": {"port": 9090}
-                },
-                {
-                    "status": "stopped"
-                },
+                {"name": "production-nginx-v2", "variables": {"port": 9090}},
+                {"status": "stopped"},
                 {
                     "name": "updated-deployment",
                     "variables": {"debug": False},
-                    "error_message": None
-                }
+                    "error_message": None,
+                },
             ]
         }
     )
@@ -143,27 +133,25 @@ class DeploymentUpdate(BaseModel):
         min_length=1,
         max_length=255,
         description="Nouveau nom",
-        json_schema_extra={"example": "production-nginx-v2"}
+        json_schema_extra={"example": "production-nginx-v2"},
     )
     status: Optional[DeploymentStatus] = Field(
-        None,
-        description="Nouveau statut",
-        json_schema_extra={"example": "running"}
+        None, description="Nouveau statut", json_schema_extra={"example": "running"}
     )
     variables: Optional[Dict[str, Any]] = Field(
         None,
         description="Nouvelles variables",
-        json_schema_extra={"example": {"port": 9090}}
+        json_schema_extra={"example": {"port": 9090}},
     )
     logs: Optional[str] = Field(
         None,
         description="Logs du déploiement",
-        json_schema_extra={"example": "Deploying... Done."}
+        json_schema_extra={"example": "Deploying... Done."},
     )
     error_message: Optional[str] = Field(
         None,
         description="Message d'erreur",
-        json_schema_extra={"example": "Connection refused on port 8080"}
+        json_schema_extra={"example": "Connection refused on port 8080"},
     )
 
 
@@ -191,9 +179,9 @@ class DeploymentResponse(BaseModel):
                 "error_message": None,
                 "deployed_at": "2026-01-02T22:35:00Z",
                 "created_at": "2026-01-02T22:30:00Z",
-                "updated_at": "2026-01-02T22:35:00Z"
+                "updated_at": "2026-01-02T22:35:00Z",
             }
-        }
+        },
     )
 
     name: str = Field(
@@ -201,67 +189,67 @@ class DeploymentResponse(BaseModel):
         min_length=1,
         max_length=255,
         description="Nom du déploiement",
-        json_schema_extra={"example": "production-nginx"}
+        json_schema_extra={"example": "production-nginx"},
     )
     id: str = Field(
         ...,
         description="ID unique du déploiement",
-        json_schema_extra={"example": "990e8400-e29b-41d4-a716-446655440000"}
+        json_schema_extra={"example": "990e8400-e29b-41d4-a716-446655440000"},
     )
     stack_id: str = Field(
         ...,
         description="ID du stack",
-        json_schema_extra={"example": "550e8400-e29b-41d4-a716-446655440000"}
+        json_schema_extra={"example": "550e8400-e29b-41d4-a716-446655440000"},
     )
     target_id: str = Field(
         ...,
         description="ID de la cible",
-        json_schema_extra={"example": "660e8400-e29b-41d4-a716-446655440001"}
+        json_schema_extra={"example": "660e8400-e29b-41d4-a716-446655440001"},
     )
     status: DeploymentStatus = Field(
         ...,
         description="Statut du déploiement",
-        json_schema_extra={"example": "running"}
+        json_schema_extra={"example": "running"},
     )
     config: Dict[str, Any] = Field(
         ...,
         description="Configuration utilisée",
-        json_schema_extra={"example": {"ports": [80, 443]}}
+        json_schema_extra={"example": {"ports": [80, 443]}},
     )
     container_id: Optional[str] = Field(
         None,
         description="ID du conteneur Docker créé par ce déploiement",
-        json_schema_extra={"example": "abc123def456"}
+        json_schema_extra={"example": "abc123def456"},
     )
     variables: Dict[str, Any] = Field(
         default_factory=dict,
         description="Variables appliquées",
-        json_schema_extra={"example": {"port": 8080}}
+        json_schema_extra={"example": {"port": 8080}},
     )
     logs: Optional[str] = Field(
         None,
         description="Logs du déploiement",
-        json_schema_extra={"example": "Deploying... Container started."}
+        json_schema_extra={"example": "Deploying... Container started."},
     )
     error_message: Optional[str] = Field(
         None,
         description="Message d'erreur si échec",
-        json_schema_extra={"example": None}
+        json_schema_extra={"example": None},
     )
     deployed_at: Optional[datetime] = Field(
         None,
         description="Date de déploiement réussi",
-        json_schema_extra={"example": "2026-01-02T22:35:00Z"}
+        json_schema_extra={"example": "2026-01-02T22:35:00Z"},
     )
     created_at: datetime = Field(
         ...,
         description="Date de création",
-        json_schema_extra={"example": "2026-01-02T22:30:00Z"}
+        json_schema_extra={"example": "2026-01-02T22:30:00Z"},
     )
     updated_at: datetime = Field(
         ...,
         description="Date de mise à jour",
-        json_schema_extra={"example": "2026-01-02T22:35:00Z"}
+        json_schema_extra={"example": "2026-01-02T22:35:00Z"},
     )
 
 
@@ -273,7 +261,7 @@ class DeploymentLogsResponse(BaseModel):
             "example": {
                 "deployment_id": "990e8400-e29b-41d4-a716-446655440000",
                 "logs": "2026-01-02 22:30:00 Starting deployment...\n2026-01-02 22:31:00 Container created.\n2026-01-02 22:31:05 Health check passed.",
-                "updated_at": "2026-01-02T22:31:05Z"
+                "updated_at": "2026-01-02T22:31:05Z",
             }
         }
     )
@@ -281,15 +269,15 @@ class DeploymentLogsResponse(BaseModel):
     deployment_id: str = Field(
         ...,
         description="ID du déploiement",
-        json_schema_extra={"example": "990e8400-e29b-41d4-a716-446655440000"}
+        json_schema_extra={"example": "990e8400-e29b-41d4-a716-446655440000"},
     )
     logs: Optional[str] = Field(
         None,
         description="Logs du déploiement",
-        json_schema_extra={"example": "Starting deployment...\nContainer created."}
+        json_schema_extra={"example": "Starting deployment...\nContainer created."},
     )
     updated_at: datetime = Field(
         ...,
         description="Date de dernière mise à jour des logs",
-        json_schema_extra={"example": "2026-01-02T22:31:05Z"}
+        json_schema_extra={"example": "2026-01-02T22:31:05Z"},
     )

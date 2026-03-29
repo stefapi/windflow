@@ -364,7 +364,7 @@ onUnmounted(() => {
 }
 
 /* Responsive adjustments */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .logs-header {
     flex-direction: column;
     align-items: flex-start;

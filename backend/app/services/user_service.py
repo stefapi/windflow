@@ -4,10 +4,11 @@ Service métier pour gestion des utilisateurs.
 Implémente le pattern Repository avec SQLAlchemy 2.0 async.
 """
 
-from typing import Optional, List, Tuple
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import List, Optional, Tuple
+
 from passlib.context import CryptContext
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.user import User
 from ..schemas.user import UserCreate, UserUpdate
@@ -58,7 +59,9 @@ class UserService:
         return pwd_context.verify(plain_password, hashed_password)
 
     @staticmethod
-    def verify_and_update(plain_password: str, hashed_password: str) -> Tuple[bool, Optional[str]]:
+    def verify_and_update(
+        plain_password: str, hashed_password: str
+    ) -> Tuple[bool, Optional[str]]:
         """
         Vérifie un mot de passe et détecte si le hash doit être renouvelé.
 
@@ -83,15 +86,15 @@ class UserService:
             ...     await db.commit()
         """
         # Vérifier le mot de passe et obtenir le résultat
-        verified, new_hash = pwd_context.verify_and_update(plain_password, hashed_password)
+        verified, new_hash = pwd_context.verify_and_update(
+            plain_password, hashed_password
+        )
 
         return verified, new_hash
 
     @staticmethod
     async def verify_and_update_user(
-        db: AsyncSession,
-        user: User,
-        plain_password: str
+        db: AsyncSession, user: User, plain_password: str
     ) -> bool:
         """
         Vérifie le mot de passe d'un utilisateur et met à jour automatiquement
@@ -116,7 +119,9 @@ class UserService:
             ...     # L'utilisateur est authentifié
             ...     pass
         """
-        is_valid, new_hash = UserService.verify_and_update(plain_password, user.hashed_password)
+        is_valid, new_hash = UserService.verify_and_update(
+            plain_password, user.hashed_password
+        )
 
         # Si le mot de passe est valide et qu'un nouveau hash est disponible
         if is_valid and new_hash:
@@ -139,9 +144,7 @@ class UserService:
         Returns:
             User ou None si non trouvé
         """
-        result = await db.execute(
-            select(User).where(User.id == user_id)
-        )
+        result = await db.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -156,9 +159,7 @@ class UserService:
         Returns:
             User ou None si non trouvé
         """
-        result = await db.execute(
-            select(User).where(User.email == email)
-        )
+        result = await db.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -173,9 +174,7 @@ class UserService:
         Returns:
             User ou None si non trouvé
         """
-        result = await db.execute(
-            select(User).where(User.username == username)
-        )
+        result = await db.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -201,9 +200,7 @@ class UserService:
 
     @staticmethod
     async def list_all(
-        db: AsyncSession,
-        skip: int = 0,
-        limit: int = 100
+        db: AsyncSession, skip: int = 0, limit: int = 100
     ) -> Tuple[List[User], int]:
         """
         Liste tous les utilisateurs de toutes les organisations (pour superusers).
@@ -217,27 +214,18 @@ class UserService:
             Tuple[List[User], int]: Liste d'utilisateurs et nombre total
         """
         # Requête pour les utilisateurs paginés
-        result = await db.execute(
-            select(User)
-            .offset(skip)
-            .limit(limit)
-        )
+        result = await db.execute(select(User).offset(skip).limit(limit))
         users = list(result.scalars().all())
 
         # Requête pour le count total
-        count_result = await db.execute(
-            select(func.count()).select_from(User)
-        )
+        count_result = await db.execute(select(func.count()).select_from(User))
         total = count_result.scalar_one()
 
         return users, total
 
     @staticmethod
     async def list_by_organization(
-        db: AsyncSession,
-        organization_id: str,
-        skip: int = 0,
-        limit: int = 100
+        db: AsyncSession, organization_id: str, skip: int = 0, limit: int = 100
     ) -> Tuple[List[User], int]:
         """
         Liste les utilisateurs d'une organisation avec le nombre total.
@@ -262,7 +250,9 @@ class UserService:
 
         # Requête pour le count total
         count_result = await db.execute(
-            select(func.count()).select_from(User).where(User.organization_id == organization_id)
+            select(func.count())
+            .select_from(User)
+            .where(User.organization_id == organization_id)
         )
         total = count_result.scalar_one()
 
@@ -281,7 +271,9 @@ class UserService:
             Nombre d'utilisateurs
         """
         result = await db.execute(
-            select(func.count()).select_from(User).where(User.organization_id == organization_id)
+            select(func.count())
+            .select_from(User)
+            .where(User.organization_id == organization_id)
         )
         return result.scalar_one()
 
@@ -307,7 +299,7 @@ class UserService:
             full_name=user_data.full_name,
             hashed_password=hashed_password,
             organization_id=user_data.organization_id,
-            is_superuser=user_data.is_superuser
+            is_superuser=user_data.is_superuser,
         )
 
         db.add(user)
@@ -317,11 +309,7 @@ class UserService:
         return user
 
     @staticmethod
-    async def update(
-        db: AsyncSession,
-        user: User,
-        user_data: UserUpdate
-    ) -> User:
+    async def update(db: AsyncSession, user: User, user_data: UserUpdate) -> User:
         """
         Met à jour un utilisateur.
 
@@ -364,9 +352,7 @@ class UserService:
 
     @staticmethod
     async def delete_many(
-        db: AsyncSession,
-        user_ids: List[str],
-        current_user_id: str
+        db: AsyncSession, user_ids: List[str], current_user_id: str
     ) -> Tuple[List[str], List[str]]:
         """
         Supprime plusieurs utilisateurs en masse.
@@ -400,9 +386,7 @@ class UserService:
 
     @staticmethod
     async def update_organization_many(
-        db: AsyncSession,
-        user_ids: List[str],
-        organization_id: str
+        db: AsyncSession, user_ids: List[str], organization_id: str
     ) -> Tuple[List[str], List[str]]:
         """
         Met à jour l'organisation de plusieurs utilisateurs en masse.

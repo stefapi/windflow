@@ -772,11 +772,11 @@ function clearError(): void {
 .stats-loading,
 .stats-not-running {
   display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
+  align-items: center;
   height: 200px;
   color: var(--color-text-secondary);
+  flex-direction: column;
 }
 
 .stats-loading {
@@ -785,19 +785,19 @@ function clearError(): void {
 }
 
 .stats-content {
-  flex: 1;
+  display: flex;
   overflow: auto;
   padding: 16px;
-  display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 20px;
 }
 
 .stat-section {
+  padding: 16px;
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  padding: 16px;
 }
 
 .stat-header {
@@ -816,8 +816,8 @@ function clearError(): void {
 .memory-details {
   margin-top: 8px;
   font-size: 12px;
-  color: var(--color-text-secondary);
   font-family: monospace;
+  color: var(--color-text-secondary);
 }
 
 .io-grid {
@@ -842,20 +842,20 @@ function clearError(): void {
 }
 
 .io-value {
-  font-family: monospace;
   font-size: 13px;
+  font-family: monospace;
   color: var(--color-text-primary);
 }
 
 .history-section {
+  padding: 16px;
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  padding: 16px;
 }
 
 .history-section h4 {
-  margin: 0 0 16px 0;
+  margin: 0 0 16px;
   font-size: 14px;
   font-weight: 600;
   color: var(--color-text-primary);
@@ -868,33 +868,33 @@ function clearError(): void {
 }
 
 .history-chart {
+  padding: 12px;
   background-color: var(--color-bg-secondary);
   border: 1px solid var(--color-border-light);
   border-radius: 8px;
-  padding: 12px;
 }
 
 .chart-title {
-  font-size: 12px;
-  font-weight: 600;
   margin-bottom: 8px;
+  font-size: 12px;
   color: var(--color-text-secondary);
+  font-weight: 600;
 }
 
 .chart {
-  height: 120px;
   width: 100%;
+  height: 120px;
 }
 
 .no-history {
+  padding: 20px;
+  font-size: 13px;
   text-align: center;
   color: var(--color-text-placeholder);
-  font-size: 13px;
-  padding: 20px;
 }
 
 /* Responsive adjustments */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .stats-header {
     flex-direction: column;
     align-items: flex-start;

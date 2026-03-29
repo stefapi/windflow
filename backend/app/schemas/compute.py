@@ -11,7 +11,6 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-
 # =============================================================================
 # Primitives — Services et containers
 # =============================================================================
@@ -34,14 +33,19 @@ class ServiceWithMetrics(BaseModel):
     image: str = Field(..., description="Image Docker utilisée")
     status: str = Field(..., description="État du container (running, exited, etc.)")
     cpu_percent: float = Field(0.0, description="Utilisation CPU en %")
-    memory_usage: str = Field("0M", description="Utilisation mémoire formatée (ex: 540M)")
-    memory_limit: Optional[str] = Field(None, description="Limite mémoire formatée (ex: 2G)")
+    memory_usage: str = Field(
+        "0M", description="Utilisation mémoire formatée (ex: 540M)"
+    )
+    memory_limit: Optional[str] = Field(
+        None, description="Limite mémoire formatée (ex: 2G)"
+    )
     uptime: Optional[str] = Field(None, description="Uptime formaté (ex: 'Up 2 hours')")
     ports: list[ContainerPortMapping] = Field(
         default_factory=list, description="Ports mappés"
     )
     health_status: Optional[str] = Field(
-        None, description="Statut de santé (healthy, unhealthy, starting) si healthcheck configuré"
+        None,
+        description="Statut de santé (healthy, unhealthy, starting) si healthcheck configuré",
     )
 
 
@@ -66,7 +70,8 @@ class StandaloneContainer(BaseModel):
         default_factory=list, description="Ports mappés"
     )
     health_status: Optional[str] = Field(
-        None, description="Statut de santé (healthy, unhealthy, starting) si healthcheck configuré"
+        None,
+        description="Statut de santé (healthy, unhealthy, starting) si healthcheck configuré",
     )
 
 
@@ -78,24 +83,31 @@ class DiscoveredItem(BaseModel):
     Non managé par WindFlow mais visible dans la vue Compute.
     """
 
-    id: str = Field(..., description="Identifiant unique (ex: compose:<project>@<target>)")
-    name: str = Field(..., description="Nom du projet (valeur de com.docker.compose.project)")
+    id: str = Field(
+        ..., description="Identifiant unique (ex: compose:<project>@<target>)"
+    )
+    name: str = Field(
+        ..., description="Nom du projet (valeur de com.docker.compose.project)"
+    )
     type: Literal["container", "composition", "helm_release"] = Field(
         ..., description="Type d'objet découvert"
     )
     technology: str = Field(..., description="Technologie (docker-compose, helm, etc.)")
     source_path: Optional[str] = Field(
-        None, description="Chemin du fichier de définition (com.docker.compose.project.config_files)"
+        None,
+        description="Chemin du fichier de définition (com.docker.compose.project.config_files)",
     )
     target_id: str = Field(..., description="ID de la target hébergeant cet objet")
     target_name: str = Field(..., description="Nom de la target")
-    services_total: int = Field(0, description="Nombre total de services dans le projet")
+    services_total: int = Field(
+        0, description="Nombre total de services dans le projet"
+    )
     services_running: int = Field(0, description="Nombre de services en état running")
     detected_at: str = Field(..., description="Timestamp ISO de détection")
     adoptable: bool = Field(True, description="Peut être adopté dans WindFlow")
     services: list[ServiceWithMetrics] = Field(
         default_factory=list,
-        description="Liste des containers détectés pour cet objet découvert"
+        description="Liste des containers détectés pour cet objet découvert",
     )
 
 
@@ -118,7 +130,9 @@ class StackWithServices(BaseModel):
     target_id: str = Field(..., description="ID de la target principale")
     target_name: str = Field(..., description="Nom de la target principale")
     services_total: int = Field(..., description="Nombre total de services attendus")
-    services_running: int = Field(..., description="Nombre de services actuellement running")
+    services_running: int = Field(
+        ..., description="Nombre de services actuellement running"
+    )
     status: Literal["running", "partial", "stopped", "archived"] = Field(
         ...,
         description=(
@@ -149,17 +163,21 @@ class ComputeGlobalView(BaseModel):
         default_factory=list, description="Stacks managées par WindFlow"
     )
     discovered_items: list[DiscoveredItem] = Field(
-        default_factory=list, description="Projets Compose et autres objets découverts (non-WindFlow)"
+        default_factory=list,
+        description="Projets Compose et autres objets découverts (non-WindFlow)",
     )
     standalone_containers: list[StandaloneContainer] = Field(
-        default_factory=list, description="Containers individuels sans appartenance à un projet"
+        default_factory=list,
+        description="Containers individuels sans appartenance à un projet",
     )
 
 
 class TargetMetrics(BaseModel):
     """Métriques agrégées d'une target."""
 
-    cpu_total_percent: float = Field(0.0, description="CPU total utilisé sur la target (%)")
+    cpu_total_percent: float = Field(
+        0.0, description="CPU total utilisé sur la target (%)"
+    )
     memory_used: str = Field("0M", description="Mémoire utilisée formatée")
     memory_total: str = Field("0M", description="Mémoire totale formatée")
 
@@ -185,7 +203,8 @@ class TargetGroup(BaseModel):
         default_factory=list, description="Containers standalone sur cette target"
     )
     metrics: TargetMetrics = Field(
-        default_factory=TargetMetrics, description="Métriques agrégées de cette target"
+        default_factory=TargetMetrics,  # type: ignore[arg-type]
+        description="Métriques agrégées de cette target"
     )
 
 
@@ -202,9 +221,15 @@ class ComputeStatsResponse(BaseModel):
     Fournit les compteurs pour le bandeau supérieur de la vue globale.
     """
 
-    total_containers: int = Field(..., description="Nombre total de containers Docker (tous états)")
-    running_containers: int = Field(..., description="Nombre de containers en état running")
-    stacks_count: int = Field(..., description="Nombre de stacks managées par WindFlow (DB)")
+    total_containers: int = Field(
+        ..., description="Nombre total de containers Docker (tous états)"
+    )
+    running_containers: int = Field(
+        ..., description="Nombre de containers en état running"
+    )
+    stacks_count: int = Field(
+        ..., description="Nombre de stacks managées par WindFlow (DB)"
+    )
     stacks_running_count: int = Field(
         ..., description="Nombre de stacks avec tous leurs services en running"
     )
@@ -218,12 +243,16 @@ class ComputeStatsResponse(BaseModel):
         ..., description="Nombre de projets Compose découverts (hors WindFlow)"
     )
     discovered_targets_count: int = Field(
-        ..., description="Nombre de machines distinctes hébergeant des projets découverts"
+        ...,
+        description="Nombre de machines distinctes hébergeant des projets découverts",
     )
     standalone_count: int = Field(
         ..., description="Nombre de containers standalone (ni compose ni WindFlow)"
     )
     standalone_targets_count: int = Field(
-        ..., description="Nombre de machines distinctes hébergeant des containers standalone"
+        ...,
+        description="Nombre de machines distinctes hébergeant des containers standalone",
     )
-    targets_count: int = Field(..., description="Nombre de targets enregistrées dans WindFlow")
+    targets_count: int = Field(
+        ..., description="Nombre de targets enregistrées dans WindFlow"
+    )

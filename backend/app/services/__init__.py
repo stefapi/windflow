@@ -5,11 +5,11 @@ Ce module contient la logique métier (business logic) de l'application.
 Suit le pattern Repository et Dependency Injection selon backend.md.
 """
 
-from .user_service import UserService
-from .organization_service import OrganizationService
-from .target_service import TargetService
-from .stack_service import StackService
 from .deployment_service import DeploymentService
+from .organization_service import OrganizationService
+from .stack_service import StackService
+from .target_service import TargetService
+from .user_service import UserService
 
 __all__ = [
     "UserService",

@@ -24,23 +24,22 @@ Fonctions de gestion des abonnements:
     - subscribe_to_deployment_logs: S'abonner aux logs d'un déploiement
 """
 
-from typing import Dict, Any, Optional
-from fastapi import WebSocket
 from datetime import datetime
+from typing import Optional
+
+from fastapi import WebSocket
 
 from ..schemas.websocket_events import WebSocketEventType
 from .connection_managers import manager, user_manager
 from .plugin import PluginContext
 
-
 # ============================================================================
 # FONCTIONS DE BROADCAST - DÉPLOIEMENTS
 # ============================================================================
 
+
 async def _broadcast_deployment_event(
-    deployment_id: str,
-    event_type: WebSocketEventType,
-    event_data: dict
+    deployment_id: str, event_type: WebSocketEventType, event_data: dict
 ) -> None:
     """
     Fonction générique pour broadcaster un événement de déploiement.
@@ -59,20 +58,14 @@ async def _broadcast_deployment_event(
     if "timestamp" not in event_data:
         event_data["timestamp"] = datetime.utcnow().isoformat()
 
-    websocket_message = {
-        "type": event_type,
-        "data": event_data
-    }
+    websocket_message = {"type": event_type, "data": event_data}
 
     await manager.broadcast_to_deployment(deployment_id, websocket_message)
     await user_manager.dispatch_to_plugins(event_type, event_data)
 
 
 async def broadcast_deployment_log(
-    deployment_id: str,
-    message: str,
-    level: str = "info",
-    **extra_data
+    deployment_id: str, message: str, level: str = "info", **extra_data
 ):
     """
     Broadcast deployment logs to all connected WebSocket clients.
@@ -90,8 +83,8 @@ async def broadcast_deployment_log(
             "deploymentId": deployment_id,
             "logs": [message],
             "level": level,
-            **extra_data
-        }
+            **extra_data,
+        },
     )
 
 
@@ -100,7 +93,7 @@ async def broadcast_deployment_status(
     new_status: str,
     deployment_name: str = "",
     old_status: str = "",
-    **extra_data
+    **extra_data,
 ):
     """
     Broadcast deployment status changes to all connected WebSocket clients.
@@ -120,16 +113,13 @@ async def broadcast_deployment_status(
             "deploymentName": deployment_name,
             "oldStatus": old_status,
             "newStatus": new_status,
-            **extra_data
-        }
+            **extra_data,
+        },
     )
 
 
 async def broadcast_deployment_progress(
-    deployment_id: str,
-    progress: int,
-    step: str,
-    **extra_data
+    deployment_id: str, progress: int, step: str, **extra_data
 ):
     """
     Broadcast deployment progress updates to all connected WebSocket clients.
@@ -153,16 +143,13 @@ async def broadcast_deployment_progress(
             "deploymentId": deployment_id,
             "progress": progress,
             "step": step,
-            **extra_data
-        }
+            **extra_data,
+        },
     )
 
 
 async def broadcast_deployment_complete(
-    deployment_id: str,
-    success: bool = True,
-    deployment_name: str = "",
-    **extra_data
+    deployment_id: str, success: bool = True, deployment_name: str = "", **extra_data
 ):
     """
     Broadcast deployment completion to all connected WebSocket clients.
@@ -187,13 +174,14 @@ async def broadcast_deployment_complete(
         new_status=final_status,
         deployment_name=deployment_name,
         old_status="running",
-        **extra_data
+        **extra_data,
     )
 
 
 # ============================================================================
 # FONCTIONS DE BROADCAST - UTILISATEURS
 # ============================================================================
+
 
 async def broadcast_to_user(user_id: str, message: dict):
     """
@@ -233,20 +221,15 @@ async def broadcast_to_event_subscribers(event_type: str, message: dict):
         ... )
     """
     import logging
+
     logger = logging.getLogger(__name__)
 
-    logger.debug(
-        f"📢 Broadcasting to event subscribers: {event_type}"
-    )
-    logger.debug(
-        f"Message: {message}"
-    )
+    logger.debug(f"📢 Broadcasting to event subscribers: {event_type}")
+    logger.debug(f"Message: {message}")
 
     await user_manager.broadcast_to_event_subscribers(event_type, message)
 
-    logger.debug(
-        f"✅ Broadcast to event subscribers completed"
-    )
+    logger.debug("✅ Broadcast to event subscribers completed")
 
 
 async def broadcast_deployment_log_to_subscribers(deployment_id: str, message: dict):
@@ -273,7 +256,10 @@ async def broadcast_deployment_log_to_subscribers(deployment_id: str, message: d
 # FONCTIONS DE GESTION DES CONNEXIONS
 # ============================================================================
 
-async def add_user_connection(user_id: str, websocket: WebSocket, context: Optional[PluginContext] = None):
+
+async def add_user_connection(
+    user_id: str, websocket: WebSocket, context: Optional[PluginContext] = None
+):
     """
     Ajoute une connexion utilisateur.
 
@@ -311,6 +297,7 @@ async def remove_user_connection(user_id: str, websocket: WebSocket):
 # ============================================================================
 # FONCTIONS DE GESTION DES ABONNEMENTS
 # ============================================================================
+
 
 async def subscribe_to_event(user_id: str, event_type: str, websocket: WebSocket):
     """
@@ -362,7 +349,9 @@ async def unsubscribe_from_event(user_id: str, event_type: str, websocket: WebSo
     await user_manager.unsubscribe_from_event(user_id, event_type, websocket)
 
 
-async def subscribe_to_deployment_logs(user_id: str, deployment_id: str, websocket: WebSocket):
+async def subscribe_to_deployment_logs(
+    user_id: str, deployment_id: str, websocket: WebSocket
+):
     """
     Abonne un utilisateur aux logs d'un déploiement.
 

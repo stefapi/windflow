@@ -134,6 +134,7 @@ const handleLogin = async () => {
     opacity: 0;
     transform: translateY(24px) scale(0.97);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -149,12 +150,15 @@ const handleLogin = async () => {
   0%, 100% {
     transform: translate(0, 0);
   }
+
   25% {
     transform: translate(30px, 20px);
   }
+
   50% {
     transform: translate(20px, 40px);
   }
+
   75% {
     transform: translate(-10px, 25px);
   }
@@ -164,12 +168,15 @@ const handleLogin = async () => {
   0%, 100% {
     transform: translate(0, 0);
   }
+
   25% {
     transform: translate(-25px, -15px);
   }
+
   50% {
     transform: translate(-40px, 10px);
   }
+
   75% {
     transform: translate(-15px, 30px);
   }
@@ -179,12 +186,15 @@ const handleLogin = async () => {
   0%, 100% {
     transform: translate(0, 0);
   }
+
   25% {
     transform: translate(15px, -30px);
   }
+
   50% {
     transform: translate(-20px, -20px);
   }
+
   75% {
     transform: translate(25px, 10px);
   }
@@ -206,12 +216,12 @@ const handleLogin = async () => {
 
 /* Login form Element Plus overrides for theme support */
 .login-card-form :deep(.el-input__wrapper) {
+  overflow: hidden;
   background-color: var(--color-bg-input);
   border: 1px solid var(--color-border-light);
   border-radius: 10px !important;
   box-shadow: none !important;
   transition: all 0.25s ease;
-  overflow: hidden;
 }
 
 .login-card-form :deep(.el-input__wrapper:hover) {
@@ -225,10 +235,10 @@ const handleLogin = async () => {
 }
 
 .login-card-form :deep(.el-input__inner) {
-  color: var(--color-text-primary);
   font-size: 14px;
-  border-radius: 10px !important;
+  color: var(--color-text-primary);
   background-color: transparent !important;
+  border-radius: 10px !important;
 }
 
 .login-card-form :deep(.el-input__inner::placeholder) {
@@ -240,10 +250,10 @@ const handleLogin = async () => {
 .login-card-form :deep(.el-input__inner:-webkit-autofill:hover),
 .login-card-form :deep(.el-input__inner:-webkit-autofill:focus),
 .login-card-form :deep(.el-input__inner:-webkit-autofill:active) {
-  -webkit-box-shadow: 0 0 0 30px var(--color-bg-input) inset !important;
-  -webkit-text-fill-color: var(--color-text-primary) !important;
   border-radius: 10px !important;
+  box-shadow: 0 0 0 30px var(--color-bg-input) inset !important;
   transition: background-color 5000s ease-in-out 0s;
+  -webkit-text-fill-color: var(--color-text-primary) !important;
 }
 
 .login-card-form :deep(.el-input__prefix .el-icon) {
@@ -259,20 +269,20 @@ const handleLogin = async () => {
 }
 
 .login-card-form :deep(.el-form-item__error) {
-  color: var(--color-error);
   font-size: 12px;
+  color: var(--color-error);
 }
 
 /* Responsive adjustments */
-@media (max-width: 767px) {
+@media (width <= 767px) {
   .login-page {
     padding: 16px;
   }
 
   .login-card {
+    max-width: 100%;
     padding: 36px 24px 28px;
     border-radius: 12px;
-    max-width: 100%;
   }
 
   .login-card-title {
@@ -280,7 +290,7 @@ const handleLogin = async () => {
   }
 }
 
-@media (max-width: 380px) {
+@media (width <= 380px) {
   .login-card {
     padding: 28px 20px 24px;
   }

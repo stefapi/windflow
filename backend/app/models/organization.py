@@ -3,18 +3,19 @@ Modèle Organization pour support multi-tenant.
 """
 
 from datetime import datetime
-from uuid import uuid4
-from sqlalchemy import String, DateTime, JSON, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING, List
+from uuid import uuid4
+
+from sqlalchemy import JSON, DateTime, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
 
 if TYPE_CHECKING:
-    from .user import User
-    from .target import Target
-    from .stack import Stack
     from .deployment import Deployment
+    from .stack import Stack
+    from .target import Target
+    from .user import User
 
 
 class Organization(Base):
@@ -28,14 +29,16 @@ class Organization(Base):
 
     # Clé primaire
     id: Mapped[str] = mapped_column(
-        String(36),
-        primary_key=True,
-        default=lambda: str(uuid4())
+        String(36), primary_key=True, default=lambda: str(uuid4())
     )
 
     # Informations de base
-    name: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    slug: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(
+        String(255), unique=True, index=True, nullable=False
+    )
+    slug: Mapped[str] = mapped_column(
+        String(100), unique=True, index=True, nullable=False
+    )
     domain: Mapped[str] = mapped_column(String(255), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=True)
 
@@ -44,40 +47,27 @@ class Organization(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-        nullable=False
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
     # Relations
     users: Mapped[List["User"]] = relationship(
-        "User",
-        back_populates="organization",
-        cascade="all, delete-orphan"
+        "User", back_populates="organization", cascade="all, delete-orphan"
     )
 
     targets: Mapped[List["Target"]] = relationship(
-        "Target",
-        back_populates="organization",
-        cascade="all, delete-orphan"
+        "Target", back_populates="organization", cascade="all, delete-orphan"
     )
 
     stacks: Mapped[List["Stack"]] = relationship(
-        "Stack",
-        back_populates="organization",
-        cascade="all, delete-orphan"
+        "Stack", back_populates="organization", cascade="all, delete-orphan"
     )
 
     deployments: Mapped[List["Deployment"]] = relationship(
-        "Deployment",
-        back_populates="organization",
-        cascade="all, delete-orphan"
+        "Deployment", back_populates="organization", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

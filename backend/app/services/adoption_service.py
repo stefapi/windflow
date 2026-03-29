@@ -126,7 +126,9 @@ def _parse_networks_from_inspect(
         result.append(
             AdoptionNetwork(
                 name=name,
-                driver=info.get("Driver", "bridge") if isinstance(info, dict) else "bridge",
+                driver=(
+                    info.get("Driver", "bridge") if isinstance(info, dict) else "bridge"
+                ),
                 is_default=is_default,
             )
         )
@@ -183,21 +185,25 @@ def _generate_compose_preview(services: list[AdoptionServiceData]) -> str:
         svc_def: dict = {"image": svc.image}
 
         if svc.env_vars:
-            svc_def["environment"] = {
-                ev.key: ev.value for ev in svc.env_vars
-            }
+            svc_def["environment"] = {ev.key: ev.value for ev in svc.env_vars}
 
         if svc.volumes:
             svc_def["volumes"] = [
-                f"{v.source}:{v.destination}:{v.mode}" if v.source
-                else f"{v.destination}:{v.mode}"
+                (
+                    f"{v.source}:{v.destination}:{v.mode}"
+                    if v.source
+                    else f"{v.destination}:{v.mode}"
+                )
                 for v in svc.volumes
             ]
 
         if svc.ports:
             svc_def["ports"] = [
-                f"{p.host_ip}:{p.host_port}:{p.container_port}" if p.host_ip != "0.0.0.0"
-                else f"{p.host_port}:{p.container_port}"
+                (
+                    f"{p.host_ip}:{p.host_port}:{p.container_port}"
+                    if p.host_ip != "0.0.0.0"
+                    else f"{p.host_port}:{p.container_port}"
+                )
                 for p in svc.ports
                 if p.host_port > 0
             ]
@@ -264,7 +270,7 @@ async def get_adoption_data(
 
         if item_type == "composition" and item_id.startswith("compose:"):
             # Format : "compose:<project>@<target>"
-            parts = item_id[len("compose:"):]
+            parts = item_id[len("compose:") :]
             if "@" in parts:
                 project_name, target_id = parts.split("@", 1)
             else:
@@ -282,7 +288,7 @@ async def get_adoption_data(
             # Format possible : "container:<id>@<target>"
             cid = item_id
             if cid.startswith("container:"):
-                cid = cid[len("container:"):]
+                cid = cid[len("container:") :]
             if "@" in cid:
                 cid, _ = cid.split("@", 1)
             for c in all_containers:
@@ -437,7 +443,7 @@ async def adopt_discovered_item(
             project_name = None
             item_id = request.discovered_id
             if item_id.startswith("compose:"):
-                parts = item_id[len("compose:"):]
+                parts = item_id[len("compose:") :]
                 if "@" in parts:
                     project_name, _ = parts.split("@", 1)
                 else:
@@ -451,7 +457,7 @@ async def adopt_discovered_item(
         elif request.item_type == "container":
             cid = request.discovered_id
             if cid.startswith("container:"):
-                cid = cid[len("container:"):]
+                cid = cid[len("container:") :]
             if "@" in cid:
                 cid, _ = cid.split("@", 1)
             for c in all_containers:

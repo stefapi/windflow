@@ -12,12 +12,11 @@ Important:
     - Adapté pour développement ou petites charges
 """
 
-import logging
 import asyncio
-from typing import Dict, Any
+import logging
 from datetime import datetime
-from uuid import UUID
 from pathlib import Path
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ async def deploy_stack_async(
     stack_id: str,
     target_id: str,
     user_id: str,
-    configuration: Dict[str, Any]
+    configuration: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
     Version asyncio du déploiement de stack (fallback Celery).
@@ -48,14 +47,15 @@ async def deploy_stack_async(
     Raises:
         Exception: En cas d'erreur de déploiement
     """
-    from backend.app.services.docker_compose_service import DockerComposeService
-    from backend.app.services.docker_service import DockerService
-    from backend.app.services.deployment_service import DeploymentService
-    from backend.app.database import AsyncSessionLocal
-    from backend.app.models.stack import Stack
-    from backend.app.models.deployment import DeploymentStatus, Deployment
-    from backend.app.schemas.target import TargetType
     from sqlalchemy import select
+
+    from app.database import AsyncSessionLocal
+    from app.models.deployment import Deployment, DeploymentStatus
+    from app.models.stack import Stack
+    from app.schemas.target import TargetType
+    from app.services.deployment_service import DeploymentService
+    from app.services.docker_compose_service import DockerComposeService
+    from app.services.docker_service import DockerService
 
     logger.info(
         f"[FALLBACK-ASYNCIO] Début du déploiement {deployment_id} "
@@ -69,7 +69,7 @@ async def deploy_stack_async(
                 db,
                 deployment_id,
                 DeploymentStatus.DEPLOYING,
-                logs="[INFO] Démarrage du déploiement (mode fallback asyncio)..."
+                logs="[INFO] Démarrage du déploiement (mode fallback asyncio)...",
             )
 
             # 1. Charger le deployment pour récupérer son nom
@@ -85,62 +85,74 @@ async def deploy_stack_async(
             logger.info(f"Deployment chargé: {deployment_name}")
 
             # 2. Charger le stack
-            result = await db.execute(
-                select(Stack).where(Stack.id == stack_id)
-            )
+            result = await db.execute(select(Stack).where(Stack.id == stack_id))
             stack = result.scalar_one_or_none()
 
             if not stack:
                 raise ValueError(f"Stack {stack_id} non trouvé")
 
-            logger.info(f"Stack chargé: {stack.name} v{stack.version}, target_type={stack.target_type}")
+            logger.info(
+                f"Stack chargé: {stack.name} v{stack.version}, target_type={stack.target_type}"
+            )
             await DeploymentService.update_status(
-                db, deployment_id, DeploymentStatus.DEPLOYING,
-                logs=f"[INFO] Stack chargé: {stack.name} v{stack.version} (type: {stack.target_type})"
+                db,
+                deployment_id,
+                DeploymentStatus.DEPLOYING,
+                logs=f"[INFO] Stack chargé: {stack.name} v{stack.version} (type: {stack.target_type})",
             )
 
             # Router vers le bon service selon le target_type
             if stack.target_type == TargetType.DOCKER.value:
                 # === DÉPLOIEMENT DOCKER SIMPLE ===
-                logger.info("[FALLBACK-ASYNCIO] Mode déploiement: Docker container simple")
+                logger.info(
+                    "[FALLBACK-ASYNCIO] Mode déploiement: Docker container simple"
+                )
                 await DeploymentService.update_status(
-                    db, deployment_id, DeploymentStatus.DEPLOYING,
-                    logs="[INFO] Mode déploiement: Docker container simple (asyncio fallback)"
+                    db,
+                    deployment_id,
+                    DeploymentStatus.DEPLOYING,
+                    logs="[INFO] Mode déploiement: Docker container simple (asyncio fallback)",
                 )
 
                 # 2. Substituer les variables avec DockerService
                 docker_service = DockerService()
                 final_config = docker_service.substitute_variables(
-                    stack.template,
-                    configuration
+                    stack.template, configuration
                 )
 
                 logger.info("Variables substituées dans le template")
                 await DeploymentService.update_status(
-                    db, deployment_id, DeploymentStatus.DEPLOYING,
-                    logs="[INFO] Variables substituées dans le template"
+                    db,
+                    deployment_id,
+                    DeploymentStatus.DEPLOYING,
+                    logs="[INFO] Variables substituées dans le template",
                 )
 
                 # 3. Valider la configuration container
-                is_valid, error_msg = docker_service.validate_container_config(final_config)
+                is_valid, error_msg = docker_service.validate_container_config(
+                    final_config
+                )
                 if not is_valid:
                     raise ValueError(f"Configuration container invalide: {error_msg}")
 
                 await DeploymentService.update_status(
-                    db, deployment_id, DeploymentStatus.DEPLOYING,
-                    logs="[INFO] Validation de la configuration container réussie"
+                    db,
+                    deployment_id,
+                    DeploymentStatus.DEPLOYING,
+                    logs="[INFO] Validation de la configuration container réussie",
                 )
 
                 # 4. Déployer le container
                 container_name = deployment_name
                 await DeploymentService.update_status(
-                    db, deployment_id, DeploymentStatus.DEPLOYING,
-                    logs=f"[INFO] Lancement du container {container_name}..."
+                    db,
+                    deployment_id,
+                    DeploymentStatus.DEPLOYING,
+                    logs=f"[INFO] Lancement du container {container_name}...",
                 )
 
                 success, output = await docker_service.deploy_container(
-                    final_config,
-                    container_name
+                    final_config, container_name
                 )
 
                 if not success:
@@ -153,7 +165,7 @@ async def deploy_stack_async(
                     db,
                     deployment_id,
                     DeploymentStatus.RUNNING,
-                    logs=f"[SUCCESS] Container déployé avec succès (asyncio fallback)\nContainer ID: {output}"
+                    logs=f"[SUCCESS] Container déployé avec succès (asyncio fallback)\nContainer ID: {output}",
                 )
 
                 return {
@@ -168,28 +180,31 @@ async def deploy_stack_async(
                     "deployment_type": "docker",
                     "execution_mode": "asyncio_fallback",
                     "started_at": datetime.utcnow().isoformat(),
-                    "completed_at": datetime.utcnow().isoformat()
+                    "completed_at": datetime.utcnow().isoformat(),
                 }
 
             else:
                 # === DÉPLOIEMENT DOCKER-COMPOSE ===
                 logger.info("[FALLBACK-ASYNCIO] Mode déploiement: Docker Compose")
                 await DeploymentService.update_status(
-                    db, deployment_id, DeploymentStatus.DEPLOYING,
-                    logs="[INFO] Mode déploiement: Docker Compose (asyncio fallback)"
+                    db,
+                    deployment_id,
+                    DeploymentStatus.DEPLOYING,
+                    logs="[INFO] Mode déploiement: Docker Compose (asyncio fallback)",
                 )
 
                 # 2. Substituer les variables dans le template
                 compose_service = DockerComposeService()
                 final_compose = compose_service.substitute_variables(
-                    stack.template,
-                    configuration
+                    stack.template, configuration
                 )
 
                 logger.info("Variables substituées dans le template")
                 await DeploymentService.update_status(
-                    db, deployment_id, DeploymentStatus.DEPLOYING,
-                    logs="[INFO] Variables substituées dans le template"
+                    db,
+                    deployment_id,
+                    DeploymentStatus.DEPLOYING,
+                    logs="[INFO] Variables substituées dans le template",
                 )
 
                 # 3. Valider le compose généré
@@ -198,8 +213,10 @@ async def deploy_stack_async(
                     raise ValueError(f"Compose invalide: {error_msg}")
 
                 await DeploymentService.update_status(
-                    db, deployment_id, DeploymentStatus.DEPLOYING,
-                    logs="[INFO] Validation du fichier compose réussie"
+                    db,
+                    deployment_id,
+                    DeploymentStatus.DEPLOYING,
+                    logs="[INFO] Validation du fichier compose réussie",
                 )
 
                 # 3b. Injecter les labels WindFlow dans chaque service
@@ -222,10 +239,14 @@ async def deploy_stack_async(
                     existing_labels["windflow.stack_id"] = stack_id
                     svc_cfg["labels"] = existing_labels
 
-                logger.info(f"Labels WindFlow injectés dans les services (stack_id={stack_id})")
+                logger.info(
+                    f"Labels WindFlow injectés dans les services (stack_id={stack_id})"
+                )
                 await DeploymentService.update_status(
-                    db, deployment_id, DeploymentStatus.DEPLOYING,
-                    logs=f"[INFO] Labels WindFlow injectés (windflow.stack_id={stack_id})"
+                    db,
+                    deployment_id,
+                    DeploymentStatus.DEPLOYING,
+                    logs=f"[INFO] Labels WindFlow injectés (windflow.stack_id={stack_id})",
                 )
 
                 # 4. Générer le fichier docker-compose.yml
@@ -235,20 +256,23 @@ async def deploy_stack_async(
                 compose_service.generate_compose_file(final_compose, compose_file)
                 logger.info(f"Fichier compose généré: {compose_file}")
                 await DeploymentService.update_status(
-                    db, deployment_id, DeploymentStatus.DEPLOYING,
-                    logs=f"[INFO] Fichier compose généré: {compose_file}"
+                    db,
+                    deployment_id,
+                    DeploymentStatus.DEPLOYING,
+                    logs=f"[INFO] Fichier compose généré: {compose_file}",
                 )
 
                 # 5. Déployer avec docker-compose
                 project_name = deployment_name
                 await DeploymentService.update_status(
-                    db, deployment_id, DeploymentStatus.DEPLOYING,
-                    logs=f"[INFO] Lancement de docker-compose pour {project_name}..."
+                    db,
+                    deployment_id,
+                    DeploymentStatus.DEPLOYING,
+                    logs=f"[INFO] Lancement de docker-compose pour {project_name}...",
                 )
 
                 success, output = await compose_service.deploy_compose(
-                    compose_file,
-                    project_name
+                    compose_file, project_name
                 )
 
                 if not success:
@@ -261,7 +285,7 @@ async def deploy_stack_async(
                     db,
                     deployment_id,
                     DeploymentStatus.RUNNING,
-                    logs=f"[SUCCESS] Déploiement terminé avec succès (asyncio fallback)\n{output}"
+                    logs=f"[SUCCESS] Déploiement terminé avec succès (asyncio fallback)\n{output}",
                 )
 
                 return {
@@ -277,7 +301,7 @@ async def deploy_stack_async(
                     "execution_mode": "asyncio_fallback",
                     "started_at": datetime.utcnow().isoformat(),
                     "completed_at": datetime.utcnow().isoformat(),
-                    "output": output
+                    "output": output,
                 }
 
     except Exception as e:
@@ -290,7 +314,7 @@ async def deploy_stack_async(
                 deployment_id,
                 DeploymentStatus.FAILED,
                 error_message=str(e),
-                logs=f"[ERROR] Erreur lors du déploiement (asyncio fallback): {str(e)}"
+                logs=f"[ERROR] Erreur lors du déploiement (asyncio fallback): {str(e)}",
             )
 
         # Re-raise l'exception
@@ -302,7 +326,7 @@ def create_background_task(
     stack_id: str,
     target_id: str,
     user_id: str,
-    configuration: Dict[str, Any]
+    configuration: Dict[str, Any],
 ) -> asyncio.Task:
     """
     Crée une tâche asyncio en arrière-plan pour le déploiement.
@@ -341,7 +365,7 @@ def create_background_task(
             stack_id=stack_id,
             target_id=target_id,
             user_id=user_id,
-            configuration=configuration
+            configuration=configuration,
         )
     )
 
@@ -361,7 +385,9 @@ def create_background_task(
                     f"{result.get('status', 'unknown')}"
                 )
         except asyncio.CancelledError:
-            logger.warning(f"Background task for deployment {deployment_id} was cancelled")
+            logger.warning(
+                f"Background task for deployment {deployment_id} was cancelled"
+            )
         except Exception as e:
             logger.error(f"Error in task callback for deployment {deployment_id}: {e}")
 
@@ -436,8 +462,7 @@ def get_active_background_tasks_count() -> int:
 
 
 async def retry_pending_deployments_async(
-    max_age_minutes: int = 2,
-    timeout_minutes: int = 60
+    max_age_minutes: int = 2, timeout_minutes: int = 60
 ) -> Dict[str, Any]:
     """
     Version asyncio de la tâche de recovery des déploiements PENDING.
@@ -453,9 +478,10 @@ async def retry_pending_deployments_async(
     Returns:
         Statistiques de recovery (retried, failed, skipped, errors)
     """
-    from backend.app.services.deployment_service import DeploymentService
-    from backend.app.database import AsyncSessionLocal
     from datetime import datetime
+
+    from app.database import AsyncSessionLocal
+    from app.services.deployment_service import DeploymentService
 
     logger.info(
         f"[FALLBACK-ASYNCIO] Exécution du recovery des déploiements PENDING "
@@ -465,9 +491,7 @@ async def retry_pending_deployments_async(
     try:
         async with AsyncSessionLocal() as db:
             stats = await DeploymentService.recover_pending_deployments(
-                db,
-                max_age_minutes=max_age_minutes,
-                timeout_minutes=timeout_minutes
+                db, max_age_minutes=max_age_minutes, timeout_minutes=timeout_minutes
             )
 
             result = {
@@ -478,7 +502,7 @@ async def retry_pending_deployments_async(
                 "message": (
                     f"Recovery terminé (asyncio): {stats['retried']} réessayés, "
                     f"{stats['failed']} marqués FAILED, {stats['errors']} erreurs"
-                )
+                ),
             }
 
             logger.info(
@@ -495,7 +519,7 @@ async def retry_pending_deployments_async(
             "timestamp": datetime.utcnow().isoformat(),
             "execution_mode": "asyncio_fallback",
             "error": str(e),
-            "message": f"Erreur lors du recovery (asyncio): {str(e)}"
+            "message": f"Erreur lors du recovery (asyncio): {str(e)}",
         }
 
 
@@ -509,7 +533,9 @@ def schedule_recovery_task() -> asyncio.Task:
     Returns:
         asyncio.Task créée pour le recovery
     """
-    logger.info("Planification de la tâche de recovery des déploiements PENDING (asyncio)")
+    logger.info(
+        "Planification de la tâche de recovery des déploiements PENDING (asyncio)"
+    )
 
     task = asyncio.create_task(retry_pending_deployments_async())
 
@@ -520,7 +546,9 @@ def schedule_recovery_task() -> asyncio.Task:
                 logger.error(f"Tâche de recovery échouée: {t.exception()}")
             else:
                 result = t.result()
-                logger.info(f"Tâche de recovery terminée: {result.get('message', 'unknown')}")
+                logger.info(
+                    f"Tâche de recovery terminée: {result.get('message', 'unknown')}"
+                )
         except asyncio.CancelledError:
             logger.warning("Tâche de recovery annulée")
         except Exception as e:

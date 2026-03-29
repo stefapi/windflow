@@ -8,6 +8,7 @@ Provides conditional rate limiting based on configuration:
 """
 
 from typing import Callable, Optional
+
 from fastapi import Request
 from fastapi_limiter.depends import RateLimiter
 
@@ -41,7 +42,6 @@ def conditional_rate_limiter(times: int, seconds: int) -> Optional[Callable]:
         # Return a no-op dependency that always allows requests
         async def no_op_limiter(request: Request):
             """No-op rate limiter when rate limiting is disabled."""
-            pass
 
         return no_op_limiter
 

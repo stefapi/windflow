@@ -54,7 +54,7 @@ describe('ContainerProcesses.vue', () => {
   })
 
   it('should render the component', async () => {
-    const wrapper = mount(ContainerProcesses, {
+    const _wrapper = mount(ContainerProcesses, {
       props: {
         containerId: 'abc123',
         containerName: 'test-container',
@@ -73,11 +73,11 @@ describe('ContainerProcesses.vue', () => {
     })
 
     await flushPromises()
-    expect(wrapper.exists()).toBe(true)
+    expect(_wrapper.exists()).toBe(true)
   })
 
   it('should fetch processes on mount', async () => {
-    const wrapper = mount(ContainerProcesses, {
+    const _wrapper = mount(ContainerProcesses, {
       props: {
         containerId: 'abc123',
       },

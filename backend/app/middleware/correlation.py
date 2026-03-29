@@ -2,9 +2,9 @@
 
 import logging
 from uuid import uuid4
+
 from fastapi import Request
 from starlette.responses import Response
-
 
 logger = logging.getLogger(__name__)
 

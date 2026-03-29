@@ -7,19 +7,17 @@ Les dépendances externes (DB, Docker) sont mockées.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.schemas.compute import ComputeGlobalView, ComputeStatsResponse, TargetGroup
 from app.services.compute_service import (
     _classify_containers,
     _format_memory,
     get_compute_global,
     get_compute_stats,
 )
-from app.schemas.compute import ComputeGlobalView, ComputeStatsResponse, TargetGroup
-
 
 # =============================================================================
 # Helpers — fabrique de ContainerInfo mockés
@@ -44,7 +42,9 @@ def _make_container(
     c.labels = labels or {}
     # status et ports doivent être des strings/lists réels (pas MagicMock)
     # pour que extract_uptime/parse_ports fonctionnent correctement
-    c.status = status or ("Up 2 hours" if state == "running" else "Exited (0) 3 minutes ago")
+    c.status = status or (
+        "Up 2 hours" if state == "running" else "Exited (0) 3 minutes ago"
+    )
     c.ports = ports or []
     return c
 
@@ -167,9 +167,7 @@ class TestGetComputeStats:
     @pytest.mark.asyncio
     async def test_docker_unavailable_returns_zeros(self, mock_db) -> None:
         """Quand Docker n'est pas disponible, les compteurs Docker sont à 0."""
-        with patch(
-            "app.services.compute_service.DockerClientService"
-        ) as mock_cls:
+        with patch("app.services.compute_service.DockerClientService") as mock_cls:
             mock_instance = AsyncMock()
             mock_instance.ping.return_value = False
             mock_cls.return_value = mock_instance
@@ -190,9 +188,7 @@ class TestGetComputeStats:
     @pytest.mark.asyncio
     async def test_docker_exception_returns_zeros(self, mock_db) -> None:
         """Une exception Docker retourne des compteurs à 0 sans lever d'erreur."""
-        with patch(
-            "app.services.compute_service.DockerClientService"
-        ) as mock_cls:
+        with patch("app.services.compute_service.DockerClientService") as mock_cls:
             mock_instance = AsyncMock()
             mock_instance.ping.side_effect = ConnectionError("socket unreachable")
             mock_cls.return_value = mock_instance
@@ -219,9 +215,7 @@ class TestGetComputeStats:
             _make_container("c4", state="running", labels={}),
         ]
 
-        with patch(
-            "app.services.compute_service.DockerClientService"
-        ) as mock_cls:
+        with patch("app.services.compute_service.DockerClientService") as mock_cls:
             mock_instance = AsyncMock()
             mock_instance.ping.return_value = True
             mock_instance.list_containers.return_value = containers
@@ -231,9 +225,9 @@ class TestGetComputeStats:
 
         assert result.total_containers == 4
         assert result.running_containers == 3
-        assert result.stacks_services_count == 2   # 2 containers windflow
-        assert result.discovered_count == 1         # 1 projet compose
-        assert result.standalone_count == 1         # 1 standalone
+        assert result.stacks_services_count == 2  # 2 containers windflow
+        assert result.discovered_count == 1  # 1 projet compose
+        assert result.standalone_count == 1  # 1 standalone
 
 
 # =============================================================================
@@ -241,7 +235,9 @@ class TestGetComputeStats:
 # =============================================================================
 
 
-def _make_stack(stack_id: str = "s1", name: str = "My Stack", deployments=None) -> MagicMock:
+def _make_stack(
+    stack_id: str = "s1", name: str = "My Stack", deployments=None
+) -> MagicMock:
     """Crée un Stack mocké."""
     stack = MagicMock()
     stack.id = stack_id
@@ -291,9 +287,7 @@ class TestGetComputeGlobal:
         stack = _make_stack("s1", "My Stack")
         mock_db = _make_mock_db(stacks=[stack])
 
-        with patch(
-            "app.services.compute_service.DockerClientService"
-        ) as mock_cls:
+        with patch("app.services.compute_service.DockerClientService") as mock_cls:
             mock_instance = AsyncMock()
             mock_instance.ping.return_value = False
             mock_cls.return_value = mock_instance
@@ -314,7 +308,9 @@ class TestGetComputeGlobal:
 
         containers = [
             _make_container("c1", "wf-svc", state="running", labels=_wf_labels("s1")),
-            _make_container("c2", "compose-app", state="running", labels=_compose_labels("proj")),
+            _make_container(
+                "c2", "compose-app", state="running", labels=_compose_labels("proj")
+            ),
             _make_container("c3", "standalone", state="exited", labels={}),
         ]
 
@@ -369,7 +365,9 @@ class TestGetComputeGlobal:
         mock_db = _make_mock_db(stacks=[stack_nginx, stack_redis])
 
         containers = [
-            _make_container("c1", "nginx-compose", labels=_compose_labels("nginx-proj")),
+            _make_container(
+                "c1", "nginx-compose", labels=_compose_labels("nginx-proj")
+            ),
             _make_container("c2", "redis-standalone", labels={}),
         ]
 
@@ -405,7 +403,9 @@ class TestGetComputeGlobal:
             mock_instance.list_containers.return_value = containers
             mock_cls.return_value = mock_instance
 
-            result = await get_compute_global(mock_db, org_id=None, type_filter="managed")
+            result = await get_compute_global(
+                mock_db, org_id=None, type_filter="managed"
+            )
 
         assert isinstance(result, ComputeGlobalView)
         assert result.discovered_items == []

@@ -5,16 +5,15 @@ Ces fonctions sont disponibles dans tous les templates (Docker, Docker Compose, 
 et permettent de générer dynamiquement des valeurs sécurisées et utilitaires.
 """
 
+import base64
+import hashlib
 import secrets
 import string
 import uuid
-import base64
-import hashlib
-from typing import Optional, Literal
+from typing import Literal, Optional
 
-from . import animalname
-from . import cosmicname
-from . import mythologyname
+from . import animalname, cosmicname, mythologyname
+
 
 class JinjaFunctions:
     """Collection de fonctions utilitaires pour templates Jinja2."""
@@ -46,7 +45,7 @@ class JinjaFunctions:
             # Uniquement lettres et chiffres
             characters = string.ascii_letters + string.digits
 
-        password = ''.join(secrets.choice(characters) for _ in range(length))
+        password = "".join(secrets.choice(characters) for _ in range(length))
         return password
 
     @staticmethod
@@ -78,7 +77,7 @@ class JinjaFunctions:
     @staticmethod
     def random_string(
         length: int,
-        charset: Literal["alphanumeric", "alpha", "numeric", "hex"] = "alphanumeric"
+        charset: Literal["alphanumeric", "alpha", "numeric", "hex"] = "alphanumeric",
     ) -> str:
         """
         Génère une chaîne aléatoire selon un charset spécifique.
@@ -105,14 +104,16 @@ class JinjaFunctions:
             "alphanumeric": string.ascii_letters + string.digits,
             "alpha": string.ascii_letters,
             "numeric": string.digits,
-            "hex": "0123456789abcdef"
+            "hex": "0123456789abcdef",
         }
 
         if charset not in charset_map:
-            raise ValueError(f"Charset invalide: {charset}. Options: {list(charset_map.keys())}")
+            raise ValueError(
+                f"Charset invalide: {charset}. Options: {list(charset_map.keys())}"
+            )
 
         characters = charset_map[charset]
-        result = ''.join(secrets.choice(characters) for _ in range(length))
+        result = "".join(secrets.choice(characters) for _ in range(length))
         return result
 
     @staticmethod
@@ -147,7 +148,7 @@ class JinjaFunctions:
             >>> '-' in uid
             False
         """
-        return str(uuid.uuid4()).replace('-', '')
+        return str(uuid.uuid4()).replace("-", "")
 
     @staticmethod
     def base64_encode(value: str) -> str:
@@ -165,9 +166,9 @@ class JinjaFunctions:
             >>> encoded
             'aGVsbG8='
         """
-        value_bytes = value.encode('utf-8')
+        value_bytes = value.encode("utf-8")
         encoded_bytes = base64.b64encode(value_bytes)
-        return encoded_bytes.decode('utf-8')
+        return encoded_bytes.decode("utf-8")
 
     @staticmethod
     def base64_decode(value: str) -> str:
@@ -185,14 +186,13 @@ class JinjaFunctions:
             >>> decoded
             'hello'
         """
-        value_bytes = value.encode('utf-8')
+        value_bytes = value.encode("utf-8")
         decoded_bytes = base64.b64decode(value_bytes)
-        return decoded_bytes.decode('utf-8')
+        return decoded_bytes.decode("utf-8")
 
     @staticmethod
     def hash_value(
-        value: str,
-        algorithm: Literal["sha256", "sha512", "md5", "sha1"] = "sha256"
+        value: str, algorithm: Literal["sha256", "sha512", "md5", "sha1"] = "sha256"
     ) -> str:
         """
         Hash une valeur avec l'algorithme spécifié.
@@ -213,14 +213,16 @@ class JinjaFunctions:
             "sha256": hashlib.sha256,
             "sha512": hashlib.sha512,
             "md5": hashlib.md5,
-            "sha1": hashlib.sha1
+            "sha1": hashlib.sha1,
         }
 
         if algorithm not in algorithm_map:
-            raise ValueError(f"Algorithme invalide: {algorithm}. Options: {list(algorithm_map.keys())}")
+            raise ValueError(
+                f"Algorithme invalide: {algorithm}. Options: {list(algorithm_map.keys())}"
+            )
 
         hash_func = algorithm_map[algorithm]
-        value_bytes = value.encode('utf-8')
+        value_bytes = value.encode("utf-8")
         hashed = hash_func(value_bytes).hexdigest()
         return hashed
 
@@ -277,7 +279,7 @@ class JinjaFunctions:
             # Vérifier que le port est dans la plage valide
             if port > 65535:
                 raise RuntimeError(
-                    f"Aucun port disponible trouvé. Dépassement de la plage valide (65535)"
+                    "Aucun port disponible trouvé. Dépassement de la plage valide (65535)"
                 )
 
             # Tester si le port est disponible
@@ -285,7 +287,7 @@ class JinjaFunctions:
                 # Créer un socket TCP et essayer de bind sur le port
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                    sock.bind(('', port))
+                    sock.bind(("", port))
                     # Si bind réussit, le port est disponible
                     return port
             except OSError:
@@ -318,6 +320,7 @@ class JinjaFunctions:
             'default'
         """
         import os
+
         return os.environ.get(var_name, default)
 
     @staticmethod
@@ -337,6 +340,7 @@ class JinjaFunctions:
             10
         """
         from datetime import datetime
+
         return datetime.utcnow().strftime(format)
 
     @staticmethod
@@ -386,7 +390,7 @@ class JinjaFunctions:
             >>> len(name.split('-'))
             2
         """
-        return name+"-"+animalname.generate_codename(style=style)
+        return name + "-" + animalname.generate_codename(style=style)
 
     @staticmethod
     def generate_cosmicname(name="", style: Optional[str] = None) -> str:
@@ -414,7 +418,7 @@ class JinjaFunctions:
             >>> len(name.split('-'))
             2
         """
-        return name+"-"+cosmicname.generate_codename(style=style)
+        return name + "-" + cosmicname.generate_codename(style=style)
 
     @staticmethod
     def generate_mythologyname(name="", style: Optional[str] = None) -> str:
@@ -442,25 +446,25 @@ class JinjaFunctions:
             >>> len(name.split('-'))
             2
         """
-        return name+"-"+mythologyname.generate_codename(style=style)
+        return name + "-" + mythologyname.generate_codename(style=style)
 
 
 # Dictionnaire des fonctions disponibles pour Jinja2
 JINJA_FUNCTIONS = {
-    'generate_password': JinjaFunctions.generate_password,
-    'generate_secret': JinjaFunctions.generate_secret,
-    'random_string': JinjaFunctions.random_string,
-    'generate_uuid': JinjaFunctions.generate_uuid,
-    'generate_uuid_short': JinjaFunctions.generate_uuid_short,
-    'base64_encode': JinjaFunctions.base64_encode,
-    'base64_decode': JinjaFunctions.base64_decode,
-    'hash_value': JinjaFunctions.hash_value,
-    'random_port': JinjaFunctions.random_port,
-    'get_valid_port': JinjaFunctions.get_valid_port,
-    'env': JinjaFunctions.env,
-    'now': JinjaFunctions.now,
-    'random_choice': JinjaFunctions.random_choice,
-    'generate_animalname': JinjaFunctions.generate_animalname,
-    'generate_cosmicname': JinjaFunctions.generate_cosmicname,
-    'generate_mythologyname': JinjaFunctions.generate_mythologyname,
+    "generate_password": JinjaFunctions.generate_password,
+    "generate_secret": JinjaFunctions.generate_secret,
+    "random_string": JinjaFunctions.random_string,
+    "generate_uuid": JinjaFunctions.generate_uuid,
+    "generate_uuid_short": JinjaFunctions.generate_uuid_short,
+    "base64_encode": JinjaFunctions.base64_encode,
+    "base64_decode": JinjaFunctions.base64_decode,
+    "hash_value": JinjaFunctions.hash_value,
+    "random_port": JinjaFunctions.random_port,
+    "get_valid_port": JinjaFunctions.get_valid_port,
+    "env": JinjaFunctions.env,
+    "now": JinjaFunctions.now,
+    "random_choice": JinjaFunctions.random_choice,
+    "generate_animalname": JinjaFunctions.generate_animalname,
+    "generate_cosmicname": JinjaFunctions.generate_cosmicname,
+    "generate_mythologyname": JinjaFunctions.generate_mythologyname,
 }

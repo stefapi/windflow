@@ -10,7 +10,6 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-
 # =============================================================================
 # Primitives — Données détectées d'un container
 # =============================================================================
@@ -103,9 +102,7 @@ class AdoptionWizardData(BaseModel):
     type: Literal["container", "composition", "helm_release"] = Field(
         ..., description="Type d'objet découvert"
     )
-    technology: str = Field(
-        ..., description="Technologie (docker-compose, helm…)"
-    )
+    technology: str = Field(..., description="Technologie (docker-compose, helm…)")
     target_id: str = Field(..., description="ID de la target hébergeant l'objet")
     target_name: str = Field(..., description="Nom de la target")
     services: list[AdoptionServiceData] = Field(

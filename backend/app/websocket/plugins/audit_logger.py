@@ -4,11 +4,11 @@ Audit Logger Plugin - Logs security-related WebSocket events.
 Handles authentication and session events for audit purposes.
 """
 
-from typing import Dict, Any
 from datetime import datetime
+from typing import Any, Dict
 
-from ..plugin import WebSocketPlugin, PluginContext
 from ...schemas.websocket_events import WebSocketEventType
+from ..plugin import PluginContext, WebSocketPlugin
 
 
 class AuditLoggerPlugin(WebSocketPlugin):
@@ -34,10 +34,7 @@ class AuditLoggerPlugin(WebSocketPlugin):
     ]
 
     async def handle_event(
-        self,
-        event: WebSocketEventType,
-        data: Dict[str, Any],
-        context: PluginContext
+        self, event: WebSocketEventType, data: Dict[str, Any], context: PluginContext
     ) -> None:
         """
         Handle security-related events by logging them.
@@ -54,81 +51,81 @@ class AuditLoggerPlugin(WebSocketPlugin):
         # Log based on event type
         if event == WebSocketEventType.AUTH_LOGIN_SUCCESS:
             context.logger.info(
-                f"🔐 WebSocket authentication successful",
+                "🔐 WebSocket authentication successful",
                 extra={
                     "event": event.value,
                     "user_id": str(user_id),
                     "username": username,
                     "timestamp": datetime.utcnow().isoformat(),
-                    "data": data
-                }
+                    "data": data,
+                },
             )
 
         elif event == WebSocketEventType.AUTH_LOGOUT:
             context.logger.info(
-                f"🔓 WebSocket logout",
+                "🔓 WebSocket logout",
                 extra={
                     "event": event.value,
                     "user_id": str(user_id),
                     "username": username,
-                    "timestamp": datetime.utcnow().isoformat()
-                }
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
             )
 
         elif event == WebSocketEventType.AUTH_TOKEN_REFRESH:
             context.logger.info(
-                f"🔄 WebSocket token refreshed",
+                "🔄 WebSocket token refreshed",
                 extra={
                     "event": event.value,
                     "user_id": str(user_id),
                     "username": username,
-                    "timestamp": datetime.utcnow().isoformat()
-                }
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
             )
 
         elif event == WebSocketEventType.SESSION_EXPIRED:
             context.logger.warning(
-                f"⚠️ WebSocket session expired",
+                "⚠️ WebSocket session expired",
                 extra={
                     "event": event.value,
                     "user_id": str(user_id),
                     "username": username,
-                    "timestamp": datetime.utcnow().isoformat()
-                }
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
             )
 
         elif event == WebSocketEventType.SESSION_AUTH_REQUIRED:
             context.logger.warning(
-                f"⚠️ WebSocket authentication required",
+                "⚠️ WebSocket authentication required",
                 extra={
                     "event": event.value,
                     "user_id": str(user_id),
-                    "timestamp": datetime.utcnow().isoformat()
-                }
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
             )
 
         elif event == WebSocketEventType.SESSION_PERMISSION_CHANGED:
             context.logger.info(
-                f"🔑 WebSocket user permissions changed",
+                "🔑 WebSocket user permissions changed",
                 extra={
                     "event": event.value,
                     "user_id": str(user_id),
                     "username": username,
                     "timestamp": datetime.utcnow().isoformat(),
-                    "data": data
-                }
+                    "data": data,
+                },
             )
 
         elif event == WebSocketEventType.SESSION_ORGANIZATION_CHANGED:
             context.logger.info(
-                f"🏢 WebSocket user organization changed",
+                "🏢 WebSocket user organization changed",
                 extra={
                     "event": event.value,
                     "user_id": str(user_id),
                     "username": username,
                     "timestamp": datetime.utcnow().isoformat(),
-                    "data": data
-                }
+                    "data": data,
+                },
             )
 
         # TODO: Potential future enhancements:

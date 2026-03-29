@@ -331,10 +331,10 @@ async function confirmBulkDelete(): Promise<void> {
 }
 
 .bulk-delete-list ul {
-  margin: 0;
-  padding-left: 20px;
-  max-height: 150px;
   overflow-y: auto;
+  max-height: 150px;
+  padding-left: 20px;
+  margin: 0;
 }
 
 .bulk-delete-list li {

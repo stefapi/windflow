@@ -349,17 +349,17 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   padding: 3px 10px;
-  border-radius: 999px;
   font-size: 12px;
-  cursor: pointer;
   border: 1px solid transparent;
+  border-radius: 999px;
   transition: all 0.2s;
+  cursor: pointer;
   user-select: none;
 }
 
 .pill-default {
-  background-color: var(--color-bg-secondary, #f3f4f6);
   color: var(--color-text-secondary, #6b7280);
+  background-color: var(--color-bg-secondary, #f3f4f6);
   border-color: var(--color-border, #e5e7eb);
 }
 
@@ -368,8 +368,8 @@ onMounted(() => {
 }
 
 .pill-selected {
-  background-color: var(--el-color-primary-light-8, #ecf5ff);
   color: var(--el-color-primary, #409eff);
+  background-color: var(--el-color-primary-light-8, #ecf5ff);
   border-color: var(--el-color-primary, #409eff);
 }
 </style>

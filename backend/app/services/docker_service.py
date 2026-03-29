@@ -7,12 +7,12 @@ de variables, génération de mots de passe, et gestion complète du cycle de vi
  utilise DockerExecutor pour l'exécution (CLI avec fallback socket).
 """
 
-import re
 import logging
-from typing import Dict, Any, Optional, Tuple, List
+import re
+from typing import Any, Dict, List, Optional, Tuple
 
-from backend.app.helper.template_renderer import TemplateRenderer
-from backend.app.services.docker_executor import DockerExecutor, get_docker_executor
+from app.helper.template_renderer import TemplateRenderer
+from app.services.docker_executor import DockerExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +42,7 @@ class DockerService:
         self._executor = value
 
     def substitute_variables(
-        self,
-        template: Dict[str, Any],
-        variables: Dict[str, Any]
+        self, template: Dict[str, Any], variables: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Substitue les variables dans le template container avec support
@@ -69,7 +67,9 @@ class DockerService:
         """
         return self.renderer.render_dict(template, variables)
 
-    def validate_container_config(self, config: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    def validate_container_config(
+        self, config: Dict[str, Any]
+    ) -> Tuple[bool, Optional[str]]:
         """
         Valide une configuration de container Docker.
 
@@ -81,45 +81,54 @@ class DockerService:
         """
         try:
             # Vérifier qu'il y a une image
-            if 'image' not in config:
+            if "image" not in config:
                 return False, "Image Docker manquante"
 
             # Vérifier le format de l'image
-            image = config['image']
+            image = config["image"]
             if not isinstance(image, str) or not image.strip():
                 return False, "Image Docker invalide"
 
             # Vérifier le container_name si présent
-            if 'container_name' in config:
-                container_name = config['container_name']
+            if "container_name" in config:
+                container_name = config["container_name"]
                 if not isinstance(container_name, str) or not container_name.strip():
                     return False, "Nom du container invalide"
 
                 # Valider le format du nom (alphanumérique, -, _)
-                if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]*$', container_name):
-                    return False, "Nom du container doit être alphanumérique (-, _ autorisés)"
+                if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$", container_name):
+                    return (
+                        False,
+                        "Nom du container doit être alphanumérique (-, _ autorisés)",
+                    )
 
             # Vérifier les ports si présents
-            if 'ports' in config and config['ports']:
-                if not isinstance(config['ports'], list):
+            if "ports" in config and config["ports"]:
+                if not isinstance(config["ports"], list):
                     return False, "Les ports doivent être une liste"
 
-                for port_mapping in config['ports']:
+                for port_mapping in config["ports"]:
                     if not isinstance(port_mapping, str):
                         return False, f"Mapping de port invalide: {port_mapping}"
 
                     # Vérifier le format "host_port:container_port"
-                    if ':' not in port_mapping:
-                        return False, f"Format de port invalide: {port_mapping} (attendu: host:container)"
+                    if ":" not in port_mapping:
+                        return (
+                            False,
+                            f"Format de port invalide: {port_mapping} (attendu: host:container)",
+                        )
 
             # Vérifier les variables d'environnement si présentes
-            if 'environment' in config and config['environment']:
-                if not isinstance(config['environment'], dict):
-                    return False, "Les variables d'environnement doivent être un dictionnaire"
+            if "environment" in config and config["environment"]:
+                if not isinstance(config["environment"], dict):
+                    return (
+                        False,
+                        "Les variables d'environnement doivent être un dictionnaire",
+                    )
 
             # Vérifier les volumes si présents
-            if 'volumes' in config and config['volumes']:
-                if not isinstance(config['volumes'], list):
+            if "volumes" in config and config["volumes"]:
+                if not isinstance(config["volumes"], list):
                     return False, "Les volumes doivent être une liste"
 
             return True, None
@@ -128,9 +137,7 @@ class DockerService:
             return False, f"Erreur de validation: {str(e)}"
 
     def build_docker_run_command(
-        self,
-        config: Dict[str, Any],
-        container_name: Optional[str] = None
+        self, config: Dict[str, Any], container_name: Optional[str] = None
     ) -> List[str]:
         """
         Construit la commande docker run à partir de la configuration.
@@ -153,71 +160,71 @@ class DockerService:
             >>> cmd[0:2]
             ['docker', 'run']
         """
-        cmd = ['docker', 'run', '-d']  # -d pour mode detached
+        cmd = ["docker", "run", "-d"]  # -d pour mode detached
 
         # Nom du container
-        name = container_name or config.get('container_name')
+        name = container_name or config.get("container_name")
         if name:
-            cmd.extend(['--name', name])
+            cmd.extend(["--name", name])
 
         # Variables d'environnement
-        env_vars = config.get('environment', {})
+        env_vars = config.get("environment", {})
         for key, value in env_vars.items():
-            cmd.extend(['-e', f"{key}={value}"])
+            cmd.extend(["-e", f"{key}={value}"])
 
         # Ports
-        ports = config.get('ports', [])
+        ports = config.get("ports", [])
         for port_mapping in ports:
-            cmd.extend(['-p', port_mapping])
+            cmd.extend(["-p", port_mapping])
 
         # Volumes
-        volumes = config.get('volumes', [])
+        volumes = config.get("volumes", [])
         for volume_mapping in volumes:
-            cmd.extend(['-v', volume_mapping])
+            cmd.extend(["-v", volume_mapping])
 
         # Restart policy
-        restart_policy = config.get('restart_policy', 'unless-stopped')
-        cmd.extend(['--restart', restart_policy])
+        restart_policy = config.get("restart_policy", "unless-stopped")
+        cmd.extend(["--restart", restart_policy])
 
         # Health check (optionnel)
-        healthcheck = config.get('healthcheck')
+        healthcheck = config.get("healthcheck")
         if healthcheck and isinstance(healthcheck, dict):
-            test = healthcheck.get('test')
+            test = healthcheck.get("test")
             if test:
                 # Le test est parfois une liste comme ["CMD-SHELL", "pg_isready"]
                 if isinstance(test, list):
-                    test_str = ' '.join(test[1:]) if test[0] == 'CMD-SHELL' else ' '.join(test)
+                    test_str = (
+                        " ".join(test[1:]) if test[0] == "CMD-SHELL" else " ".join(test)
+                    )
                 else:
                     test_str = str(test)
 
-                cmd.extend(['--health-cmd', test_str])
+                cmd.extend(["--health-cmd", test_str])
 
-            if 'interval' in healthcheck:
-                cmd.extend(['--health-interval', healthcheck['interval']])
+            if "interval" in healthcheck:
+                cmd.extend(["--health-interval", healthcheck["interval"]])
 
-            if 'timeout' in healthcheck:
-                cmd.extend(['--health-timeout', healthcheck['timeout']])
+            if "timeout" in healthcheck:
+                cmd.extend(["--health-timeout", healthcheck["timeout"]])
 
-            if 'retries' in healthcheck:
-                cmd.extend(['--health-retries', str(healthcheck['retries'])])
+            if "retries" in healthcheck:
+                cmd.extend(["--health-retries", str(healthcheck["retries"])])
 
-            if 'start_period' in healthcheck:
-                cmd.extend(['--health-start-period', healthcheck['start_period']])
+            if "start_period" in healthcheck:
+                cmd.extend(["--health-start-period", healthcheck["start_period"]])
 
         # Labels
-        labels = config.get('labels', {})
+        labels = config.get("labels", {})
         for key, value in labels.items():
-            cmd.extend(['--label', f"{key}={value}"])
+            cmd.extend(["--label", f"{key}={value}"])
 
         # Image (doit être à la fin)
-        cmd.append(config['image'])
+        cmd.append(config["image"])
 
         return cmd
 
     async def deploy_container(
-        self,
-        config: Dict[str, Any],
-        container_name: Optional[str] = None
+        self, config: Dict[str, Any], container_name: Optional[str] = None
     ) -> Tuple[bool, str]:
         """
         Déploie un container Docker.
@@ -239,8 +246,7 @@ class DockerService:
             return False, error_msg
 
     async def get_container_status(
-        self,
-        container_name: str
+        self, container_name: str
     ) -> Tuple[bool, Dict[str, Any]]:
         """
         Récupère le statut d'un container Docker.
@@ -255,12 +261,10 @@ class DockerService:
             return await self.executor.get_container_status(container_name)
         except Exception as e:
             logger.error(f"Erreur récupération statut: {e}")
-            return False, {'error': str(e)}
+            return False, {"error": str(e)}
 
     async def stop_container(
-        self,
-        container_name: str,
-        timeout: int = 10
+        self, container_name: str, timeout: int = 10
     ) -> Tuple[bool, str]:
         """
         Arrête un container Docker.
@@ -280,10 +284,7 @@ class DockerService:
             return False, error_msg
 
     async def remove_container(
-        self,
-        container_name: str,
-        force: bool = False,
-        remove_volumes: bool = True
+        self, container_name: str, force: bool = False, remove_volumes: bool = True
     ) -> Tuple[bool, str]:
         """
         Supprime un container Docker.
@@ -297,17 +298,16 @@ class DockerService:
             Tuple[bool, str]: (Succès, Message)
         """
         try:
-            return await self.executor.remove_container(container_name, force, remove_volumes)
+            return await self.executor.remove_container(
+                container_name, force, remove_volumes
+            )
         except Exception as e:
             error_msg = f"Erreur lors de la suppression: {str(e)}"
             logger.error(error_msg)
             return False, error_msg
 
     async def get_container_logs(
-        self,
-        container_name: str,
-        tail: int = 100,
-        since: Optional[str] = None
+        self, container_name: str, tail: int = 100, since: Optional[str] = None
     ) -> Tuple[bool, str]:
         """
         Récupère les logs d'un container Docker.
@@ -327,9 +327,7 @@ class DockerService:
             return False, str(e)
 
     async def restart_container(
-        self,
-        container_name: str,
-        timeout: int = 10
+        self, container_name: str, timeout: int = 10
     ) -> Tuple[bool, str]:
         """
         Redémarre un container Docker.
@@ -349,9 +347,7 @@ class DockerService:
             return False, error_msg
 
     async def remove_volume(
-        self,
-        volume_name: str,
-        force: bool = False
+        self, volume_name: str, force: bool = False
     ) -> Tuple[bool, str]:
         """
         Supprime un volume Docker nommé.

@@ -3,12 +3,13 @@ Service de gestion des tâches planifiées.
 
 CRUD et exécution des tâches récurrentes via Celery Beat.
 """
+
 import logging
 from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import select, update, delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.scheduled_task import ScheduledTask, TaskType
