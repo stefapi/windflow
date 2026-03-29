@@ -138,7 +138,6 @@ describe('ContainerDetail.vue', () => {
       history: createWebHistory(),
       routes: [
         { path: '/', name: 'Home', component: { template: '<div>Home</div>' } },
-        { path: '/containers', name: 'Containers', component: { template: '<div>Containers</div>' } },
         { path: '/containers/:id', name: 'ContainerDetail', component: ContainerDetail },
         { path: '/terminal/:containerId', name: 'Terminal', component: { template: '<div>Terminal</div>' } },
       ],
@@ -360,7 +359,7 @@ describe('ContainerDetail.vue', () => {
   })
 
   describe('Navigation', () => {
-    it('should have goBack method that navigates to Containers list', async () => {
+    it('should have goBack method that calls router.back()', async () => {
       mockInspectContainer.mockResolvedValue(mockContainerDetail)
 
       const wrapper = await mountComponent()

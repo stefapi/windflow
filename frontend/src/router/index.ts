@@ -32,11 +32,6 @@ const routes: RouteRecordRaw[] = [
       },
       // Infrastructure
       {
-        path: 'containers',
-        name: 'Containers',
-        component: () => import('@/views/Containers.vue'),
-      },
-      {
         path: 'containers/:id',
         name: 'ContainerDetail',
         component: () => import('@/views/ContainerDetail.vue'),

@@ -21,7 +21,7 @@
           :count="dashboardStore.containers.total"
           label="Containers"
           :icon="Box"
-          to="/containers"
+          to="/compute"
           :running-count="dashboardStore.containers.running"
           :stopped-count="dashboardStore.containers.stopped"
         />

@@ -25,7 +25,8 @@ interface BreadcrumbItem {
 // Mapping des noms de routes vers des labels lisibles en français
 const routeLabels: Record<string, string> = {
   Dashboard: 'Dashboard',
-  Containers: 'Containers',
+  Compute: 'Compute',
+  ContainerDetail: 'Détail Container',
   VMs: 'Machines Virtuelles',
   Targets: 'Targets',
   Stacks: 'Stacks',
@@ -88,7 +89,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => {
 })
 
 function isDetailRoute(routeName: string): boolean {
-  const detailRoutes = ['DeploymentDetail', 'WorkflowEditor', 'Terminal']
+  const detailRoutes = ['DeploymentDetail', 'WorkflowEditor', 'Terminal', 'ContainerDetail']
   return detailRoutes.includes(routeName)
 }
 
@@ -96,7 +97,8 @@ function getParentRoute(routeName: string): string | null {
   const parents: Record<string, string> = {
     DeploymentDetail: 'Deployments',
     WorkflowEditor: 'Workflows',
-    Terminal: 'Containers',
+    Terminal: 'Compute',
+    ContainerDetail: 'Compute',
   }
   return parents[routeName] || null
 }

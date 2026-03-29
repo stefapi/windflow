@@ -314,7 +314,6 @@ import { useSidebar } from '@/composables/useSidebar'
 import WindFlowLogo from '@/components/WindFlowLogo.vue'
 import {
   Odometer,
-  Box,
   Monitor,
   Upload,
   Connection,
@@ -355,7 +354,6 @@ const dashboardItems: NavItem[] = [
 
 // Infrastructure section items
 const infrastructureItems: NavItem[] = [
-  { icon: Box, label: 'Containers', path: '/containers' },
   { icon: Monitor, label: 'VMs', path: '/vms', badge: 'Bientôt' },
   { icon: Connection, label: 'Stacks', path: '/stacks' },
   { icon: DataAnalysis, label: 'Compute', path: '/compute' },

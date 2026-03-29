@@ -14,7 +14,6 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'Dashboard', component: { template: '<div>Dashboard</div>' } },
-    { path: '/containers', name: 'Containers', component: { template: '<div>Containers</div>' } },
     { path: '/volumes', name: 'Volumes', component: { template: '<div>Volumes</div>' } },
     { path: '/marketplace', name: 'Marketplace', component: { template: '<div>Marketplace</div>' } },
     { path: '/settings', name: 'Settings', component: { template: '<div>Settings</div>' } },
@@ -174,7 +173,8 @@ describe('SidebarNav', () => {
     it('rend les éléments de navigation infrastructure', async () => {
       const wrapper = await mountComponent()
       const html = wrapper.html()
-      expect(html).toContain('Containers')
+      expect(html).toContain('VMs')
+      expect(html).toContain('Compute')
       expect(html).toContain('Targets')
       expect(html).toContain('Stacks')
       // Note: Deployments n'est plus dans la sidebar (STORY-411)

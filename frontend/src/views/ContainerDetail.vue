@@ -649,7 +649,7 @@ async function handleAction(action: string): Promise<void> {
 }
 
 function goBack(): void {
-  router.push({ name: 'Containers' })
+  router.back()
 }
 
 function showInspectDrawer(): void {
