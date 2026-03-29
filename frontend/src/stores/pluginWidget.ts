@@ -4,7 +4,7 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, markRaw } from 'vue'
 import type { Component } from 'vue'
 
 /**
@@ -87,9 +87,10 @@ export const usePluginWidgetStore = defineStore('pluginWidget', () => {
       return
     }
 
-    // Store the widget
+    // Store the widget (markRaw on component to prevent Vue reactive proxy overhead)
     const fullWidget: PluginWidget = {
       ...widget,
+      component: markRaw(widget.component),
       pluginId,
     }
 

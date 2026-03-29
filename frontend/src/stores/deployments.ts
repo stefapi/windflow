@@ -23,9 +23,8 @@ export const useDeploymentsStore = defineStore('deployments', () => {
 
     try {
       const response = await deploymentsApi.list({ organization_id: organizationId })
-      // Backend returns List[DeploymentResponse] directly, not wrapped in {items:[]}
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      deployments.value = (response.data as any).items || response.data
+      // Backend returns DeploymentListResponse with {items, total, skip, limit}
+      deployments.value = response.data.items ?? []
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch deployments'
       throw err

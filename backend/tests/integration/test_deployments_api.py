@@ -94,8 +94,14 @@ class TestDeploymentsAPI:
         response = await authenticated_client.get("/api/v1/deployments")
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) >= 3
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert "total" in data
+        assert "skip" in data
+        assert "limit" in data
+        assert isinstance(data["items"], list)
+        assert len(data["items"]) >= 3
+        assert data["total"] >= 3
 
     async def test_list_deployments_with_pagination(
         self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Target
@@ -117,7 +123,10 @@ class TestDeploymentsAPI:
         response = await authenticated_client.get("/api/v1/deployments?skip=1&limit=2")
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 2
+        assert "items" in data
+        assert len(data["items"]) == 2
+        assert data["skip"] == 1
+        assert data["limit"] == 2
 
     async def test_create_deployment_unauthenticated(
         self, client: AsyncClient, test_stack: Stack, test_target: Target

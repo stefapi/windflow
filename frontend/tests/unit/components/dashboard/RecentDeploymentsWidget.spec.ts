@@ -17,9 +17,8 @@ const mockDeploymentsResponse = {
   data: {
     items: [] as Deployment[],
     total: 0,
-    page: 1,
-    size: 10,
-    pages: 1,
+    skip: 0,
+    limit: 10,
   },
 }
 

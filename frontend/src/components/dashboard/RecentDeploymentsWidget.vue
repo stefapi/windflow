@@ -155,7 +155,7 @@ async function fetchDeployments(): Promise<void> {
       limit: props.limit,
       skip: 0,
     })
-    deployments.value = response.data.items
+    deployments.value = response.data.items ?? []
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Erreur lors du chargement des déploiements'
     console.error('Failed to fetch deployments:', err)

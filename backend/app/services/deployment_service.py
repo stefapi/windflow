@@ -175,6 +175,20 @@ class DeploymentService:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def count_by_organization(
+        db: AsyncSession, organization_id: str,
+    ) -> int:
+        """Compte le nombre total de déploiements d'une organisation."""
+        from sqlalchemy import func
+
+        result = await db.execute(
+            select(func.count(Deployment.id)).where(
+                Deployment.organization_id == organization_id
+            )
+        )
+        return result.scalar_one()
+
+    @staticmethod
     async def list_by_organization(
         db: AsyncSession, organization_id: str, skip: int = 0, limit: int = 100
     ) -> List[Deployment]:

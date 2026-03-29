@@ -16,6 +16,7 @@ from ...database import get_db
 from ...models.user import User
 from ...schemas.deployment import (
     DeploymentCreate,
+    DeploymentListResponse,
     DeploymentLogsResponse,
     DeploymentResponse,
     DeploymentUpdate,
@@ -28,13 +29,14 @@ logger = logging.getLogger(__name__)
 
 @router.get(
     "",
-    response_model=List[DeploymentResponse],
+    response_model=DeploymentListResponse,
     summary="List all deployments",
     description="""
 List all deployments in the current user's organization.
 
 ## Pagination
-Use `skip` and `limit` parameters for pagination:
+Returns a paginated response with `items`, `total`, `skip`, and `limit`.
+Use `skip` and `limit` query parameters to navigate pages:
 - Default: Returns first 100 deployments
 - Maximum limit: 1000 deployments per request
 
@@ -48,25 +50,30 @@ Deployments are returned in reverse chronological order (newest first).
 """,
     responses={
         200: {
-            "description": "List of deployments",
+            "description": "Paginated list of deployments",
             "content": {
                 "application/json": {
-                    "example": [
-                        {
-                            "id": "990e8400-e29b-41d4-a716-446655440000",
-                            "name": "production-api",
-                            "status": "running",
-                            "target_type": "docker",
-                            "created_at": "2026-01-02T22:30:00Z",
-                        },
-                        {
-                            "id": "880e8400-e29b-41d4-a716-446655440001",
-                            "name": "staging-web",
-                            "status": "pending",
-                            "target_type": "docker-compose",
-                            "created_at": "2026-01-02T21:15:00Z",
-                        },
-                    ]
+                    "example": {
+                        "items": [
+                            {
+                                "id": "990e8400-e29b-41d4-a716-446655440000",
+                                "name": "production-api",
+                                "status": "running",
+                                "target_type": "docker",
+                                "created_at": "2026-01-02T22:30:00Z",
+                            },
+                            {
+                                "id": "880e8400-e29b-41d4-a716-446655440001",
+                                "name": "staging-web",
+                                "status": "pending",
+                                "target_type": "docker-compose",
+                                "created_at": "2026-01-02T21:15:00Z",
+                            },
+                        ],
+                        "total": 42,
+                        "skip": 0,
+                        "limit": 100,
+                    }
                 }
             },
         },
@@ -118,16 +125,25 @@ async def list_deployments(
         },
     )
 
+    # Get total count and paginated items
+    total = await DeploymentService.count_by_organization(
+        session, current_user.organization_id
+    )
     deployments = await DeploymentService.list_by_organization(
         session, current_user.organization_id, skip, limit
     )
 
     logger.info(
-        f"Retrieved {len(deployments)} deployments",
-        extra={"correlation_id": correlation_id, "count": len(deployments)},
+        f"Retrieved {len(deployments)} deployments (total: {total})",
+        extra={"correlation_id": correlation_id, "count": len(deployments), "total": total},
     )
 
-    return deployments
+    return DeploymentListResponse(
+        items=[DeploymentResponse.model_validate(d) for d in deployments],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @router.get(

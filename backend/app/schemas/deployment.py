@@ -253,6 +253,56 @@ class DeploymentResponse(BaseModel):
     )
 
 
+class DeploymentListResponse(BaseModel):
+    """
+    Réponse paginée pour la liste des déploiements.
+
+    Encapsule la liste des déploiements avec les métadonnées
+    de pagination (total, skip, limit).
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "items": [
+                    {
+                        "id": "990e8400-e29b-41d4-a716-446655440000",
+                        "name": "production-nginx",
+                        "status": "running",
+                        "created_at": "2026-01-02T22:30:00Z",
+                    }
+                ],
+                "total": 42,
+                "skip": 0,
+                "limit": 20,
+            }
+        }
+    )
+
+    items: list[DeploymentResponse] = Field(
+        ...,
+        description="Liste des déploiements de la page courante",
+    )
+    total: int = Field(
+        ...,
+        ge=0,
+        description="Nombre total de déploiements dans l'organisation",
+        json_schema_extra={"example": 42},
+    )
+    skip: int = Field(
+        ...,
+        ge=0,
+        description="Offset de la page courante",
+        json_schema_extra={"example": 0},
+    )
+    limit: int = Field(
+        ...,
+        ge=1,
+        description="Taille de la page courante",
+        json_schema_extra={"example": 20},
+    )
+
+
 class DeploymentLogsResponse(BaseModel):
     """Schema pour réponse des logs d'un déploiement."""
 
