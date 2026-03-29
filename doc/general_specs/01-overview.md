@@ -2,7 +2,7 @@
 
 ## Qu'est-ce que WindFlow ?
 
-WindFlow est un **gestionnaire d'infrastructure self-hosted** pour piloter des containers Docker, des compositions (Compose, Helm) et des machines virtuelles depuis une interface web unique. Il est conçu pour tourner aussi bien sur un Raspberry Pi 4 que sur un serveur x86 dédié ou un nœud Proxmox.
+WindFlow est un **gestionnaire d'infrastructure self-hosted** pour piloter des containers Docker, des compositions (Compose, Helm) et des machines virtuelles depuis une interface web unique. Il est conçu pour tourner aussi bien sur un Raspberry Pi 4 que sur un serveur x86 dédié ou un nœud LXD.
 
 Son architecture repose sur un **cœur minimal** — gestion unifiée du Compute (containers + VMs), gestion du stockage et des réseaux, et marketplace de plugins — complété par un **écosystème de plugins installables** qui étendent les capacités à la demande : reverse proxy, bases de données, DNS, monitoring, backups, mail, workflows, IA, et plus encore.
 
@@ -18,13 +18,13 @@ Rendre la gestion d'infrastructure accessible à tous en proposant un outil self
 
 - la simplicité d'un Cloudron ou YunoHost pour le déploiement applicatif,
 - la profondeur de Portainer pour la gestion fine des containers,
-- la gestion de VMs d'un Proxmox pour les machines virtuelles,
+- la gestion de VMs d'un Proxmox ou vsphere pour les machines virtuelles,
 - le tout dans une interface moderne, unifiée, et extensible par plugins.
 
 ### Objectifs principaux
 
 **Compute unifié — containers et VMs côte à côte**
-- Une seule vue "Compute" regroupe tous les objets qui s'exécutent : containers individuels, stacks Compose, releases Helm, machines virtuelles KVM ou Proxmox
+- Une seule vue "Compute" regroupe tous les objets qui s'exécutent : containers individuels, stacks Compose, releases Helm, machines virtuelles KVM ou lxd.
 - Les containers et les VMs peuvent coexister dans une même stack WindFlow (environnement mixte)
 - On distingue toujours ce que WindFlow gère de ce qu'il observe
 
@@ -61,7 +61,7 @@ Une **stack WindFlow** est un ensemble d'objets Compute dont WindFlow est l'aute
 
 - des containers Docker (définis par un Compose ou déployés individuellement),
 - des releases Helm (sur un cluster Kubernetes connecté),
-- des machines virtuelles KVM ou Proxmox,
+- des machines virtuelles KVM ou LXD,
 - ou un **mélange des trois** dans un environnement cohérent.
 
 WindFlow gère le cycle de vie complet : déploiement, mise à jour, restart, suppression, sauvegarde. Les stacks sont éditables directement depuis l'UI ou pilotées depuis un dépôt Git.
@@ -71,9 +71,9 @@ WindFlow gère le cycle de vie complet : déploiement, mise à jour, restart, su
 Quand WindFlow scanne un target (machine distante ou locale), il peut détecter des objets qu'il n'a pas créés :
 
 - des containers Docker lancés hors WindFlow,
-- des fichiers `docker-compose.yml` ou `compose.yaml` existants sur le système de fichiers,
-- des releases Helm déjà déployées sur un cluster,
-- des VMs libvirt/Proxmox existantes.
+- des fichiers `docker-compose.yml` ou `compose.yaml` existant dans le docker,
+- des releases Helm déjà déployées sur un cluster Kube,
+- des VMs libvirt/LXD existantes.
 
 Ces objets sont affichés en **lecture seule** : WindFlow les observe et remonte leurs métriques, mais ne les modifie pas sans action explicite de l'utilisateur. Un bouton "Adopter" permet de les intégrer dans une stack WindFlow, déclenchant un wizard qui reprend la configuration existante.
 
@@ -102,8 +102,8 @@ Des containers ou des VMs créés directement depuis WindFlow, sans appartenir �
 
 ### Pour l'Administrateur Système
 
-- **VMs et containers côte à côte** : KVM/Proxmox pour les VMs, Docker pour les containers, même interface
-- **Profondeur Portainer** pour les containers : logs inline, terminal exec, gestion des images/volumes/réseaux, métriques live
+- **VMs et containers côte à côte** : libvirt/LXD/Incus pour les VMs, Docker ou podman pour les containers, Kube avec K8s ou K3s le tout accessible au travers d'un SSH
+- **Profondeur Portainer** pour les containers : logs inline, terminal exec, gestion des images/volumes/réseaux, gestion variables d'environnement et Labels, métriques live
 - **Console VNC/SPICE** intégrée au navigateur pour les VMs, sans client lourd
 - **Volume browser** : naviguer, éditer, uploader des fichiers dans les volumes sans accès SSH
 - **Gestion des snapshots VM** : créer, restaurer, supprimer depuis une vue dédiée multi-machines
@@ -137,10 +137,10 @@ Un développeur ou une petite équipe loue un serveur dédié (OVH, Hetzner…) 
 
 Un administrateur système gère quelques serveurs avec un mix de VMs et de containers.
 
-- WindFlow sur un serveur principal, connecté à d'autres machines via SSH et à un nœud Proxmox
-- KVM/libvirt pour les VMs existantes, détectées automatiquement en tant qu'objets discovered
-- Création de nouvelles VMs depuis des templates cloud-init Ubuntu/Debian/Alpine stockés dans la bibliothèque d'images OS
-- Console VNC intégrée pour accéder aux VMs sans client lourd
+- WindFlow sur un serveur principal, connecté à d'autres machines via SSH
+- KVM/libvirt ou LXD/incus pour les VMs existantes, détectées automatiquement en tant qu'objets discovered
+- Création de nouvelles VMs depuis des templates cloud-init Ubuntu/Debian/Alpine stockés dans la bibliothèque d'images OS. Ces VMs créés peuvent ensuite servir de container pour du docker ou Kube
+- Console VNC intégrée ou shell terminal pour accéder aux VMs sans client lourd
 - Vue Compute globale : toutes les machines, tous les containers, toutes les VMs, en une seule page
 - Stacks mixtes : environnements qui combinent une VM de base (ex. k3s-node) et ses services containers
 
@@ -175,8 +175,8 @@ Une équipe de développeurs veut des environnements de dev/test rapides à prov
 │                                                         │
 │  ┌─────────────────────────────────────────────────┐   │
 │  │  Compute Engine                                 │   │
-│  │  Containers : Docker Engine, Compose, Helm/k8s  │   │
-│  │  VMs        : KVM/libvirt, Proxmox VE           │   │
+│  │  Containers : Docker, Podman, Helm/k8s/K3s      │   │
+│  │  VMs        : KVM/libvirt, LXD/Incus            │   │
 │  │  Discovery  : scan et réconciliation auto       │   │
 │  └─────────────────────────────────────────────────┘   │
 │                                                         │
@@ -197,21 +197,21 @@ Une équipe de développeurs veut des environnements de dev/test rapides à prov
 
 ### Ce qui est Core vs Plugin
 
-| Core (toujours présent) | Plugin (installable à la demande) |
-|---|---|
-| API REST (FastAPI) | Reverse proxy (Traefik, Caddy, Nginx PM) |
-| Auth JWT + RBAC | DNS (Pi-hole, CoreDNS, Cloudflare) |
-| Compute Engine : containers (Docker, Compose, Helm) | Certificats TLS (Let's Encrypt) |
-| Compute Engine : VMs (KVM/libvirt, Proxmox) | Bases de données (PostgreSQL, MySQL, Redis, MongoDB) |
-| Discovery & réconciliation | Monitoring (Uptime Kuma, Netdata, Prometheus) |
-| Plugin Manager + Marketplace | Backup (Restic, Borg) |
-| Target Manager (local + SSH) | Sécurité (Authelia, Trivy, Vault) |
-| Celery worker (tâches async) | Git & CI (Gitea, auto-deploy) |
-| PostgreSQL ou SQLite | Mail (Mailu, Stalwart) |
-| Redis (optionnel) | Workflows (n8n, Node-RED) |
-| Web UI (Vue.js 3) | IA (Ollama, LiteLLM) |
-| CLI/TUI | SSO (Keycloak) |
-| | Messagerie (MQTT, RabbitMQ) |
+| Core (toujours présent)                            | Plugin (installable à la demande) |
+|----------------------------------------------------|---|
+| API REST (FastAPI)                                 | Reverse proxy (Traefik, Caddy, Nginx PM) |
+| Auth JWT + RBAC                                    | DNS (Pi-hole, CoreDNS, Cloudflare) |
+| Compute Engine : containers (Docker, Podman, Helm) | Certificats TLS (Let's Encrypt) |
+| Compute Engine : VMs (KVM/libvirt, LXD, Incus)     | Bases de données (PostgreSQL, MySQL, Redis, MongoDB) |
+| Discovery & réconciliation                         | Monitoring (Uptime Kuma, Netdata, Prometheus) |
+| Plugin Manager + Marketplace                       | Backup (Restic, Borg) |
+| Target Manager (local + SSH)                       | Sécurité (Authelia, Trivy, Vault) |
+| Celery worker (tâches async)                       | Git & CI (Gitea, auto-deploy) |
+| PostgreSQL ou SQLite                               | Mail (Mailu, Stalwart) |
+| Redis (optionnel)                                  | Workflows (n8n, Node-RED) |
+| Web UI (Vue.js 3)                                  | IA (Ollama, LiteLLM) |
+| CLI/TUI                                            | SSO (Keycloak) |
+|                                                    | Messagerie (MQTT, RabbitMQ) |
 
 ### Profils de Ressources
 
@@ -227,11 +227,11 @@ Une équipe de développeurs veut des environnements de dev/test rapides à prov
 
 ### Compute Unifié : Containers ET VMs
 
-La plupart des outils self-hosted gèrent soit les containers (Portainer, CasaOS), soit les VMs (Proxmox, virt-manager). WindFlow fait les deux dans la même interface, avec une vue globale cross-machine et cross-technologie. Un Raspberry Pi avec Docker et un serveur Proxmox avec des VMs KVM se gèrent depuis le même dashboard, sans navigation entre plusieurs outils.
+La plupart des outils self-hosted gèrent soit les containers (Portainer, CasaOS), soit les VMs (Lxd,Incus, virt-manager). WindFlow fait les deux dans la même interface, avec une vue globale cross-machine et cross-technologie. Un Raspberry Pi avec Docker et un serveur LXD avec des VMs KVM se gèrent depuis le même dashboard, sans navigation entre plusieurs outils.
 
 ### Profondeur Portainer pour les Containers
 
-WindFlow ne se contente pas de lancer des containers. Pour les objets Docker, il offre le même niveau de profondeur que Portainer : gestion des images avec détection des images dangling, Volume Browser pour naviguer dans les fichiers sans SSH, gestion fine des réseaux Docker, métriques CPU/mémoire live par container, terminal exec et logs inline.
+WindFlow ne se contente pas de lancer des containers. Pour les objets Docker ou Podman, il offre le même niveau de profondeur que Portainer : gestion des images avec détection des images dangling, Volume Browser pour naviguer dans les fichiers sans SSH, gestion fine des réseaux Docker, métriques CPU/mémoire live par container, terminal exec et logs inline.
 
 ### Stacks Mixtes VM + Containers
 
@@ -285,7 +285,7 @@ WindFlow est pensé ARM-first. Le core et tous les plugins officiels fournissent
 ### Formats et Protocoles
 
 - **Containers** : Docker Engine API, format Docker Compose v3+, Helm v3, API Kubernetes
-- **VMs** : libvirt/QEMU-KVM, API Proxmox VE, VNC/SPICE pour les consoles
+- **VMs** : libvirt/QEMU-KVM, API LXD ou Incus, VNC/SPICE pour les consoles
 - **Images OS** : qcow2, raw, ISO, cloud-init (user-data + meta-data + network-config)
 - **Architectures** : linux/amd64, linux/arm64
 

@@ -4,11 +4,12 @@
 
 ### Panorama des Interfaces Étudiées
 
-L'analyse couvre 15+ outils répartis en 3 familles :
+L'analyse couvre 18+ outils répartis en 4 familles :
 
 **Homeserver / App Stores** : Umbrel, Runtipi, CasaOS, Cosmos Server, YunoHost, FreedomBox
 **PaaS / Déploiement** : Coolify, Cloudron, CapRover
 **Infra / VMs** : Proxmox VE, vSphere, Scaleway Console
+**Infra unifiée (Containers + VMs)** : Proxmox VE, Incus/LXD, Harvester (SUSE)
 
 ### Leçons Tirées par Outil
 
@@ -126,37 +127,101 @@ Interface minimaliste : liste d'apps, one-click apps, déploiement via Git ou im
 - La simplicité de la page "One-Click Apps" : recherche + grille d'apps + install
 - Le concept de "App Configs" modifiable post-installation (env vars, ports, volumes)
 
+#### Proxmox VE — La Convergence VMs + LXC
+
+Proxmox est le seul outil du marché qui gère VMs (KVM) et containers système (LXC) dans une interface unifiée. L'arbre de navigation (Datacenter → Node → VM/CT) traite les deux types comme des "guests" avec les mêmes onglets : Summary, Console, Resources, Network, Snapshots.
+
+**Ce qu'on prend pour la convergence :**
+- Le pattern "Instance" unique : VMs et LXC partagent la même arborescence, les mêmes actions (Start/Stop/Reboot/Snapshot/Console), le type n'est qu'un attribut
+- Les onglets identiques par instance (Summary, Console, Snapshots, Network, Storage) — le contenu s'adapte au type mais la structure reste la même
+- La vue Datacenter qui agrège tous les nodes avec leurs instances respectives
+- Les colonnes Status/Name/Type/CPU/RAM identiques dans la liste des guests
+
+**Ce qu'on adapte :**
+- Proxmox LXC ≠ Docker container — WindFlow gère Docker/Podman containers ET KVM/LXD VMs, mais le principe de convergence est identique
+- L'UI Proxmox est datée (ExtJS) — WindFlow applique ce pattern de convergence avec un design moderne
+
+#### Incus / LXD — L'Unification Totale par Canonique
+
+Incus (fork communautaire de LXD) est la référence absolue en matière de convergence container/VM. La CLI `incus list` affiche containers et VMs dans la même table, avec les mêmes colonnes. Les commandes sont identiques : `incus start`, `incus stop`, `incus snapshot`, `incus exec` fonctionnent pour les deux types.
+
+**Ce qu'on prend pour la convergence :**
+- Le principe fondamental : **le type (container vs VM) est une colonne, pas un paradigme** — tout objet Compute est une "Instance"
+- Les actions convergentes : Start, Stop, Restart, Snapshot, Console, Exec — mêmes commandes, comportement adapté au type
+- `incus exec` pour containers (shell direct) et `incus console` pour VMs (VNC) — WindFlow applique le même pattern : Terminal pour containers, Console VNC pour VMs, mais le bouton "Console" est le même
+- La table unifiée avec colonne TYPE qui permet le filtrage tout en gardant la vue globale
+
+**Ce qu'on adapte :**
+- Incus ne gère pas Docker/Podman — WindFlow ajoute les containers Docker à ce modèle convergent
+- Incus n'a pas de marketplace — WindFlow ajoute l'App Store au-dessus de cette couche Compute unifiée
+
+#### Harvester (SUSE) — Le Cloud Natif Unifié
+
+Harvester est un hyperviseur open-source construit sur Kubernetes qui gère VMs et workloads containers dans la même interface Rancher. Chaque VM est un objet K8s (VirtualMachineInstance), les containers sont des Pods, et l'UI Rancher unifie les deux.
+
+**Ce qu'on prend pour la convergence :**
+- Le concept d'"Instance" comme abstraction commune au-dessus des technologies
+- La même interface pour provisionner une VM ou un container — le wizard est identique, seul le choix initial du type diffère
+- Les métriques unifiées : même format de CPU/RAM/Réseau pour tous les types d'instances
+
 ---
 
 ## Principes UX Révisés
 
-### 1. Deux Modes d'Interface
+### 1. Convergence Container / VM — Le Principe Fondateur
+
+Inspiré d'Incus/LXD (unification totale) et Proxmox VE (convergence VMs + LXC) :
+
+**Le type (container, VM, pod K8s) est un attribut, pas un paradigme.** Tout objet Compute est une **"Instance"** dans l'interface, avec les mêmes actions de base (Start, Stop, Restart, Console, Snapshot, Metrics) quelle que soit la technologie sous-jacente.
+
+**Règle de convergence :**
+- Si une action a du sens pour les containers ET les VMs → **même bouton, même emplacement, même comportement**
+- Si une action est spécifique à un type → **elle apparaît en plus**, jamais à la place d'une action commune
+- La barre d'actions d'une card Instance est la même pour tous les types : seules les icônes spécifiques changent (Terminal pour container, VNC pour VM)
+
+**Matrice de convergence des actions :**
+
+| Action | Container | VM | Pod K8s | Bouton UI |
+|--------|-----------|-----|---------|-----------|
+| Démarrer / Arrêter / Redémarrer | ✅ | ✅ | ✅ | `[▶ Start]` `[⏸ Stop]` `[🔄 Restart]` |
+| Console (Terminal ou VNC) | ✅ Terminal | ✅ VNC/SPICE | ✅ Terminal | `[🖥 Console]` |
+| Logs | ✅ stdout/stderr | ✅ Serial console | ✅ kubectl logs | `[📋 Logs]` |
+| Métriques live | ✅ CPU/RAM/Net | ✅ CPU/RAM/Net | ✅ CPU/RAM/Net | Onglet Metrics |
+| Snapshots | ✅ (image commit) | ✅ (qcow2 COW) | ❌ | `[📸 Snapshot]` |
+| Stockage | ✅ Volumes Docker | ✅ Disques VM | ✅ PVC | Onglet Storage |
+| Réseau | ✅ Docker network | ✅ Bridge/VLAN | ✅ Service | Onglet Network |
+| Configuration | ✅ Env vars + Labels | ✅ Hardware (CPU/RAM) | ✅ ConfigMap | `[⚙ Config]` |
+
+### 2. Deux Modes d'Interface
 
 Inspiré de Cosmos Server (mode simple vs admin) et Proxmox (vue simple vs vue complète) :
 
 **Mode Standard** : Dashboard, Apps installées, Marketplace, Volumes, Settings. Suffisant pour 80% des utilisateurs.
 
-**Mode Avancé** : Ajoute Containers (individuels), VMs, Networks, Images, Targets, Audit. Pour les admins et les power users.
+**Mode Avancé** : Ajoute la vue Compute détaillée (instances individuelles, stacks, images), Targets, Réseaux, Audit. Pour les admins et les power users.
 
 Le toggle est dans la sidebar (un bouton discret en bas). Le mode est mémorisé par utilisateur. Les Viewers voient toujours le mode Standard.
 
-### 2. "Server Apps" comme Concept Central
+### 3. "Instance" comme Concept Central (Mode Standard : "Apps")
 
-Inspiré de Cosmos et Cloudron : tout ce qui est déployé (stack, container, VM) devient une **"App"** dans l'interface, avec son icône, son domaine (si plugin Traefik installé), son statut, et ses actions. C'est la vue par défaut.
+Inspiré de Cosmos, Cloudron et Incus : en mode Standard, tout ce qui est déployé (stack, container, VM) apparaît comme une **"App"** avec son icône, son domaine, son statut, et des actions convergentes. En mode Avancé, on voit la réalité technique : des **Instances** (containers, VMs, pods) regroupées en Stacks.
 
-La vue "Containers" et "VMs" techniques existe en mode avancé pour les power users.
+Les actions convergentes s'appliquent à tous les types :
+- `[🖥 Console]` → Terminal xterm.js pour containers, VNC/noVNC pour VMs
+- `[📋 Logs]` → Docker logs pour containers, serial console pour VMs
+- `[📸 Snapshot]` → Docker commit pour containers, qcow2 snapshot pour VMs
 
-### 3. Dashboard Type "Homepage"
+### 4. Dashboard Type "Homepage"
 
-Inspiré d'Umbrel (wallpaper + widgets) mais avec la densité d'information de Runtipi (métriques système + apps running). Le dashboard est le point d'entrée unique, personnalisable avec des widgets ajoutés par les plugins.
+Inspiré d'Umbrel (wallpaper + widgets) mais avec la densité d'information de Runtipi (métriques système + instances running). Le dashboard est le point d'entrée unique, personnalisable avec des widgets ajoutés par les plugins.
 
-### 4. Wizard Everywhere
+### 5. Wizard Everywhere
 
-Inspiré de Scaleway et Cloudron : chaque action complexe (installer un plugin, déployer une stack, ajouter un target, créer une VM) passe par un **wizard par étapes** au lieu d'un formulaire monolithique.
+Inspiré de Scaleway et Cloudron : chaque action complexe (installer un plugin, déployer une stack, ajouter un target, créer une instance) passe par un **wizard par étapes** au lieu d'un formulaire monolithique. Le wizard de création d'Instance est unifié : le choix du type (Container / Stack / VM) est la première étape, les étapes suivantes s'adaptent.
 
-### 5. Actions sans Navigation
+### 6. Actions sans Navigation
 
-Inspiré de Portainer et Runtipi : les actions courantes (start, stop, restart, logs, terminal, backup) sont accessibles **directement depuis les listes**, sans ouvrir le détail. Le détail existe pour la configuration et le troubleshooting.
+Inspiré de Portainer, Runtipi et Proxmox : les actions courantes (start, stop, restart, console, logs, snapshot) sont accessibles **directement depuis les listes**, sans ouvrir le détail. Ces actions sont **les mêmes** pour les containers et les VMs. Le détail existe pour la configuration et le troubleshooting.
 
 ---
 
@@ -199,14 +264,14 @@ Inspiré de Portainer et Runtipi : les actions courantes (start, stop, restart, 
 │  🏪  Marketplace         │
 │  🔌  Plugins             │
 │                          │
-│  INFRASTRUCTURE          │  ← Visible en mode avancé uniquement
-│  📦  Containers          │  ← Tous les containers Docker (incluant ceux des plugins)
-│  🖥️  VMs                 │  ← Machines virtuelles
-│  📚  Stacks (compose)    │  ← Vue technique des stacks compose
-│  🎯  Targets             │  ← Machines cibles
-│  💾  Volumes             │  ← Volumes Docker + file browser
-│  🌐  Networks            │  ← Networks Docker
-│  🖼️  Images              │  ← Images Docker
+│  COMPUTE                 │  ← Visible en mode avancé uniquement (cf. 12-compute-model.md)
+│  ⚡  Compute             │  ← Vue unifiée : instances containers + VMs, par stack/standalone
+│  📚  Stacks              │  ← Stacks WindFlow (compose, helm, mixtes)
+│  🎯  Targets             │  ← Machines cibles (local, SSH, Proxmox)
+│  💾  Stockage            │  ← Volumes Docker + disques VM + file browser
+│  🌐  Réseaux             │  ← Networks Docker + bridges VM
+│  🖼️  Images              │  ← Images Docker + ISOs / templates VM
+│  📸  Snapshots           │  ← Snapshots VM (vue centralisée multi-machines)
 │                          │
 │  ── Plugins ──           │
 │  🌍  Domaines            │
@@ -241,7 +306,7 @@ Inspiré d'Umbrel (widgets personnalisables) + Runtipi (métriques système) + C
 │         │  ┌─ Système ──────────────────────────────────────────────────┐   │
 │         │  │ CPU ████░░░░░░ 38%   RAM ██████░░░░ 1.2/4 GB             │   │
 │         │  │ Disque █████████░ 28/64 GB   Uptime: 15j 3h              │   │
-│         │  │ 🟢 5 apps running  🖥️ 1 VM running  🔌 3 plugins actifs  │   │
+│         │  │ 🟢 12 instances running (10 containers · 2 VMs) · 🔌 3 plugins actifs │   │
 │         │  └────────────────────────────────────────────────────────────┘   │
 │         │                                                                   │
 │         │  ┌─ Apps ─────────────────────────────────────────────────────┐   │
@@ -326,9 +391,9 @@ C'est la vue principale. Tout ce qui est "déployé" apparaît ici, qu'il ait é
 │                                                                             │
 │  ┌── ubuntu-dev (VM) ────────────────────────────────────────── 🟢 ─────┐  │
 │  │  🖥️  Ubuntu 22.04 (KVM)                                             │  │
-│  │  2 vCPU, 2 GB RAM, 20 GB disk    Target: local                      │  │
+│  │  2 vCPU, 2 GB RAM, 20 GB disk    Target: local    Stack: dev-env    │  │
 │  │                                                                       │  │
-│  │  [🖥 Console]  [📸 Snapshot]  [⏸ Stop]                              [⋯] │  │
+│  │  [🖥 Console]  [📋 Logs]  [📸 Snapshot]  [⏸ Stop]  [🔄 Restart]  [⋯] │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 │  ┌── old-test-app ───────────────────────────────────────────── 🔴 ─────┐  │
@@ -402,6 +467,68 @@ Inspiré de Proxmox (onglets) + Cosmos (URL/routing intégré) + Cloudron (backu
 - **Métriques inline** avec mini-graphiques (inspiré Proxmox Summary)
 - **Bouton [📸 Backup]** directement sur l'app (inspiré Cloudron et Runtipi) — nécessite plugin Restic
 - **Actions plugin contextuelles** en bas : le plugin PostgreSQL détecte les containers DB et propose ses actions
+
+---
+
+## Écran 3b : Détail Instance — VM (vue convergente)
+
+La **même structure d'onglets** que le détail Container, adaptée au type VM. Inspiré de Proxmox (onglets identiques VM/CT) et Incus (même CLI pour les deux types).
+
+```
+┌─ ubuntu-dev (VM) ──────────────────────────────────────────────────────────┐
+│                                                                            │
+│  🖥️ Ubuntu 22.04 (KVM)        🟢 Running (3 jours)      [🖥 Console]    │
+│  IP: 192.168.1.55 (dhcp)                                                  │
+│  Stack: dev-env  │  Target: local  │  RAM: 1.8 / 2 GB  │  CPU: 12%      │
+│                                                                            │
+│  [⏸ Stop] [🔄 Restart] [📋 Logs] [📸 Snapshot] [🖥 Console] [⚙ Config]  │
+│                                                                            │
+│  ┌ Aperçu ─┬ Console ─┬ Métriques ─┬ Stockage ─┬ Réseau ─┬ Snapshots ─┬ ⚙ ─┐
+│  │                                                                      │  │
+│  │  ──── Onglet Aperçu (actif) ────                                    │  │
+│  │                                                                      │  │
+│  │  ┌─ Hardware ───────────────────────────────────────────────────┐    │  │
+│  │  │  Type    KVM / QEMU (libvirt)                               │    │  │
+│  │  │  vCPU    2 (cortex-a72)                                     │    │  │
+│  │  │  RAM     2 GB                                               │    │  │
+│  │  │  Firmware EFI                                               │    │  │
+│  │  │  OS      Ubuntu 22.04.3 LTS (cloud-init)                    │    │  │
+│  │  └──────────────────────────────────────────────────────────────┘    │  │
+│  │                                                                      │  │
+│  │  ┌─ Ressources ────────────────────────────────────────────────┐    │  │
+│  │  │  CPU  ████░░░░░░ 12%    RAM  █████████░ 1.8 / 2 GB         │    │  │
+│  │  │  NET ↑ 2.4 MB/s  ↓ 890 KB/s   I/O ↑ 5 MB/s  ↓ 1 MB/s    │    │  │
+│  │  └──────────────────────────────────────────────────────────────┘    │  │
+│  │                                                                      │  │
+│  │  ┌─ Disques (1) ──────────────────────────────────────────────┐     │  │
+│  │  │  vda    qcow2    20 GB    /         8.2 GB used    [📂]    │     │  │
+│  │  └──────────────────────────────────────────────────────────────┘    │  │
+│  │                                                                      │  │
+│  │  ┌─ Snapshots (2) ────────────────────────────────────────────┐     │  │
+│  │  │  📸 clean-install    2024-03-28 10:00    1.2 GB    [⟲]    │     │  │
+│  │  │  📸 before-update    2024-03-29 15:30    0.8 GB    [⟲]    │     │  │
+│  │  │                                              [+ Nouveau]    │     │  │
+│  │  └──────────────────────────────────────────────────────────────┘    │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Convergence avec le détail Container (Écran 3) :**
+
+| Élément | Container (Écran 3) | VM (Écran 3b) | Convergence |
+|---------|---------------------|----------------|-------------|
+| Barre d'actions | Stop, Restart, Logs, Terminal, Backup, Config | Stop, Restart, Logs, Snapshot, Console, Config | Mêmes positions, adaptées au type |
+| Onglet Aperçu | Services + Ressources + Volumes | Hardware + Ressources + Disques + Snapshots | Même layout, contenu adapté |
+| Onglet Console | Terminal xterm.js | Console VNC/noVNC | Même chrome UI (toolbar, fullscreen) |
+| Onglet Métriques | CPU/RAM/Net/I/O | CPU/RAM/Net/I/O | Identique |
+| Onglet Stockage | Volumes Docker | Disques VM (qcow2/raw) | Même structure liste + actions |
+| Onglet Réseau | Docker networks | Bridges/VLANs | Même structure liste + actions |
+| Onglet Config | Env vars + Labels | Hardware (CPU/RAM/firmware) | Même principe éditable |
+| Onglet Snapshots | — (dans ⋯) | Arbre de snapshots | Spécifique VM, visible si applicable |
+
+**Règle :** Les onglets communs (Aperçu, Console, Métriques, Stockage, Réseau, Config) sont toujours présents. Les onglets spécifiques (Snapshots pour VM, Services pour stack) apparaissent selon le type d'instance.
 
 ---
 
@@ -618,17 +745,46 @@ Inspiré de CasaOS File Manager + Nextcloud Files + Cosmos Storage Manager.
 
 ---
 
-## Écran 8 : Console VM (intégrée)
+## Écran 8 : Console Unifiée (Terminal + VNC)
 
-Inspiré de Proxmox (noVNC dans un onglet).
+Inspiré de Proxmox (noVNC dans un onglet) et Incus (même commande console pour containers et VMs).
+
+Le bouton `[🖥 Console]` ouvre la même page pour tous les types d'instances. Le contenu s'adapte :
+- **Container / Pod K8s** → Terminal xterm.js (shell interactif via WebSocket)
+- **VM** → Console VNC/noVNC (accès graphique via WebSocket)
+
+Même chrome UI pour les deux : barre d'outils, plein écran, clipboard.
+
+### Console Terminal (Container)
+
+```
+┌─ Console : nextcloud-php ──────────────────────────────────────────────────┐
+│                                                                            │
+│  📦 nextcloud-php (container) 🟢    [🖥 Terminal]  [Plein Écran]          │
+│                                                                            │
+│  ┌──────────────────────────────────────────────────────────────────────┐ │
+│  │  root@nextcloud-php:/var/www/html# ls -la                            │ │
+│  │  total 184                                                            │ │
+│  │  drwxr-xr-x  1 www-data www-data  4096 Mar 28  config               │ │
+│  │  drwxr-xr-x  1 www-data www-data  4096 Mar 28  apps                 │ │
+│  │  -rw-r--r--  1 www-data www-data  2847 Mar 28  index.php             │ │
+│  │  root@nextcloud-php:/var/www/html# _                                 │ │
+│  │                                                                      │ │
+│  └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+│  Shell: /bin/bash  │  User: root  │  Container: nextcloud-php            │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Console VNC (VM)
 
 ```
 ┌─ Console : ubuntu-dev ─────────────────────────────────────────────────────┐
 │                                                                            │
-│  🖥️ ubuntu-dev (KVM) 🟢     [Ctrl+Alt+Del]  [Plein Écran]  [Coller]     │
+│  🖥️ ubuntu-dev (VM KVM) 🟢    [Ctrl+Alt+Del]  [Plein Écran]  [Coller]   │
 │                                                                            │
 │  ┌──────────────────────────────────────────────────────────────────────┐ │
-│  │                                                                      │ │
 │  │                                                                      │ │
 │  │          ubuntu@ubuntu-dev:~$ sudo apt update                        │ │
 │  │          Hit:1 http://archive.ubuntu.com/ubuntu jammy InRelease      │ │
@@ -638,13 +794,14 @@ Inspiré de Proxmox (noVNC dans un onglet).
 │  │                                                                      │ │
 │  │                    [ Console VNC via noVNC ]                          │ │
 │  │                                                                      │ │
-│  │                                                                      │ │
 │  └──────────────────────────────────────────────────────────────────────┘ │
 │                                                                            │
 │  Résolution: 1024×768  │  Qualité: Auto  │  Clipboard: Bidirectionnel     │
 │                                                                            │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Convergence :** La barre de titre affiche le type d'instance (`📦 container` ou `🖥️ VM KVM`), mais le chrome (toolbar, fullscreen, status bar) est identique. L'utilisateur sait toujours s'il est dans un terminal ou une console graphique, mais l'expérience d'ouverture est la même.
 
 ---
 
@@ -813,6 +970,182 @@ L'étape 3 propose d'installer un premier plugin (Traefik recommandé) et une pr
 
 ---
 
+## Écran 11b : Wizard Création d'Instance Unifié
+
+Inspiré de Proxmox (Create VM/CT dans la même UI) et Incus (`incus launch` — même commande pour containers et VMs).
+
+Le wizard démarre par le choix du type d'instance, puis les étapes s'adaptent. C'est le même point d'entrée `[+ Nouvelle App]` qui déclenche ce wizard.
+
+### Étape 1 — Choix du Type
+
+```
+┌─ Créer une Instance ───────────────────────────────────────────────────────┐
+│                                                                            │
+│  ○─────────○───────○───────○                                              │
+│  Type      Config  Déploy                                                  │
+│                                                                            │
+│  Étape 1 — Que voulez-vous créer ?                                        │
+│                                                                            │
+│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐          │
+│  │                  │ │                  │ │                  │          │
+│  │  📦  Container   │ │  📚  Stack       │ │  🖥️  VM          │          │
+│  │                  │ │  (Compose)       │ │                  │          │
+│  │  Un container    │ │                  │ │  Machine         │          │
+│  │  unique depuis   │ │  Groupe de       │ │  virtuelle KVM   │          │
+│  │  une image       │ │  containers      │ │  ou LXD/Incus    │          │
+│  │  Docker          │ │  via Compose     │ │                  │          │
+│  │                  │ │                  │ │                  │          │
+│  │  Rapide, simple  │ │  Pour les apps   │ │  Pour les OS     │          │
+│  │  128+ Mo RAM     │ │  multi-services  │ │  complets, legacy│          │
+│  │                  │ │  256+ Mo RAM     │ │  512+ Mo RAM     │          │
+│  │                  │ │                  │ │                  │          │
+│  │  [Choisir]       │ │  [Choisir]       │ │  [Choisir]       │          │
+│  └──────────────────┘ └──────────────────┘ └──────────────────┘          │
+│                                                                            │
+│  💡 Pas sûr ? Commencez par la Marketplace pour un déploiement one-click  │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Étape 2 — Configuration (adaptée au type choisi : Container)
+
+```
+┌─ Créer un Container ───────────────────────────────────────────────────────┐
+│                                                                            │
+│  ●─────────○───────○───────○                                              │
+│  Type      Config  Déploy                                                  │
+│                                                                            │
+│  Étape 2 — Configuration du Container                                    │
+│                                                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │  Nom *           [nginx-proxy            ]                         │  │
+│  │  Image *         [nginx:latest           ]  [🔍 Chercher]         │  │
+│  │  Target          [▼ local (RPi 4)       ]                          │  │
+│  │                                                                     │  │
+│  │  ── Ressources ──────────────────────────────────────               │  │
+│  │  RAM limit       [512] MB    CPU limit    [1] cores               │  │
+│  │                                                                     │  │
+│  │  ── Ports ───────────────────────────────────────────               │  │
+│  │  Host: [80] → Container: [80]    [+ Ajouter un port]              │  │
+│  │                                                                     │  │
+│  │  ▸ Volumes  ▸ Réseau  ▸ Env vars  ▸ Labels (avancé)               │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+│                                           [← Retour]  [Déployer →]       │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Étape 2 — Configuration (adaptée au type choisi : VM)
+
+```
+┌─ Créer une VM ─────────────────────────────────────────────────────────────┐
+│                                                                            │
+│  ●─────────○───────○───────○                                              │
+│  Type      Config  Déploy                                                  │
+│                                                                            │
+│  Étape 2 — Configuration de la Machine Virtuelle                         │
+│                                                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │  Nom *           [ubuntu-dev            ]                         │  │
+│  │  Target          [▼ local (RPi 4)       ]                          │  │
+│  │  Hyperviseur     [▼ KVM/libvirt         ]                          │  │
+│  │                                                                     │  │
+│  │  ── Image OS ───────────────────────────────────────                │  │
+│  │  Template        [▼ Ubuntu 22.04 LTS (cloud-init) ]               │  │
+│  │  Architecture    [▼ arm64              ]                          │  │
+│  │                                                                     │  │
+│  │  ── Hardware ───────────────────────────────────────                │  │
+│  │  vCPU            [2] cores   RAM     [2048] MB                    │  │
+│  │  Disque          [20] GB     Format  [▼ qcow2  ]                  │  │
+│  │                                                                     │  │
+│  │  ── Cloud-init ─────────────────────────────────────                │  │
+│  │  Hostname        [ubuntu-dev]                                     │  │
+│  │  Utilisateur     [ubuntu    ]                                     │  │
+│  │  Clé SSH         [▼ ~/.ssh/id_rsa.pub]                            │  │
+│  │  Packages        [htop, curl, git ]                                │  │
+│  │                                                                     │  │
+│  │  ▸ Réseau (bridge/VLAN)  ▸ Storage pool  ▸ Firmware (avancé)      │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+│                                           [← Retour]  [Déployer →]       │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Convergence :** Le wizard Container et le wizard VM partagent :
+- Le même stepper visuel (Type → Config → Déploy)
+- Les mêmes sections "Nom", "Target", "Ressources"
+- La même logique de sections dépliables (▸ Réseau, ▸ Avancé)
+- Le même bouton final "Déployer"
+
+Seules les sections spécifiques diffèrent (Image Docker vs Template OS, Ports vs Cloud-init, Volumes vs Disques).
+
+---
+
+## Écran 12 : Vue Compute (Mode Avancé)
+
+Inspiré de Proxmox (arbre Datacenter → Node → VM/CT) et Incus (`incus list` — table unifiée). Cf. `12-compute-model.md` pour le modèle conceptuel.
+
+### Vue Globale (onglet par défaut)
+
+```
+┌─ Compute ──────────────────────────────────────────────────────────────────┐
+│                                                                            │
+│  [Vue globale] [Containers] [VMs] [Images & ISOs] [Snapshots]             │
+│                                                                            │
+│  Filtres: [▼ Tout type] [▼ Tout target] [▼ Tout statut] [🔍 Rechercher]  │
+│  Vue: [▣ Par stack] [☰ Par machine]                                       │
+│                                                                            │
+│  ── Stacks WindFlow ─────────────────────────────────────────────────────  │
+│                                                                            │
+│  ┌─ ☁️ nextcloud (compose · local) — 3/3 running ──────────────────────┐ │
+│  │  [▶ Start all] [⏸ Stop all] [🔄 Redeploy] [📝 Edit] [⋯]          │ │
+│  │                                                                     │ │
+│  │  TYPE       NOM              IMAGE/OS           STATUS   CPU  RAM   │ │
+│  │  📦 Ctr     nextcloud-nginx  nginx:alpine       🟢 run   2%   45MB  │ │
+│  │  📦 Ctr     nextcloud-php    nextcloud:28       🟢 run   5%   297MB │ │
+│  │  📦 Ctr     nextcloud-cron   nextcloud:28       🟢 run   0%   12MB  │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+│  ┌─ 🔧 dev-env (mixte · local) — all up ──────────────────────────────┐ │
+│  │  [▶ Start all] [⏸ Stop all] [🔄 Redeploy] [📝 Edit] [⋯]          │ │
+│  │                                                                     │ │
+│  │  TYPE       NOM              IMAGE/OS           STATUS   CPU  RAM   │ │
+│  │  🖥️ VM      ubuntu-dev       Ubuntu 22.04       🟢 run   12%  1.8G  │ │
+│  │  📦 Ctr     dev-postgres     postgres:15        🟢 run   1%   89MB  │ │
+│  │  📦 Ctr     dev-redis        redis:7-alpine     🟢 run   0%   12MB  │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+│  ── Discovered (non managés) ──────────────────────────────────────────   │
+│                                                                            │
+│  ┌─ monitoring (compose · nas-server) — observé, adoptable ───────────┐  │
+│  │  TYPE       NOM              IMAGE/OS           STATUS   CPU  RAM   │ │
+│  │  📦 Ctr     prometheus       prom/prometheus    🟢 run   3%   234MB │ │
+│  │  📦 Ctr     grafana          grafana/grafana    🟢 run   1%   89MB  │ │
+│  │                                          [📥 Adopter dans WindFlow] │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+│  ── Standalone ────────────────────────────────────────────────────────   │
+│                                                                            │
+│  TYPE       NOM              IMAGE/OS           STATUS   CPU  RAM  TGT   │ │
+│  📦 Ctr     traefik          traefik:v3         🟢 run   1%  142MB local │ │
+│  🖥️ VM      pfsense-router   pfSense 2.7       🟢 run   8%  512MB local │ │
+│  📦 Ctr     pihole           pihole:latest      🟢 run   2%   67MB pi4  │ │
+│                                                                            │
+│  [+ Créer une Instance]                                                   │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Points clés de convergence :**
+- **Même table** pour tous les types : la colonne TYPE différencie (`📦 Ctr` vs `🖥️ VM`)
+- **Mêmes colonnes** : STATUS, CPU, RAM — comparables entre containers et VMs
+- **Stacks mixtes** : une stack peut contenir des VMs ET des containers (cf. `dev-env`)
+- **Actions de stack identiques** : Start/Stop/Redeploy/Edit — quel que soit le contenu
+- **Toggle vue** : Par stack (logique) ou Par machine (physique)
+- **Bouton Adopter** pour les objets discovered — même workflow pour containers et VMs
+
+---
+
 ## Direction Esthétique Révisée
 
 ### Inspiration Visuelle
@@ -870,18 +1203,32 @@ Accent bleu        #3b82f6
 
 | # | Écran | Inspiré de | Innovation WindFlow |
 |---|-------|------------|---------------------|
-| 1 | Dashboard | Umbrel + Runtipi | Apps en grille + widgets plugins + métriques système |
-| 2 | Apps (vue unifiée) | Cloudron + Runtipi + Cosmos | Containers + Stacks + VMs dans la même liste, domaines visibles |
-| 3 | Détail App | Proxmox + Cosmos + Cloudron | Onglets dynamiques (plugins), backup inline, métriques live |
+| 1 | Dashboard | Umbrel + Runtipi | Compteurs unifiés (instances containers + VMs), widgets plugins |
+| 2 | Apps (vue unifiée) | Cloudron + Runtipi + Incus | Containers + Stacks + VMs dans la même liste, actions convergentes |
+| 3 | Détail App / Container | Proxmox + Cosmos + Cloudron | Onglets dynamiques (plugins), backup inline, métriques live |
+| 3b | Détail VM (convergent) | Proxmox + Incus | **Même structure d'onglets** que Container, Hardware + Snapshots |
 | 4 | Marketplace | Umbrel + Runtipi | Recommandations contextuelles, ratings, séparation plugins/stacks |
 | 5 | Wizard Installation | Scaleway + Cloudron | Résumé d'impact, options avancées cachées |
 | 6 | Targets | Coolify + Proxmox | Cards métriques, température, bouton SSH |
 | 7 | Volume Browser | CasaOS + Nextcloud | Preview inline, breadcrumbs, drag & drop |
-| 8 | Console VM | Proxmox | noVNC intégré, clipboard bidirectionnel |
+| 8 | Console Unifiée | Proxmox + Incus | **Même page** pour Terminal (container) et VNC (VM), même chrome UI |
 | 9 | Plugins | Runtipi + Cosmos | Résumé d'activité par plugin, RAM totale |
 | 10 | Activité | Cloudron + Umbrel | Journal chronologique avec actions directes |
 | 11 | Onboarding | Umbrel + Cosmos | Détection auto du hardware, recommandation de profil |
+| 11b | Wizard Création Instance | Proxmox + Incus | **Wizard unifié** : choix Container/Stack/VM → config adaptée → déployer |
+| 12 | Vue Compute (avancé) | Proxmox + Incus | **Table unifiée** TYPE/NOM/STATUS/CPU/RAM, stacks mixtes, vue par stack/machine |
 | — | Mobile | Umbrel (dock) | Dock fixe en bas, cards simplifiées |
+
+### Principes de convergence appliqués
+
+| Principe | Outils de référence | Application WindFlow |
+|----------|-------------------|---------------------|
+| Instance = concept unique | Incus, Harvester | Container, VM et Pod K8s sont des "Instances" avec mêmes actions de base |
+| Type = colonne, pas paradigme | Incus (`incus list`) | La colonne TYPE différencie, les actions sont convergentes |
+| Mêmes onglets par instance | Proxmox (VM/CT) | Aperçu, Console, Métriques, Stockage, Réseau, Config — communs à tous |
+| Même barre d'actions | Proxmox + Incus | `[Console] [Logs] [Stop] [Restart] [Snapshot] [Config]` — adaptés au type |
+| Même wizard de création | Proxmox (Create VM/CT) | Étape 1 : choisir le type → étapes suivantes adaptées |
+| Métriques même format | Harvester | CPU/RAM/Net/I/O identiques pour containers et VMs |
 
 ---
 

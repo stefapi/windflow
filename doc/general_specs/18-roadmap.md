@@ -19,7 +19,7 @@ Le principe fondamental : un **cœur minimal** qui gère le compute (containers,
 ### Objectifs Stratégiques
 
 **2026 : Fondation solide**
-- Core stable : containers Docker + VMs (KVM/Proxmox)
+- Core stable : containers Docker + VMs (KVM/LXC/LXD)
 - Système de plugins mature avec marketplace
 - 20+ plugins disponibles couvrant les cas d'usage courants
 - Fonctionne sur Raspberry Pi 4+ avec 2 Go de RAM (core seul)
@@ -41,19 +41,19 @@ Le principe fondamental : un **cœur minimal** qui gère le compute (containers,
 
 ### Ce qui fait partie du Core
 
-| Composant | Description |
-|-----------|-------------|
-| **API REST** | FastAPI, endpoints pour containers, VMs, plugins, marketplace |
-| **Base de données** | PostgreSQL (ou SQLite en mode léger pour RPi) |
-| **Cache** | Redis (ou en-mémoire en mode léger) |
-| **Auth** | JWT, organisations, RBAC |
-| **Web UI** | Vue.js 3, dashboard, gestion containers/VMs |
-| **CLI/TUI** | Rich + Typer + Textual |
-| **Container engine** | Docker : containers, compose stacks, images, volumes, networks |
-| **VM engine** | Libvirt (KVM/QEMU), Proxmox API, VirtualBox (optionnel) |
-| **Plugin manager** | Installation, mise à jour, configuration, dépendances entre plugins |
-| **Marketplace** | Catalogue de stacks et plugins, installation one-click |
-| **Target manager** | Discovery et gestion des machines cibles (local, SSH) |
+| Composant | Description                                                                   |
+|-----------|-------------------------------------------------------------------------------|
+| **API REST** | FastAPI, endpoints pour containers, VMs, plugins, marketplace                 |
+| **Base de données** | PostgreSQL (ou SQLite en mode léger pour RPi)                                 |
+| **Cache** | Redis (ou en-mémoire en mode léger)                                           |
+| **Auth** | JWT, organisations, RBAC                                                      |
+| **Web UI** | Vue.js 3, dashboard, gestion containers/VMs                                   |
+| **CLI/TUI** | Rich + Typer + Textual                                                        |
+| **Container engine** | Docker / Podman / K8s : containers, compose stacks, images, volumes, networks |
+| **VM engine** | Libvirt (KVM/QEMU), LXC, LXD, Incus                                           |
+| **Plugin manager** | Installation, mise à jour, configuration, dépendances entre plugins           |
+| **Marketplace** | Catalogue de stacks et plugins, installation one-click                        |
+| **Target manager** | Discovery et gestion des machines cibles (local, SSH)                         |
 
 ### Ce qui est un Plugin (exemples)
 
@@ -174,8 +174,8 @@ C'est la fondation de tout ce qui suit. Sans un système de plugins solide, Wind
 - [ ] Gestion disques (qcow2, raw)
 - [ ] Gestion images ISO et cloud-init
 
-**Proxmox VE :**
-- [ ] Connexion API Proxmox
+** LXC / LXD / Incus :**
+- [ ] Connexion API
 - [ ] CRUD VMs et conteneurs LXC
 - [ ] Snapshots, backup/restore
 - [ ] Vue nodes et ressources
@@ -248,7 +248,7 @@ C'est la fondation de tout ce qui suit. Sans un système de plugins solide, Wind
 **Serveurs distants :**
 - [ ] Ajout de machines cibles via SSH
 - [ ] Déploiement de containers sur machines distantes
-- [ ] Gestion VMs sur hyperviseurs distants (libvirt, Proxmox)
+- [ ] Gestion VMs sur hyperviseurs distants (libvirt, LXC, LXD, Incus)
 - [ ] Vue consolidée de toutes les machines et services
 - [ ] Monitoring basique par machine (CPU, RAM, disque, réseau)
 

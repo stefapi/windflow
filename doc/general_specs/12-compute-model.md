@@ -18,7 +18,7 @@ Une stack WindFlow est un **environnement nommé** qui regroupe un ensemble d'ob
 
 - un ou plusieurs containers Docker définis via un Compose intégré,
 - une ou plusieurs releases Helm sur un cluster Kubernetes connecté,
-- une ou plusieurs VMs (KVM ou Proxmox), provisionnées depuis un template cloud-init,
+- une ou plusieurs VMs (KVM ou LXD), provisionnées depuis un template cloud-init,
 - ou un **mélange des trois** (stack mixte).
 
 La stack définit les dépendances entre ses composants (ordre de démarrage, réseau partagé, volumes communs), les variables d'environnement globales, et éventuellement sa source Git pour le GitOps.
@@ -33,7 +33,7 @@ Objets pouvant être discovered :
 - **Compositions Compose** : fichiers `docker-compose.yml` ou `compose.yaml` détectés sur le système de fichiers du target, avec leurs containers associés
 - **Releases Helm** : releases déployées sur un cluster Kubernetes connecté (`helm list`)
 - **VMs libvirt** : VMs présentes dans libvirt (`virsh list --all`) non créées par WindFlow
-- **VMs Proxmox** : VMs et LXC détectés via l'API Proxmox mais non créés par WindFlow
+- **VMs LXC** : VMs et LXC détectés, LXD, Incus mais non créés par WindFlow
 
 L'action **"Adopter"** permet d'importer un objet discovered dans une stack WindFlow. Un wizard guide l'utilisateur : reprise de la configuration existante, choix de préserver ou recréer les volumes et réseaux, nommage de la stack résultante.
 
@@ -45,14 +45,15 @@ Un standalone peut être promu en stack à tout moment (l'objet rejoindra une no
 
 ### Axe 2 — Type de Technologie
 
-| Type | Sous-type | Hyperviseur / Runtime | Niveau de granularité |
-|---|---|---|---|
-| Container | Docker standalone | Docker Engine | Container individuel |
-| Container | Compose | Docker Engine | Service dans une composition |
-| Container | Helm / k8s Pod | Kubernetes | Pod dans un namespace |
-| VM | KVM | libvirt / QEMU | Instance VM |
-| VM | Proxmox VM | Proxmox VE API | Instance VM |
-| VM | Proxmox LXC | Proxmox VE API | Container système |
+| Type | Sous-type         | Hyperviseur / Runtime | Niveau de granularité |
+|---|-------------------|-----------------------|---|
+| Container | Docker standalone | Docker Engine         | Container individuel |
+| Container | Podman standalone | Docker Engine         | Container individuel |
+| Container | Compose           | Docker Engine         | Service dans une composition |
+| Container | Helm / k8s / K3s  | Kubernetes            | Pod dans un namespace |
+| VM | KVM               | libvirt / QEMU        | Instance VM |
+| VM | LXD, Incus        | LXD / Incus           | Instance VM |
+| VM | LXC               | Proxmox VE API        | Container système |
 
 ---
 
@@ -94,7 +95,7 @@ La vue globale affiche les objets Compute en trois sections ordonnées :
 
 3. Standalone
    ├── [VM KVM]    pfsense-router · localhost · running
-   ├── [VM Proxmox] k3s-node-1 · prox-home · running
+   ├── [VM LXC] k3s-node-1 · prox-home · running
    ├── [container]  traefik · localhost · running
    └── [container]  pihole · pi4-home · running
 ```
@@ -104,7 +105,7 @@ La vue globale affiche les objets Compute en trois sections ordonnées :
 La vue globale expose des filtres combinables :
 
 - **Type** : Stacks WindFlow / Discovered / Standalone
-- **Technologie** : Docker / Compose / Helm / VM KVM / VM Proxmox / LXC
+- **Technologie** : Docker / Compose / Helm / VM KVM / LXD / LXC / Incus
 - **Target** : filtrer par machine (localhost, vps-ovh, pi4-home, k8s-prod…)
 - **Statut** : running / stopped / paused / exited / suspended
 - **Recherche libre** : nom, image, OS

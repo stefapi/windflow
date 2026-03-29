@@ -211,7 +211,7 @@ class VMResponse(BaseModel):
     id: str
     name: str
     status: str               # running, stopped, paused, creating
-    hypervisor: str            # kvm, proxmox, virtualbox
+    hypervisor: str            # kvm, LXD, Incus
     vcpus: int
     memory_mb: int
     disks: list[dict]
@@ -279,10 +279,10 @@ GET    /{id}/resources         # Ressources système (CPU, RAM, disque)
 ```python
 class TargetCreateRequest(BaseModel):
     name: str
-    type: str                  # local, ssh, proxmox
+    type: str                  # local, ssh
     environment_id: str
     host: Optional[str] = None
-    connection_config: Optional[dict] = None  # SSH key, Proxmox token, etc.
+    connection_config: Optional[dict] = None  # SSH key, Socket token, etc.
 
 class TargetResponse(BaseModel):
     id: str
@@ -290,7 +290,7 @@ class TargetResponse(BaseModel):
     type: str
     host: Optional[str]
     status: str                # online, offline, unknown, error
-    capabilities: dict         # docker, libvirt, proxmox, system info
+    capabilities: dict         # docker, Podman, K8s, K3s, libvirt, LXD, Incus, system info
     environment_id: str
     last_seen: Optional[str]
 ```

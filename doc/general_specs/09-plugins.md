@@ -16,18 +16,18 @@ Cette approche a trois avantages concrets :
 
 Quand une fonctionnalité est envisagée, la question est : "Est-ce que WindFlow est inutilisable sans ?" Si la réponse est non, c'est un plugin.
 
-| Appartient au Core | Est un Plugin |
-|---------------------|---------------|
-| Gestion containers Docker | Reverse proxy (Traefik, Caddy) |
-| Gestion VMs (KVM, Proxmox) | DNS (Pi-hole, CoreDNS) |
-| Auth JWT + RBAC | Monitoring (Uptime Kuma, Prometheus) |
-| Plugin Manager + Marketplace | Backup (Restic, Borg) |
-| Target Manager (local, SSH) | Bases de données (PostgreSQL manager, Redis manager) |
-| Volumes et networks Docker | Mail (Mailu, Stalwart) |
-| CLI / TUI / Web UI | IA (Ollama, LiteLLM) |
-| | SSO (Keycloak) |
-| | Git auto-deploy |
-| | Workflows (n8n, Node-RED) |
+| Appartient au Core                     | Est un Plugin |
+|----------------------------------------|---------------|
+| Gestion containers Docker, Podman, K8s | Reverse proxy (Traefik, Caddy) |
+| Gestion VMs (KVM, LXD, Incus)          | DNS (Pi-hole, CoreDNS) |
+| Auth JWT + RBAC                        | Monitoring (Uptime Kuma, Prometheus) |
+| Plugin Manager + Marketplace           | Backup (Restic, Borg) |
+| Target Manager (local, SSH)            | Bases de données (PostgreSQL manager, Redis manager) |
+| Volumes et networks Docker             | Mail (Mailu, Stalwart) |
+| CLI / TUI / Web UI                     | IA (Ollama, LiteLLM) |
+|                                        | SSO (Keycloak) |
+|                                        | Git auto-deploy |
+|                                        | Workflows (n8n, Node-RED) |
 
 ---
 

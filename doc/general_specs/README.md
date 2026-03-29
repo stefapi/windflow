@@ -7,7 +7,7 @@ Documentation technique du projet WindFlow, un gestionnaire d'infrastructure sel
 ### Vue d'Ensemble et Architecture
 - **[01-overview.md](01-overview.md)** — Vision du projet, philosophie core + plugins, cas d'usage, architecture de haut niveau
 - **[02-architecture.md](02-architecture.md)** — Architecture monolithique modulaire, profils de déploiement (léger/standard), système de plugins, modèle de données, communication et événements
-- **[03-technology-stack.md](03-technology-stack.md)** — Stack technique core vs plugins, PostgreSQL/SQLite, Redis/mémoire, FastAPI, Vue.js, Docker SDK, libvirt, Celery
+- **[03-technology-stack.md](03-technology-stack.md)** — Stack technique core vs plugins, PostgreSQL/SQLite, Redis/mémoire, FastAPI, Vue.js, Docker SDK, libvirt, LXD, Incus, Celery
 
 ### Conception Technique
 - **[04-data-model.md](04-data-model.md)** — Modèle de données (13 tables), entités core et plugins, compatibilité SQLite, modèle SQLAlchemy

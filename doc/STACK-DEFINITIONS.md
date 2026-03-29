@@ -146,11 +146,12 @@ variables:
 ### Types de déploiement (`target_type`)
 
 Valeurs possibles dans l'enum `TargetType` :
-- `docker` : Container Docker simple
-- `docker_compose` : Stack Docker Compose multi-services
+- `docker` : Container Docker simple (docker ou podman )
+- `docker_compose` : Stack Docker Compose multi-services (docker-compose, docker compose, podman compose )
 - `docker_swarm` : Stack Docker Swarm
-- `kubernetes` : Déploiement Kubernetes
-- `vm` : Machine virtuelle
+- `kubernetes` : Déploiement Kubernetes K8s, K3s
+- `lxd`: Machines virtelles lxd ou incus
+- `kvm` : Machines virtuelles kvm
 - `physical` : Serveur physique
 
 ### Types de variables

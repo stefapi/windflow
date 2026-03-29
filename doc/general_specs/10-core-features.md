@@ -6,19 +6,19 @@ Ce document décrit les fonctionnalités qui font partie du **core** de WindFlow
 
 ### Fonctionnalités Core
 
-| # | Fonctionnalité | Description |
-|---|----------------|-------------|
-| 1 | Gestion des Containers | Docker : containers, compose, images, logs, terminal |
-| 2 | Gestion des VMs | KVM/libvirt, Proxmox VE, VirtualBox |
-| 3 | Système de Plugins | Installation, configuration, lifecycle, registre |
-| 4 | Marketplace | Catalogue de stacks et plugins, installation one-click |
-| 5 | Stacks & Templates | Groupes de services, versioning, templates Jinja2 |
-| 6 | Gestion des Targets | Machines locales et distantes (SSH), auto-discovery |
-| 7 | Volumes & Stockage | Volumes Docker, disques VM, volume browser |
-| 8 | Réseaux | Networks Docker, isolation par environnement |
-| 9 | Authentification & RBAC | JWT, organisations, environnements, rôles |
-| 10 | Interface Web | Dashboard, gestion visuelle, formulaires dynamiques |
-| 11 | CLI / TUI | Ligne de commande et interface terminal interactive |
+| # | Fonctionnalité | Description                                                      |
+|---|----------------|------------------------------------------------------------------|
+| 1 | Gestion des Containers | Docker/Podman/Kube : containers, compose, images, logs, terminal |
+| 2 | Gestion des VMs | KVM/libvirt, LXD, Incus                                          |
+| 3 | Système de Plugins | Installation, configuration, lifecycle, registre                 |
+| 4 | Marketplace | Catalogue de stacks et plugins, installation one-click           |
+| 5 | Stacks & Templates | Groupes de services, versioning, templates Jinja2                |
+| 6 | Gestion des Targets | Machines locales et distantes (SSH), auto-discovery              |
+| 7 | Volumes & Stockage | Volumes Docker, disques VM, volume browser                       |
+| 8 | Réseaux | Networks Docker / Kube, isolation par environnement              |
+| 9 | Authentification & RBAC | JWT, organisations, environnements, rôles                        |
+| 10 | Interface Web | Dashboard, gestion visuelle, formulaires dynamiques              |
+| 11 | CLI / TUI | Ligne de commande et interface terminal interactive              |
 
 ---
 
@@ -128,7 +128,7 @@ docker_client = docker.DockerClient(base_url=target.docker_url)
 
 WindFlow gère les VMs via les hyperviseurs disponibles sur la machine cible. Le support est détecté automatiquement.
 
-### KVM / QEMU (via libvirt)
+### KVM / QEMU (via libvirt) ou LXD / Incus
 
 **Opérations VM :**
 - Créer une VM (CPU, mémoire, disque, réseau, ISO/cloud-init)
@@ -147,13 +147,14 @@ WindFlow gère les VMs via les hyperviseurs disponibles sur la machine cible. Le
 
 **Console :**
 - Console VNC/SPICE intégrée au navigateur (noVNC)
+- Console Terminal intégrée
 - Pas de client lourd nécessaire
 
 ```python
 # Exemple : création d'une VM KVM
 @router.post("/api/v1/vms")
 async def create_vm(config: VMCreateRequest, target: Target = Depends(get_target)):
-    vm_service = get_vm_service(target)  # LibvirtService ou ProxmoxService
+    vm_service = get_vm_service(target)  # LibvirtService
     vm_id = await vm_service.create_vm(
         name=config.name,
         vcpus=config.vcpus,
@@ -175,32 +176,6 @@ async def create_vm(config: VMCreateRequest, target: Target = Depends(get_target
 - Gestion d'une bibliothèque d'ISOs et d'images cloud
 - Upload d'ISOs depuis l'UI
 - Support cloud-init pour le provisionnement automatique
-
-### Proxmox VE
-
-Pour les machines qui tournent Proxmox, WindFlow s'intègre via l'API REST Proxmox :
-
-- CRUD de VMs et de containers LXC
-- Snapshots et restauration
-- Backup et restore Proxmox
-- Vue des nodes et de leurs ressources
-- Console VNC via l'API Proxmox
-
-### VirtualBox (optionnel)
-
-Support basique via VBoxWebSVC pour les environnements de développement :
-
-- CRUD de VMs
-- Snapshots
-- Démarrage/arrêt
-
-### Hyperviseur sur Machine Distante
-
-Comme pour Docker, les VMs distantes sont gérées via les connexions natives de chaque hyperviseur :
-
-- libvirt : `qemu+ssh://user@host/system`
-- Proxmox : API REST via HTTPS
-- VirtualBox : VBoxWebSVC sur le réseau local
 
 ---
 
@@ -453,9 +428,7 @@ config_schema:
 
 **Local** — La machine sur laquelle WindFlow est installé. Docker et/ou libvirt sont détectés automatiquement.
 
-**SSH** — Une machine distante accessible via SSH. WindFlow détecte automatiquement ce qui est disponible (Docker, libvirt, Proxmox) sur la machine distante.
-
-**Proxmox** — Un nœud ou cluster Proxmox, connecté via l'API REST.
+**SSH** — Une machine distante accessible via SSH. WindFlow détecte automatiquement ce qui est disponible (Docker, libvirt, LXD) sur la machine distante.
 
 ### Discovery Automatique
 
@@ -481,10 +454,10 @@ class TargetDiscovery:
                 "vms": await self._count_vms(target),
             }
 
-        # Proxmox API disponible ?
-        if await self._check_proxmox(target):
-            capabilities["proxmox"] = {
-                "version": await self._get_proxmox_version(target),
+        # LXD API disponible ?
+        if await self._check_LXD(target):
+            capabilities["LXD"] = {
+                "version": await self._get_LXD_version(target),
                 "nodes": await self._list_nodes(target),
             }
 
