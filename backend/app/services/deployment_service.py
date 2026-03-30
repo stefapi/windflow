@@ -432,7 +432,7 @@ class DeploymentService:
         """
         from sqlalchemy.orm import selectinload
 
-        from ..schemas.target import TargetType
+        from ..enums.target import TargetType
 
         # Charger le déploiement avec ses relations (stack)
         result = await db.execute(

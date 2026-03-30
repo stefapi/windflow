@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from enum import Enum
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -13,52 +12,10 @@ from sqlalchemy import ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
+from ..enums.target import CapabilityType
 
 if TYPE_CHECKING:
     from .target import Target
-
-
-class CapabilityType(str, Enum):
-    """Types de capacités détectées sur une cible."""
-
-    # Virtualisation
-    LIBVIRT = "libvirt"
-    VIRSH = "virsh"
-    VIRTUALBOX = "virtualbox"
-    VAGRANT = "vagrant"
-    PROXMOX = "proxmox"
-    QEMU_KVM = "qemu_kvm"
-    MULTIPASS = "multipass"
-
-    # Conteneurisation — Docker
-    DOCKER = "docker"
-    DOCKER_COMPOSE = "docker_compose"
-    DOCKER_SWARM = "docker_swarm"
-
-    # Conteneurisation — Podman
-    PODMAN = "podman"
-    PODMAN_COMPOSE = "podman_compose"
-
-    # Conteneurisation — Système (LXC/LXD/Incus)
-    LXC = "lxc"
-    LXD = "lxd"
-    INCUS = "incus"
-
-    # Runtimes OCI bas niveau
-    RUNC = "runc"
-    CRUN = "crun"
-    CONTAINERD = "containerd"
-
-    # Outils OCI
-    BUILDAH = "buildah"
-    SKOPEO = "skopeo"
-
-    # Kubernetes / Orchestration
-    KUBECTL = "kubectl"
-    KUBEADM = "kubeadm"
-    K3S = "k3s"
-    MICROK8S = "microk8s"
-    HELM = "helm"
 
 
 class TargetCapability(Base):
@@ -111,21 +68,21 @@ class TargetCapability(Base):
 
     detected_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
         comment="Date de détection de la capacité",
     )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
 

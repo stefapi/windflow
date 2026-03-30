@@ -28,7 +28,9 @@ from .organization import (
     OrganizationUpdate,
 )
 from .stack import StackBase, StackCreate, StackResponse, StackUpdate
-from .target import TargetBase, TargetCreate, TargetResponse, TargetUpdate
+from ..enums.target import CapabilityType
+from .target import TargetCreate, TargetResponse, TargetUpdate
+from .target_capability import TargetCapabilityBase, TargetCapabilityResponse
 from .user import (
     LoginResponse,
     Token,
@@ -56,7 +58,6 @@ __all__ = [
     "OrganizationUpdate",
     "OrganizationResponse",
     # Target schemas
-    "TargetBase",
     "TargetCreate",
     "TargetUpdate",
     "TargetResponse",

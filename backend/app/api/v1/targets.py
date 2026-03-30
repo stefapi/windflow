@@ -1,24 +1,40 @@
 """
 Routes de gestion des cibles de déploiement.
+
+Toute route vérifie systématiquement l'appartenance de la cible
+à l'organisation de l'utilisateur authentifié via ``_get_target_for_org``.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import List, Optional
+from typing import Any
 
+import asyncssh
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_active_user
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
+from ...enums.target import CapabilityType
+from ...models.target import Target
 from ...models.user import User
-from ...schemas.target import TargetCreate, TargetResponse, TargetType, TargetUpdate
-from ...schemas.target_capability import CapabilityType, TargetCapabilityResponse
+from ...schemas.target import (
+    ConnectionTestRequest,
+    ConnectionTestResponse,
+    SSHAuthMethod,
+    SSHCredentials,
+    TargetCapabilitiesResponse,
+    TargetCreate,
+    TargetResponse,
+    TargetType,
+    TargetUpdate,
+)
+from ...schemas.target_capability import TargetCapabilityResponse
 from ...schemas.target_scan import (
     ScanResult,
-    TargetCapabilitiesResponse,
     TargetDiscoveryRequest,
     TargetDiscoveryResponse,
 )
@@ -28,6 +44,7 @@ from ...services.target_service import TargetService
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Types de capacités liés à la virtualisation
 VIRTUALIZATION_CAPABILITY_TYPES: set[CapabilityType] = {
     CapabilityType.LIBVIRT,
     CapabilityType.VIRTUALBOX,
@@ -39,7 +56,7 @@ VIRTUALIZATION_CAPABILITY_TYPES: set[CapabilityType] = {
 
 @router.get(
     "/",
-    response_model=List[TargetResponse],
+    response_model=list[TargetResponse],
     status_code=status.HTTP_200_OK,
     summary="List deployment targets",
     description="""
@@ -137,7 +154,7 @@ async def list_targets(
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
-) -> List[TargetResponse]:
+) -> list[TargetResponse]:
     """List deployment targets for the organization."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
@@ -844,6 +861,121 @@ async def delete_target(
 
 
 @router.post(
+    "/test-connection",
+    response_model=ConnectionTestResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Test SSH connection to a target",
+    description="""
+Test SSH connection to a host with provided credentials.
+
+## Process
+1. Attempts to establish an SSH connection using provided credentials
+2. If successful, retrieves basic OS information
+3. Returns connection status and OS details
+
+## Supported Authentication Methods
+- **Password**: Username + password authentication
+- **SSH Key**: Username + private key (with optional passphrase)
+
+## Use Cases
+- Validate credentials before creating a target
+- Test connection after updating credentials
+- Troubleshoot connectivity issues
+
+**Authentication Required**
+""",
+    dependencies=[Depends(conditional_rate_limiter(20, 60))],
+    tags=["targets"],
+)
+async def test_connection(
+    request: Request,
+    test_request: ConnectionTestRequest,
+    current_user: User = Depends(get_current_active_user),
+) -> ConnectionTestResponse:
+    """Test SSH connection to a target host."""
+    import asyncio
+
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Testing SSH connection to {test_request.host}:{test_request.port}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "host": test_request.host,
+        },
+    )
+    creds = test_request.credentials
+    ssh_kwargs: dict = {
+        "host": test_request.host,
+        "port": test_request.port,
+        "username": creds.username,
+        "known_hosts": None,
+    }
+
+    if creds.auth_method == SSHAuthMethod.SSH_KEY:
+        ssh_kwargs["client_keys"] = [creds.ssh_private_key]
+        if creds.ssh_private_key_passphrase:
+            ssh_kwargs["passphrase"] = creds.ssh_private_key_passphrase
+    else:
+        ssh_kwargs["password"] = creds.password
+
+    try:
+        async with asyncssh.connect(**ssh_kwargs) as conn:
+            # Connection successful — try to get OS info
+            os_info: dict[str, Any] = {}
+            try:
+                result = await asyncio.wait_for(
+                    conn.run("uname -a", check=False, encoding="utf-8"),
+                    timeout=10,
+                )
+                if result.exit_status == 0:
+                    os_info["uname"] = result.stdout.strip()
+
+                result = await asyncio.wait_for(
+                    conn.run("cat /etc/os-release", check=False, encoding="utf-8"),
+                    timeout=10,
+                )
+                if result.exit_status == 0:
+                    for line in result.stdout.splitlines():
+                        if line.startswith("PRETTY_NAME="):
+                            os_info["distribution"] = line.split("=", 1)[1].strip('"')
+                        elif line.startswith("VERSION="):
+                            os_info["version"] = line.split("=", 1)[1].strip('"')
+            except (asyncio.TimeoutError, asyncssh.Error):
+                pass  # Non-critical: OS info is optional
+
+            return ConnectionTestResponse(
+                success=True,
+                message=f"Connexion réussie à {test_request.host}:{test_request.port} en tant que '{creds.username}'",
+                os_info=os_info or None,
+            )
+    except asyncssh.PermissionDenied:
+        return ConnectionTestResponse(
+            success=False,
+            message="Authentification échouée : identifiants incorrects",
+        )
+    except asyncssh.ConnectionLost:
+        return ConnectionTestResponse(
+            success=False,
+            message="Connexion perdue pendant la négociation SSH",
+        )
+    except OSError as exc:
+        return ConnectionTestResponse(
+            success=False,
+            message=f"Impossible de se connecter à {test_request.host}:{test_request.port} — {exc}",
+        )
+    except Exception as exc:  # noqa: B902
+        logger.warning(
+            f"Unexpected SSH test error: {exc}",
+            extra={"correlation_id": correlation_id},
+        )
+        return ConnectionTestResponse(
+            success=False,
+            message=f"Erreur inattendue : {exc}",
+        )
+
+
+@router.post(
     "/discover",
     response_model=TargetDiscoveryResponse,
     status_code=status.HTTP_201_CREATED,
@@ -1109,14 +1241,13 @@ async def discover_target(
 
     target_type = discovery_request.preferred_type or _infer_target_type(scan_result)
 
-    credentials = {
-        "username": discovery_request.username,
-        "password": discovery_request.password,
-    }
-    if discovery_request.sudo_user:
-        credentials["sudo_user"] = discovery_request.sudo_user
-    if discovery_request.sudo_password:
-        credentials["sudo_password"] = discovery_request.sudo_password
+    ssh_credentials = SSHCredentials(
+        auth_method=SSHAuthMethod.PASSWORD,
+        username=discovery_request.username,
+        password=discovery_request.password,
+        sudo_user=discovery_request.sudo_user,
+        sudo_password=discovery_request.sudo_password,
+    )
 
     target_payload = TargetCreate(
         name=discovery_request.name,
@@ -1124,7 +1255,7 @@ async def discover_target(
         host=discovery_request.host,
         port=discovery_request.port,
         type=target_type,
-        credentials=credentials,
+        credentials=ssh_credentials,
         organization_id=organization_id,
         extra_metadata={
             "auto_discovered": True,
@@ -1452,7 +1583,7 @@ Retrieve all capabilities detected for a specific target.
 async def get_target_capabilities(
     request: Request,
     target_id: str,
-    capability_type: Optional[CapabilityType] = None,
+    capability_type: CapabilityType | None = None,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
 ) -> TargetCapabilitiesResponse:
@@ -1659,7 +1790,7 @@ async def get_target_capability_by_type(
 
 @router.get(
     "/{target_id}/capabilities/virtualization",
-    response_model=List[TargetCapabilityResponse],
+    response_model=list[TargetCapabilityResponse],
     status_code=status.HTTP_200_OK,
     summary="Get target virtualization capabilities",
     description="""
@@ -1787,7 +1918,7 @@ async def get_target_virtualization_capabilities(
     target_id: str,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
-) -> List[TargetCapabilityResponse]:
+) -> list[TargetCapabilityResponse]:
     """Retrieve virtualization capabilities for a target."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(

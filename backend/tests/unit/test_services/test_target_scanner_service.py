@@ -8,7 +8,7 @@ and new detector methods (LXC, LXD, Incus, containerd, OCI tools).
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from unittest.mock import AsyncMock
 
 import pytest
@@ -37,7 +37,7 @@ class MockExecutor:
 
     def __init__(
         self,
-        responses: Optional[Dict[str, CommandResult]] = None,
+        responses: Optional[dict[str, CommandResult]] = None,
         default: Optional[CommandResult] = None,
     ):
         self._responses = responses or {}

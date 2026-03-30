@@ -12,17 +12,13 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
     Any,
     Awaitable,
     Callable,
-    Dict,
-    List,
-    Optional,
     Protocol,
-    Tuple,
     TypeVar,
 )
 
@@ -30,8 +26,8 @@ import asyncssh
 from asyncssh import ConnectionLost
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..enums.target import CapabilityType
 from ..models.target import Target
-from ..models.target_capability import CapabilityType
 from ..schemas.target_scan import (
     ContainerRuntimeInfo,
     DockerCapabilities,
@@ -105,7 +101,7 @@ class LocalCommandExecutor:
     """Execute commands on the local machine using subprocess."""
 
     def __init__(
-        self, sudo_user: Optional[str] = None, sudo_password: Optional[str] = None
+        self, sudo_user: str | None = None, sudo_password: str | None = None
     ):
         self._sudo_user = sudo_user
         self._sudo_password = sudo_password
@@ -158,8 +154,8 @@ class SSHCommandExecutor:
     def __init__(
         self,
         connection: asyncssh.SSHClientConnection,
-        sudo_user: Optional[str] = None,
-        sudo_password: Optional[str] = None,
+        sudo_user: str | None = None,
+        sudo_password: str | None = None,
     ):
         self._connection = connection
         self._sudo_user = sudo_user
@@ -206,7 +202,7 @@ class SSHCommandExecutor:
         return " ".join(sudo_parts + [command])
 
 
-Parser = Callable[[str], Dict[str, Any]]
+Parser = Callable[[str], dict[str, Any]]
 T = TypeVar("T")
 
 
@@ -221,7 +217,7 @@ class SocketProbe:
     covering system (root), rootless (user), session, and snap variants.
     """
 
-    SOCKET_PATHS: Dict[str, Dict[str, List[str]]] = {
+    SOCKET_PATHS: dict[str, dict[str, list[str]]] = {
         "docker": {
             "system": ["/var/run/docker.sock"],
             "rootless": ["/run/user/{uid}/docker.sock"],
@@ -258,7 +254,7 @@ class SocketProbe:
     }
 
     @classmethod
-    def _resolve_uid_paths(cls, paths: List[str]) -> List[str]:
+    def _resolve_uid_paths(cls, paths: list[str]) -> list[str]:
         """Replace ``{uid}`` placeholders with the current UID."""
         uid = os.getuid()
         return [p.format(uid=uid) for p in paths]
@@ -269,7 +265,7 @@ class SocketProbe:
         executor: CommandExecutor,
         tool: str,
         timeout: int = 5,
-    ) -> Optional[SocketInfo]:
+    ) -> SocketInfo | None:
         """Probe socket paths for *tool* and return the first match.
 
         Tries system paths first, then rootless/session paths.
@@ -283,7 +279,7 @@ class SocketProbe:
             return None
 
         # Order: system → rootless → session
-        probe_order: List[Tuple[str, List[str]]] = []
+        probe_order: list[tuple[str, list[str]]] = []
         for mode in ("system", "rootless", "session"):
             raw = paths_by_mode.get(mode)
             if raw:
@@ -314,7 +310,7 @@ class SocketProbe:
         return None
 
     @classmethod
-    async def probe_local(cls, tool: str) -> Optional[SocketInfo]:
+    async def probe_local(cls, tool: str) -> SocketInfo | None:
         """Fast local-only probe (no subprocess, just ``Path`` checks).
 
         Returns a :class:`SocketInfo` even when the socket exists but is not
@@ -381,7 +377,7 @@ class DockerSocketClient:
             return False
         return await asyncio.to_thread(self._can_connect)
 
-    async def collect_capabilities(self) -> Optional[DockerCapabilities]:
+    async def collect_capabilities(self) -> DockerCapabilities | None:
         """Collects Docker capabilities via the socket."""
         if docker is None:
             return None
@@ -402,7 +398,7 @@ class DockerSocketClient:
             if client is not None:
                 client.close()
 
-    def _collect_capabilities_sync(self) -> Optional[DockerCapabilities]:
+    def _collect_capabilities_sync(self) -> DockerCapabilities | None:
         client = None
         try:
             client = self._create_client()
@@ -430,15 +426,15 @@ class DockerSocketClient:
 
     @staticmethod
     def _build_swarm_info(
-        swarm_info: Optional[Dict[str, Any]],
-    ) -> Optional[DockerSwarmInfo]:
+        swarm_info: dict[str, Any | None],
+    ) -> DockerSwarmInfo | None:
         if not swarm_info:
             return None
 
         local_state = swarm_info.get("LocalNodeState")
         available = local_state not in {None, "inactive"}
         active = local_state == "active"
-        node_role: Optional[str] = None
+        node_role: str | None = None
         if available:
             node_role = "manager" if swarm_info.get("ControlAvailable") else "worker"
 
@@ -468,7 +464,7 @@ class LibvirtSocketClient:
             return False
         return await asyncio.to_thread(self._can_connect)
 
-    async def collect_details(self) -> Dict[str, Any]:
+    async def collect_details(self) -> dict[str, Any]:
         """Collects host and VM information via libvirt."""
         if libvirt is None:
             return {}
@@ -485,7 +481,7 @@ class LibvirtSocketClient:
             if connection is not None:
                 connection.close()
 
-    def _collect_details_sync(self) -> Dict[str, Any]:
+    def _collect_details_sync(self) -> dict[str, Any]:
         connection = None
         try:
             connection = libvirt.openReadOnly(self.uri)
@@ -529,7 +525,7 @@ class LibvirtSocketClient:
                 connection.close()
 
     @staticmethod
-    def _format_version(value: int) -> Optional[str]:
+    def _format_version(value: int) -> str | None:
         if not value:
             return None
         major = value // 1_000_000
@@ -570,13 +566,19 @@ class TargetScannerService:
         Raises:
             CommandExecutionError: When SSH connection or commands fail.
         """
-        ssh_kwargs = {
+        ssh_kwargs: dict = {
             "host": scan_request.host,
             "port": scan_request.port,
             "username": scan_request.username,
-            "password": scan_request.password,
             "known_hosts": None,
         }
+        # Support both password and SSH key authentication
+        if scan_request.ssh_private_key:
+            ssh_kwargs["client_keys"] = [scan_request.ssh_private_key]
+            if getattr(scan_request, "ssh_private_key_passphrase", None):
+                ssh_kwargs["passphrase"] = scan_request.ssh_private_key_passphrase
+        else:
+            ssh_kwargs["password"] = scan_request.password
         try:
             async with asyncssh.connect(**ssh_kwargs) as connection:
                 executor = SSHCommandExecutor(
@@ -613,20 +615,20 @@ class TargetScannerService:
             else:
                 credentials = target.credentials or {}
                 username = credentials.get("username")
-                password = credentials.get("password")
-                if not username or not password:
+                if not username:
                     raise ValueError(
-                        "Target credentials must contain 'username' and 'password' "
-                        "for remote scanning."
+                        "Target credentials must contain 'username' for remote scanning."
                     )
 
                 scan_request = ScanRequest(
                     host=target.host,
                     port=target.port or 22,
                     username=username,
-                    password=password,
+                    password=credentials.get("password"),
+                    ssh_private_key=credentials.get("ssh_private_key"),
+                    ssh_private_key_passphrase=credentials.get("ssh_private_key_passphrase"),
                     sudo_user=credentials.get("sudo_user"),
-                    sudo_password=credentials.get("sudo_password") or password,
+                    sudo_password=credentials.get("sudo_password"),
                 )
                 scan_result = await self.scan_remote(scan_request)
 
@@ -704,7 +706,7 @@ class TargetScannerService:
         success = not errors
 
         # Build unified discovered_sockets map
-        discovered_sockets: Dict[str, SocketInfo] = {}
+        discovered_sockets: dict[str, SocketInfo] = {}
 
         # Docker socket
         if docker_info and docker_info.socket:
@@ -729,7 +731,7 @@ class TargetScannerService:
 
         return ScanResult(
             host=host,
-            scan_date=datetime.utcnow(),
+            scan_date=datetime.now(timezone.utc),
             success=success,
             platform=platform_info,
             os=os_info,
@@ -747,8 +749,8 @@ class TargetScannerService:
         func: Callable[[CommandExecutor], Awaitable[T]],
         executor: CommandExecutor,
         errors: list[str],
-        default: Optional[T] = None,
-    ) -> Optional[T]:
+        default: T | None = None,
+    ) -> T | None:
         try:
             return await func(executor)
         except CommandExecutionError as exc:
@@ -860,8 +862,8 @@ class TargetScannerService:
 
     async def _detect_virtualization(
         self, executor: CommandExecutor
-    ) -> Dict[str, ToolInfo]:
-        virtualization: Dict[str, ToolInfo] = {}
+    ) -> dict[str, ToolInfo]:
+        virtualization: dict[str, ToolInfo] = {}
 
         # --- libvirt socket detection (KVM/QEMU) ---
         libvirt_socket_info = await SocketProbe.probe(executor, "libvirt")
@@ -908,7 +910,7 @@ class TargetScannerService:
             )
 
         # --- Other virtualization tools ---
-        checks: Dict[str, Tuple[str, Optional[Parser]]] = {
+        checks: dict[str, tuple[str, Parser | None]] = {
             "virtualbox": ("vboxmanage --version", self._parse_version_only),
             "vagrant": ("vagrant --version", self._parse_vagrant_version),
             "proxmox": ("pveversion", self._parse_version_only),
@@ -934,7 +936,7 @@ class TargetScannerService:
         )
         if podman_version_result.success:
             version_info = self._parse_version_only(podman_version_result.stdout)
-            podman_details: Dict[str, Any] = {}
+            podman_details: dict[str, Any] = {}
             if podman_socket_info:
                 podman_details["socket"] = podman_socket_info.model_dump()
             podman_info_result = await executor.run(
@@ -987,7 +989,7 @@ class TargetScannerService:
 
     async def _detect_docker(
         self, executor: CommandExecutor, host: str
-    ) -> Optional[DockerCapabilities]:
+    ) -> DockerCapabilities | None:
         docker_version_result = await executor.run(
             "docker --version", timeout=self._DEFAULT_TIMEOUT
         )
@@ -1007,7 +1009,7 @@ class TargetScannerService:
         }
 
         docker_socket_path = "/var/run/docker.sock"
-        docker_socket: Optional[SocketInfo] = None
+        docker_socket: SocketInfo | None = None
 
         # Probe socket for all execution types (local uses fast path, remote uses command)
         if is_local_execution:
@@ -1081,7 +1083,7 @@ class TargetScannerService:
 
     async def _detect_docker_compose(
         self, executor: CommandExecutor
-    ) -> Optional[DockerComposeInfo]:
+    ) -> DockerComposeInfo | None:
         compose_plugin_result = await executor.run(
             "docker compose version", timeout=self._DEFAULT_TIMEOUT
         )
@@ -1109,8 +1111,8 @@ class TargetScannerService:
 
     async def _detect_kubernetes(
         self, executor: CommandExecutor
-    ) -> Dict[str, ToolInfo]:
-        kube_tools: Dict[str, Tuple[str, Optional[Parser]]] = {
+    ) -> dict[str, ToolInfo]:
+        kube_tools: dict[str, tuple[str, Parser | None]] = {
             "kubectl": (
                 "kubectl version --client -o json",
                 self._parse_kubectl_version,
@@ -1127,7 +1129,7 @@ class TargetScannerService:
             ),
         }
 
-        kubernetes: Dict[str, ToolInfo] = {}
+        kubernetes: dict[str, ToolInfo] = {}
         for tool, (command, parser) in kube_tools.items():
             result = await executor.run(command, timeout=self._DEFAULT_TIMEOUT)
             if result.success and parser:
@@ -1149,8 +1151,8 @@ class TargetScannerService:
 
     async def _detect_container_runtimes(
         self, executor: CommandExecutor
-    ) -> Dict[str, ContainerRuntimeInfo]:
-        runtimes: Dict[str, ContainerRuntimeInfo] = {}
+    ) -> dict[str, ContainerRuntimeInfo]:
+        runtimes: dict[str, ContainerRuntimeInfo] = {}
 
         # --- LXC ---
         runtimes["lxc"] = await self._detect_lxc(executor)
@@ -1177,7 +1179,7 @@ class TargetScannerService:
             return ContainerRuntimeInfo(available=False)
 
         version = version_result.stripped_stdout()
-        details: Dict[str, Any] = {}
+        details: dict[str, Any] = {}
 
         # Check kernel support
         checkconfig = await executor.run(
@@ -1223,7 +1225,7 @@ class TargetScannerService:
             return ContainerRuntimeInfo(available=False)
 
         version = daemon_version or client_version
-        details: Dict[str, Any] = {}
+        details: dict[str, Any] = {}
 
         # Determine install method
         snap_result = await executor.run(
@@ -1268,7 +1270,7 @@ class TargetScannerService:
 
         parsed = self._parse_version_only(version_result.stdout)
         version = parsed.get("version", version_result.stripped_stdout())
-        details: Dict[str, Any] = {}
+        details: dict[str, Any] = {}
 
         # Determine install method
         snap_result = await executor.run(
@@ -1322,7 +1324,7 @@ class TargetScannerService:
             )
 
         parsed = self._parse_version_only(version_result.stdout)
-        details: Dict[str, Any] = {}
+        details: dict[str, Any] = {}
 
         # Socket
         socket_info = await SocketProbe.probe(executor, "containerd")
@@ -1350,11 +1352,11 @@ class TargetScannerService:
 
     async def _detect_oci_tools(
         self, executor: CommandExecutor
-    ) -> Dict[str, ToolInfo]:
+    ) -> dict[str, ToolInfo]:
         """Detect OCI runtimes and tools (runc, crun, buildah, skopeo, podman-compose)."""
-        tools: Dict[str, ToolInfo] = {}
+        tools: dict[str, ToolInfo] = {}
 
-        oci_checks: Dict[str, Tuple[str, Optional[Parser]]] = {
+        oci_checks: dict[str, tuple[str, Parser | None]] = {
             "runc": ("runc --version", self._parse_runc_version),
             "crun": ("crun --version", self._parse_version_only),
             "buildah": ("buildah --version", self._parse_version_only),
@@ -1385,19 +1387,19 @@ class TargetScannerService:
 
     def build_capabilities_payload(
         self, scan_result: ScanResult
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Construit la liste normalisée des capacités détectées.
 
         Ne crée des entrées que pour les capacités réellement disponibles.
         """
-        capabilities: List[Dict[str, Any]] = []
+        capabilities: list[dict[str, Any]] = []
         detected_at = scan_result.scan_date
 
         def add_capability(
             capability_type: CapabilityType,
             available: bool,
-            version: Optional[str],
-            details: Optional[Dict[str, Any]],
+            version: str | None,
+            details: dict[str, Any | None],
         ) -> None:
             if available:
                 capabilities.append(
@@ -1422,7 +1424,7 @@ class TargetScannerService:
         # Docker
         docker_caps = scan_result.docker
         if docker_caps is not None and docker_caps.installed:
-            docker_details: Dict[str, Any] = {
+            docker_details: dict[str, Any] = {
                 "running": docker_caps.running,
                 "socket_accessible": docker_caps.socket_accessible,
             }
@@ -1437,7 +1439,7 @@ class TargetScannerService:
 
             compose_info = docker_caps.compose
             if compose_info and compose_info.available:
-                compose_details: Dict[str, Any] = {}
+                compose_details: dict[str, Any] = {}
                 if compose_info.plugin_based is not None:
                     compose_details["plugin_based"] = compose_info.plugin_based
                 add_capability(
@@ -1475,7 +1477,7 @@ class TargetScannerService:
             capability_type = self._map_runtime_key_to_capability(key)
             if capability_type is None:
                 continue
-            details_payload: Optional[Dict[str, Any]] = {}
+            details_payload: dict[str, Any | None] = {}
             if info.socket:
                 details_payload["socket"] = info.socket.model_dump()
             if info.install_method:
@@ -1506,7 +1508,7 @@ class TargetScannerService:
 
     def _map_virtualization_key_to_capability(
         self, key: str
-    ) -> Optional[CapabilityType]:
+    ) -> CapabilityType | None:
         mapping = {
             "libvirt": CapabilityType.LIBVIRT,
             "virsh": CapabilityType.VIRSH,
@@ -1520,7 +1522,7 @@ class TargetScannerService:
         }
         return mapping.get(key.lower())
 
-    def _map_kubernetes_key_to_capability(self, key: str) -> Optional[CapabilityType]:
+    def _map_kubernetes_key_to_capability(self, key: str) -> CapabilityType | None:
         mapping = {
             "kubectl": CapabilityType.KUBECTL,
             "kubeadm": CapabilityType.KUBEADM,
@@ -1530,7 +1532,7 @@ class TargetScannerService:
         }
         return mapping.get(key.lower())
 
-    def _map_runtime_key_to_capability(self, key: str) -> Optional[CapabilityType]:
+    def _map_runtime_key_to_capability(self, key: str) -> CapabilityType | None:
         mapping = {
             "lxc": CapabilityType.LXC,
             "lxd": CapabilityType.LXD,
@@ -1539,7 +1541,7 @@ class TargetScannerService:
         }
         return mapping.get(key.lower())
 
-    def _map_oci_key_to_capability(self, key: str) -> Optional[CapabilityType]:
+    def _map_oci_key_to_capability(self, key: str) -> CapabilityType | None:
         mapping = {
             "runc": CapabilityType.RUNC,
             "crun": CapabilityType.CRUN,
@@ -1551,7 +1553,7 @@ class TargetScannerService:
 
     def _extract_tool_info(
         self, info: Any
-    ) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
+    ) -> tuple[bool, str | None, dict[str, Any | None]]:
         if isinstance(info, ToolInfo):
             return info.available, info.version, info.details
         if isinstance(info, dict):
@@ -1590,21 +1592,21 @@ class TargetScannerService:
         return stripped
 
     @staticmethod
-    def _parse_version_only(output: str) -> Dict[str, Any]:
+    def _parse_version_only(output: str) -> dict[str, Any]:
         match = re.search(r"(\d+\.\d+(?:\.\d+)?)", output)
         if match:
             return {"version": match.group(1)}
         return {}
 
     @staticmethod
-    def _parse_vagrant_version(output: str) -> Dict[str, Any]:
+    def _parse_vagrant_version(output: str) -> dict[str, Any]:
         result = TargetScannerService._parse_version_only(output)
         if result:
             result["raw"] = output.strip()
         return result
 
     @staticmethod
-    def _parse_qemu_version(output: str) -> Dict[str, Any]:
+    def _parse_qemu_version(output: str) -> dict[str, Any]:
         first_line = output.splitlines()[0] if output else ""
         version_info = TargetScannerService._parse_version_only(first_line)
         if version_info:
@@ -1612,12 +1614,12 @@ class TargetScannerService:
         return version_info
 
     @staticmethod
-    def _parse_docker_version(output: str) -> Optional[str]:
+    def _parse_docker_version(output: str) -> str | None:
         info = TargetScannerService._parse_version_only(output)
         return info.get("version")
 
     @staticmethod
-    def _parse_kubectl_version(output: str) -> Dict[str, Any]:
+    def _parse_kubectl_version(output: str) -> dict[str, Any]:
         try:
             data = json.loads(output)
         except json.JSONDecodeError:
@@ -1635,7 +1637,7 @@ class TargetScannerService:
         return {}
 
     @staticmethod
-    def _parse_kubeadm_version(output: str) -> Dict[str, Any]:
+    def _parse_kubeadm_version(output: str) -> dict[str, Any]:
         try:
             data = json.loads(output)
             return {
@@ -1647,7 +1649,7 @@ class TargetScannerService:
             return TargetScannerService._parse_version_only(output)
 
     @staticmethod
-    def _parse_k3s_version(output: str) -> Dict[str, Any]:
+    def _parse_k3s_version(output: str) -> dict[str, Any]:
         """Parse k3s version output like 'k3s version v1.28.4+k3s2'."""
         match = re.search(r"v?(\d+\.\d+(?:\.\d+)?(?:\+\S+)?)", output)
         if match:
@@ -1655,7 +1657,7 @@ class TargetScannerService:
         return TargetScannerService._parse_version_only(output)
 
     @staticmethod
-    def _parse_runc_version(output: str) -> Dict[str, Any]:
+    def _parse_runc_version(output: str) -> dict[str, Any]:
         """Parse runc version output (may be multi-line)."""
         for line in output.splitlines():
             if "runc" in line.lower() or line.strip().startswith("1.") or line.strip().startswith("2."):

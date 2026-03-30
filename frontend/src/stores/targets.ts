@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { targetsApi } from '@/services/api'
-import type { Target, TargetCreate, TargetUpdate } from '@/types/api'
+import type { ConnectionTestRequest, ConnectionTestResponse, Target, TargetCreate, TargetUpdate } from '@/types/api'
 
 export const useTargetsStore = defineStore('targets', () => {
   const targets = ref<Target[]>([])
@@ -85,6 +85,20 @@ export const useTargetsStore = defineStore('targets', () => {
     }
   }
 
+  async function testConnection(data: ConnectionTestRequest): Promise<ConnectionTestResponse> {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await targetsApi.testConnection(data)
+      return response.data
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to test connection'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function scanTarget(id: string): Promise<void> {
     loading.value = true
     error.value = null
@@ -120,5 +134,6 @@ export const useTargetsStore = defineStore('targets', () => {
     updateTarget,
     deleteTarget,
     scanTarget,
+    testConnection,
   }
 })

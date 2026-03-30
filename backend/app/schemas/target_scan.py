@@ -1,23 +1,21 @@
-"""
-Schemas for target capability scanning and discovery.
-
-Validation strictly follows project backend guidelines (Pydantic V2).
-"""
+"""Schemas Pydantic pour les résultats de scan de cibles."""
 
 from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
-from .target import TargetResponse, TargetType
-from .target_capability import TargetCapabilityResponse
+from ..enums.target import CapabilityType
 
 
-class PlatformArchitecture(str, Enum):
-    """Supported CPU architecture identifiers."""
+# ─── Architecture ───────────────────────────────────────────────
+
+
+class Architecture(str, Enum):
+    """Architecture CPU normalisée (utile pour les tests unitaires)."""
 
     X86_64 = "x86_64"
     X86_32 = "x86_32"
@@ -25,305 +23,198 @@ class PlatformArchitecture(str, Enum):
     ARMV8 = "armv8"
     ARMV7 = "armv7"
     ARMV6 = "armv6"
+    RISCV64 = "riscv64"
     UNKNOWN = "unknown"
 
 
-class ScanRequest(BaseModel):
-    """Scan request parameters for remote or local target discovery."""
+class PlatformArchitecture(str, Enum):
+    """Architecture CPU normalisée pour le scan de cibles."""
 
-    model_config = ConfigDict(from_attributes=True, str_strip_whitespace=True)
+    X86_64 = "x86_64"
+    X86_32 = "x86_32"
+    ARM64 = "arm64"
+    ARMV8 = "armv8"
+    ARMV7 = "armv7"
+    ARMV6 = "armv6"
+    RISCV64 = "riscv64"
+    UNKNOWN = "unknown"
 
-    host: str = Field(..., description="Hostname or IP address to scan")
-    port: int = Field(
-        default=22, ge=1, le=65535, description="SSH port for remote connection"
-    )
-    username: str = Field(
-        ..., min_length=1, max_length=128, description="Login username"
-    )
-    password: str = Field(
-        ..., min_length=1, max_length=512, description="Login password"
-    )
-    sudo_user: Optional[str] = Field(
-        default=None,
-        min_length=1,
-        max_length=128,
-        description="Optional sudo username if privilege escalation required",
-    )
-    sudo_password: Optional[str] = Field(
-        default=None,
-        min_length=1,
-        max_length=512,
-        description="Optional sudo password for privilege escalation",
-    )
+
+# ─── Platform & OS ──────────────────────────────────────────────
 
 
 class PlatformInfo(BaseModel):
-    """Hardware platform information detected during scan."""
+    """Informations sur la plateforme matérielle."""
 
-    model_config = ConfigDict(from_attributes=True)
-
-    architecture: PlatformArchitecture = Field(
-        default=PlatformArchitecture.UNKNOWN,
-        description="Normalized CPU architecture identifier",
-    )
-    cpu_model: Optional[str] = Field(
-        default=None, description="CPU model name reported by the host"
-    )
-    cpu_cores: Optional[int] = Field(
-        default=None, ge=1, description="Number of CPU cores available"
-    )
-    total_memory_gb: Optional[float] = Field(
-        default=None, ge=0, description="Total system memory in gigabytes"
-    )
+    architecture: PlatformArchitecture = PlatformArchitecture.UNKNOWN
+    cpu_model: str | None = None
+    cpu_cores: int | None = None
+    total_memory_gb: float | None = None
 
 
 class OSInfo(BaseModel):
-    """Operating system details detected during scan."""
+    """Informations sur le système d'exploitation."""
 
-    model_config = ConfigDict(from_attributes=True)
-
-    system: str = Field(
-        ..., description="Operating system family (Linux, Windows, etc.)"
-    )
-    distribution: Optional[str] = Field(
-        default=None, description="Distribution or vendor name when available"
-    )
-    version: Optional[str] = Field(
-        default=None, description="Operating system version string"
-    )
-    kernel: Optional[str] = Field(
-        default=None, description="Kernel version information"
-    )
+    system: str = "unknown"
+    distribution: str | None = None
+    version: str | None = None
+    kernel: str | None = None
+    uname: str | None = None
 
 
-class ToolInfo(BaseModel):
-    """Generic tool availability and metadata."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    available: bool = Field(..., description="Indicates whether the tool is installed")
-    version: Optional[str] = Field(
-        default=None, description="Detected version string when available"
-    )
-    details: Optional[Dict[str, Any]] = Field(
-        default=None, description="Additional information about the tool state"
-    )
+# ─── Socket / Runtime info ──────────────────────────────────────
 
 
 class SocketInfo(BaseModel):
     """Information about a detected Unix socket."""
 
-    model_config = ConfigDict(from_attributes=True)
-
-    path: str = Field(..., description="Absolute path of the Unix socket")
-    exists: bool = Field(
-        default=False, description="Whether the socket file exists on the filesystem"
-    )
-    accessible: bool = Field(
-        default=False, description="Whether the socket is readable/writable by current user"
-    )
-    mode: str = Field(
-        default="system",
-        description="Socket mode: 'system' (root), 'rootless', or 'session'",
-    )
-
-
-class DockerComposeInfo(BaseModel):
-    """Docker Compose capability information."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    available: bool = Field(
-        ..., description="Indicates whether Docker Compose is available"
-    )
-    version: Optional[str] = Field(
-        default=None, description="Docker Compose version when available"
-    )
-    plugin_based: Optional[bool] = Field(
+    path: str
+    exists: bool = False
+    accessible: bool = False
+    mode: str | None = Field(
         default=None,
-        description="True if docker compose plugin is used instead of standalone binary",
-    )
-
-
-class DockerSwarmInfo(BaseModel):
-    """Docker Swarm capability information."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    available: bool = Field(
-        ..., description="Indicates whether Swarm functionality is available"
-    )
-    active: Optional[bool] = Field(
-        default=None, description="True when the node is part of an active swarm"
-    )
-    node_role: Optional[str] = Field(
-        default=None, description="Role of the node within the swarm (manager/worker)"
-    )
-    details: Optional[Dict[str, Any]] = Field(
-        default=None, description="Additional swarm information gathered during scan"
-    )
-
-
-class DockerCapabilities(BaseModel):
-    """Docker capability information grouped in a dedicated structure."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    installed: bool = Field(
-        ..., description="Indicates whether Docker engine is installed"
-    )
-    version: Optional[str] = Field(
-        default=None, description="Docker engine version when available"
-    )
-    running: bool = Field(
-        default=False, description="True if Docker daemon is reachable and running"
-    )
-    socket_accessible: bool = Field(
-        default=False,
-        description="Indicates whether Docker socket is accessible to the user",
-    )
-    socket: Optional[SocketInfo] = Field(
-        default=None, description="Unix socket information for Docker daemon"
-    )
-    compose: Optional[DockerComposeInfo] = Field(
-        default=None, description="Docker Compose capability details"
-    )
-    swarm: Optional[DockerSwarmInfo] = Field(
-        default=None, description="Docker Swarm capability details"
+        description="system, rootless, or session",
     )
 
 
 class ContainerRuntimeInfo(BaseModel):
-    """Detailed information about a container runtime (LXC/LXD/Incus)."""
+    """Container runtime detected on the target."""
 
-    model_config = ConfigDict(from_attributes=True)
-
-    available: bool = Field(
-        ..., description="Indicates whether the runtime is installed"
-    )
-    version: Optional[str] = Field(
-        default=None, description="Detected version string"
-    )
-    socket: Optional[SocketInfo] = Field(
-        default=None, description="Unix socket information when applicable"
-    )
-    install_method: Optional[str] = Field(
+    available: bool = False
+    version: str | None = None
+    install_method: str | None = Field(
         default=None,
-        description="How the tool was installed: 'package', 'snap', 'binary', etc.",
+        description="snap, package, binary, etc.",
     )
-    details: Optional[Dict[str, Any]] = Field(
-        default=None, description="Additional runtime-specific information"
+    socket: SocketInfo | None = None
+    details: dict[str, Any] | None = None
+
+
+class ToolInfo(BaseModel):
+    """Generic tool detection result."""
+
+    available: bool = False
+    version: str | None = None
+    details: dict[str, Any] | None = None
+
+
+# ─── Docker-specific ────────────────────────────────────────────
+
+
+class DockerComposeInfo(BaseModel):
+    """Docker Compose detection result."""
+
+    available: bool = False
+    version: str | None = None
+    plugin_based: bool | None = Field(
+        default=None,
+        description="True if compose is a Docker plugin (v2)",
     )
+
+
+class DockerSwarmInfo(BaseModel):
+    """Docker Swarm detection result."""
+
+    available: bool = False
+    active: bool | None = None
+    node_role: str | None = None
+    details: dict[str, Any] | None = None
+
+
+class DockerCapabilities(BaseModel):
+    """Docker engine detection result."""
+
+    installed: bool = False
+    version: str | None = None
+    running: bool = False
+    socket_accessible: bool = False
+    compose: DockerComposeInfo | None = None
+    swarm: DockerSwarmInfo | None = None
+    socket: SocketInfo | None = None
+
+
+# ─── Scan Request ───────────────────────────────────────────────
+
+
+class ScanRequest(BaseModel):
+    """Paramètres pour un scan de cible distante."""
+
+    host: str
+    port: int = 22
+    username: str | None = None
+    password: str | None = None
+    ssh_private_key: str | None = None
+    ssh_private_key_passphrase: str | None = None
+    sudo_user: str | None = None
+    sudo_password: str | None = None
+
+
+# ─── Scan Result ────────────────────────────────────────────────
 
 
 class ScanResult(BaseModel):
-    """Complete scan result containing detected capabilities."""
+    """Résultat complet d'un scan de cible."""
 
-    model_config = ConfigDict(from_attributes=True)
+    host: str
+    scan_date: datetime
+    success: bool = True
 
-    host: str = Field(..., description="Scanned host identifier")
-    scan_date: datetime = Field(..., description="Timestamp when the scan occurred")
-    success: bool = Field(..., description="Indicates whether the scan succeeded")
+    # Détections
+    docker: DockerCapabilities | None = None
+    virtualization: dict[str, ToolInfo] = Field(default_factory=dict)
+    kubernetes: dict[str, ToolInfo] = Field(default_factory=dict)
+    container_runtimes: dict[str, ContainerRuntimeInfo] = Field(default_factory=dict)
+    oci_tools: dict[str, ToolInfo] = Field(default_factory=dict)
 
-    platform: Optional[PlatformInfo] = Field(
-        default=None, description="Platform hardware capabilities"
-    )
-    os: Optional[OSInfo] = Field(
-        default=None, description="Operating system information"
-    )
-    virtualization: Dict[str, ToolInfo] = Field(
-        default_factory=dict, description="Virtualization tools detected on the target"
-    )
-    docker: Optional[DockerCapabilities] = Field(
-        default=None, description="Docker related capabilities"
-    )
-    kubernetes: Dict[str, ToolInfo] = Field(
-        default_factory=dict, description="Kubernetes related tooling capabilities"
-    )
-    container_runtimes: Dict[str, ContainerRuntimeInfo] = Field(
-        default_factory=dict,
-        description="Container runtimes detected (LXC, LXD, Incus, containerd, etc.)",
-    )
-    oci_tools: Dict[str, ToolInfo] = Field(
-        default_factory=dict,
-        description="OCI low-level tools (runc, crun, buildah, skopeo)",
-    )
-    discovered_sockets: Dict[str, SocketInfo] = Field(
-        default_factory=dict,
-        description="Unified map of all discovered Unix sockets keyed by tool name",
-    )
-    errors: List[str] = Field(
-        default_factory=list,
-        description="List of error messages encountered during the scan",
-    )
+    # Informations système
+    platform: PlatformInfo | None = None
+    os: OSInfo | None = None
+    platform_info: dict[str, Any] | None = None
+    os_info: dict[str, Any] | None = None
+
+    # Sockets découverts
+    discovered_sockets: dict[str, SocketInfo] = Field(default_factory=dict)
+
+    # Erreurs
+    errors: list[str] = Field(default_factory=list)
 
 
-class CapabilityUpdate(BaseModel):
-    """Schema used when updating target discovered capabilities."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    discovered_capabilities: Dict[str, Any] = Field(
-        ..., description="Capabilities map to persist on the target model"
-    )
-    last_scan_date: datetime = Field(
-        ..., description="Timestamp of the scan that produced these capabilities"
-    )
-    scan_status: str = Field(
-        ...,
-        min_length=1,
-        max_length=20,
-        description="Status of the scan (pending, scanning, completed, failed)",
-    )
+# ─── Capability payload item ────────────────────────────────────
 
 
-class TargetDiscoveryRequest(ScanRequest):
-    """Discovery request that leads to automatic target creation."""
+class CapabilityPayloadItem(BaseModel):
+    """Élément de capacité prêt à être persisté en base."""
 
-    name: str = Field(
-        ..., min_length=1, max_length=255, description="Desired target name"
+    capability_type: CapabilityType
+    is_available: bool
+    version: str | None = None
+    details: dict[str, Any] | None = None
+
+
+# ─── Discovery ──────────────────────────────────────────────────
+
+
+class TargetDiscoveryRequest(BaseModel):
+    """Requête de découverte automatique d'une cible."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    host: str = Field(..., min_length=1)
+    port: int = Field(default=22, ge=1, le=65535)
+    description: str | None = None
+    username: str | None = None
+    password: str | None = None
+    ssh_private_key: str | None = None
+    ssh_private_key_passphrase: str | None = None
+    sudo_user: str | None = None
+    sudo_password: str | None = None
+    preferred_type: str | None = Field(
+        default=None, description="Type de cible souhaité (auto-détecté si absent)"
     )
-    description: Optional[str] = Field(
-        default=None, max_length=500, description="Optional target description"
-    )
-    organization_id: Optional[str] = Field(
-        default=None,
-        description="Organization identifier, defaults to current user's organization",
-    )
-    preferred_type: Optional[TargetType] = Field(
-        default=None,
-        description="Optional preferred target type overriding automatic detection",
-    )
+    organization_id: str | None = None
 
 
 class TargetDiscoveryResponse(BaseModel):
-    """Response payload for discovery + creation workflow."""
+    """Réponse après découverte et création d'une cible."""
 
-    model_config = ConfigDict(from_attributes=True)
-
-    target: TargetResponse = Field(..., description="Created target representation")
-    scan_result: ScanResult = Field(..., description="Scan result used for creation")
-
-
-class TargetCapabilitiesResponse(BaseModel):
-    """Response payload for retrieving stored capabilities."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    scan_date: Optional[datetime] = Field(
-        default=None, description="Timestamp of the last capabilities scan"
-    )
-    scan_success: Optional[bool] = Field(
-        default=None,
-        description="Indicates whether the last capabilities scan succeeded",
-    )
-    platform_info: Optional[Dict[str, Any]] = Field(
-        default=None, description="Platform information detected during the last scan"
-    )
-    os_info: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Operating system information detected during the last scan",
-    )
-    capabilities: List[TargetCapabilityResponse] = Field(
-        default_factory=list, description="List of detected capabilities for the target"
-    )
+    target: Any = Field(..., description="Cible créée (TargetResponse)")
+    scan_result: ScanResult = Field(..., description="Résultat du scan")

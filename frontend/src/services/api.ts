@@ -17,6 +17,8 @@ import type {
   TargetCreate,
   TargetUpdate,
   TargetCapabilitiesResponse,
+  ConnectionTestRequest,
+  ConnectionTestResponse,
   Stack,
   StackCreate,
   StackUpdate,
@@ -141,6 +143,9 @@ export const targetsApi = {
 
   getCapabilities: (id: string) =>
     http.get<TargetCapabilitiesResponse>(`/targets/${id}/capabilities`),
+
+  testConnection: (data: ConnectionTestRequest) =>
+    http.post<ConnectionTestResponse>('/targets/test-connection', data),
 }
 
 // Stacks API

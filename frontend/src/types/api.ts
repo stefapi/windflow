@@ -63,25 +63,72 @@ export interface OrganizationUpdate {
   description?: string
 }
 
-// Target types
-export type TargetType = 'docker' | 'docker_swarm' | 'kubernetes' | 'vm' | 'physical'
+// Target types (mirrors backend enums/target.py)
+export type TargetType = 'docker' | 'docker_swarm' | 'kubernetes' | 'ssh' | 'vm' | 'physical'
 export type TargetStatus = 'online' | 'offline' | 'error' | 'maintenance'
+export type SSHAuthMethod = 'local' | 'password' | 'ssh_key'
 
-// Target Capability types
+// SSH Credentials
+export interface SSHCredentials {
+  auth_method: SSHAuthMethod
+  username?: string
+  password?: string
+  ssh_private_key?: string
+  ssh_private_key_passphrase?: string
+  sudo_user?: string
+  sudo_password?: string
+}
+
+export interface SSHCredentialsUpdate {
+  auth_method?: SSHAuthMethod
+  username?: string
+  password?: string
+  ssh_private_key?: string
+  ssh_private_key_passphrase?: string
+  sudo_user?: string
+  sudo_password?: string
+}
+
+export interface ConnectionTestRequest {
+  host: string
+  port: number
+  credentials: SSHCredentials
+}
+
+export interface ConnectionTestResponse {
+  success: boolean
+  message: string
+  os_info?: Record<string, unknown>
+}
+
+// Target Capability types (mirrors backend enums/target.py CapabilityType)
 export type CapabilityType =
+  | 'docker'
+  | 'docker_compose'
+  | 'docker_swarm'
+  | 'kubernetes'
   | 'libvirt'
   | 'virtualbox'
   | 'vagrant'
   | 'proxmox'
   | 'qemu_kvm'
-  | 'docker'
-  | 'docker_compose'
-  | 'docker_swarm'
   | 'podman'
   | 'kubectl'
   | 'kubeadm'
   | 'k3s'
   | 'microk8s'
+  | 'helm'
+  | 'lxc'
+  | 'lxd'
+  | 'incus'
+  | 'containerd'
+  | 'runc'
+  | 'crun'
+  | 'buildah'
+  | 'skopeo'
+  | 'podman_compose'
+  | 'virsh'
+  | 'multipass'
 
 export interface TargetCapability extends BaseModel {
   target_id: string
@@ -107,7 +154,14 @@ export interface Target extends BaseModel {
   port: number
   description: string | null
   status: TargetStatus
-  metadata: Record<string, unknown>
+  auth_method: string | null
+  username: string | null
+  has_sudo: boolean
+  scan_date: string | null
+  scan_success: boolean | null
+  platform_info: Record<string, unknown> | null
+  os_info: Record<string, unknown> | null
+  extra_metadata: Record<string, unknown>
   organization_id: string
   capabilities?: TargetCapability[]
 }
@@ -118,8 +172,9 @@ export interface TargetCreate {
   host: string
   port: number
   description?: string
-  metadata?: Record<string, unknown>
+  credentials: SSHCredentials
   organization_id: string
+  extra_metadata?: Record<string, unknown>
 }
 
 export interface TargetUpdate {
@@ -128,8 +183,9 @@ export interface TargetUpdate {
   host?: string
   port?: number
   description?: string
+  credentials?: SSHCredentialsUpdate
   status?: TargetStatus
-  metadata?: Record<string, unknown>
+  extra_metadata?: Record<string, unknown>
 }
 
 // Stack types

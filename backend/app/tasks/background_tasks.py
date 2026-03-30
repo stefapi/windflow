@@ -52,7 +52,7 @@ async def deploy_stack_async(
     from app.database import AsyncSessionLocal
     from app.models.deployment import Deployment, DeploymentStatus
     from app.models.stack import Stack
-    from app.schemas.target import TargetType
+    from app.enums.target import TargetType
     from app.services.deployment_service import DeploymentService
     from app.services.docker_compose_service import DockerComposeService
     from app.services.docker_service import DockerService

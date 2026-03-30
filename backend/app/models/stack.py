@@ -2,15 +2,17 @@
 Modèle Stack pour gestion des templates Docker Compose.
 """
 
-from datetime import datetime
-from typing import TYPE_CHECKING, List
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
-from ..schemas.target import TargetType
+from ..enums.target import TargetType
 
 if TYPE_CHECKING:
     from .deployment import Deployment
@@ -93,10 +95,13 @@ class Stack(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
     )
 
     # Relations
@@ -104,11 +109,11 @@ class Stack(Base):
         "Organization", back_populates="stacks"
     )
 
-    deployments: Mapped[List["Deployment"]] = relationship(
+    deployments: Mapped[list["Deployment"]] = relationship(
         "Deployment", back_populates="stack", cascade="all, delete-orphan"
     )
 
-    versions: Mapped[List["StackVersion"]] = relationship(
+    versions: Mapped[list["StackVersion"]] = relationship(
         "StackVersion",
         back_populates="stack",
         cascade="all, delete-orphan",

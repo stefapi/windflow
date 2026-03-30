@@ -134,13 +134,16 @@ async def _create_localhost_target(
         if libvirt_tool and libvirt_tool.available:
             details.append(f"Libvirt: {libvirt_tool.version or 'présent'}")
 
+        from .enums.target import SSHAuthMethod as _SSHAuthMethod
+        from .schemas.target import SSHCredentials as _SSHCredentials
+
         target_payload = TargetCreate(
             name="localhost",
             description="Local machine automatically discovered during initial database bootstrap",
             host="localhost",
             port=22,
             type=target_type,
-            credentials={},
+            credentials=_SSHCredentials(auth_method=_SSHAuthMethod.LOCAL),
             organization_id=organization_id,
             extra_metadata={"auto_created": True, "creation_source": "database_seed"},
         )
@@ -180,7 +183,7 @@ def _default_seed_target_type() -> "TargetType":  # type: ignore[name-defined]  
     Le typage fonctionnel d'une cible doit être déduit des entrées
     persistées dans `target_capabilities`, pas d'un champ exclusif.
     """
-    from .schemas.target import TargetType
+    from .enums.target import TargetType
 
     return TargetType.PHYSICAL
 

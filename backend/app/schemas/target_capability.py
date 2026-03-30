@@ -3,33 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
-class CapabilityType(str, Enum):
-    """Types de capacités détectées sur une cible."""
-
-    # Virtualisation
-    LIBVIRT = "libvirt"
-    VIRTUALBOX = "virtualbox"
-    VAGRANT = "vagrant"
-    PROXMOX = "proxmox"
-    QEMU_KVM = "qemu_kvm"
-
-    # Conteneurisation
-    DOCKER = "docker"
-    DOCKER_COMPOSE = "docker_compose"
-    DOCKER_SWARM = "docker_swarm"
-    PODMAN = "podman"
-
-    # Kubernetes / Orchestration
-    KUBECTL = "kubectl"
-    KUBEADM = "kubeadm"
-    K3S = "k3s"
-    MICROK8S = "microk8s"
+from ..enums.target import CapabilityType
 
 
 class TargetCapabilityBase(BaseModel):
@@ -41,10 +19,10 @@ class TargetCapabilityBase(BaseModel):
     is_available: bool = Field(
         default=False, description="Indique si la capacité est disponible sur la cible"
     )
-    version: Optional[str] = Field(
+    version: str | None = Field(
         default=None, description="Version de l'outil détectée lorsque disponible"
     )
-    details: Optional[Dict[str, Any]] = Field(
+    details: dict[str, Any] | None = Field(
         default=None,
         description="Informations supplémentaires retournées par le scanner",
     )
