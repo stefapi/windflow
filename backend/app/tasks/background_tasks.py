@@ -523,6 +523,63 @@ async def retry_pending_deployments_async(
         }
 
 
+async def health_check_targets_async() -> Dict[str, Any]:
+    """
+    Version asyncio de la tâche de health check des targets.
+
+    Utilisée comme fallback quand Celery n'est pas disponible.
+    Exécute un TCP reachability probe sur toutes les targets.
+
+    Returns:
+        Résultat du health check avec statuts mis à jour
+    """
+    from datetime import datetime
+
+    from app.database import AsyncSessionLocal
+    from app.services.target_service import TargetService
+
+    logger.info("[FALLBACK-ASYNCIO] Exécution du health check périodique des targets")
+
+    try:
+        async with AsyncSessionLocal() as db:
+            results = await TargetService.check_all_health(db)
+
+            online = sum(1 for r in results if r.get("status") == "online")
+            offline = sum(1 for r in results if r.get("status") == "offline")
+            errors = sum(1 for r in results if "error" in r)
+
+            result = {
+                "status": "completed",
+                "timestamp": datetime.utcnow().isoformat(),
+                "total": len(results),
+                "online": online,
+                "offline": offline,
+                "errors": errors,
+                "execution_mode": "asyncio_fallback",
+                "message": (
+                    f"Health check terminé (asyncio): {online} en ligne, "
+                    f"{offline} hors ligne, {errors} erreurs sur {len(results)} cibles"
+                ),
+            }
+
+            logger.info(
+                f"[FALLBACK-ASYNCIO] Health check terminé: {online} online, "
+                f"{offline} offline, {errors} errors sur {len(results)} targets"
+            )
+
+            return result
+
+    except Exception as e:
+        logger.error(f"[FALLBACK-ASYNCIO] Erreur lors du health check: {e}")
+        return {
+            "status": "error",
+            "timestamp": datetime.utcnow().isoformat(),
+            "execution_mode": "asyncio_fallback",
+            "error": str(e),
+            "message": f"Erreur lors du health check (asyncio): {str(e)}",
+        }
+
+
 def schedule_recovery_task() -> asyncio.Task:
     """
     Planifie une tâche de recovery des déploiements PENDING.

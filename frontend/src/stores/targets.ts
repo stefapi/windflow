@@ -1,13 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { targetsApi } from '@/services/api'
-import type { ConnectionTestRequest, ConnectionTestResponse, Target, TargetCreate, TargetUpdate } from '@/types/api'
+import type { ConnectionTestRequest, ConnectionTestResponse, HealthCheckResponse, HostReachabilityRequest, HostReachabilityResponse, Target, TargetCreate, TargetUpdate } from '@/types/api'
+
+/** Interval between automatic health checks (ms). */
+const HEALTH_POLL_INTERVAL = 60_000 // 1 minute
 
 export const useTargetsStore = defineStore('targets', () => {
   const targets = ref<Target[]>([])
   const currentTarget = ref<Target | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const healthCheckingIds = ref<Set<string>>(new Set())
+  let _pollTimer: ReturnType<typeof setInterval> | null = null
 
   async function fetchTargets(organizationId?: string): Promise<void> {
     loading.value = true
@@ -85,6 +90,16 @@ export const useTargetsStore = defineStore('targets', () => {
     }
   }
 
+  async function testReachability(data: HostReachabilityRequest): Promise<HostReachabilityResponse> {
+    try {
+      const response = await targetsApi.testReachability(data)
+      return response.data
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to test reachability'
+      throw err
+    }
+  }
+
   async function testConnection(data: ConnectionTestRequest): Promise<ConnectionTestResponse> {
     loading.value = true
     error.value = null
@@ -96,6 +111,71 @@ export const useTargetsStore = defineStore('targets', () => {
       throw err
     } finally {
       loading.value = false
+    }
+  }
+
+  // ── Health check ──────────────────────────────────────────────
+
+  /** Update a single target in the local list with health data */
+  function _applyHealthResult(result: HealthCheckResponse): void {
+    const idx = targets.value.findIndex(t => t.id === result.target_id)
+    if (idx !== -1) {
+      targets.value[idx] = {
+        ...targets.value[idx],
+        status: result.status as Target['status'],
+        updated_at: result.last_check,
+      }
+    }
+    if (currentTarget.value?.id === result.target_id) {
+      currentTarget.value = {
+        ...currentTarget.value,
+        status: result.status as Target['status'],
+        updated_at: result.last_check,
+      }
+    }
+  }
+
+  /** Trigger a health check for a single target */
+  async function healthCheckTarget(id: string): Promise<HealthCheckResponse> {
+    healthCheckingIds.value.add(id)
+    try {
+      const response = await targetsApi.healthCheck(id)
+      _applyHealthResult(response.data)
+      return response.data
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Health check failed'
+      throw err
+    } finally {
+      healthCheckingIds.value.delete(id)
+    }
+  }
+
+  /** Run health checks for all known targets (used by polling) */
+  async function healthCheckAll(): Promise<void> {
+    const ids = targets.value.map(t => t.id)
+    for (const id of ids) {
+      try {
+        const response = await targetsApi.healthCheck(id)
+        _applyHealthResult(response.data)
+      } catch {
+        // Silently skip — next poll will retry
+      }
+    }
+  }
+
+  /** Start periodic health polling (idempotent) */
+  function startHealthPolling(intervalMs: number = HEALTH_POLL_INTERVAL): void {
+    if (_pollTimer) return
+    // Initial immediate check
+    healthCheckAll()
+    _pollTimer = setInterval(() => healthCheckAll(), intervalMs)
+  }
+
+  /** Stop periodic health polling */
+  function stopHealthPolling(): void {
+    if (_pollTimer) {
+      clearInterval(_pollTimer)
+      _pollTimer = null
     }
   }
 
@@ -134,6 +214,12 @@ export const useTargetsStore = defineStore('targets', () => {
     updateTarget,
     deleteTarget,
     scanTarget,
+    testReachability,
     testConnection,
+    healthCheckingIds,
+    healthCheckTarget,
+    healthCheckAll,
+    startHealthPolling,
+    stopHealthPolling,
   }
 })

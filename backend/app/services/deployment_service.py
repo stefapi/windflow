@@ -681,6 +681,32 @@ class DeploymentService:
             except Exception as e:
                 logger.error(f"Erreur lors de l'émission de l'événement de logs: {e}")
 
+        # Update target health status on deployment completion/failure
+        if status in (DeploymentStatus.RUNNING, DeploymentStatus.FAILED):
+            try:
+                from ..models.target import Target
+                from ..enums.target import TargetStatus
+
+                target_result = await db.execute(
+                    select(Target).where(Target.id == deployment.target_id)
+                )
+                target = target_result.scalar_one_or_none()
+                if target:
+                    if status == DeploymentStatus.RUNNING:
+                        # Successful deployment ⇒ target is online
+                        target.status = TargetStatus.ONLINE
+                    else:
+                        # Failed deployment ⇒ run a quick health check
+                        from .target_service import TargetService
+
+                        await TargetService.check_health(db, target)
+            except Exception as target_exc:
+                logger.warning(
+                    "Could not update target health after deployment %s: %s",
+                    deployment_id,
+                    target_exc,
+                )
+
         return deployment
 
     @staticmethod

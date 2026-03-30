@@ -88,24 +88,16 @@ def cleanup_logs():
 
 @celery_app.task(name="windflow.tasks.health_check_targets")
 def health_check_targets():
-    """Vérification de la santé des targets."""
+    """Vérification de la santé des targets via TCP reachability probe."""
     logger.info("Exécution tâche planifiée : vérification santé targets")
     import asyncio
 
-    from .database import db as database
-    from .services.target_service import TargetService
-
     async def _check():
+        from .database import db as database
+        from .services.target_service import TargetService
+
         async with database.session_factory() as db:
-            service = TargetService(db)
-            targets = await service.list_targets()
-            results = []
-            for target in targets:
-                try:
-                    status = await service.check_target_health(target.id)
-                    results.append({"target": target.name, "status": status})
-                except Exception as e:
-                    results.append({"target": target.name, "error": str(e)})
+            results = await TargetService.check_all_health(db)
             return results
 
     result = asyncio.run(_check())

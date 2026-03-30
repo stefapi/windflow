@@ -87,6 +87,38 @@ class SSHCredentialsUpdate(BaseModel):
 # ─── Connection Test ────────────────────────────────────────────
 
 
+# ─── Host Reachability Test ────────────────────────────────────
+
+
+class HostReachabilityStepResult(BaseModel):
+    """Résultat d'une étape individuelle du test de joignabilité."""
+
+    step: str = Field(..., description="Nom de l'étape (dns, ssh)")
+    success: bool = Field(..., description="L'étape a réussi")
+    message: str = Field(..., description="Message descriptif du résultat")
+    duration_ms: float | None = Field(
+        default=None, description="Durée de l'étape en millisecondes"
+    )
+
+
+class HostReachabilityRequest(BaseModel):
+    """Requête de test de joignabilité d'un hôte (sans credentials)."""
+
+    host: str = Field(..., min_length=1, max_length=255, description="Adresse IP ou hostname")
+    port: int = Field(default=22, ge=1, le=65535, description="Port SSH")
+
+
+class HostReachabilityResponse(BaseModel):
+    """Résultat du test de joignabilité d'un hôte."""
+
+    host: str = Field(..., description="Hôte testé")
+    port: int = Field(..., description="Port testé")
+    steps: list[HostReachabilityStepResult] = Field(
+        default_factory=list, description="Résultats détaillés par étape"
+    )
+    reachable: bool = Field(..., description="L'hôte est globalement joignable")
+
+
 class ConnectionTestRequest(BaseModel):
     """Requête de test de connexion SSH."""
 
@@ -152,6 +184,7 @@ class TargetResponse(BaseModel):
     auth_method: str | None
     username: str | None
     has_sudo: bool
+    last_check: datetime | None = None
     scan_date: datetime | None = None
     scan_success: bool | None = None
     platform_info: dict[str, Any] | None = None
@@ -162,6 +195,15 @@ class TargetResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class HealthCheckResponse(BaseModel):
+    """Résultat d'un health check sur une cible."""
+
+    target_id: str = Field(..., description="ID de la cible")
+    status: TargetStatus = Field(..., description="Nouveau statut après vérification")
+    last_check: datetime = Field(..., description="Horodatage du health check")
+    message: str = Field(..., description="Message descriptif du résultat")
 
 
 class TargetCapabilitiesResponse(BaseModel):

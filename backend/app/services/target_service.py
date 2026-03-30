@@ -8,16 +8,20 @@ aucune attribution manuelle de ``updated_at`` n'est nécessaire.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import Any, Sequence
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..enums.target import CapabilityType, TargetStatus
+from ..enums.target import CapabilityType, TargetStatus, TargetType
 from ..models.target import Target
 from ..models.target_capability import TargetCapability
 from ..schemas.target import TargetCreate, TargetUpdate
+
+logger = logging.getLogger(__name__)
 
 
 class TargetService:
@@ -201,6 +205,110 @@ class TargetService:
         await db.commit()
         await db.refresh(target)
         return target
+
+    # ─── Health Check ──────────────────────────────────────────
+
+    #: Timeout (seconds) for TCP health-check probes.
+    HEALTH_CHECK_TIMEOUT: float = 5.0
+
+    @staticmethod
+    async def check_health(db: AsyncSession, target: Target) -> TargetStatus:
+        """Perform a lightweight TCP reachability probe and persist the result.
+
+        Only tests if the relevant port is open — **no** SSH login or
+        Docker API call.  The *status* and *last_check* fields are
+        updated in-place and committed.
+
+        Args:
+            db: Async database session.
+            target: Target model instance (must already be loaded).
+
+        Returns:
+            The new :class:`TargetStatus` that was persisted.
+        """
+        check_time = datetime.now(timezone.utc)
+        port = TargetService._get_health_check_port(target)
+
+        try:
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection(target.host, port),
+                timeout=TargetService.HEALTH_CHECK_TIMEOUT,
+            )
+            writer.close()
+            await writer.wait_closed()
+            new_status = TargetStatus.ONLINE
+        except (asyncio.TimeoutError, OSError, ConnectionRefusedError):
+            new_status = TargetStatus.OFFLINE
+        except Exception:
+            logger.exception(
+                "Unexpected error during health check for target %s",
+                target.id,
+            )
+            new_status = TargetStatus.ERROR
+
+        target.status = new_status
+        target.last_check = check_time
+        db.add(target)
+        await db.commit()
+        await db.refresh(target)
+
+        logger.info(
+            "Health check for target %s (%s:%s) → %s",
+            target.id,
+            target.host,
+            port,
+            new_status.value,
+        )
+        return new_status
+
+    @staticmethod
+    async def check_all_health(db: AsyncSession) -> list[dict[str, Any]]:
+        """Run a health check on **all** targets across every organisation.
+
+        Typically called by a periodic background task (Celery *or*
+        asyncio fallback).
+
+        Returns:
+            A list of dicts ``{"target_id": ..., "name": ..., "status": ...}``
+            for every target that was checked.
+        """
+        result = await db.execute(select(Target))
+        targets = list(result.scalars().all())
+
+        results: list[dict[str, Any]] = []
+        for target in targets:
+            try:
+                new_status = await TargetService.check_health(db, target)
+                results.append(
+                    {
+                        "target_id": target.id,
+                        "name": target.name,
+                        "status": new_status.value,
+                    }
+                )
+            except Exception as exc:
+                logger.error(
+                    "Health check failed for target %s: %s", target.id, exc
+                )
+                results.append(
+                    {
+                        "target_id": target.id,
+                        "name": target.name,
+                        "error": str(exc),
+                    }
+                )
+        return results
+
+    @staticmethod
+    def _get_health_check_port(target: Target) -> int:
+        """Return the TCP port to probe for reachability.
+
+        Always uses the **configured** port (``target.port``) which
+        represents the management channel (typically SSH).  Type-specific
+        ports (2376 for Docker, 6443 for K8s…) are rarely exposed on the
+        network — Docker is usually accessed via Unix socket over SSH.
+        """
+        return target.port
 
     # ─── Private helpers ───────────────────────────────────────
 

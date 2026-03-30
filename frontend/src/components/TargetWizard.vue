@@ -45,6 +45,66 @@
             :max="65535"
           />
         </el-form-item>
+
+        <!-- Reachability test -->
+        <el-form-item label="Connectivité">
+          <div class="w-full">
+            <el-button
+              :disabled="!form.host"
+              :loading="testingReachability"
+              @click="testReachability"
+            >
+              <el-icon class="mr-1"><Promotion /></el-icon>
+              Tester la connectivité
+            </el-button>
+
+            <div
+              v-if="reachabilityResult"
+              class="mt-3 w-full"
+            >
+              <div class="flex flex-col gap-2">
+                <div
+                  v-for="step in reachabilityResult.steps"
+                  :key="step.step"
+                  class="flex items-center gap-2"
+                >
+                  <el-icon
+                    :color="step.success ? '#67c23a' : '#f56c6c'"
+                    :size="18"
+                  >
+                    <CircleCheck v-if="step.success" />
+                    <CircleClose v-else />
+                  </el-icon>
+                  <el-tag
+                    :type="step.success ? 'success' : 'danger'"
+                    size="small"
+                    class="w-16 text-center"
+                  >
+                    {{ step.step.toUpperCase() }}
+                  </el-tag>
+                  <span class="text-sm text-gray-600">{{ step.message }}</span>
+                  <span
+                    v-if="step.duration_ms !== null"
+                    class="text-xs text-gray-400 ml-auto"
+                  >
+                    {{ step.duration_ms.toFixed(1) }}ms
+                  </span>
+                </div>
+              </div>
+
+              <el-alert
+                :type="reachabilityResult.reachable ? 'success' : 'error'"
+                :title="reachabilityResult.reachable
+                  ? `${form.host}:${form.port} est joignable`
+                  : `${form.host}:${form.port} n'est pas joignable`"
+                show-icon
+                :closable="false"
+                class="mt-3"
+              />
+            </div>
+          </div>
+        </el-form-item>
+
         <el-form-item label="Description">
           <el-input
             v-model="form.description"
@@ -233,11 +293,11 @@
 import { ref, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Connection } from '@element-plus/icons-vue'
+import { Connection, Promotion, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import { useTargetsStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 import BaseWizard from '@/components/BaseWizard.vue'
-import type { Target, TargetCreate, TargetUpdate, ConnectionTestResponse, SSHAuthMethod } from '@/types/api'
+import type { Target, TargetCreate, TargetUpdate, ConnectionTestResponse, HostReachabilityResponse, SSHAuthMethod } from '@/types/api'
 
 // ─── Props & Emits ────────────────────────────────────────────
 
@@ -304,6 +364,8 @@ const credentialsForm = reactive({
 
 const testingConnection = ref(false)
 const connectionTestResult = ref<ConnectionTestResponse | null>(null)
+const testingReachability = ref(false)
+const reachabilityResult = ref<HostReachabilityResponse | null>(null)
 
 // ─── Validation rules ─────────────────────────────────────────
 
@@ -381,6 +443,7 @@ function resetForms(): void {
   credentialsForm.ssh_private_key_passphrase = ''
   credentialsForm.sudo_user = ''
   credentialsForm.sudo_password = ''
+  reachabilityResult.value = null
   connectionTestResult.value = null
   error.value = ''
 }
@@ -407,6 +470,32 @@ watch(() => props.modelValue, (open) => {
     }
   }
 })
+
+// ─── Test Reachability ────────────────────────────────────────
+
+async function testReachability(): Promise<void> {
+  if (!form.host) return
+  testingReachability.value = true
+  reachabilityResult.value = null
+  try {
+    reachabilityResult.value = await targetsStore.testReachability({
+      host: form.host,
+      port: form.port,
+    })
+  } catch {
+    reachabilityResult.value = {
+      host: form.host,
+      port: form.port,
+      steps: [
+        { step: 'dns', success: false, message: 'Erreur lors du test de connectivité', duration_ms: null },
+        { step: 'ssh', success: false, message: 'Erreur lors du test de connectivité', duration_ms: null },
+      ],
+      reachable: false,
+    }
+  } finally {
+    testingReachability.value = false
+  }
+}
 
 // ─── Test Connection ──────────────────────────────────────────
 

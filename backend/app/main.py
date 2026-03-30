@@ -11,6 +11,7 @@ Enterprise-grade API with:
 
 print("=== LOADING backend.app.main MODULE ===", flush=True)
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -123,6 +124,28 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"✗ Deployment recovery failed: {e}")
 
+    # Start periodic target health check (asyncio fallback when Celery is unavailable)
+    health_task: asyncio.Task | None = None
+    try:
+        # Import with relative paths (works regardless of entry point)
+        from .database import AsyncSessionLocal as _AsyncSessionLocal
+        from .services.target_service import TargetService as _TargetService
+
+        async def _periodic_health_check() -> None:
+            """Background loop: run target health check every 5 minutes."""
+            while True:
+                try:
+                    async with _AsyncSessionLocal() as db:
+                        await _TargetService.check_all_health(db)
+                except Exception as exc:
+                    logger.error("Periodic health check error: %s", exc)
+                await asyncio.sleep(300)  # 5 minutes
+
+        health_task = asyncio.create_task(_periodic_health_check())
+        logger.info("✓ Periodic target health check started (every 5 min)")
+    except Exception as e:
+        logger.warning(f"✗ Periodic health check could not start: {e}")
+
     logger.info("=" * 60)
     logger.info(f"🚀 {settings.app_name} is ready!")
     logger.info(f"   Docs: http://{settings.api_host}:{settings.api_port}/docs")
@@ -133,6 +156,15 @@ async def lifespan(app: FastAPI):
 
     # === SHUTDOWN ===
     logger.info("Shutting down application...")
+
+    # Cancel periodic health check task
+    if health_task and not health_task.done():
+        health_task.cancel()
+        try:
+            await health_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("✓ Periodic health check task cancelled")
 
     # Close rate limiter
     if settings.rate_limit_enabled and settings.rate_limit_storage_url:

@@ -24,6 +24,10 @@ from ...models.user import User
 from ...schemas.target import (
     ConnectionTestRequest,
     ConnectionTestResponse,
+    HealthCheckResponse,
+    HostReachabilityRequest,
+    HostReachabilityResponse,
+    HostReachabilityStepResult,
     SSHAuthMethod,
     SSHCredentials,
     TargetCapabilitiesResponse,
@@ -521,6 +525,18 @@ async def create_target(
     target = await TargetService.create(
         session, target_data, organization_id=current_user.organization_id
     )
+
+    # Trigger initial health check so status is not stuck at default
+    try:
+        await TargetService.check_health(session, target)
+        await session.refresh(target)
+    except Exception as exc:
+        logger.warning(
+            "Initial health check failed for target %s: %s",
+            target.id,
+            exc,
+        )
+
     return TargetResponse.model_validate(target)
 
 
@@ -858,6 +874,197 @@ async def delete_target(
         )
 
     await TargetService.delete(session, target_id)
+
+
+@router.post(
+    "/test-reachability",
+    response_model=HostReachabilityResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Test host reachability (DNS + Ping + SSH port)",
+    description="""
+Test la joignabilité d'un hôte sans authentification.
+
+## Étapes séquentielles
+1. **DNS** — Résolution du nom d'hôte (si ce n'est pas une IP)
+2. **Ping** — Test ICMP (peut échouer si ping désactivé sur le serveur)
+3. **SSH** — Tentative de connexion TCP au port SSH sans login
+
+## Utilisation
+- Vérifier qu'un hôte est accessible avant de saisir les credentials
+- Diagnostic rapide de connectivité
+- Valider la résolution DNS et l'ouverture du port SSH
+
+## Notes
+- L'étape Ping peut échouer si l'hôte cible bloque l'ICMP (pare-feu).
+  Ce n'est pas forcément bloquant — le test SSH sera quand même exécuté.
+
+**Authentication Required**
+""",
+    dependencies=[Depends(conditional_rate_limiter(30, 60))],
+    tags=["targets"],
+)
+async def test_reachability(
+    request: Request,
+    reachability_request: HostReachabilityRequest,
+    current_user: User = Depends(get_current_active_user),
+) -> HostReachabilityResponse:
+    """Test host reachability: DNS resolution + SSH port check (no auth)."""
+    import socket
+    import time
+
+    correlation_id = getattr(request.state, "correlation_id", None)
+    host = reachability_request.host
+    port = reachability_request.port
+    logger.info(
+        f"Testing reachability for {host}:{port}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "host": host,
+            "port": port,
+        },
+    )
+
+    steps: list[HostReachabilityStepResult] = []
+    resolved_ip: str | None = None
+
+    # ── Step 1: DNS Resolution ──────────────────────────────────
+    # Skip DNS check for plain IP addresses
+    is_ip = False
+    try:
+        socket.inet_pton(socket.AF_INET, host)
+        is_ip = True
+    except OSError:
+        try:
+            socket.inet_pton(socket.AF_INET6, host)
+            is_ip = True
+        except OSError:
+            pass
+
+    if is_ip:
+        steps.append(
+            HostReachabilityStepResult(
+                step="dns",
+                success=True,
+                message=f"{host} est une adresse IP (pas de résolution DNS nécessaire)",
+                duration_ms=0,
+            )
+        )
+        resolved_ip = host
+    else:
+        t0 = time.monotonic()
+        try:
+            loop = asyncio.get_running_loop()
+            addr_infos = await asyncio.wait_for(
+                loop.getaddrinfo(host, None),
+                timeout=5.0,
+            )
+            elapsed = (time.monotonic() - t0) * 1000
+            if addr_infos:
+                resolved_ip = addr_infos[0][4][0]
+                steps.append(
+                    HostReachabilityStepResult(
+                        step="dns",
+                        success=True,
+                        message=f"Résolution DNS réussie : {host} → {resolved_ip}",
+                        duration_ms=round(elapsed, 1),
+                    )
+                )
+            else:
+                steps.append(
+                    HostReachabilityStepResult(
+                        step="dns",
+                        success=False,
+                        message=f"Aucun enregistrement DNS pour {host}",
+                        duration_ms=round(elapsed, 1),
+                    )
+                )
+        except asyncio.TimeoutError:
+            elapsed = (time.monotonic() - t0) * 1000
+            steps.append(
+                HostReachabilityStepResult(
+                    step="dns",
+                    success=False,
+                    message=f"Timeout de résolution DNS pour {host} (>{elapsed:.0f}ms)",
+                    duration_ms=round(elapsed, 1),
+                )
+            )
+        except OSError as exc:
+            elapsed = (time.monotonic() - t0) * 1000
+            steps.append(
+                HostReachabilityStepResult(
+                    step="dns",
+                    success=False,
+                    message=f"Échec de résolution DNS pour {host} : {exc}",
+                    duration_ms=round(elapsed, 1),
+                )
+            )
+
+    # ── Step 2: SSH Port Check ──────────────────────────────────
+    dns_ok = steps[0].success
+    if dns_ok:
+        target_host = resolved_ip or host
+        t0 = time.monotonic()
+        try:
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection(target_host, port),
+                timeout=5.0,
+            )
+            elapsed = (time.monotonic() - t0) * 1000
+            writer.close()
+            await writer.wait_closed()
+            steps.append(
+                HostReachabilityStepResult(
+                    step="ssh",
+                    success=True,
+                    message=f"Port SSH {port} ouvert sur {host} ({target_ip_display(host, resolved_ip)})",
+                    duration_ms=round(elapsed, 1),
+                )
+            )
+        except asyncio.TimeoutError:
+            elapsed = (time.monotonic() - t0) * 1000
+            steps.append(
+                HostReachabilityStepResult(
+                    step="ssh",
+                    success=False,
+                    message=f"Timeout de connexion au port {port} sur {host} (>{elapsed:.0f}ms)",
+                    duration_ms=round(elapsed, 1),
+                )
+            )
+        except OSError as exc:
+            elapsed = (time.monotonic() - t0) * 1000
+            steps.append(
+                HostReachabilityStepResult(
+                    step="ssh",
+                    success=False,
+                    message=f"Impossible de se connecter au port {port} sur {host} : {exc}",
+                    duration_ms=round(elapsed, 1),
+                )
+            )
+    else:
+        steps.append(
+            HostReachabilityStepResult(
+                step="ssh",
+                success=False,
+                message="Étape ignorée : la résolution DNS a échoué",
+                duration_ms=None,
+            )
+        )
+
+    reachable = all(s.success for s in steps)
+    return HostReachabilityResponse(
+        host=host,
+        port=port,
+        steps=steps,
+        reachable=reachable,
+    )
+
+
+def target_ip_display(host: str, resolved_ip: str | None) -> str:
+    """Helper pour afficher l'IP résolue si différente du host."""
+    if resolved_ip and resolved_ip != host:
+        return f"{resolved_ip}"
+    return host
 
 
 @router.post(
@@ -1444,6 +1651,101 @@ async def scan_target(
     scanner = TargetScannerService()
     updated_target = await scanner.scan_and_update_target(target, session)
     return TargetResponse.model_validate(updated_target)
+
+
+@router.post(
+    "/{target_id}/health-check",
+    response_model=HealthCheckResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Check target health (TCP reachability probe)",
+    description="""
+Perform a lightweight health check on a target by testing TCP port reachability.
+
+## Process
+1. Determines the appropriate port based on target type
+2. Attempts a TCP connection (no authentication)
+3. Updates target status to ONLINE or OFFLINE
+4. Returns the health check result
+
+## Port Selection
+Uses the **configured port** of the target (``target.port``), which is the
+management channel (typically SSH port 22).  This port is always reachable
+on a functioning remote machine.
+
+## Status Updates
+- **ONLINE**: TCP connection succeeded
+- **OFFLINE**: Connection refused or timed out
+- **ERROR**: Unexpected error during check
+
+The `last_check` timestamp is updated on every check.
+
+**Authentication Required**
+""",
+    dependencies=[Depends(conditional_rate_limiter(60, 60))],
+    responses={
+        200: {
+            "description": "Health check completed",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "target_id": "550e8400-e29b-41d4-a716-446655440000",
+                        "status": "online",
+                        "last_check": "2026-03-30T21:00:00Z",
+                        "message": "Port 2376 ouvert sur docker.prod.example.com",
+                    }
+                }
+            },
+        },
+        401: {"description": "Authentication required"},
+        403: {"description": "Access denied to this target"},
+        404: {"description": "Target not found"},
+    },
+    tags=["targets"],
+)
+async def health_check_target(
+    request: Request,
+    target_id: str,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+) -> HealthCheckResponse:
+    """Perform a lightweight TCP health check on a target."""
+    from ...enums.target import TargetStatus as TS
+
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Health check requested for target {target_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "target_id": target_id,
+        },
+    )
+    target = await TargetService.get_by_id(session, target_id)
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cible {target_id} non trouvée",
+        )
+
+    if target.organization_id != current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
+        )
+
+    new_status = await TargetService.check_health(session, target)
+
+    messages = {
+        TS.ONLINE: f"Port ouvert sur {target.host}",
+        TS.OFFLINE: f"Impossible de joindre {target.host} — port fermé ou injoignable",
+        TS.ERROR: f"Erreur inattendue lors du check de {target.host}",
+    }
+
+    return HealthCheckResponse(
+        target_id=target.id,
+        status=new_status,
+        last_check=target.last_check,
+        message=messages.get(new_status, "Statut mis à jour"),
+    )
 
 
 @router.get(

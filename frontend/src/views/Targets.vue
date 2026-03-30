@@ -196,7 +196,15 @@
           align="right"
         >
           <template #default="{ row }">
-            <el-button-group>
+              <el-button-group>
+              <el-button
+                size="small"
+                title="Vérifier la connexion"
+                :loading="targetsStore.healthCheckingIds.has(row.id)"
+                @click="manualHealthCheck(row)"
+              >
+                <el-icon><Connection /></el-icon>
+              </el-button>
               <el-button
                 size="small"
                 title="Scanner"
@@ -236,11 +244,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useTargetsStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Edit, Delete, Refresh } from '@element-plus/icons-vue'
+import { Connection, Delete, Edit, Plus, Refresh } from '@element-plus/icons-vue'
 import { targetsApi } from '@/services/api'
 import type { Target } from '@/types/api'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
@@ -365,10 +373,33 @@ const refreshCapabilities = async (targetId: string): Promise<void> => {
   }
 }
 
+// ── Health check ────────────────────────────────────────────────
+
+async function manualHealthCheck(target: Target): Promise<void> {
+  try {
+    const result = await targetsStore.healthCheckTarget(target.id)
+    const ok = result.status === 'online'
+    ElMessage({
+      type: ok ? 'success' : 'error',
+      message: ok
+        ? `✓ ${target.host} est en ligne`
+        : `✗ ${target.host} est injoignable — ${result.message}`,
+    })
+  } catch {
+    ElMessage.error('Impossible de vérifier la cible')
+  }
+}
+
 // ─── Init ─────────────────────────────────────────────────────
 
 onMounted(() => {
-  targetsStore.fetchTargets(authStore.organizationId || undefined)
+  targetsStore.fetchTargets(authStore.organizationId || undefined).then(() => {
+    targetsStore.startHealthPolling()
+  })
+})
+
+onBeforeUnmount(() => {
+  targetsStore.stopHealthPolling()
 })
 </script>
 

@@ -101,6 +101,26 @@ export interface ConnectionTestResponse {
   os_info?: Record<string, unknown>
 }
 
+// Host Reachability types
+export interface HostReachabilityStepResult {
+  step: string
+  success: boolean
+  message: string
+  duration_ms: number | null
+}
+
+export interface HostReachabilityRequest {
+  host: string
+  port: number
+}
+
+export interface HostReachabilityResponse {
+  host: string
+  port: number
+  steps: HostReachabilityStepResult[]
+  reachable: boolean
+}
+
 // Target Capability types (mirrors backend enums/target.py CapabilityType)
 export type CapabilityType =
   | 'docker'
@@ -145,6 +165,13 @@ export interface TargetCapabilitiesResponse {
   platform_info: Record<string, unknown> | null
   os_info: Record<string, unknown> | null
   capabilities: TargetCapability[]
+}
+
+export interface HealthCheckResponse {
+  target_id: string
+  status: string
+  last_check: string
+  message: string
 }
 
 export interface Target extends BaseModel {

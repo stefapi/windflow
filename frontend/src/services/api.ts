@@ -17,8 +17,11 @@ import type {
   TargetCreate,
   TargetUpdate,
   TargetCapabilitiesResponse,
+  HealthCheckResponse,
   ConnectionTestRequest,
   ConnectionTestResponse,
+  HostReachabilityRequest,
+  HostReachabilityResponse,
   Stack,
   StackCreate,
   StackUpdate,
@@ -144,8 +147,14 @@ export const targetsApi = {
   getCapabilities: (id: string) =>
     http.get<TargetCapabilitiesResponse>(`/targets/${id}/capabilities`),
 
+  testReachability: (data: HostReachabilityRequest) =>
+    http.post<HostReachabilityResponse>('/targets/test-reachability', data),
   testConnection: (data: ConnectionTestRequest) =>
     http.post<ConnectionTestResponse>('/targets/test-connection', data),
+
+  /** Perform a lightweight TCP health check on a target */
+  healthCheck: (id: string) =>
+    http.post<HealthCheckResponse>(`/targets/${id}/health-check`),
 }
 
 // Stacks API
