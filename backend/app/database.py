@@ -42,7 +42,7 @@ class Database:
         # Configuration spécifique selon le type de base de données
         connect_args = {}
         engine_kwargs: dict[str, Any] = {
-            "echo": settings.debug,
+            "echo": settings.log_level == "DEBUG",
         }
 
         if self._is_sqlite:

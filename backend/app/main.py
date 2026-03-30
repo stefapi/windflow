@@ -45,6 +45,13 @@ logging.basicConfig(
         else '{"timestamp": "%(asctime)s", "logger": "%(name)s", "level": "%(levelname)s", "message": "%(message)s"}'
     ),
 )
+
+# Force SQLAlchemy engine logger to respect configured LOG_LEVEL
+# This prevents SQLAlchemy from using its own handler at INFO level when echo=True
+logging.getLogger("sqlalchemy.engine").setLevel(
+    getattr(logging, settings.log_level)
+)
+
 logger = logging.getLogger(__name__)
 
 
