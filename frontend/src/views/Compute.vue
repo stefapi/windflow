@@ -75,7 +75,7 @@
           v-for="tech in availableTechnologies"
           :key="tech"
           class="pill"
-          :class="activeTechnologies.includes(tech) ? 'pill-selected' : 'pill-default'"
+          :class="activeTechnologies.includes(tech) ? 'text-accent bg-accent-light border-accent' : 'text-text-secondary bg-bg-secondary border-border hover:bg-bg-elevated'"
           @click="toggleTechnology(tech)"
         >
           {{ tech }}
@@ -86,7 +86,7 @@
           v-for="target in targetsStore.targets"
           :key="target.id"
           class="pill"
-          :class="activeTargets.includes(target.id) ? 'pill-selected' : 'pill-default'"
+          :class="activeTargets.includes(target.id) ? 'text-accent bg-accent-light border-accent' : 'text-text-secondary bg-bg-secondary border-border hover:bg-bg-elevated'"
           @click="toggleTarget(target.id)"
         >
           {{ target.name }}
@@ -357,19 +357,4 @@ onMounted(() => {
   user-select: none;
 }
 
-.pill-default {
-  color: var(--color-text-secondary, #6b7280);
-  background-color: var(--color-bg-secondary, #f3f4f6);
-  border-color: var(--color-border, #e5e7eb);
-}
-
-.pill-default:hover {
-  background-color: var(--color-bg-elevated, #e9ecef);
-}
-
-.pill-selected {
-  color: var(--el-color-primary, #409eff);
-  background-color: var(--el-color-primary-light-8, #ecf5ff);
-  border-color: var(--el-color-primary, #409eff);
-}
 </style>

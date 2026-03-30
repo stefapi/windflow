@@ -2,7 +2,7 @@
   <transition name="slide-down">
     <div
       v-if="selectedCount > 0"
-      class="flex justify-between items-center px-4 py-3 mb-4 bg-[var(--color-accent-light)] border border-[var(--color-accent)] rounded-lg"
+      class="flex justify-between items-center px-4 py-3 mb-4 bg-accent-light border border-accent rounded-lg"
     >
       <div class="flex items-center gap-3">
         <el-tag

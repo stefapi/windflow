@@ -1,6 +1,6 @@
 <template>
   <div class="section mb-6">
-    <div class="section-header mb-3 flex items-center gap-2">
+    <div class="section-header border-b border-border py-2 mb-3 flex items-center gap-2">
       <span class="inline-block w-3 h-3 rounded-sm bg-orange-500" />
       <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">
         DISCOVERED — NON MANAGÉS
@@ -262,11 +262,6 @@ async function handleServiceAction(type: ActionType, row: ContainerTableRow, ite
 </script>
 
 <style scoped>
-.section-header {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
-}
-
 .discovered-collapse :deep(.el-collapse-item__header) {
   height: auto;
   min-height: 44px;

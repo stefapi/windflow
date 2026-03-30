@@ -1,6 +1,6 @@
 <template>
   <div class="section mb-6">
-    <div class="section-header mb-3 flex items-center gap-2">
+    <div class="section-header border-b border-border py-2 mb-3 flex items-center gap-2">
       <span class="inline-block w-3 h-3 rounded-sm bg-gray-400" />
       <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">
         STANDALONE
@@ -298,11 +298,6 @@ async function confirmBulkDelete(): Promise<void> {
 </script>
 
 <style scoped>
-.section-header {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
-}
-
 /* Slide down transition */
 .slide-down-enter-active,
 .slide-down-leave-active {
@@ -327,7 +322,6 @@ async function confirmBulkDelete(): Promise<void> {
 .bulk-delete-list p {
   font-weight: 500;
   margin-bottom: 8px;
-  color: var(--color-text-primary);
 }
 
 .bulk-delete-list ul {
@@ -339,12 +333,10 @@ async function confirmBulkDelete(): Promise<void> {
 
 .bulk-delete-list li {
   margin-bottom: 4px;
-  color: var(--color-text-primary);
 }
 
 .bulk-delete-list .more-items {
   font-style: italic;
-  color: var(--color-text-secondary);
 }
 
 :deep(.el-icon--left) {

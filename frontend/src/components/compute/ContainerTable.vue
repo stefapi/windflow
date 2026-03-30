@@ -25,7 +25,7 @@ j'ai<template>
         <router-link
           v-if="row.link"
           :to="row.link"
-          class="text-[var(--color-accent)] no-underline font-medium hover:underline"
+          class="text-accent no-underline font-medium hover:underline"
         >
           <span
             class="mr-1"
