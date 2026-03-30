@@ -42,7 +42,11 @@ from ...schemas.target_scan import (
     TargetDiscoveryRequest,
     TargetDiscoveryResponse,
 )
-from ...services.target_scanner_service import TargetScannerService
+from ...services.target_scanner_service import (
+    LocalCommandExecutor,
+    SSHCommandExecutor,
+    TargetScannerService,
+)
 from ...services.target_service import TargetService
 
 router = APIRouter()
@@ -1112,6 +1116,54 @@ async def test_connection(
         },
     )
     creds = test_request.credentials
+
+    # ── Mode local (sans SSH) ────────────────────────────────────
+    if creds.auth_method == SSHAuthMethod.LOCAL:
+        try:
+            executor = LocalCommandExecutor()
+            os_info: dict[str, Any] = {}
+
+            uname_result = await executor.run("uname -a", timeout=10)
+            if uname_result.success:
+                os_info["uname"] = uname_result.stdout.strip()
+
+            os_release_result = await executor.run("cat /etc/os-release", timeout=10)
+            if os_release_result.success:
+                for line in os_release_result.stdout.splitlines():
+                    if line.startswith("PRETTY_NAME="):
+                        os_info["distribution"] = line.split("=", 1)[1].strip('"')
+                    elif line.startswith("VERSION="):
+                        os_info["version"] = line.split("=", 1)[1].strip('"')
+
+            import getpass
+            local_user = getpass.getuser()
+
+            # ── Test sudo access if enabled ──────────────────────
+            sudo_test_msg = ""
+            if creds.sudo_enabled:
+                sudo_user = creds.sudo_user or "root"
+                sudo_test = await _test_sudo_access(
+                    executor=executor,
+                    sudo_user=sudo_user,
+                    sudo_password=creds.sudo_password,
+                )
+                if sudo_test["success"]:
+                    sudo_test_msg = f" — sudo vers {sudo_user} vérifié"
+                else:
+                    sudo_test_msg = f" — ⚠ sudo vers {sudo_user} échoué : {sudo_test['message']}"
+
+            return ConnectionTestResponse(
+                success=True,
+                message=f"Connexion locale réussie en tant que '{local_user}'{sudo_test_msg}",
+                os_info=os_info or None,
+            )
+        except Exception as exc:
+            return ConnectionTestResponse(
+                success=False,
+                message=f"Échec d'accès local : {exc}",
+            )
+
+    # ── Mode SSH (password ou clé) ──────────────────────────────
     ssh_kwargs: dict = {
         "host": test_request.host,
         "port": test_request.port,
@@ -1129,7 +1181,7 @@ async def test_connection(
     try:
         async with asyncssh.connect(**ssh_kwargs) as conn:
             # Connection successful — try to get OS info
-            os_info: dict[str, Any] = {}
+            os_info = {}
             try:
                 result = await asyncio.wait_for(
                     conn.run("uname -a", check=False, encoding="utf-8"),
@@ -1151,9 +1203,25 @@ async def test_connection(
             except (asyncio.TimeoutError, asyncssh.Error):
                 pass  # Non-critical: OS info is optional
 
+            # ── Test sudo access if enabled ──────────────────────
+            sudo_test_msg = ""
+            if creds.sudo_enabled:
+                sudo_user = creds.sudo_user or "root"
+                # Use plain executor (no sudo wrapping) — _test_sudo_access handles sudo itself
+                ssh_plain_executor = SSHCommandExecutor(conn)
+                sudo_test = await _test_sudo_access(
+                    executor=ssh_plain_executor,
+                    sudo_user=sudo_user,
+                    sudo_password=creds.sudo_password,
+                )
+                if sudo_test["success"]:
+                    sudo_test_msg = f" — sudo vers {sudo_user} vérifié"
+                else:
+                    sudo_test_msg = f" — ⚠ sudo vers {sudo_user} échoué : {sudo_test['message']}"
+
             return ConnectionTestResponse(
                 success=True,
-                message=f"Connexion réussie à {test_request.host}:{test_request.port} en tant que '{creds.username}'",
+                message=f"Connexion réussie à {test_request.host}:{test_request.port} en tant que '{creds.username}'{sudo_test_msg}",
                 os_info=os_info or None,
             )
     except asyncssh.PermissionDenied:
@@ -1481,6 +1549,49 @@ async def discover_target(
     )
     os_payload = scan_result.os.model_dump(mode="json") if scan_result.os else None
 
+    # Detect access profile (for discovery)
+    access_profile_dict: dict[str, Any] | None = None
+    try:
+        if is_localhost:
+            local_exec = LocalCommandExecutor()
+            access_profile = await scanner.detect_access_profile(
+                executor=local_exec,
+                ssh_user=None,
+                sudo_user=discovery_request.sudo_user,
+                sudo_password=discovery_request.sudo_password,
+                detection_method="discovery",
+            )
+        else:
+            ssh_kwargs_detect: dict[str, Any] = {
+                "host": discovery_request.host,
+                "port": discovery_request.port,
+                "username": discovery_request.username,
+                "known_hosts": None,
+            }
+            if discovery_request.ssh_private_key:
+                ssh_kwargs_detect["client_keys"] = [discovery_request.ssh_private_key]
+                if getattr(discovery_request, "ssh_private_key_passphrase", None):
+                    ssh_kwargs_detect["passphrase"] = discovery_request.ssh_private_key_passphrase
+            else:
+                ssh_kwargs_detect["password"] = discovery_request.password
+
+            async with asyncssh.connect(**ssh_kwargs_detect) as conn:
+                ssh_exec = SSHCommandExecutor(conn)
+                access_profile = await scanner.detect_access_profile(
+                    executor=ssh_exec,
+                    ssh_user=discovery_request.username,
+                    sudo_user=discovery_request.sudo_user,
+                    sudo_password=discovery_request.sudo_password,
+                    detection_method="discovery",
+                )
+        access_profile_dict = access_profile.model_dump(mode="json")
+    except Exception as ap_exc:
+        logger.warning(
+            "Access profile detection failed during discovery for %s: %s",
+            discovery_request.host,
+            ap_exc,
+        )
+
     await TargetService.apply_scan_result(
         db=session,
         target=target,
@@ -1489,6 +1600,7 @@ async def discover_target(
         success=scan_result.success,
         platform_info=platform_payload,
         os_info=os_payload,
+        access_profile=access_profile_dict,
     )
 
     return TargetDiscoveryResponse(
@@ -2249,6 +2361,44 @@ async def get_target_virtualization_capabilities(
         if capability.capability_type in VIRTUALIZATION_CAPABILITY_TYPES
     ]
     return virtualization_capabilities
+
+
+async def _test_sudo_access(
+    executor: LocalCommandExecutor | SSHCommandExecutor,
+    sudo_user: str,
+    sudo_password: str | None,
+) -> dict[str, Any]:
+    """Test sudo access with optional password.
+
+    Returns dict with 'success' (bool) and 'message' (str).
+    """
+    try:
+        if isinstance(executor, SSHCommandExecutor):
+            # For SSH: use echo pipe approach
+            if sudo_password:
+                cmd = f"echo '{sudo_password}' | sudo -S -p '' -u {sudo_user} whoami 2>/dev/null"
+            else:
+                cmd = f"sudo -n -u {sudo_user} whoami 2>/dev/null"
+            result = await executor.run(cmd, timeout=15)
+        else:
+            # For local: create a sudo-enabled executor to test
+            sudo_exec = LocalCommandExecutor(
+                sudo_user=sudo_user,
+                sudo_password=sudo_password,
+            )
+            result = await sudo_exec.run("whoami", timeout=15)
+
+        if result.success and result.stdout.strip():
+            return {
+                "success": True,
+                "message": f"sudo OK → {result.stdout.strip()}",
+            }
+        return {
+            "success": False,
+            "message": result.stderr.strip() or "exit code non-zero",
+        }
+    except Exception as exc:
+        return {"success": False, "message": str(exc)}
 
 
 def _infer_target_type(scan_result: ScanResult) -> TargetType:

@@ -35,6 +35,15 @@ class SSHAuthMethod(str, Enum):
     SSH_KEY = "ssh_key"
 
 
+class AccessLevel(str, Enum):
+    """Niveau d'accès détecté sur une cible."""
+
+    ROOT = "root"        # SSH user is root
+    SUDO = "sudo"        # Can escalate to root via sudo (with password)
+    SUDO_PASSWORDLESS = "sudo_passwordless"  # sudo without password
+    LIMITED = "limited"  # No root access, standard user only
+
+
 class CapabilityType(str, Enum):
     """Types de capacités détectées sur une cible."""
 

@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..enums.target import SSHAuthMethod, TargetStatus, TargetType
+from ..enums.target import AccessLevel, SSHAuthMethod, TargetStatus, TargetType
 
 
 # ─── Credentials ────────────────────────────────────────────────
@@ -31,6 +31,9 @@ class SSHCredentials(BaseModel):
     ssh_private_key_passphrase: str | None = Field(
         default=None, description="Passphrase de la clé privée"
     )
+    sudo_enabled: bool = Field(
+        default=False, description="Activer l'escalade sudo"
+    )
     sudo_user: str | None = Field(
         default=None, description="Utilisateur pour escalation sudo"
     )
@@ -49,6 +52,9 @@ class SSHCredentials(BaseModel):
             if not self.username:
                 msg = "username est requis quand auth_method=ssh_key"
                 raise ValueError(msg)
+        if self.sudo_enabled and not self.sudo_user:
+            # When sudo is enabled without a specific user, default to root
+            self.sudo_user = "root"
         return self
 
     def to_storage_dict(self) -> dict[str, Any]:
@@ -69,6 +75,8 @@ class SSHCredentials(BaseModel):
             value = getattr(self, field_name)
             if value is not None:
                 data[field_name] = value
+        # Always store sudo_enabled explicitly (even False)
+        data["sudo_enabled"] = self.sudo_enabled
         return data
 
 
@@ -80,6 +88,7 @@ class SSHCredentialsUpdate(BaseModel):
     password: str | None = None
     ssh_private_key: str | None = None
     ssh_private_key_passphrase: str | None = None
+    sudo_enabled: bool | None = None
     sudo_user: str | None = None
     sudo_password: str | None = None
 
@@ -137,6 +146,59 @@ class ConnectionTestResponse(BaseModel):
     )
 
 
+# ─── Access Profile ─────────────────────────────────────────────
+
+
+class TargetAccessProfile(BaseModel):
+    """Profil d'accès détecté sur une cible lors d'un scan.
+
+    Stocké en JSON dans la colonne ``access_profile`` du modèle Target.
+    Représente les permissions effectives du compte SSH et du compte sudo.
+    """
+
+    # Identité SSH
+    ssh_user: str = Field(..., description="Utilisateur SSH utilisé pour la connexion")
+    is_root_user: bool = Field(..., description="L'utilisateur SSH est root")
+
+    # Sudo
+    sudo_available: bool = Field(
+        default=False, description="La commande sudo est installée sur la cible"
+    )
+    sudo_verified: bool = Field(
+        default=False, description="L'accès sudo a été testé et fonctionne"
+    )
+    sudo_passwordless: bool = Field(
+        default=False, description="sudo fonctionne sans mot de passe"
+    )
+    sudo_user: str | None = Field(
+        default=None, description="Utilisateur effectif après sudo (ex: root)"
+    )
+
+    # Niveau d'accès global
+    access_level: AccessLevel = Field(
+        ..., description="Niveau d'accès effectif: root, sudo, sudo_passwordless, limited"
+    )
+    can_install_packages: bool = Field(
+        default=False, description="Possibilité d'installer des packages (root ou sudo root)"
+    )
+
+    # Capabilities par niveau
+    standard_capabilities: list[str] = Field(
+        default_factory=list,
+        description="Liste des capacités détectées avec le compte SSH standard",
+    )
+    elevated_capabilities: list[str] = Field(
+        default_factory=list,
+        description="Liste des capacités supplémentaires détectées via sudo/root",
+    )
+
+    # Métadonnées de détection
+    detected_at: datetime = Field(..., description="Date de détection du profil")
+    detection_method: str = Field(
+        ..., description="Méthode de détection: scan, discovery"
+    )
+
+
 # ─── Target Create / Update ─────────────────────────────────────
 
 
@@ -189,6 +251,9 @@ class TargetResponse(BaseModel):
     scan_success: bool | None = None
     platform_info: dict[str, Any] | None = None
     os_info: dict[str, Any] | None = None
+    access_profile: TargetAccessProfile | None = Field(
+        default=None, description="Profil d'accès détecté lors du dernier scan"
+    )
     extra_metadata: dict[str, Any]
     organization_id: str
     created_at: datetime

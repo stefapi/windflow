@@ -73,6 +73,10 @@ class Target(Base):
         JSON, nullable=True, default=None,
         comment="Operating system information detected during the last scan",
     )
+    access_profile: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, default=None,
+        comment="Access profile detected during the last scan (SSH user, sudo, capabilities)",
+    )
 
     # Organisation (multi-tenant)
     organization_id: Mapped[str] = mapped_column(
@@ -93,7 +97,8 @@ class Target(Base):
 
     @property
     def has_sudo(self) -> bool:
-        return bool((self.credentials or {}).get("sudo_user"))
+        creds = self.credentials or {}
+        return bool(creds.get("sudo_enabled") and creds.get("sudo_user"))
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

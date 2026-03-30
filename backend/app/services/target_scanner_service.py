@@ -26,8 +26,9 @@ import asyncssh
 from asyncssh import ConnectionLost
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..enums.target import CapabilityType
+from ..enums.target import AccessLevel, CapabilityType
 from ..models.target import Target
+from ..schemas.target import TargetAccessProfile
 from ..schemas.target_scan import (
     ContainerRuntimeInfo,
     DockerCapabilities,
@@ -596,12 +597,18 @@ class TargetScannerService:
         """
         Scan a stored target and persist discovered capabilities.
 
+        This method performs:
+        1. A standard scan (with sudo if configured) → elevated capabilities
+        2. An access profile detection → determines access level
+        3. If access is elevated (root/sudo), a second scan without sudo → standard capabilities
+        4. Computes the difference (elevated - standard) → elevated-only capabilities
+
         Args:
             target: Target instance to scan.
             db: Database session.
 
         Returns:
-            Target: Updated target with new capabilities.
+            Target: Updated target with new capabilities and access profile.
 
         Raises:
             ValueError: When credentials are missing for remote scan.
@@ -610,10 +617,33 @@ class TargetScannerService:
 
         is_localhost = target.host in {"localhost", "127.0.0.1"}
         try:
+            credentials = target.credentials or {}
+            sudo_user = credentials.get("sudo_user")
+            sudo_password = credentials.get("sudo_password")
+            sudo_enabled = credentials.get("sudo_enabled", False)
+
             if is_localhost:
                 scan_result = await self.scan_localhost()
+
+                # Detect access profile
+                local_executor: CommandExecutor = LocalCommandExecutor()
+                access_profile = await self.detect_access_profile(
+                    executor=local_executor,
+                    ssh_user=None,
+                    sudo_user=sudo_user,
+                    sudo_password=sudo_password,
+                    sudo_enabled=sudo_enabled,
+                    detection_method="scan",
+                )
+
+                # Double scan for localhost: run without sudo to get standard capabilities
+                standard_caps, elevated_caps = await self._perform_double_scan(
+                    access_profile=access_profile,
+                    is_localhost=True,
+                    host="localhost",
+                    credentials=credentials,
+                )
             else:
-                credentials = target.credentials or {}
                 username = credentials.get("username")
                 if not username:
                     raise ValueError(
@@ -627,11 +657,49 @@ class TargetScannerService:
                     password=credentials.get("password"),
                     ssh_private_key=credentials.get("ssh_private_key"),
                     ssh_private_key_passphrase=credentials.get("ssh_private_key_passphrase"),
-                    sudo_user=credentials.get("sudo_user"),
-                    sudo_password=credentials.get("sudo_password"),
+                    sudo_user=sudo_user,
+                    sudo_password=sudo_password,
                 )
                 scan_result = await self.scan_remote(scan_request)
 
+                # Detect access profile via SSH
+                ssh_kwargs: dict = {
+                    "host": scan_request.host,
+                    "port": scan_request.port,
+                    "username": scan_request.username,
+                    "known_hosts": None,
+                }
+                if scan_request.ssh_private_key:
+                    ssh_kwargs["client_keys"] = [scan_request.ssh_private_key]
+                    if scan_request.ssh_private_key_passphrase:
+                        ssh_kwargs["passphrase"] = scan_request.ssh_private_key_passphrase
+                else:
+                    ssh_kwargs["password"] = scan_request.password
+
+                async with asyncssh.connect(**ssh_kwargs) as connection:
+                    ssh_executor = SSHCommandExecutor(connection)
+                    access_profile = await self.detect_access_profile(
+                        executor=ssh_executor,
+                        ssh_user=username,
+                        sudo_user=sudo_user,
+                        sudo_password=sudo_password,
+                        sudo_enabled=sudo_enabled,
+                        detection_method="scan",
+                    )
+
+                # Double scan for remote: run without sudo to get standard capabilities
+                standard_caps, elevated_caps = await self._perform_double_scan(
+                    access_profile=access_profile,
+                    is_localhost=False,
+                    host=target.host,
+                    credentials=credentials,
+                )
+
+            # Fill access profile with capability lists
+            access_profile.standard_capabilities = standard_caps
+            access_profile.elevated_capabilities = elevated_caps
+
+            # Build capabilities from the main scan result (with sudo if configured)
             capabilities = self.build_capabilities_payload(scan_result)
 
             platform_payload = (
@@ -651,11 +719,254 @@ class TargetScannerService:
                 success=scan_result.success,
                 platform_info=platform_payload,
                 os_info=os_payload,
+                access_profile=access_profile.model_dump(mode="json"),
             )
             return target
         except Exception:  # noqa: B902
             await TargetService.mark_scan_failed(db, target)
             raise
+
+    async def _perform_double_scan(
+        self,
+        access_profile: TargetAccessProfile,
+        is_localhost: bool,
+        host: str,
+        credentials: dict,
+    ) -> tuple[list[str], list[str]]:
+        """Perform a double scan to distinguish standard vs elevated capabilities.
+
+        If access_level is LIMITED (no sudo), standard and elevated lists are
+        identical (the single scan result). Otherwise, a second scan is run
+        without sudo to capture what the standard user can see.
+
+        Args:
+            access_profile: The already-detected access profile.
+            is_localhost: Whether the target is localhost.
+            host: Target hostname.
+            credentials: Target credentials dict.
+
+        Returns:
+            Tuple of (standard_capabilities, elevated_capabilities) as name lists.
+        """
+        if access_profile.access_level == AccessLevel.LIMITED or access_profile.is_root_user:
+            # For root or limited: no difference between standard and elevated
+            # Root user: everything is "standard"
+            # Limited user: everything is "standard" (no elevation possible)
+            return [], []
+
+        # Run a second scan WITHOUT sudo to get standard user capabilities
+        try:
+            if is_localhost:
+                standard_executor: CommandExecutor = LocalCommandExecutor()
+                standard_scan = await self._run_scan(standard_executor, host=host)
+            else:
+                ssh_kwargs: dict = {
+                    "host": host,
+                    "port": credentials.get("port", 22),
+                    "username": credentials.get("username"),
+                    "known_hosts": None,
+                }
+                if credentials.get("ssh_private_key"):
+                    ssh_kwargs["client_keys"] = [credentials["ssh_private_key"]]
+                    if credentials.get("ssh_private_key_passphrase"):
+                        ssh_kwargs["passphrase"] = credentials["ssh_private_key_passphrase"]
+                else:
+                    ssh_kwargs["password"] = credentials.get("password")
+
+                async with asyncssh.connect(**ssh_kwargs) as connection:
+                    standard_executor = SSHCommandExecutor(connection)
+                    standard_scan = await self._run_scan(standard_executor, host=host)
+
+            standard_payload = self.build_capabilities_payload(standard_scan)
+            standard_names = self.extract_capability_names(standard_payload)
+            return standard_names, []
+        except Exception:
+            # If second scan fails, return empty lists
+            return [], []
+
+    # ------------------------------------------------------------------
+    # Access Profile detection
+    # ------------------------------------------------------------------
+
+    async def detect_access_profile(
+        self,
+        executor: CommandExecutor,
+        ssh_user: str | None = None,
+        sudo_user: str | None = None,
+        sudo_password: str | None = None,
+        sudo_enabled: bool = False,
+        detection_method: str = "scan",
+    ) -> TargetAccessProfile:
+        """Detect the access level of the current executor on the target.
+
+        Steps:
+        1. Check whoami → is root?
+        2. Check ``which sudo`` → sudo binary exists?
+        3. If not root, sudo is enabled, and sudo binary exists:
+           a. If sudo_user + sudo_password provided → test ``sudo -S -u <user> whoami``
+           b. If sudo_user but no password → test ``sudo -n -u <user> whoami`` (passwordless)
+           c. If no sudo_user → try passwordless sudo to root
+        4. Build the TargetAccessProfile with the results.
+
+        Args:
+            executor: Command executor (local or SSH).
+            ssh_user: Username used for SSH connection (for metadata).
+            sudo_user: Sudo user from credentials (if configured).
+            sudo_password: Sudo password from credentials (if configured).
+            sudo_enabled: Whether sudo escalation is explicitly enabled by the user.
+            detection_method: Origin of detection ("scan" or "discovery").
+
+        Returns:
+            TargetAccessProfile with detected access information.
+        """
+        now = datetime.now(timezone.utc)
+
+        # 1. Determine who we are connected as
+        whoami_result = await executor.run("whoami", timeout=10)
+        connected_user = whoami_result.stripped_stdout() if whoami_result.success else (ssh_user or "unknown")
+        is_root = connected_user == "root"
+
+        # 2. Check if sudo binary exists
+        sudo_available = False
+        which_sudo = await executor.run("which sudo 2>/dev/null", timeout=10)
+        if which_sudo.success and which_sudo.stripped_stdout():
+            sudo_available = True
+
+        # 3. Determine access level
+        sudo_verified = False
+        sudo_passwordless = False
+        effective_sudo_user: str | None = None
+        access_level = AccessLevel.LIMITED
+
+        if is_root:
+            # Direct root access
+            access_level = AccessLevel.ROOT
+            effective_sudo_user = "root"
+        elif sudo_enabled and sudo_available:
+            # Sudo is explicitly enabled by user and sudo binary exists
+            if sudo_user and sudo_password:
+                # Test: sudo -S -u <user> whoami with password piped via stdin
+                sudo_test = await self._test_sudo_with_password(
+                    executor, sudo_user, sudo_password,
+                )
+                if sudo_test.success and sudo_test.stripped_stdout():
+                    effective_sudo_user = sudo_test.stripped_stdout()
+                    sudo_verified = True
+                    access_level = AccessLevel.SUDO
+            elif sudo_user and not sudo_password:
+                # Try passwordless sudo to the specified user
+                sudo_test = await executor.run(
+                    f"sudo -n -u {sudo_user} whoami 2>/dev/null",
+                    timeout=15,
+                )
+                if sudo_test.success and sudo_test.stripped_stdout():
+                    effective_sudo_user = sudo_test.stripped_stdout()
+                    sudo_verified = True
+                    sudo_passwordless = True
+                    access_level = AccessLevel.SUDO_PASSWORDLESS
+            else:
+                # No sudo_user configured → try passwordless sudo to root
+                sudo_test = await executor.run(
+                    "sudo -n whoami 2>/dev/null",
+                    timeout=15,
+                )
+                if sudo_test.success and sudo_test.stripped_stdout():
+                    effective_sudo_user = sudo_test.stripped_stdout()
+                    sudo_verified = True
+                    sudo_passwordless = True
+                    access_level = AccessLevel.SUDO_PASSWORDLESS
+
+        # 4. Determine if we can install packages
+        # Only root can install packages — sudo to a non-root account does NOT
+        # grant package installation capability.
+        can_install_packages = is_root or (
+            sudo_verified and effective_sudo_user == "root"
+        )
+
+        return TargetAccessProfile(
+            ssh_user=connected_user,
+            is_root_user=is_root,
+            sudo_available=sudo_available,
+            sudo_verified=sudo_verified,
+            sudo_passwordless=sudo_passwordless,
+            sudo_user=effective_sudo_user,
+            access_level=access_level,
+            can_install_packages=can_install_packages,
+            standard_capabilities=[],  # Filled after double scan
+            elevated_capabilities=[],  # Filled after double scan
+            detected_at=now,
+            detection_method=detection_method,
+        )
+
+    async def _test_sudo_with_password(
+        self,
+        executor: CommandExecutor,
+        sudo_user: str,
+        sudo_password: str,
+    ) -> CommandResult:
+        """Test sudo with password, using robust stdin piping.
+
+        Works correctly for both local and SSH executors.
+        Uses a heredoc-style approach to avoid shell escaping issues.
+        """
+        if isinstance(executor, LocalCommandExecutor):
+            # For local execution, write password directly to stdin
+            # This avoids shell escaping issues with echo pipe
+            return await self._test_sudo_local_stdin(sudo_user, sudo_password)
+        else:
+            # For SSH, use echo pipe (asyncssh handles stdin properly)
+            return await executor.run(
+                f"echo '{sudo_password}' | sudo -S -p '' -u {sudo_user} whoami 2>/dev/null",
+                timeout=15,
+            )
+
+    async def _test_sudo_local_stdin(
+        self,
+        sudo_user: str,
+        sudo_password: str,
+    ) -> CommandResult:
+        """Test sudo locally by piping password through stdin.
+
+        Uses subprocess directly instead of the executor to ensure
+        the password is properly piped via stdin (not echo).
+        """
+        command = f"sudo -S -p '' -u {sudo_user} whoami"
+        try:
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.PIPE,
+            )
+            password_bytes = f"{sudo_password}\n".encode("utf-8")
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                process.communicate(input=password_bytes),
+                timeout=15,
+            )
+            stdout = stdout_bytes.decode("utf-8", errors="ignore")
+            stderr = stderr_bytes.decode("utf-8", errors="ignore")
+            return CommandResult(process.returncode, stdout, stderr)
+        except asyncio.TimeoutError:
+            process.kill()
+            return CommandResult(124, "", "Command timed out")
+
+    @staticmethod
+    def extract_capability_names(capabilities_payload: list[dict[str, Any]]) -> list[str]:
+        """Extract capability type names from a capabilities payload list.
+
+        Args:
+            capabilities_payload: List of capability dicts from ``build_capabilities_payload``.
+
+        Returns:
+            Sorted list of unique capability type names.
+        """
+        names: list[str] = []
+        for cap in capabilities_payload:
+            cap_type = cap.get("capability_type")
+            if cap_type:
+                # Handle both enum values and string values
+                names.append(cap_type.value if hasattr(cap_type, "value") else str(cap_type))
+        return sorted(set(names))
 
     # ------------------------------------------------------------------
     # Core scan pipeline

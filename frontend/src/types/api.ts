@@ -67,6 +67,23 @@ export interface OrganizationUpdate {
 export type TargetType = 'docker' | 'docker_swarm' | 'kubernetes' | 'ssh' | 'vm' | 'physical'
 export type TargetStatus = 'online' | 'offline' | 'error' | 'maintenance'
 export type SSHAuthMethod = 'local' | 'password' | 'ssh_key'
+export type AccessLevel = 'root' | 'sudo' | 'sudo_passwordless' | 'limited'
+
+// Access Profile (mirrors backend schemas/target.py TargetAccessProfile)
+export interface TargetAccessProfile {
+  ssh_user: string
+  is_root_user: boolean
+  sudo_available: boolean
+  sudo_verified: boolean
+  sudo_passwordless: boolean
+  sudo_user: string | null
+  access_level: AccessLevel
+  can_install_packages: boolean
+  standard_capabilities: string[]
+  elevated_capabilities: string[]
+  detected_at: string
+  detection_method: string
+}
 
 // SSH Credentials
 export interface SSHCredentials {
@@ -75,6 +92,7 @@ export interface SSHCredentials {
   password?: string
   ssh_private_key?: string
   ssh_private_key_passphrase?: string
+  sudo_enabled?: boolean
   sudo_user?: string
   sudo_password?: string
 }
@@ -85,6 +103,7 @@ export interface SSHCredentialsUpdate {
   password?: string
   ssh_private_key?: string
   ssh_private_key_passphrase?: string
+  sudo_enabled?: boolean
   sudo_user?: string
   sudo_password?: string
 }
@@ -188,6 +207,7 @@ export interface Target extends BaseModel {
   scan_success: boolean | null
   platform_info: Record<string, unknown> | null
   os_info: Record<string, unknown> | null
+  access_profile: TargetAccessProfile | null
   extra_metadata: Record<string, unknown>
   organization_id: string
   capabilities?: TargetCapability[]

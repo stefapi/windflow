@@ -37,12 +37,27 @@
                 v-if="row.scan_date"
                 class="flex items-center gap-3 mb-4"
               >
-                <el-tag
-                  :type="row.scan_success ? 'success' : 'danger'"
-                  size="small"
-                >
-                  {{ row.scan_success ? '✓ Scan OK' : '✗ Scan échoué' }}
-                </el-tag>
+              <el-tag
+                v-if="row.access_profile?.access_level === 'root'"
+                type="danger"
+                size="small"
+              >
+                root
+              </el-tag>
+              <el-tag
+                v-else-if="row.access_profile?.sudo_verified"
+                :type="row.access_profile?.sudo_passwordless ? 'success' : 'warning'"
+                size="small"
+              >
+                {{ row.access_profile?.sudo_passwordless ? 'sudo (no pass)' : 'sudo' }}
+              </el-tag>
+              <el-tag
+                v-else-if="row.access_profile?.access_level === 'limited'"
+                type="info"
+                size="small"
+              >
+                limited
+              </el-tag>
                 <span class="text-label">{{ formatDate(row.scan_date) }}</span>
                 <el-button
                   size="small"
@@ -173,7 +188,14 @@
                 class="text-label"
               >{{ row.username }}</span>
               <el-tag
-                v-if="row.has_sudo"
+                v-if="row.access_profile?.access_level === 'root'"
+                size="small"
+                type="danger"
+              >
+                root
+              </el-tag>
+              <el-tag
+                v-else-if="row.access_profile?.sudo_verified"
                 size="small"
                 type="warning"
               >
@@ -271,9 +293,11 @@ function openEditDialog(target: Target): void {
   wizardVisible.value = true
 }
 
-function onWizardSaved(): void {
+function onWizardSaved(targetId: string): void {
   wizardVisible.value = false
   editingTarget.value = null
+  // Trigger a capabilities scan for the newly created/updated target
+  refreshCapabilities(targetId)
 }
 
 // ─── UI state ─────────────────────────────────────────────────

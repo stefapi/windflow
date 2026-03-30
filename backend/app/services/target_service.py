@@ -180,13 +180,26 @@ class TargetService:
         success: bool,
         platform_info: dict[str, Any] | None = None,
         os_info: dict[str, Any] | None = None,
+        access_profile: dict[str, Any] | None = None,
     ) -> Target:
-        """Persiste le résultat d'un scan de capacités."""
+        """Persiste le résultat d'un scan de capacités.
+
+        Args:
+            db: Session de base de données.
+            target: Instance de la cible.
+            capabilities: Liste des capacités détectées.
+            scan_date: Date du scan.
+            success: Succès du scan.
+            platform_info: Informations de plateforme.
+            os_info: Informations OS.
+            access_profile: Profil d'accès détecté (dict JSON).
+        """
         # Update target fields
         target.scan_date = scan_date
         target.scan_success = success
         target.platform_info = platform_info
         target.os_info = os_info
+        target.access_profile = access_profile
         target.status = TargetStatus.ONLINE if success else TargetStatus.ERROR
         target.last_check = scan_date
 
@@ -320,6 +333,9 @@ class TargetService:
         """Fusionne les credentials existants avec la mise à jour.
 
         Returns None si ``update_schema`` est None (pas de changement).
+
+        Quand ``sudo_enabled`` est explicitement ``False``, supprime
+        ``sudo_user`` et ``sudo_password`` du dict stocké.
         """
         if update_schema is None:
             return None
@@ -331,6 +347,14 @@ class TargetService:
         # Ensure auth_method is stored as string value
         if update_schema.auth_method is not None:
             merged["auth_method"] = update_schema.auth_method.value
+
+        # Handle sudo_enabled: when explicitly set to False, clear sudo fields
+        if update_schema.sudo_enabled is False:
+            merged["sudo_enabled"] = False
+            merged.pop("sudo_user", None)
+            merged.pop("sudo_password", None)
+        elif update_schema.sudo_enabled is True:
+            merged["sudo_enabled"] = True
 
         return merged
 

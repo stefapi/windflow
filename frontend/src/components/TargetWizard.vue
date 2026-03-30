@@ -189,23 +189,44 @@
         </el-form-item>
 
         <el-divider content-position="left">
-          Escalade sudo (optionnel)
+          Escalade sudo
         </el-divider>
 
-        <el-form-item label="Utilisateur sudo">
-          <el-input
-            v-model="credentialsForm.sudo_user"
-            placeholder="ex: root"
+        <el-form-item label="Activer sudo">
+          <el-switch
+            v-model="credentialsForm.sudo_enabled"
+            active-text="Activé"
+            inactive-text="Désactivé"
           />
         </el-form-item>
-        <el-form-item label="Mot de passe sudo">
-          <el-input
-            v-model="credentialsForm.sudo_password"
-            type="password"
-            show-password
-            placeholder="Mot de passe sudo"
-          />
-        </el-form-item>
+
+        <template v-if="credentialsForm.sudo_enabled">
+          <el-form-item label="Utilisateur sudo">
+            <el-input
+              v-model="credentialsForm.sudo_user"
+              placeholder="ex: root (défaut: root)"
+            />
+          </el-form-item>
+          <el-form-item label="Mot de passe sudo">
+            <el-input
+              v-model="credentialsForm.sudo_password"
+              type="password"
+              show-password
+              placeholder="Mot de passe sudo (laisser vide si passwordless)"
+            />
+          </el-form-item>
+          <el-alert
+            v-if="!credentialsForm.sudo_password"
+            type="info"
+            :closable="false"
+            show-icon
+            class="mb-4"
+          >
+            <template #title>
+              Sans mot de passe sudo, le système tentera un sudo passwordless (sudo -n).
+            </template>
+          </el-alert>
+        </template>
       </el-form>
     </template>
 
@@ -263,11 +284,21 @@
           <el-descriptions-item label="Authentification">
             {{ credentialsForm.auth_method === 'local' ? 'Local (sans SSH)' : credentialsForm.auth_method === 'ssh_key' ? 'Clé SSH' : 'Mot de passe' }}
           </el-descriptions-item>
-          <el-descriptions-item
-            v-if="credentialsForm.sudo_user"
-            label="Sudo"
-          >
-            {{ credentialsForm.sudo_user }}
+          <el-descriptions-item label="Sudo">
+            <el-tag
+              v-if="credentialsForm.sudo_enabled"
+              type="success"
+              size="small"
+            >
+              Activé{{ credentialsForm.sudo_user ? ` (${credentialsForm.sudo_user})` : ' (root)' }}
+            </el-tag>
+            <el-tag
+              v-else
+              type="info"
+              size="small"
+            >
+              Désactivé
+            </el-tag>
           </el-descriptions-item>
           <el-descriptions-item
             v-if="form.description"
@@ -309,7 +340,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  'saved': []
+  'saved': [targetId: string]
 }>()
 
 // ─── Stores ───────────────────────────────────────────────────
@@ -358,6 +389,7 @@ const credentialsForm = reactive({
   password: '',
   ssh_private_key: '',
   ssh_private_key_passphrase: '',
+  sudo_enabled: false,
   sudo_user: '',
   sudo_password: '',
 })
@@ -441,6 +473,7 @@ function resetForms(): void {
   credentialsForm.password = ''
   credentialsForm.ssh_private_key = ''
   credentialsForm.ssh_private_key_passphrase = ''
+  credentialsForm.sudo_enabled = false
   credentialsForm.sudo_user = ''
   credentialsForm.sudo_password = ''
   reachabilityResult.value = null
@@ -456,6 +489,8 @@ function populateFromTarget(target: Target): void {
   // Credentials are not returned from API for security
   credentialsForm.auth_method = (target.auth_method as SSHAuthMethod) || 'password'
   credentialsForm.username = target.username || ''
+  // Restore sudo_enabled from target (has_sudo is derived from sudo_enabled && sudo_user)
+  credentialsForm.sudo_enabled = target.has_sudo
 }
 
 // ─── Watch for open ───────────────────────────────────────────
@@ -512,6 +547,9 @@ async function testSSHConnection(): Promise<void> {
         password: credentialsForm.auth_method === 'password' ? credentialsForm.password : undefined,
         ssh_private_key: credentialsForm.auth_method === 'ssh_key' ? credentialsForm.ssh_private_key : undefined,
         ssh_private_key_passphrase: credentialsForm.auth_method === 'ssh_key' ? credentialsForm.ssh_private_key_passphrase : undefined,
+        sudo_enabled: credentialsForm.sudo_enabled,
+        sudo_user: credentialsForm.sudo_enabled ? (credentialsForm.sudo_user || undefined) : undefined,
+        sudo_password: credentialsForm.sudo_enabled ? (credentialsForm.sudo_password || undefined) : undefined,
       },
     })
     connectionTestResult.value = result
@@ -526,6 +564,8 @@ async function testSSHConnection(): Promise<void> {
 
 async function handleSave(): Promise<void> {
   try {
+    let savedTargetId: string
+
     if (isEditing.value && props.editTarget) {
       const updateData: TargetUpdate = {
         name: form.name,
@@ -538,11 +578,13 @@ async function handleSave(): Promise<void> {
           password: credentialsForm.auth_method === 'password' ? credentialsForm.password : undefined,
           ssh_private_key: credentialsForm.auth_method === 'ssh_key' ? credentialsForm.ssh_private_key : undefined,
           ssh_private_key_passphrase: credentialsForm.auth_method === 'ssh_key' ? credentialsForm.ssh_private_key_passphrase : undefined,
-          sudo_user: credentialsForm.sudo_user || undefined,
-          sudo_password: credentialsForm.sudo_password || undefined,
+          sudo_enabled: credentialsForm.sudo_enabled,
+          sudo_user: credentialsForm.sudo_enabled ? (credentialsForm.sudo_user || undefined) : undefined,
+          sudo_password: credentialsForm.sudo_enabled ? (credentialsForm.sudo_password || undefined) : undefined,
         },
       }
       await targetsStore.updateTarget(props.editTarget.id, updateData)
+      savedTargetId = props.editTarget.id
       ElMessage.success('Cible mise à jour avec succès')
     } else {
       const createData: TargetCreate = {
@@ -557,16 +599,18 @@ async function handleSave(): Promise<void> {
           password: credentialsForm.auth_method === 'password' ? credentialsForm.password : undefined,
           ssh_private_key: credentialsForm.auth_method === 'ssh_key' ? credentialsForm.ssh_private_key : undefined,
           ssh_private_key_passphrase: credentialsForm.auth_method === 'ssh_key' ? credentialsForm.ssh_private_key_passphrase : undefined,
-          sudo_user: credentialsForm.sudo_user || undefined,
-          sudo_password: credentialsForm.sudo_password || undefined,
+          sudo_enabled: credentialsForm.sudo_enabled,
+          sudo_user: credentialsForm.sudo_enabled ? (credentialsForm.sudo_user || undefined) : undefined,
+          sudo_password: credentialsForm.sudo_enabled ? (credentialsForm.sudo_password || undefined) : undefined,
         },
         organization_id: authStore.organizationId || '',
       }
-      await targetsStore.createTarget(createData)
+      const created = await targetsStore.createTarget(createData)
+      savedTargetId = created.id
       ElMessage.success('Cible créée avec succès')
     }
     dialogVisible.value = false
-    emit('saved')
+    emit('saved', savedTargetId)
   } catch {
     error.value = isEditing.value ? 'Échec de la mise à jour' : 'Échec de la création'
   }
