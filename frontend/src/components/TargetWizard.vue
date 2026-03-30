@@ -547,7 +547,7 @@ async function handleSave(): Promise<void> {
     } else {
       const createData: TargetCreate = {
         name: form.name,
-        type: 'docker', // default, will be updated by scan
+        type: 'physical', // Les cibles créées via wizard sont des machines physiques (SSH)
         host: form.host,
         port: form.port,
         description: form.description || undefined,

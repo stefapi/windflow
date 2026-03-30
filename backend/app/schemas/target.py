@@ -145,7 +145,7 @@ class TargetCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255, description="Nom de la cible")
     type: TargetType = Field(
-        default=TargetType.DOCKER, description="Type de cible (auto-détecté via scan)"
+        default=TargetType.PHYSICAL, description="Type de cible (physical par défaut, mis à jour par scan)"
     )
     host: str = Field(..., min_length=1, max_length=255, description="Adresse IP ou hostname")
     port: int = Field(default=22, ge=1, le=65535, description="Port SSH")
