@@ -21,11 +21,22 @@ from app.schemas.target_scan import (
     SocketInfo,
     ToolInfo,
 )
-from app.services.target_scanner_service import (
-    CommandResult,
-    SocketProbe,
-    TargetScannerService,
+from app.services.commands import CommandResult
+from app.services.socket_clients import SocketProbe
+from app.services.target_scan_parsers import (
+    build_capabilities_payload,
+    map_architecture,
+    map_kubernetes_key,
+    map_oci_key,
+    map_runtime_key,
+    map_virtualization_key,
+    parse_k3s_version,
+    parse_kubectl_version,
+    parse_runc_version,
+    parse_vagrant_version,
+    parse_version_only,
 )
+from app.services.target_scanner_service import TargetScannerService
 
 
 # ---------------------------------------------------------------------------
@@ -86,8 +97,7 @@ class TestMapArchitecture:
         ],
     )
     def test_map_architecture_variants(self, raw_arch: str, expected: str) -> None:
-        service = TargetScannerService()
-        assert service._map_architecture(raw_arch).value == expected
+        assert map_architecture(raw_arch).value == expected
 
 
 # ---------------------------------------------------------------------------
@@ -98,47 +108,42 @@ class TestVersionParsing:
     """Test all version parsers."""
 
     def test_parse_version_only_standard(self) -> None:
-        result = TargetScannerService._parse_version_only("podman version 4.8.0")
+        result = parse_version_only("podman version 4.8.0")
         assert result == {"version": "4.8.0"}
 
     def test_parse_version_only_no_match(self) -> None:
-        result = TargetScannerService._parse_version_only("no version here")
+        result = parse_version_only("no version here")
         assert result == {}
 
     def test_parse_k3s_version_with_prefix(self) -> None:
-        result = TargetScannerService._parse_k3s_version(
-            "k3s version v1.28.4+k3s2\n"
-        )
+        result = parse_k3s_version("k3s version v1.28.4+k3s2\n")
         assert result == {"version": "1.28.4+k3s2"}
 
     def test_parse_k3s_version_without_prefix(self) -> None:
-        result = TargetScannerService._parse_k3s_version("k3s version 1.27.1")
+        result = parse_k3s_version("k3s version 1.27.1")
         assert result == {"version": "1.27.1"}
 
     def test_parse_runc_version_multiline(self) -> None:
         output = "runc version 1.1.12\ncommit: v1.1.12-0-g51d5e94\nspec: 1.0.2"
-        result = TargetScannerService._parse_runc_version(output)
+        result = parse_runc_version(output)
         assert result.get("version") == "1.1.12"
 
     def test_parse_runc_version_single_line(self) -> None:
-        result = TargetScannerService._parse_runc_version("1.1.11")
+        result = parse_runc_version("1.1.11")
         assert result.get("version") == "1.1.11"
 
     def test_parse_kubectl_version_json(self) -> None:
         output = '{"clientVersion": {"gitVersion": "v1.28.4", "major": "1", "minor": "28"}}'
-        result = TargetScannerService._parse_kubectl_version(output)
+        result = parse_kubectl_version(output)
         assert result["version"] == "v1.28.4"
         assert result["major"] == "1"
 
     def test_parse_kubectl_version_text_fallback(self) -> None:
-        result = TargetScannerService._parse_kubectl_version(
-            "Client Version: v1.27.0"
-        )
-        # The v? is outside the capture group, so only the numeric part is captured
+        result = parse_kubectl_version("Client Version: v1.27.0")
         assert result["version"] == "1.27.0"
 
     def test_parse_vagrant_version(self) -> None:
-        result = TargetScannerService._parse_vagrant_version("Vagrant 2.4.1")
+        result = parse_vagrant_version("Vagrant 2.4.1")
         assert result["version"] == "2.4.1"
         assert result["raw"] == "Vagrant 2.4.1"
 
@@ -461,7 +466,6 @@ class TestBuildCapabilitiesPayload:
     """Unit tests for build_capabilities_payload method."""
 
     def test_only_available_capabilities_are_included(self) -> None:
-        service = TargetScannerService()
         scan_result = ScanResult(
             host="test-host",
             scan_date=datetime.now(timezone.utc),
@@ -485,7 +489,7 @@ class TestBuildCapabilitiesPayload:
             errors=[],
         )
 
-        capabilities = service.build_capabilities_payload(scan_result)
+        capabilities = build_capabilities_payload(scan_result)
         capability_types = [cap["capability_type"].value for cap in capabilities]
 
         assert "docker" in capability_types
@@ -498,7 +502,6 @@ class TestBuildCapabilitiesPayload:
         assert all(cap["is_available"] for cap in capabilities)
 
     def test_docker_not_installed_creates_no_entries(self) -> None:
-        service = TargetScannerService()
         scan_result = ScanResult(
             host="test-host",
             scan_date=datetime.now(timezone.utc),
@@ -508,14 +511,13 @@ class TestBuildCapabilitiesPayload:
             kubernetes={},
             errors=[],
         )
-        capabilities = service.build_capabilities_payload(scan_result)
+        capabilities = build_capabilities_payload(scan_result)
         capability_types = [cap["capability_type"].value for cap in capabilities]
         assert "docker" not in capability_types
         assert "docker_compose" not in capability_types
         assert "docker_swarm" not in capability_types
 
     def test_empty_scan_creates_no_capabilities(self) -> None:
-        service = TargetScannerService()
         scan_result = ScanResult(
             host="test-host",
             scan_date=datetime.now(timezone.utc),
@@ -525,11 +527,10 @@ class TestBuildCapabilitiesPayload:
             kubernetes={},
             errors=[],
         )
-        capabilities = service.build_capabilities_payload(scan_result)
+        capabilities = build_capabilities_payload(scan_result)
         assert len(capabilities) == 0
 
     def test_container_runtimes_included(self) -> None:
-        service = TargetScannerService()
         scan_result = ScanResult(
             host="test-host",
             scan_date=datetime.now(timezone.utc),
@@ -558,7 +559,7 @@ class TestBuildCapabilitiesPayload:
             },
             errors=[],
         )
-        capabilities = service.build_capabilities_payload(scan_result)
+        capabilities = build_capabilities_payload(scan_result)
         capability_types = [cap["capability_type"].value for cap in capabilities]
 
         assert "lxc" in capability_types
@@ -574,7 +575,6 @@ class TestBuildCapabilitiesPayload:
         assert incus_cap["details"]["socket"]["path"] == "/var/lib/incus/unix.socket"
 
     def test_oci_tools_included(self) -> None:
-        service = TargetScannerService()
         scan_result = ScanResult(
             host="test-host",
             scan_date=datetime.now(timezone.utc),
@@ -591,7 +591,7 @@ class TestBuildCapabilitiesPayload:
             },
             errors=[],
         )
-        capabilities = service.build_capabilities_payload(scan_result)
+        capabilities = build_capabilities_payload(scan_result)
         capability_types = [cap["capability_type"].value for cap in capabilities]
 
         assert "runc" in capability_types
@@ -601,7 +601,6 @@ class TestBuildCapabilitiesPayload:
         assert "podman_compose" not in capability_types
 
     def test_docker_compose_available_is_included(self) -> None:
-        service = TargetScannerService()
         scan_result = ScanResult(
             host="test-host",
             scan_date=datetime.now(timezone.utc),
@@ -620,14 +619,13 @@ class TestBuildCapabilitiesPayload:
             kubernetes={},
             errors=[],
         )
-        capabilities = service.build_capabilities_payload(scan_result)
+        capabilities = build_capabilities_payload(scan_result)
         capability_types = [cap["capability_type"].value for cap in capabilities]
         assert "docker" in capability_types
         assert "docker_compose" in capability_types
         assert "docker_swarm" not in capability_types
 
     def test_virsh_and_multipass_mapped(self) -> None:
-        service = TargetScannerService()
         scan_result = ScanResult(
             host="test-host",
             scan_date=datetime.now(timezone.utc),
@@ -640,13 +638,12 @@ class TestBuildCapabilitiesPayload:
             kubernetes={},
             errors=[],
         )
-        capabilities = service.build_capabilities_payload(scan_result)
+        capabilities = build_capabilities_payload(scan_result)
         capability_types = [cap["capability_type"].value for cap in capabilities]
         assert "virsh" in capability_types
         assert "multipass" in capability_types
 
     def test_helm_mapped_from_kubernetes(self) -> None:
-        service = TargetScannerService()
         scan_result = ScanResult(
             host="test-host",
             scan_date=datetime.now(timezone.utc),
@@ -658,7 +655,7 @@ class TestBuildCapabilitiesPayload:
             },
             errors=[],
         )
-        capabilities = service.build_capabilities_payload(scan_result)
+        capabilities = build_capabilities_payload(scan_result)
         capability_types = [cap["capability_type"].value for cap in capabilities]
         assert "helm" in capability_types
 
@@ -671,33 +668,29 @@ class TestKeyMapping:
     """Test key-to-capability mapping functions."""
 
     def test_virtualization_key_mapping(self) -> None:
-        service = TargetScannerService()
-        assert service._map_virtualization_key_to_capability("libvirt") is not None
-        assert service._map_virtualization_key_to_capability("virsh") is not None
-        assert service._map_virtualization_key_to_capability("multipass") is not None
-        assert service._map_virtualization_key_to_capability("virt_install") is None
+        assert map_virtualization_key("libvirt") is not None
+        assert map_virtualization_key("virsh") is not None
+        assert map_virtualization_key("multipass") is not None
+        assert map_virtualization_key("virt_install") is None
 
     def test_kubernetes_key_mapping(self) -> None:
-        service = TargetScannerService()
-        assert service._map_kubernetes_key_to_capability("helm") is not None
-        assert service._map_kubernetes_key_to_capability("kubectl") is not None
-        assert service._map_kubernetes_key_to_capability("unknown") is None
+        assert map_kubernetes_key("helm") is not None
+        assert map_kubernetes_key("kubectl") is not None
+        assert map_kubernetes_key("unknown") is None
 
     def test_runtime_key_mapping(self) -> None:
-        service = TargetScannerService()
-        assert service._map_runtime_key_to_capability("lxc") is not None
-        assert service._map_runtime_key_to_capability("lxd") is not None
-        assert service._map_runtime_key_to_capability("incus") is not None
-        assert service._map_runtime_key_to_capability("containerd") is not None
-        assert service._map_runtime_key_to_capability("docker") is None
+        assert map_runtime_key("lxc") is not None
+        assert map_runtime_key("lxd") is not None
+        assert map_runtime_key("incus") is not None
+        assert map_runtime_key("containerd") is not None
+        assert map_runtime_key("docker") is None
 
     def test_oci_key_mapping(self) -> None:
-        service = TargetScannerService()
-        assert service._map_oci_key_to_capability("runc") is not None
-        assert service._map_oci_key_to_capability("crun") is not None
-        assert service._map_oci_key_to_capability("buildah") is not None
-        assert service._map_oci_key_to_capability("skopeo") is not None
-        assert service._map_oci_key_to_capability("podman_compose") is not None
+        assert map_oci_key("runc") is not None
+        assert map_oci_key("crun") is not None
+        assert map_oci_key("buildah") is not None
+        assert map_oci_key("skopeo") is not None
+        assert map_oci_key("podman_compose") is not None
 
 
 # ---------------------------------------------------------------------------
@@ -795,7 +788,6 @@ class TestSocketStorage:
 
     def test_build_payload_includes_docker_socket(self) -> None:
         """build_capabilities_payload should include socket info in docker details."""
-        service = TargetScannerService()
         sock = SocketInfo(path="/var/run/docker.sock", accessible=True, mode="system")
         scan_result = ScanResult(
             host="localhost",
@@ -812,7 +804,7 @@ class TestSocketStorage:
             kubernetes={},
             errors=[],
         )
-        capabilities = service.build_capabilities_payload(scan_result)
+        capabilities = build_capabilities_payload(scan_result)
         docker_cap = next(
             c for c in capabilities if c["capability_type"].value == "docker"
         )
@@ -822,7 +814,6 @@ class TestSocketStorage:
 
     def test_build_payload_without_docker_socket(self) -> None:
         """build_capabilities_payload should work when no socket is present."""
-        service = TargetScannerService()
         scan_result = ScanResult(
             host="localhost",
             scan_date=datetime.now(timezone.utc),
@@ -837,7 +828,7 @@ class TestSocketStorage:
             kubernetes={},
             errors=[],
         )
-        capabilities = service.build_capabilities_payload(scan_result)
+        capabilities = build_capabilities_payload(scan_result)
         docker_cap = next(
             c for c in capabilities if c["capability_type"].value == "docker"
         )

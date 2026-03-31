@@ -111,6 +111,7 @@ async def _create_localhost_target(
         Tuple[bool, List[str]]: Statut de création et détails d'exécution.
     """
     from .schemas.target import TargetCreate
+    from .services.target_scan_parsers import build_capabilities_payload
     from .services.target_scanner_service import TargetScannerService
     from .services.target_service import TargetService
 
@@ -150,7 +151,7 @@ async def _create_localhost_target(
 
         target = await TargetService.create(session, target_payload)
 
-        capabilities_payload = scanner.build_capabilities_payload(scan_result)
+        capabilities_payload = build_capabilities_payload(scan_result)
         platform_payload = (
             scan_result.platform.model_dump(mode="json")
             if scan_result.platform

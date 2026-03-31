@@ -42,11 +42,9 @@ from ...schemas.target_scan import (
     TargetDiscoveryRequest,
     TargetDiscoveryResponse,
 )
-from ...services.target_scanner_service import (
-    LocalCommandExecutor,
-    SSHCommandExecutor,
-    TargetScannerService,
-)
+from ...services.commands import LocalCommandExecutor, SSHCommandExecutor
+from ...services.target_scan_parsers import build_capabilities_payload
+from ...services.target_scanner_service import TargetScannerService
 from ...services.target_service import TargetService
 
 router = APIRouter()
@@ -1543,7 +1541,7 @@ async def discover_target(
         session, target_payload, organization_id=organization_id
     )
 
-    capabilities_payload = scanner.build_capabilities_payload(scan_result)
+    capabilities_payload = build_capabilities_payload(scan_result)
     platform_payload = (
         scan_result.platform.model_dump(mode="json") if scan_result.platform else None
     )

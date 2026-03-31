@@ -23,6 +23,9 @@ from ..schemas.target import TargetCreate, TargetUpdate
 
 logger = logging.getLogger(__name__)
 
+# Limite de concurrence pour les health checks parallèles
+_HEALTH_CHECK_CONCURRENCY = 10
+
 
 class TargetService:
     """Service de gestion des serveurs cibles."""
@@ -276,41 +279,40 @@ class TargetService:
 
     @staticmethod
     async def check_all_health(db: AsyncSession) -> list[dict[str, Any]]:
-        """Run a health check on **all** targets across every organisation.
+        """Lance un health check sur **toutes** les cibles, en parallèle.
 
-        Typically called by a periodic background task (Celery *or*
-        asyncio fallback).
+        Utilise un sémaphore pour limiter la concurrence à
+        ``_HEALTH_CHECK_CONCURRENCY`` cibles simultanées.
 
         Returns:
-            A list of dicts ``{"target_id": ..., "name": ..., "status": ...}``
-            for every target that was checked.
+            Liste de dicts ``{"target_id": ..., "name": ..., "status": ...}``
+            pour chaque cible vérifiée.
         """
         result = await db.execute(select(Target))
         targets = list(result.scalars().all())
 
-        results: list[dict[str, Any]] = []
-        for target in targets:
-            try:
-                new_status = await TargetService.check_health(db, target)
-                results.append(
-                    {
+        semaphore = asyncio.Semaphore(_HEALTH_CHECK_CONCURRENCY)
+
+        async def _check_one(target: Target) -> dict[str, Any]:
+            async with semaphore:
+                try:
+                    new_status = await TargetService.check_health(db, target)
+                    return {
                         "target_id": target.id,
                         "name": target.name,
                         "status": new_status.value,
                     }
-                )
-            except Exception as exc:
-                logger.error(
-                    "Health check failed for target %s: %s", target.id, exc
-                )
-                results.append(
-                    {
+                except Exception as exc:
+                    logger.error(
+                        "Health check failed for target %s: %s", target.id, exc
+                    )
+                    return {
                         "target_id": target.id,
                         "name": target.name,
                         "error": str(exc),
                     }
-                )
-        return results
+
+        return list(await asyncio.gather(*(_check_one(t) for t in targets)))
 
     @staticmethod
     def _get_health_check_port(target: Target) -> int:
