@@ -28,6 +28,14 @@
               v-loading="loadingCapabilities.has(row.id)"
               class="panel rounded p-5 my-2.5"
             >
+              <!-- Description -->
+              <p
+                v-if="row.description"
+                class="mt-0 mb-4 text-body"
+              >
+                {{ row.description }}
+              </p>
+
               <h4 class="text-heading text-base mb-4">
                 {{ t('targets.capabilities', 'Capacités détectées') }}
               </h4>
