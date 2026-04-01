@@ -12,6 +12,7 @@ export { default as DiscoveredSection } from './DiscoveredSection.vue'
 export { default as StandaloneSection } from './StandaloneSection.vue'
 export { default as TargetGroupView } from './TargetGroupView.vue'
 export { default as AdoptionWizard } from './AdoptionWizard.vue'
+export { default as StackActionsBar } from './StackActionsBar.vue'
 
 // Helpers & Types
 export {

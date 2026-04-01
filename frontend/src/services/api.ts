@@ -46,6 +46,10 @@ import type {
   AdoptionWizardData,
   AdoptionRequest,
   AdoptionResponse,
+  BatchContainerActionResponse,
+  StackActionResponse,
+  StackRedeployRequest,
+  StackRedeployResponse,
 } from '@/types/api'
 
 // Auth API
@@ -190,6 +194,15 @@ export const stacksApi = {
 
   restoreVersion: (stackId: string, versionId: string) =>
     http.post<Stack>(`/stacks/${stackId}/versions/${versionId}/restore`),
+
+  start: (id: string) =>
+    http.post<StackActionResponse>(`/stacks/${id}/start`),
+
+  stop: (id: string) =>
+    http.post<StackActionResponse>(`/stacks/${id}/stop`),
+
+  redeploy: (id: string, data: StackRedeployRequest) =>
+    http.post<StackRedeployResponse>(`/stacks/${id}/redeploy`, data),
 }
 
 // Deployments API
@@ -282,6 +295,12 @@ export const containersApi = {
 
   getLogs: (id: string, tail: number = 100, timestamps: boolean = false) =>
     http.get<ContainerLogsResponse>(`/docker/containers/${id}/logs`, { params: { tail, timestamps } }),
+
+  batchStart: (containerIds: string[]) =>
+    http.post<BatchContainerActionResponse>('/docker/containers/batch/start', { container_ids: containerIds }),
+
+  batchStop: (containerIds: string[]) =>
+    http.post<BatchContainerActionResponse>('/docker/containers/batch/stop', { container_ids: containerIds }),
 }
 
 // Compute API

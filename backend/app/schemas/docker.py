@@ -297,6 +297,27 @@ class ContainerProcess(BaseModel):
     command: str = Field("", description="Commande")
 
 
+class BatchContainerActionRequest(BaseModel):
+    """Requête d'action batch sur un ensemble de containers."""
+
+    container_ids: list[str] = Field(
+        ...,
+        description="Liste des IDs de containers à traiter",
+        min_length=1,
+        max_length=100,
+    )
+
+
+class BatchContainerActionResponse(BaseModel):
+    """Réponse d'une action batch sur des containers."""
+
+    success: bool
+    message: str
+    action: str
+    affected: int
+    errors: list[str] = Field(default_factory=list)
+
+
 class ContainerProcessListResponse(BaseModel):
     """Réponse API pour la liste des processus d'un container."""
 

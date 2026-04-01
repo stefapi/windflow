@@ -13,6 +13,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from ...core.rate_limit import conditional_rate_limiter
 from ...schemas.docker import (
+    BatchContainerActionRequest,
+    BatchContainerActionResponse,
     ContainerCreateRequest,
     ContainerDetailResponse,
     ContainerLogsResponse,
@@ -224,6 +226,131 @@ async def create_container(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la création du container: {str(e)}",
         )
+
+
+# =============================================================================
+# Batch container actions (for discovered/unmanaged stacks)
+# IMPORTANT: These routes MUST be defined BEFORE the {container_id} routes
+# to avoid FastAPI matching "batch" as a container_id parameter.
+# =============================================================================
+
+
+@router.post(
+    "/containers/batch/start",
+    response_model=BatchContainerActionResponse,
+    summary="Start multiple containers",
+    description="Start a batch of containers by their IDs. Used for discovered stacks.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(30, 60))],
+)
+async def batch_start_containers(
+    request: Request,
+    batch_data: BatchContainerActionRequest,
+):
+    """Démarre un ensemble de containers en une seule requête."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Batch starting {len(batch_data.container_ids)} containers",
+        extra={"correlation_id": correlation_id},
+    )
+
+    affected = 0
+    errors: list[str] = []
+
+    try:
+        client = await get_docker_client()
+        try:
+            for cid in batch_data.container_ids:
+                try:
+                    await client.start_container(cid)
+                    affected += 1
+                except aiohttp.ClientResponseError as e:
+                    if e.status == 304:
+                        affected += 1  # déjà démarré
+                    elif e.status == 404:
+                        errors.append(f"{cid}: non trouvé")
+                    else:
+                        errors.append(f"{cid}: {e}")
+                except Exception as exc:
+                    errors.append(f"{cid}: {exc}")
+        finally:
+            await client.close()
+    except ConnectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Docker n'est pas disponible: {exc}",
+        )
+
+    message = f"{affected}/{len(batch_data.container_ids)} containers démarrés"
+    if errors:
+        message += f" — erreurs : {'; '.join(errors[:3])}"
+
+    return BatchContainerActionResponse(
+        success=len(errors) == 0,
+        message=message,
+        action="start",
+        affected=affected,
+        errors=errors,
+    )
+
+
+@router.post(
+    "/containers/batch/stop",
+    response_model=BatchContainerActionResponse,
+    summary="Stop multiple containers",
+    description="Stop a batch of containers by their IDs. Used for discovered stacks.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(30, 60))],
+)
+async def batch_stop_containers(
+    request: Request,
+    batch_data: BatchContainerActionRequest,
+):
+    """Arrête un ensemble de containers en une seule requête."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Batch stopping {len(batch_data.container_ids)} containers",
+        extra={"correlation_id": correlation_id},
+    )
+
+    affected = 0
+    errors: list[str] = []
+
+    try:
+        client = await get_docker_client()
+        try:
+            for cid in batch_data.container_ids:
+                try:
+                    await client.stop_container(cid, timeout=10)
+                    affected += 1
+                except aiohttp.ClientResponseError as e:
+                    if e.status == 304:
+                        affected += 1  # déjà arrêté
+                    elif e.status == 404:
+                        errors.append(f"{cid}: non trouvé")
+                    else:
+                        errors.append(f"{cid}: {e}")
+                except Exception as exc:
+                    errors.append(f"{cid}: {exc}")
+        finally:
+            await client.close()
+    except ConnectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Docker n'est pas disponible: {exc}",
+        )
+
+    message = f"{affected}/{len(batch_data.container_ids)} containers arrêtés"
+    if errors:
+        message += f" — erreurs : {'; '.join(errors[:3])}"
+
+    return BatchContainerActionResponse(
+        success=len(errors) == 0,
+        message=message,
+        action="stop",
+        affected=affected,
+        errors=errors,
+    )
 
 
 @router.post(

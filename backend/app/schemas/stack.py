@@ -515,5 +515,99 @@ class DeploymentConfigRequest(BaseModel):
     )
 
 
+class StackActionResponse(BaseModel):
+    """Schema pour réponse d'action globale sur une stack (start/stop/redeploy)."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "success": True,
+                "message": "Stack 'nginx-proxy' démarrée avec succès (3 services)",
+                "stack_id": "stack-550e8400",
+                "stack_name": "nginx-proxy",
+                "affected_services": 3,
+                "action": "start",
+            }
+        }
+    )
+
+    success: bool = Field(
+        ..., description="Succès de l'opération", json_schema_extra={"example": True}
+    )
+    message: str = Field(
+        ...,
+        description="Message descriptif du résultat",
+        json_schema_extra={"example": "Stack démarrée avec succès"},
+    )
+    stack_id: str = Field(
+        ...,
+        description="ID de la stack",
+        json_schema_extra={"example": "stack-550e8400"},
+    )
+    stack_name: str = Field(
+        ...,
+        description="Nom de la stack",
+        json_schema_extra={"example": "nginx-proxy"},
+    )
+    affected_services: int = Field(
+        ...,
+        description="Nombre de services affectés",
+        json_schema_extra={"example": 3},
+    )
+    action: str = Field(
+        ...,
+        description="Action effectuée (start, stop, redeploy)",
+        json_schema_extra={"example": "start"},
+    )
+
+
+class RedeployStrategy(str):
+    """Stratégies de redéploiement possibles."""
+    ROLLING = "rolling"
+    STOP_START = "stop_start"
+
+
+class StackRedeployRequest(BaseModel):
+    """Schema pour demande de redéploiement de stack."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "strategy": "stop_start",
+            }
+        }
+    )
+
+    strategy: str = Field(
+        default=RedeployStrategy.STOP_START,
+        description="Stratégie de redéploiement : 'stop_start' (arrêt puis démarrage) ou 'rolling' (redémarrage séquentiel)",
+        json_schema_extra={"example": "stop_start"},
+    )
+
+
+class StackRedeployResponse(StackActionResponse):
+    """Schema pour réponse de redéploiement de stack."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "success": True,
+                "message": "Stack 'nginx-proxy' redéployée avec succès (3 services)",
+                "stack_id": "stack-550e8400",
+                "stack_name": "nginx-proxy",
+                "affected_services": 3,
+                "action": "redeploy",
+                "strategy": "stop_start",
+            }
+        }
+    )
+
+    strategy: str = Field(
+        ...,
+        description="Stratégie utilisée pour le redéploiement",
+        json_schema_extra={"example": "stop_start"},
+    )
+
+
 # Alias pour rétro-compatibilité (sera supprimé dans une version future)
 MarketplaceStackResponse = StackSummaryResponse

@@ -209,7 +209,7 @@ Fonctionnalités avancées :
 - [x] STORY-022 : Frontend — Refactoring de Compute.vue en sous-composants
 - [x] STORY-023 : Frontend — Harmonisation tables containers et actions en masse
 - [x] STORY-003 : Wizard d'adoption d'objets découverts
-- [ ] STORY-004 : Actions globales de stack (Start/Stop/Redeploy)
+- [x] STORY-004 : Actions globales de stack (Start/Stop/Redeploy)
 
 #### Images Docker
 - [ ] STORY-005 : Gestion des images Docker - Liste et visualisation

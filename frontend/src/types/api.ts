@@ -779,3 +779,36 @@ export interface AdoptionResponse {
   deployment_id?: string | null
   message: string
 }
+
+// Stack Action types (STORY-004)
+export type RedeployStrategy = 'rolling' | 'stop_start'
+
+export interface StackActionResponse {
+  success: boolean
+  message: string
+  stack_id: string
+  stack_name: string
+  affected_services: number
+  action: string
+}
+
+export interface StackRedeployRequest {
+  strategy: RedeployStrategy
+}
+
+export interface StackRedeployResponse extends StackActionResponse {
+  strategy: string
+}
+
+// Batch Container Action types (STORY-004 — discovered stacks)
+export interface BatchContainerActionRequest {
+  container_ids: string[]
+}
+
+export interface BatchContainerActionResponse {
+  success: boolean
+  message: string
+  action: string
+  affected: number
+  errors: string[]
+}

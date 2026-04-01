@@ -50,7 +50,27 @@
               <el-button
                 v-if="item.adoptable"
                 size="small"
+                type="success"
+                :disabled="item.services_running === item.services_total"
+                :loading="itemActionLoading === `start-${item.id}`"
+                @click.stop="handleItemStart(item)"
+              >
+                ▶ Démarrer
+              </el-button>
+              <el-button
+                v-if="item.adoptable"
+                size="small"
                 type="warning"
+                :disabled="item.services_running === 0"
+                :loading="itemActionLoading === `stop-${item.id}`"
+                @click.stop="handleItemStop(item)"
+              >
+                ⏹ Arrêter
+              </el-button>
+              <el-button
+                v-if="item.adoptable"
+                size="small"
+                type="primary"
                 @click.stop="emit('adopt', item.id)"
               >
                 ↗ Adopter
@@ -140,6 +160,7 @@ const itemRowsMap = computed(() => {
 const itemSelections = ref<Record<string, ContainerTableRow[]>>({})
 const tableRefs = ref<Record<string, { clearSelection: () => void }>>({})
 const bulkActionLoading = ref<string | null>(null)
+const itemActionLoading = ref<string | null>(null)
 
 function setTableRef(itemId: string, el: any): void {
   if (el) tableRefs.value[itemId] = el
@@ -199,6 +220,52 @@ async function handleBulkAction(action: 'start' | 'stop' | 'restart' | 'delete',
   clearItemSelection(itemId)
   bulkActionLoading.value = null
   emit('refresh')
+}
+
+async function handleItemStart(item: DiscoveredItem): Promise<void> {
+  // Ne cibler que les containers inactifs
+  const containerIds = (item.services ?? [])
+    .filter(s => s.status !== 'running')
+    .map(s => s.id)
+  if (containerIds.length === 0) return
+
+  itemActionLoading.value = `start-${item.id}`
+  try {
+    const res = await containersApi.batchStart(containerIds)
+    if (res.data.success) {
+      ElMessage.success(res.data.message)
+    } else {
+      ElMessage.warning(res.data.message)
+    }
+    emit('refresh')
+  } catch {
+    ElMessage.error('Erreur lors du démarrage des containers')
+  } finally {
+    itemActionLoading.value = null
+  }
+}
+
+async function handleItemStop(item: DiscoveredItem): Promise<void> {
+  // Ne cibler que les containers actifs
+  const containerIds = (item.services ?? [])
+    .filter(s => s.status === 'running')
+    .map(s => s.id)
+  if (containerIds.length === 0) return
+
+  itemActionLoading.value = `stop-${item.id}`
+  try {
+    const res = await containersApi.batchStop(containerIds)
+    if (res.data.success) {
+      ElMessage.success(res.data.message)
+    } else {
+      ElMessage.warning(res.data.message)
+    }
+    emit('refresh')
+  } catch {
+    ElMessage.error("Erreur lors de l'arrêt des containers")
+  } finally {
+    itemActionLoading.value = null
+  }
 }
 
 async function handleServiceAction(type: ActionType, row: ContainerTableRow, item: DiscoveredItem): Promise<void> {

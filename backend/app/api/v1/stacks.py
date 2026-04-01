@@ -16,12 +16,16 @@ from ...helper.template_renderer import TemplateRenderer
 from ...models.stack_version import StackVersion
 from ...models.user import User
 from ...schemas.stack import (
+    StackActionResponse,
     StackCreate,
+    StackRedeployRequest,
+    StackRedeployResponse,
     StackResponse,
     StackSummaryResponse,
     StackUpdate,
 )
 from ...schemas.stack_version import StackVersionCreate, StackVersionResponse
+from ...services.docker_client_service import DockerClientService
 from ...services.stack_service import StackService
 
 router = APIRouter()
@@ -1560,3 +1564,323 @@ async def restore_stack_version(
     update_data = StackUpdate(compose_content=version.compose_content)
     updated_stack = await StackService.update(session, stack_id, update_data)
     return updated_stack
+
+
+# ─── Stack Actions (Start / Stop / Redeploy) ─────────────────────────
+
+
+async def _get_stack_and_containers(
+    stack_id: str,
+    current_user: User,
+    session: AsyncSession,
+) -> tuple:
+    """
+    Helper : vérifie la stack (existence + permissions) et retourne
+    les containers Docker associés via le label windflow.stack_id.
+
+    Returns:
+        (stack, stack_containers) — objets Stack et liste de ContainerInfo
+
+    Raises:
+        HTTPException: 404, 403 ou 503 si Docker indisponible
+    """
+    stack = await StackService.get_by_id(session, stack_id)
+    if not stack:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Stack {stack_id} non trouvée",
+        )
+    if stack.organization_id != current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé à cette stack",
+        )
+
+    # Récupérer les containers Docker associés
+    try:
+        docker = DockerClientService()
+        if not await docker.ping():
+            await docker.close()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Docker n'est pas disponible",
+            )
+        all_containers = await docker.list_containers(all=True)
+        await docker.close()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Docker indisponible : {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Docker n'est pas disponible : {exc}",
+        )
+
+    # Filtrer par label windflow.stack_id
+    stack_containers = [
+        c for c in all_containers
+        if c.labels.get("windflow.stack_id") == stack_id
+    ]
+
+    return stack, stack_containers
+
+
+@router.post(
+    "/{stack_id}/start",
+    response_model=StackActionResponse,
+    summary="Start all services of a stack",
+    description="""
+Start all containers belonging to a managed stack.
+
+## Behavior
+- Finds all Docker containers with the label `windflow.stack_id` matching the stack ID
+- Starts each container that is not already running
+- Returns the count of affected services
+
+## Prerequisites
+- Stack must exist and belong to the user's organization
+- Docker must be available
+
+**Authentication Required**
+""",
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(30, 60))],
+)
+async def start_stack(
+    request: Request,
+    stack_id: str,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Démarre tous les containers d'une stack managée."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Starting stack {stack_id}",
+        extra={"correlation_id": correlation_id, "stack_id": stack_id},
+    )
+
+    stack, containers = await _get_stack_and_containers(
+        stack_id, current_user, session
+    )
+
+    if not containers:
+        return StackActionResponse(
+            success=True,
+            message=f"Aucun container trouvé pour la stack '{stack.name}'",
+            stack_id=stack_id,
+            stack_name=stack.name,
+            affected_services=0,
+            action="start",
+        )
+
+    started = 0
+    errors: list[str] = []
+    docker = DockerClientService()
+    try:
+        for container in containers:
+            if container.state != "running":
+                try:
+                    await docker.start_container(container.id)
+                    started += 1
+                except Exception as exc:
+                    errors.append(f"{container.name}: {exc}")
+            else:
+                started += 1
+    finally:
+        await docker.close()
+
+    message = f"Stack '{stack.name}' démarrée ({started}/{len(containers)} services)"
+    if errors:
+        message += f" — erreurs : {'; '.join(errors[:3])}"
+
+    return StackActionResponse(
+        success=len(errors) == 0,
+        message=message,
+        stack_id=stack_id,
+        stack_name=stack.name,
+        affected_services=started,
+        action="start",
+    )
+
+
+@router.post(
+    "/{stack_id}/stop",
+    response_model=StackActionResponse,
+    summary="Stop all services of a stack",
+    description="""
+Stop all containers belonging to a managed stack.
+
+## Behavior
+- Finds all Docker containers with the label `windflow.stack_id` matching the stack ID
+- Stops each running container
+- Returns the count of affected services
+
+## Prerequisites
+- Stack must exist and belong to the user's organization
+- Docker must be available
+
+**Authentication Required**
+""",
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(30, 60))],
+)
+async def stop_stack(
+    request: Request,
+    stack_id: str,
+    timeout: int = 10,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Arrête tous les containers d'une stack managée."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Stopping stack {stack_id}",
+        extra={"correlation_id": correlation_id, "stack_id": stack_id},
+    )
+
+    stack, containers = await _get_stack_and_containers(
+        stack_id, current_user, session
+    )
+
+    if not containers:
+        return StackActionResponse(
+            success=True,
+            message=f"Aucun container trouvé pour la stack '{stack.name}'",
+            stack_id=stack_id,
+            stack_name=stack.name,
+            affected_services=0,
+            action="stop",
+        )
+
+    stopped = 0
+    errors: list[str] = []
+    docker = DockerClientService()
+    try:
+        for container in containers:
+            if container.state == "running":
+                try:
+                    await docker.stop_container(container.id, timeout=timeout)
+                    stopped += 1
+                except Exception as exc:
+                    errors.append(f"{container.name}: {exc}")
+            else:
+                stopped += 1
+    finally:
+        await docker.close()
+
+    message = f"Stack '{stack.name}' arrêtée ({stopped}/{len(containers)} services)"
+    if errors:
+        message += f" — erreurs : {'; '.join(errors[:3])}"
+
+    return StackActionResponse(
+        success=len(errors) == 0,
+        message=message,
+        stack_id=stack_id,
+        stack_name=stack.name,
+        affected_services=stopped,
+        action="stop",
+    )
+
+
+@router.post(
+    "/{stack_id}/redeploy",
+    response_model=StackRedeployResponse,
+    summary="Redeploy a stack",
+    description="""
+Redeploy all containers belonging to a managed stack.
+
+## Strategies
+- **stop_start** (default): Stop all containers, then start them all
+- **rolling**: Restart containers one by one (stop → start → wait for running → next)
+
+## Behavior
+- Finds all Docker containers with the label `windflow.stack_id` matching the stack ID
+- Applies the selected strategy
+- Returns the count of affected services and strategy used
+
+## Prerequisites
+- Stack must exist and belong to the user's organization
+- Docker must be available
+
+**Authentication Required**
+""",
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(20, 60))],
+)
+async def redeploy_stack(
+    request: Request,
+    stack_id: str,
+    redeploy_data: StackRedeployRequest = StackRedeployRequest(),
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Redéploie une stack avec la stratégie choisie."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    strategy = redeploy_data.strategy
+    logger.info(
+        f"Redeploying stack {stack_id} (strategy={strategy})",
+        extra={"correlation_id": correlation_id, "stack_id": stack_id, "strategy": strategy},
+    )
+
+    stack, containers = await _get_stack_and_containers(
+        stack_id, current_user, session
+    )
+
+    if not containers:
+        return StackRedeployResponse(
+            success=True,
+            message=f"Aucun container trouvé pour la stack '{stack.name}'",
+            stack_id=stack_id,
+            stack_name=stack.name,
+            affected_services=0,
+            action="redeploy",
+            strategy=strategy,
+        )
+
+    affected = 0
+    errors: list[str] = []
+    docker = DockerClientService()
+    try:
+        if strategy == "rolling":
+            # Rolling : un par un, stop → start → vérifier running
+            for container in containers:
+                try:
+                    await docker.stop_container(container.id, timeout=10)
+                    await docker.start_container(container.id)
+                    affected += 1
+                except Exception as exc:
+                    errors.append(f"{container.name}: {exc}")
+        else:
+            # stop_start : arrêter tout, puis démarrer tout
+            for container in containers:
+                try:
+                    if container.state == "running":
+                        await docker.stop_container(container.id, timeout=10)
+                except Exception as exc:
+                    errors.append(f"stop {container.name}: {exc}")
+
+            for container in containers:
+                try:
+                    await docker.start_container(container.id)
+                    affected += 1
+                except Exception as exc:
+                    errors.append(f"start {container.name}: {exc}")
+    finally:
+        await docker.close()
+
+    message = (
+        f"Stack '{stack.name}' redéployée ({affected}/{len(containers)} services, "
+        f"stratégie : {strategy})"
+    )
+    if errors:
+        message += f" — erreurs : {'; '.join(errors[:3])}"
+
+    return StackRedeployResponse(
+        success=len(errors) == 0,
+        message=message,
+        stack_id=stack_id,
+        stack_name=stack.name,
+        affected_services=affected,
+        action="redeploy",
+        strategy=strategy,
+    )

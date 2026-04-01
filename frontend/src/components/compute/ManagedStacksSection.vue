@@ -86,6 +86,12 @@
           </div>
         </template>
 
+        <!-- Stack global actions (STORY-004) -->
+        <StackActionsBar
+          :stack="stack"
+          @action-completed="handleStackActionCompleted"
+        />
+
         <BulkActionBar
           :selected-count="getStackSelectedIds(stack.id).length"
           :loading-action="bulkActionLoading"
@@ -125,6 +131,7 @@ import { Loading } from '@element-plus/icons-vue'
 import { containersApi } from '@/services/api'
 import ContainerTable from './ContainerTable.vue'
 import BulkActionBar from './BulkActionBar.vue'
+import StackActionsBar from './StackActionsBar.vue'
 import { serviceToRow, servicesRunningClass, getActionPastParticiple } from './helpers'
 import type { ContainerTableRow } from './helpers'
 import type { StackWithServices } from '@/types/api'
@@ -215,6 +222,11 @@ async function handleBulkAction(action: 'start' | 'stop' | 'restart' | 'delete',
 
   clearStackSelection(stackId)
   bulkActionLoading.value = null
+  emit('refresh')
+}
+
+/** Callback après une action globale de stack (start/stop/redeploy) */
+function handleStackActionCompleted(_stackId: string): void {
   emit('refresh')
 }
 
