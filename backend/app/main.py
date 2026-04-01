@@ -422,7 +422,8 @@ if __name__ == "__main__":
     uvicorn.run(
         "backend.app.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=settings.api_port,
         reload=settings.debug,
+        reload_dirs=["backend/app"] if settings.debug else None,
         log_level=settings.log_level.lower(),
     )

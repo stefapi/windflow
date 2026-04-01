@@ -55,7 +55,10 @@ class Database:
             # Créer le répertoire data si nécessaire
             import os
 
-            db_path = settings.database_url.replace("sqlite:///", "")
+            # Extraction robuste du chemin : gère sqlite:/// et sqlite+aiosqlite:///
+            _, _, db_path = settings.database_url.partition(":///")
+            if not db_path:
+                db_path = settings.database_url
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
         else:
             # PostgreSQL avec pool de connexions
