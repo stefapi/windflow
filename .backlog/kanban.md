@@ -10,6 +10,13 @@ _(vide)_
 
 ## 📋 BACKLOG (À faire)
 
+### EPIC-009 : Container Detail — Complétude des informations et UX
+- [ ] STORY-024 : Backend — Schémas Pydantic structurés pour ContainerDetail
+- [ ] STORY-025 : Frontend — Header enrichi du Container Detail
+- [ ] STORY-026 : Frontend — Onglet État & Configuration détaillés
+- [ ] STORY-027 : Frontend — Onglet Aperçu synthétique conforme maquette UI
+- [ ] STORY-028 : Backend + Frontend — Onglet Config éditable
+- [ ] STORY-029 : Backend + Frontend — Métriques Network I/O et Disk I/O
 ### EPIC-008 : Couverture Frontend des APIs Backend (Qualité — Q1 2026)
 - [ ] STORY-005 : Gestion des images Docker - Liste et visualisation
 - [ ] STORY-006 : Gestion des images Docker - Pull et suppression
