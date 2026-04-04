@@ -61,6 +61,7 @@ export function serviceToRow(service: ServiceWithMetrics, targetName?: string): 
     uptime: service.uptime ?? null,
     ports: service.ports ?? [],
     healthStatus: service.health_status ?? null,
+    link: `/containers/${service.id}`,
   }
 }
 

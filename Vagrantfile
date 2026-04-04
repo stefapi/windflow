@@ -18,35 +18,41 @@ Vagrant.configure("2") do |config|
   # ============================================================================
 
   config.vm.define "windflow-debug", primary: true, autostart: true do |debug|
-    debug.vm.box = "debian/bookworm64"
+    debug.vm.box = "bento/debian-13"
     debug.vm.hostname = "windflow-debug"
 
     # Network configuration for debug access
     # MAC address is fixed to ensure consistent IP address for remote debugging
-    debug.vm.network "public_network", dhcp: true, mac: "080027051304",bridge: "enp34s0"
+    # Note: bridge interface name depends on the host machine (adapt to your local interface)
+    debug.vm.network "public_network", dhcp: true, mac: "080027051304", bridge: "enp15s0"
 
     # Port forwarding for WindFlow services
-    debug.vm.network "forwarded_port", guest: 3000, host: 3000   # Frontend
+    debug.vm.network "forwarded_port", guest: 3000, host: 3003   # Frontend
     debug.vm.network "forwarded_port", guest: 8000, host: 8000   # API Backend
     debug.vm.network "forwarded_port", guest: 3001, host: 3001   # Grafana
-    debug.vm.network "forwarded_port", guest: 9090, host: 9090   # Prometheus
+    debug.vm.network "forwarded_port", guest: 9090, host: 9091   # Prometheus
     debug.vm.network "forwarded_port", guest: 5555, host: 5555   # Flower (Celery monitoring)
     debug.vm.network "forwarded_port", guest: 5432, host: 5432   # PostgreSQL
-    debug.vm.network "forwarded_port", guest: 6379, host: 6379   # Redis
+    debug.vm.network "forwarded_port", guest: 6379, host: 6479   # Redis
     debug.vm.network "forwarded_port", guest: 8200, host: 8200   # Vault
-    debug.vm.network "forwarded_port", guest: 22, host: 2222     # SSH
+    debug.vm.network "forwarded_port", guest: 22, host: 2222, id: "ssh"   # SSH
 
     # VirtualBox configuration
     debug.vm.provider "virtualbox" do |vb|
       vb.name = "windflow-debug"
-      vb.memory = "16384"   # 8GB RAM for comprehensive testing
+      vb.memory = "16384"   # 16GB RAM for comprehensive testing
       vb.cpus = 4
       vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
       vb.customize ["modifyvm", :id, "--natdnsproxy1", "on"]
     end
 
-    # Debug provisioning - WARNING: Unsecured, for development only
-    debug.vm.provision "shell", inline: <<-SHELL
+    # -------------------------------------------------------------------------
+    # Provisioner 1: System setup (runs BEFORE /vagrant is mounted)
+    # This block must NOT reference /vagrant - it runs before Guest Additions
+    # are ready. All content is inlined from dev/scripts/vagrant_debug.sh
+    # -------------------------------------------------------------------------
+    debug.vm.provision "shell", name: "debug-system-setup", inline: <<-SHELL
+      set -e
       echo "🔧 WindFlow Debug Environment Setup"
 
       # Execute debug script if present
@@ -55,15 +61,24 @@ Vagrant.configure("2") do |config|
         bash /vagrant/dev/scripts/vagrant_debug.sh
       fi
 
-      # Install WindFlow in debug mode
+      echo "✅ System setup complete - ready for Guest Additions"
+    SHELL
+
+    # -------------------------------------------------------------------------
+    # Provisioner 2: WindFlow installation (runs AFTER /vagrant is mounted)
+    # At this point Guest Additions are installed and /vagrant is available
+    # -------------------------------------------------------------------------
+    debug.vm.provision "shell", name: "windflow-install", inline: <<-SHELL
+      echo "🚀 Installing WindFlow..."
       if [ -e /vagrant/scripts/install.sh ]; then
-        echo "🚀 Installing WindFlow..."
         cd /vagrant
         bash scripts/install.sh --install-dir /home/vagrant/windflow --domain localhost
+      else
+        echo "⚠️  /vagrant/scripts/install.sh not found - skipping WindFlow installation"
       fi
 
       echo "✅ WindFlow Debug Environment Ready"
-      echo "🌐 Access WindFlow at: http://localhost:3000"
+      echo "🌐 Access WindFlow at: http://localhost:3003"
       echo "🔑 SSH: vagrant ssh windflow-debug"
       echo "🐳 Docker user: dockerdebug / D0ck3rd3bug"
     SHELL
@@ -75,7 +90,7 @@ Vagrant.configure("2") do |config|
 
   # Debian Testing Environment
   config.vm.define "windflow-debian", autostart: false do |debian|
-    debian.vm.box = "debian/bookworm64"
+    debian.vm.box = "bento/debian-13"
     debian.vm.hostname = "windflow-debian"
 
     # Port forwarding with offset
@@ -97,7 +112,7 @@ Vagrant.configure("2") do |config|
 
   # Ubuntu Testing Environment
   config.vm.define "windflow-ubuntu", autostart: false do |ubuntu|
-    ubuntu.vm.box = "ubuntu/jammy64"
+    ubuntu.vm.box = "cloud-image/ubuntu-26.04"
     ubuntu.vm.hostname = "windflow-ubuntu"
 
     # Port forwarding with offset
@@ -119,7 +134,7 @@ Vagrant.configure("2") do |config|
 
   # Fedora Testing Environment
   config.vm.define "windflow-fedora", autostart: false do |fedora|
-    fedora.vm.box = "bento/fedora-39"
+    fedora.vm.box = "cloud-image/fedora-43"
     fedora.vm.hostname = "windflow-fedora"
 
     # Port forwarding with offset
@@ -141,7 +156,7 @@ Vagrant.configure("2") do |config|
 
   # CentOS Stream Testing Environment
   config.vm.define "windflow-centos", autostart: false do |centos|
-    centos.vm.box = "bento/centos-stream-9"
+    centos.vm.box = "cloud-image/centos-10-stream"
     centos.vm.hostname = "windflow-centos"
 
     # Port forwarding with offset
@@ -163,7 +178,7 @@ Vagrant.configure("2") do |config|
 
   # Rocky Linux Testing Environment
   config.vm.define "windflow-rocky", autostart: false do |rocky|
-    rocky.vm.box = "bento/rockylinux-9"
+    rocky.vm.box = "cloud-image/rocky-10"
     rocky.vm.hostname = "windflow-rocky"
 
     # Port forwarding with offset
@@ -185,7 +200,7 @@ Vagrant.configure("2") do |config|
 
   # AlmaLinux Testing Environment
   config.vm.define "windflow-alma", autostart: false do |alma|
-    alma.vm.box = "bento/almalinux-9"
+    alma.vm.box = "cloud-image/almalinux-10"
     alma.vm.hostname = "windflow-alma"
 
     # Port forwarding with offset
@@ -233,7 +248,7 @@ Vagrant.configure("2") do |config|
 
   # Alpine Linux Testing Environment (Lightweight)
   config.vm.define "windflow-alpine", autostart: false do |alpine|
-    alpine.vm.box = "bento/alpine-3.18"
+    alpine.vm.box = "cloud-image/alpine-3.23"
     alpine.vm.hostname = "windflow-alpine"
 
     # Port forwarding with offset
@@ -255,7 +270,7 @@ Vagrant.configure("2") do |config|
 
   # Minimal Testing Environment (Resource constrained)
   config.vm.define "windflow-minimal", autostart: false do |minimal|
-    minimal.vm.box = "debian/bookworm64"
+    minimal.vm.box = "cloud-image/debian-13"
     minimal.vm.hostname = "windflow-minimal"
 
     # Port forwarding with offset
@@ -315,8 +330,14 @@ end
 # VAGRANT USAGE INSTRUCTIONS
 # ============================================================================
 #
+# 📦 Required plugins (install once on the host):
+#   vagrant plugin install vagrant-vbguest    # Auto-install VirtualBox Guest Additions
+#   vagrant plugin install vagrant-disksize   # Resize VM disk (optional)
+#
 # 🚀 Quick Start:
-#   vagrant up windflow-debug          # Primary development environment
+#   vagrant up                         # Launches windflow-debug (default)
+#   vagrant up windflow-debug          # Explicit launch of debug environment
+#   vagrant ssh                        # Connect to windflow-debug (default)
 #   vagrant ssh windflow-debug         # Access debug environment
 #
 # 🧪 Testing on specific distributions:
@@ -333,11 +354,11 @@ end
 #   vagrant up windflow-minimal         # Test on minimal resources
 #
 # 🌐 Access URLs (when using windflow-debug):
-#   Frontend:    http://localhost:3000
+#   Frontend:    http://localhost:3003
 #   API:         http://localhost:8000
 #   API Docs:    http://localhost:8000/docs
 #   Grafana:     http://localhost:3001
-#   Prometheus:  http://localhost:9090
+#   Prometheus:  http://localhost:9091
 #   Flower:      http://localhost:5555
 #
 # 📝 Debug Access:
