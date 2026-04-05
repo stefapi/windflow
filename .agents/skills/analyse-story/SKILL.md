@@ -170,7 +170,148 @@ Exemples :
 
 ---
 
-## Phase 3 : Rédaction des tâches dans la story
+## Phase 2.5 : Évaluation de complexité et décision de découpe
+
+**Avant de rédiger les tâches**, évaluer si la story est traitable en une seule session LLM (~200k tokens context window).
+
+### Critères de complexité
+
+Une story est considérée **complexe** si elle remplit **au moins un** des critères suivants :
+- **Plus de 5 tâches d'implémentation** identifiées lors de l'exploration (Phase 2)
+- **Plus de 6 fichiers** à modifier/créer
+- **Mélange backend + frontend** (couche full-stack avec modifications significatives des deux côtés)
+- **Plus de 8 critères d'acceptation** (AC)
+
+### Processus de décision
+
+```
+### Évaluation de complexité — STORY-XXX
+
+**Critères remplis :**
+- [ ] > 5 tâches identifiées → [Oui/Non — compter les tâches envisagées]
+- [ ] > 6 fichiers impactés → [Oui/Non — lister les fichiers]
+- [ ] Backend + Frontend → [Oui/Non]
+- [ ] > 8 AC → [Oui/Non — nombre d'AC]
+
+**Verdict :** [Simple | Complexe]
+```
+
+#### Si la story est SIMPLE → passer à Phase 3 (rédaction classique des tâches dans la story)
+
+#### Si la story est COMPLEXE → lancer le processus de découpe en sous-stories
+
+### Processus de découpe en sous-stories
+
+#### Étape A : Analyser les groupes de tâches
+
+Regrouper les tâches envisagées par **cohésion fonctionnelle** :
+- Backend API / Services / Models / Schemas
+- Frontend Composants / Stores / Composables / Types
+- Helpers / Utils / Shared
+- Tests
+
+#### Étape B : Proposer le découpage à l'utilisateur
+
+Présenter la proposition AVANT toute création de fichier :
+
+```
+## ⚠️ STORY-XXX est complexe — Découpe proposée
+
+**Raison :** [critères remplis]
+
+**Sous-stories proposées :**
+
+### STORY-XXX.1 : [Titre] — Backend API
+- **Périmètre :** [description]
+- **AC couverts :** AC 1, AC 2, AC 3
+- **Fichiers :** [liste]
+- **Tâches estimées :** N
+
+### STORY-XXX.2 : [Titre] — Frontend composants
+- **Périmètre :** [description]
+- **AC couverts :** AC 4, AC 5
+- **Fichiers :** [liste]
+- **Tâches estimées :** N
+
+### STORY-XXX.3 : [Titre] — Tests & intégration
+- **Périmètre :** [description]
+- **AC couverts :** AC 6, AC 7, AC 8
+- **Fichiers :** [liste]
+- **Tâches estimées :** N
+
+**Dépendances :** STORY-XXX.2 dépend de STORY-XXX.1, STORY-XXX.3 dépend de STORY-XXX.2
+
+Validez-vous ce découpage ? (oui / modifications souhaitées)
+```
+
+#### Étape C : Après validation utilisateur — Créer les fichiers de sous-stories
+
+Pour chaque sous-story, créer un fichier `.backlog/stories/STORY-XXX.N-titre-court.md` en utilisant le template `.backlog/sub-story.md` :
+
+```markdown
+# STORY-XXX.N : [Titre de la sous-story]
+
+**Statut :** TODO
+**Story Parente :** STORY-XXX — [Titre de la Story]
+**Epic Parent :** EPIC-YYY — [Titre de l'Epic]
+
+## Description
+[Sous-ensemble de la description parente, spécifique à cette sous-story]
+
+## Critères d'acceptation (AC)
+- [ ] AC X : [Critère hérité de la story parente]
+- [ ] AC Y : [Critère hérité de la story parente]
+
+## Contexte technique
+[Fichiers concernés, patterns, prérequis — rempli grâce à l'exploration Phase 2]
+
+## Dépendances
+- STORY-XXX.(N-1) : [si dépendance, ou "Aucune"]
+
+## Tâches d'implémentation détaillées
+[Remplies comme en Phase 3 classique — 2 à 4 tâches ciblées par sous-story]
+
+## Tests à écrire
+[Spécifiques à cette sous-story]
+
+## État d'avancement technique
+- [ ] Tâche 1 ...
+- [ ] Tâche 2 ...
+
+## Notes d'implémentation
+<!-- Ajoutées à la clôture par treat-story -->
+```
+
+**Rédiger les tâches détaillées dans chaque sous-story** en suivant le même format que la Phase 3 classique (§3.1 à §3.3).
+
+#### Étape D : Transformer la story parente
+
+Modifier le fichier story parent pour :
+1. **Retirer** la section `## État d'avancement technique` détaillée (remplacer par une note)
+2. **Retirer** la section `## Tâches d'implémentation détaillées` si elle existait
+3. **Ajouter** la section `## Sous-stories` :
+
+```markdown
+## Sous-stories
+- [ ] STORY-XXX.1 : [Titre sous-story 1] — Couvre AC 1, AC 2, AC 3
+- [ ] STORY-XXX.2 : [Titre sous-story 2] — Couvre AC 4, AC 5
+- [ ] STORY-XXX.3 : [Titre sous-story 3] — Couvre AC 6, AC 7, AC 8
+```
+
+4. **Ajouter** les dépendances entre sous-stories dans la section `## Dépendances` existante
+
+#### Principes de découpe à respecter
+
+- **Cohésion fonctionnelle** : chaque sous-story couvre un domaine cohérent
+- **Autonomie** : chaque sous-story peut être implémentée et testée indépendamment
+- **Ordre logique** : numérotation séquentielle (.1, .2, .3...) dans l'ordre d'implémentation
+- **AC répartis** : chaque AC de la story parente est couvert par exactement une sous-story
+- **Taille cible** : 2-4 tâches d'implémentation par sous-story
+- **Sous-stories non listées dans l'epic parent** (uniquement dans la story parente)
+
+---
+
+## Phase 3 : Rédaction des tâches dans la story (si story simple)
 
 ### 3.1 Structure de la section à écrire
 

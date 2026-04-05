@@ -12,9 +12,23 @@ Le projet suit cette hiérarchie de fichiers :
 ## 2. Règles de Numérotation
 - **Epics** : `EPIC-XXX` (numérotation séquentielle globale, ex: EPIC-001, EPIC-002...)
 - **Stories** : `STORY-XXX` (numérotation séquentielle globale, pas par epic, ex: STORY-401, STORY-402...)
+- **Sous-stories** : `STORY-XXX.N` (numérotation séquentielle au sein de la story parente, ex: STORY-026.1, STORY-026.2, STORY-026.3)
 - **Bugs** : `BUG-XXX` (numérotation séquentielle globale, ex: BUG-001, BUG-002...)
 
 Réutilise les numéros libres si besoin
+
+### 2.1 Conventions des Sous-stories
+
+Les sous-stories sont des subdivisions d'une story parente, créées par `analyse-story` lorsque la complexité le justifie (cf. section 5.1.1).
+
+**Nomming des fichiers :**
+- Fichier : `STORY-XXX.N-titre-court.md` dans `.backlog/stories/`
+- Exemple : `STORY-026.1-etat-healthcheck.md`, `STORY-026.2-config-ressources.md`
+
+**Relations de référence :**
+- Chaque sous-story référence sa story parente **et** l'epic de plus haut niveau
+- La story parente liste ses sous-stories mais ne contient **pas** de tâches d'implémentation
+- Les sous-stories ne sont **pas** listées dans l'epic parent (uniquement dans la story parente)
 
 ## 3. Cycle de Vie des Éléments
 
@@ -96,6 +110,7 @@ Réutilise les numéros libres si besoin
 
 **Présence obligatoire dans le Kanban :**
 - Toute story avec un statut `TODO`, `IN_PROGRESS`, `REVIEW`, ou `BLOCKED` DOIT apparaître dans `.backlog/kanban.md`
+- Toute sous-story avec un statut `TODO`, `IN_PROGRESS`, `REVIEW`, ou `BLOCKED` DOIT apparaître dans `.backlog/kanban.md` (individuellement, au même titre qu'une story)
 - Tout bug avec un statut `CONFIRMED`, `IN_PROGRESS`, ou `REVIEW` DOIT apparaître dans `.backlog/kanban.md`
 
 **Correspondance statut ↔ colonne Kanban :**
@@ -164,6 +179,108 @@ create-*        →  analyse-story    →  treat-story
 - L'analyse (étape 2) explore le code, identifie les patterns et écrit les tâches détaillées dans la story — **sans coder**
 - L'implémentation (étape 3) exécute les tâches **dans l'ordre**, fichier par fichier, en suivant exactement les instructions de l'analyse
 
+### 5.1.1 `analyse-story` — Évaluation de complexité et découpe en sous-stories
+
+Lors de l'étape d'analyse (étape 2), la skill `analyse-story` DOIT évaluer la complexité de la story avant de produire les tâches d'implémentation. Si la story est trop complexe pour être traitée en une seule session par un LLM (context window ~200k tokens), elle doit être découpée en sous-stories.
+
+#### Critères de complexité
+
+Une story est considérée **complexe** si elle remplit **au moins un** des critères suivants :
+- **Plus de 5 tâches d'implémentation** identifiées lors de l'analyse
+- **Plus de 6 fichiers** à modifier/créer
+- **Mélange backend + frontend** (couche full-stack avec modifications des deux côtés)
+- **Plus de 8 critères d'acceptation** (AC)
+
+Si la story est complexe, procéder à la découpe (cf. processus ci-dessous).
+Si la story n'est pas complexe, procéder à l'analyse classique (tâches détaillées dans la story).
+
+#### Processus de découpe
+
+1. **Analyser** les domaines fonctionnels/techniques de la story pour identifier des groupes de tâches cohérents
+2. **Proposer un découpage** à l'utilisateur avec :
+   - Nombre de sous-stories proposées
+   - Titre et périmètre de chaque sous-story
+   - AC couverts par chaque sous-story
+   - Dépendances entre sous-stories (ordre séquentiel)
+3. **Attendre la validation** de l'utilisateur avant de créer les fichiers
+4. **Créer les fichiers de sous-stories** en utilisant le template `.backlog/sub-story.md`
+5. **Transformer la story parente** : retirer les tâches d'implémentation, ajouter la section `## Sous-stories` listant les sous-stories créées
+
+#### Principes de découpe
+
+- **Cohésion fonctionnelle** : chaque sous-story doit couvrir un domaine cohérent (ex: backend API, frontend composant, helpers/utils, styles)
+- **Autonomie** : chaque sous-story doit pouvoir être implémentée et testée indépendamment (dans la mesure du possible)
+- **Ordre logique** : les sous-stories sont numérotées séquentiellement (.1, .2, .3...) dans l'ordre d'implémentation recommandé
+- **AC répartis** : chaque AC de la story parente doit être couvert par exactement une sous-story
+- **Taille cible** : chaque sous-story doit viser 2-4 tâches d'implémentation et rester traitable en une session LLM
+
+#### Structure résultante après découpe
+
+**Story parente (transformée) :**
+```markdown
+# STORY-XXX : Titre de la Story
+**Statut :** TODO
+**Epic Parent :** EPIC-YYY — Titre de l'Epic
+
+## Description
+[Description inchangée]
+
+## Critères d'acceptation (AC)
+[Liste complète des AC — cochée quand la sous-story correspondante est DONE]
+
+## Sous-stories
+- [ ] STORY-XXX.1 : [Titre sous-story 1] — Couvre AC 1, AC 2, AC 3
+- [ ] STORY-XXX.2 : [Titre sous-story 2] — Couvre AC 4, AC 5
+- [ ] STORY-XXX.3 : [Titre sous-story 3] — Couvre AC 6, AC 7, AC 8
+
+## Dépendances
+STORY-XXX.2 dépend de STORY-XXX.1
+STORY-XXX.3 dépend de STORY-XXX.2
+```
+
+**Sous-story (fichier individuel) :**
+```markdown
+# STORY-XXX.N : [Titre de la sous-story]
+**Statut :** TODO
+**Story Parente :** STORY-XXX — [Titre de la Story]
+**Epic Parent :** EPIC-YYY — [Titre de l'Epic]
+
+## Description
+[Sous-ensemble de la description parente, spécifique à cette sous-story]
+
+## Critères d'acceptation (AC)
+- [ ] AC X : [Critère hérité de la story parente]
+- [ ] AC Y : [Critère hérité de la story parente]
+
+## Contexte technique
+[Spécifique à cette sous-story : fichiers concernés, patterns, prérequis]
+
+## Dépendances
+- STORY-XXX.(N-1) : [si dépendance sur la sous-story précédente]
+
+## Tâches d'implémentation détaillées
+[Remplies par analyse-story — 2 à 4 tâches ciblées]
+
+## Tests à écrire
+[Spécifiques à cette sous-story]
+
+## État d'avancement technique
+- [ ] Tâche 1 ...
+- [ ] Tâche 2 ...
+```
+
+### 5.1.2 `treat-story` — Traitement des sous-stories
+
+Quand `treat-story` est appelée sur une story qui a été découpée en sous-stories :
+1. Vérifier la présence de la section `## Sous-stories` dans la story parente
+2. **Traiter les sous-stories séquentiellement** (.1, puis .2, puis .3...)
+3. Pour chaque sous-story :
+   - Suivre le même protocole que pour une story classique (§5.2 à §5.4)
+   - Mettre à jour le statut de la sous-story
+   - Cocher la case correspondante dans la section `## Sous-stories` de la story parente
+   - Cocher les AC validés dans la story parente
+4. Quand toutes les sous-stories sont `DONE`, la story parente passe automatiquement à `DONE`
+
 ### 5.2 Avant le développement
 
 1. **Lecture :** Analyse le fichier STORY ou BUG correspondant pour comprendre les critères d'acceptation (AC).
@@ -196,6 +313,7 @@ create-*        →  analyse-story    →  treat-story
 ### Templates
 - **Epic** : `.backlog/epic.md`
 - **Story** : `.backlog/story.md`
+- **Sous-story** : `.backlog/sub-story.md`
 - **Bug** : `.backlog/bug.md`
 
 ### Sections obligatoires par type

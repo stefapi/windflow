@@ -17,6 +17,14 @@ En tant que [Rôle], je veux [Action] afin de [Bénéfice].
 <!-- Stories ou composants dont cette story dépend -->
 - Aucune
 
+## Sous-stories
+<!-- Section présente uniquement si la story a été découpée par analyse-story (cf. §5.1.1).
+Chaque sous-story est un fichier séparé dans .backlog/stories/. Format :
+- [ ] STORY-XXX.1 : [Titre sous-story 1] — Couvre AC 1, AC 2
+- [ ] STORY-XXX.2 : [Titre sous-story 2] — Couvre AC 3, AC 4
+Les sous-stories ne sont PAS listées dans l'epic parent.
+-->
+
 ## État d'avancement technique
 <!-- Checkboxes alignées avec les tâches détaillées (rempli par analyse-story) -->
 - [ ] Tâche 1 ...

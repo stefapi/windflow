@@ -49,12 +49,54 @@ Une fois la story identifiée, lire le fichier `.backlog/stories/STORY-XXX-*.md`
 
 **Vérifier si la story a été analysée par `analyse-story`** en cherchant la section `## Tâches d'implémentation détaillées`.
 
-#### Cas A : Story analysée (section présente) ✅ — Mode nominal
+#### Cas A : Story analysée avec sous-stories (section `## Sous-stories` présente) 🔄 — Mode sous-stories
+
+La story contient une section `## Sous-stories` indiquant qu'elle a été découpée par `analyse-story` :
+
+```markdown
+## Sous-stories
+- [ ] STORY-XXX.1 : [Titre] — Couvre AC 1, AC 2
+- [ ] STORY-XXX.2 : [Titre] — Couvre AC 3, AC 4
+```
+
+**Action :** Présenter un résumé et traiter les sous-stories séquentiellement :
+
+```
+## STORY-XXX : [Titre] — Story découpée en sous-stories
+
+**Sous-stories :**
+1. [ ] STORY-XXX.1 : [Titre] — [AC couverts]
+2. [ ] STORY-XXX.2 : [Titre] — [AC couverts]
+3. [ ] STORY-XXX.3 : [Titre] — [AC couverts]
+
+**Approche :** Traitement séquentiel (.1 → .2 → .3)
+
+On commence par STORY-XXX.1 ? (oui/non)
+```
+
+**Processus pour chaque sous-story :**
+1. Lire le fichier `.backlog/stories/STORY-XXX.N-*.md`
+2. Vérifier la section `## Tâches d'implémentation détaillées` (comme Cas B nominal)
+3. Exécuter la Phase 2 complète pour cette sous-story (implémentation séquentielle)
+4. Après validation (REVIEW → DONE) de la sous-story :
+   - Cocher la case dans la section `## Sous-stories` de la story parente
+   - Cocher les AC validés dans la story parente
+   - Mettre à jour le kanban (retirer la sous-story, ajouter la suivante)
+5. Passer à la sous-story suivante
+
+**Quand toutes les sous-stories sont DONE :**
+- La story parente passe automatiquement à `DONE`
+- Mettre à jour le kanban et l'epic parent
+
+**Note :** Ne PAS implémenter directement dans la story parente — chaque sous-story est traitée comme une story indépendante avec son propre cycle de statut.
+
+#### Cas B : Story analysée (section tâches présente, sans sous-stories) ✅ — Mode nominal
 
 La story contient déjà :
 - `## Tâches d'implémentation détaillées` avec des `### Tâche N` ordonnées
 - `## Tests à écrire` avec fichiers et cas de test
 - `## État d'avancement technique` aligné avec les tâches
+- Pas de section `## Sous-stories`
 
 **Action :** Lire toutes les tâches et présenter un résumé express :
 
@@ -78,7 +120,7 @@ On lance l'implémentation ? (oui/non)
 
 **Pas d'exploration du codebase supplémentaire.** Tout est déjà décrit dans les tâches. Passer directement à la Phase 2.
 
-#### Cas B : Story non analysée (section absente) ⚠️ — Mode dégradé
+#### Cas C : Story non analysée (section absente) ⚠️ — Mode dégradé
 
 La story n'a pas été pré-analysée.
 
