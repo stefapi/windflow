@@ -161,11 +161,11 @@ Avant de clôturer une session de travail, vérifier :
 
 ### 5.1 Pipeline de Skills
 
-Le traitement d'une story suit un pipeline en 3 étapes, chacune gérée par une skill dédiée :
+Le traitement d'une epic suit un pipeline en 4 étapes, chacune gérée par une skill dédiée :
 
 ```
-create-*        →  analyse-story    →  treat-story
-(Description+AC)   (Tâches détaillées)  (Implémentation)
+create-*        →  analyse-story    →  treat-story       →  finalise-epic
+(Description+AC)   (Tâches détaillées)  (Implémentation)     (Quality Gate)
 ```
 
 | Étape | Skill | Produit | Statut story |
@@ -173,11 +173,13 @@ create-*        →  analyse-story    →  treat-story
 | 1. Création | `create-stories`, `create-improvement`, `create-refactoring` | Fichier story avec description + AC | `TODO` |
 | 2. Analyse | `analyse-story` | Tâches d'implémentation détaillées, tests à écrire | `TODO` |
 | 3. Implémentation | `treat-story` | Code, tests, documentation | `TODO` → `IN_PROGRESS` → `REVIEW` → `DONE` |
+| 4. Finalisation | `finalise-epic` | Rapport de conformité (quality gate avant clôture) | Epic : vérification toutes stories DONE |
 
 **Règles du pipeline :**
 - Les skills de création (étape 1) ne génèrent **que** la description et les AC — pas de tâches techniques
 - L'analyse (étape 2) explore le code, identifie les patterns et écrit les tâches détaillées dans la story — **sans coder**
 - L'implémentation (étape 3) exécute les tâches **dans l'ordre**, fichier par fichier, en suivant exactement les instructions de l'analyse
+- La finalisation (étape 4) est un **quality gate en lecture seule** — elle ne modifie aucun fichier de code, uniquement le rapport dans l'epic. Elle doit être lancée **après** que toutes les stories sont DONE, et **avant** `close-epic`
 
 ### 5.1.1 `analyse-story` — Évaluation de complexité et découpe en sous-stories
 
