@@ -93,6 +93,8 @@ class ContainerDetail:
     host_config: dict[str, Any]
     network_settings: dict[str, Any]
     mounts: list[dict[str, Any]]
+    size_rw: Optional[int] = None
+    size_root_fs: Optional[int] = None
     logs: Optional[str] = None
 
     @classmethod
@@ -116,6 +118,8 @@ class ContainerDetail:
             host_config=data.get("HostConfig", {}),
             network_settings=data.get("NetworkSettings", {}),
             mounts=data.get("Mounts", []),
+            size_rw=data.get("SizeRw"),
+            size_root_fs=data.get("SizeRootFs"),
         )
 
 
@@ -631,6 +635,28 @@ class DockerClientService:
             timeout=timeout + 5,
         )
 
+    async def pause_container(self, container_id: str) -> None:
+        """
+        Met en pause un container.
+
+        POST /containers/{id}/pause
+
+        Args:
+            container_id: ID ou nom du container
+        """
+        await self._request("POST", f"/containers/{container_id}/pause")
+
+    async def unpause_container(self, container_id: str) -> None:
+        """
+        Reprend un container en pause.
+
+        POST /containers/{id}/unpause
+
+        Args:
+            container_id: ID ou nom du container
+        """
+        await self._request("POST", f"/containers/{container_id}/unpause")
+
     async def remove_container(
         self,
         container_id: str,
@@ -653,6 +679,47 @@ class DockerClientService:
             f"/containers/{container_id}",
             params=params,
             timeout=30.0,
+        )
+
+    async def update_container(
+        self, container_id: str, update_config: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Met à jour la configuration d'un container sans recréation.
+
+        POST /containers/{id}/update
+
+        Args:
+            container_id: ID ou nom du container
+            update_config: Configuration Docker à appliquer
+                (RestartPolicy, Resources, etc.)
+
+        Returns:
+            Dict avec clés potentielles : "Warnings"
+        """
+        response = await self._request(
+            "POST",
+            f"/containers/{container_id}/update",
+            body=update_config,
+        )
+        return await response.json()
+
+    async def rename_container(
+        self, container_id: str, new_name: str
+    ) -> None:
+        """
+        Renomme un container.
+
+        POST /containers/{id}/rename?name=new_name
+
+        Args:
+            container_id: ID ou nom du container
+            new_name: Nouveau nom du container
+        """
+        await self._request(
+            "POST",
+            f"/containers/{container_id}/rename",
+            params={"name": new_name},
         )
 
     async def container_logs(

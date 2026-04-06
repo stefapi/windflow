@@ -120,8 +120,9 @@ export const useTargetsStore = defineStore('targets', () => {
   function _applyHealthResult(result: HealthCheckResponse): void {
     const idx = targets.value.findIndex(t => t.id === result.target_id)
     if (idx !== -1) {
+      const existing = targets.value[idx]!
       targets.value[idx] = {
-        ...targets.value[idx],
+        ...existing,
         status: result.status as Target['status'],
         updated_at: result.last_check,
       }

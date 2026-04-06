@@ -6,7 +6,7 @@ Connexion via Unix socket /var/run/docker.sock.
 """
 
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -15,13 +15,22 @@ from ...core.rate_limit import conditional_rate_limiter
 from ...schemas.docker import (
     BatchContainerActionRequest,
     BatchContainerActionResponse,
+    ContainerConfigInfo,
     ContainerCreateRequest,
     ContainerDetailResponse,
+    ContainerHostConfigInfo,
     ContainerLogsResponse,
+    ContainerNetworkSettingsInfo,
     ContainerProcess,
     ContainerProcessListResponse,
+    ContainerRenameRequest,
+    ContainerRenameResponse,
     ContainerResponse,
+    ContainerStateInfo,
     ContainerStatsResponse,
+    ContainerUpdateResourcesRequest,
+    ContainerUpdateRestartPolicyRequest,
+    ContainerUpdateResponse,
     ImagePullRequest,
     ImagePullResponse,
     ImageResponse,
@@ -129,12 +138,14 @@ async def get_container(
             created=container.created,
             path=container.path,
             args=container.args,
-            state=container.state,
+            state=ContainerStateInfo.from_docker_dict(container.state),
             image=container.image,
-            config=container.config,
-            host_config=container.host_config,
-            network_settings=container.network_settings,
+            config=ContainerConfigInfo.from_docker_dict(container.config),
+            host_config=ContainerHostConfigInfo.from_docker_dict(container.host_config),
+            network_settings=ContainerNetworkSettingsInfo.from_docker_dict(container.network_settings),
             mounts=container.mounts,
+            size_rw=container.size_rw,
+            size_root_fs=container.size_root_fs,
         )
 
     except aiohttp.ClientResponseError as e:
@@ -202,11 +213,11 @@ async def create_container(
             created=container.created,
             path=container.path,
             args=container.args,
-            state=container.state,
+            state=ContainerStateInfo.from_docker_dict(container.state),
             image=container.image,
-            config=container.config,
-            host_config=container.host_config,
-            network_settings=container.network_settings,
+            config=ContainerConfigInfo.from_docker_dict(container.config),
+            host_config=ContainerHostConfigInfo.from_docker_dict(container.host_config),
+            network_settings=ContainerNetworkSettingsInfo.from_docker_dict(container.network_settings),
             mounts=container.mounts,
         )
 
@@ -486,6 +497,88 @@ async def restart_container(
         )
 
 
+@router.post(
+    "/containers/{container_id}/pause",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Pause container",
+    description="Pause a running container.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(50, 60))],
+)
+async def pause_container(
+    request: Request,
+    container_id: str,
+):
+    """Met en pause un container."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Pausing container {container_id}", extra={"correlation_id": correlation_id}
+    )
+
+    try:
+        client = await get_docker_client()
+        await client.pause_container(container_id)
+        await client.close()
+
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Container {container_id} non trouvé",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error pausing container: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la mise en pause: {str(e)}",
+        )
+
+
+@router.post(
+    "/containers/{container_id}/unpause",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Unpause container",
+    description="Unpause a paused container.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(50, 60))],
+)
+async def unpause_container(
+    request: Request,
+    container_id: str,
+):
+    """Reprend un container en pause."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Unpausing container {container_id}", extra={"correlation_id": correlation_id}
+    )
+
+    try:
+        client = await get_docker_client()
+        await client.unpause_container(container_id)
+        await client.close()
+
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Container {container_id} non trouvé",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error unpausing container: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la reprise: {str(e)}",
+        )
+
+
 @router.delete(
     "/containers/{container_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -526,6 +619,160 @@ async def remove_container(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la suppression: {str(e)}",
+        )
+
+
+@router.patch(
+    "/containers/{container_id}/restart-policy",
+    response_model=ContainerUpdateResponse,
+    summary="Update container restart policy",
+    description="Update the restart policy of a container without recreation.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(30, 60))],
+)
+async def update_restart_policy(
+    request: Request,
+    container_id: str,
+    update_data: ContainerUpdateRestartPolicyRequest,
+):
+    """Met à jour la politique de redémarrage d'un container."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Updating restart policy for container {container_id}: {update_data.name}",
+        extra={"correlation_id": correlation_id},
+    )
+
+    try:
+        client = await get_docker_client()
+
+        restart_policy: dict[str, Any] = {"Name": update_data.name}
+        if update_data.maximum_retry_count is not None:
+            restart_policy["MaximumRetryCount"] = update_data.maximum_retry_count
+
+        update_config = {"RestartPolicy": restart_policy}
+        result = await client.update_container(container_id, update_config)
+        await client.close()
+
+        return ContainerUpdateResponse(warnings=result.get("Warnings", []))
+
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Container {container_id} non trouvé",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error updating restart policy: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la mise à jour: {str(e)}",
+        )
+
+
+@router.patch(
+    "/containers/{container_id}/resources",
+    response_model=ContainerUpdateResponse,
+    summary="Update container resources",
+    description="Update resource limits of a container without recreation.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(30, 60))],
+)
+async def update_resources(
+    request: Request,
+    container_id: str,
+    update_data: ContainerUpdateResourcesRequest,
+):
+    """Met à jour les limites de ressources d'un container."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Updating resources for container {container_id}",
+        extra={"correlation_id": correlation_id},
+    )
+
+    try:
+        client = await get_docker_client()
+
+        resources: dict[str, Any] = {}
+        if update_data.memory_limit is not None:
+            resources["Memory"] = update_data.memory_limit
+        if update_data.cpu_shares is not None:
+            resources["CpuShares"] = update_data.cpu_shares
+        if update_data.pids_limit is not None:
+            resources["PidsLimit"] = update_data.pids_limit
+
+        update_config = {"Resources": resources}
+        result = await client.update_container(container_id, update_config)
+        await client.close()
+
+        return ContainerUpdateResponse(warnings=result.get("Warnings", []))
+
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Container {container_id} non trouvé",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error updating resources: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la mise à jour: {str(e)}",
+        )
+
+
+@router.post(
+    "/containers/{container_id}/rename",
+    response_model=ContainerRenameResponse,
+    summary="Rename container",
+    description="Rename a container.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(20, 60))],
+)
+async def rename_container(
+    request: Request,
+    container_id: str,
+    rename_data: ContainerRenameRequest,
+):
+    """Renomme un container."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Renaming container {container_id} to {rename_data.new_name}",
+        extra={"correlation_id": correlation_id},
+    )
+
+    try:
+        client = await get_docker_client()
+        await client.rename_container(container_id, rename_data.new_name)
+        await client.close()
+
+        return ContainerRenameResponse(
+            success=True,
+            message=f"Container renommé en {rename_data.new_name}",
+        )
+
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Container {container_id} non trouvé",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error renaming container: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors du renommage: {str(e)}",
         )
 
 
@@ -607,7 +854,9 @@ async def get_container_stats(
         client = await get_docker_client()
 
         # Get single stats snapshot (stream=False)
-        stats_data = await client.container_stats(container_id, stream=False)
+        # container_stats() is an async generator — consume first item
+        stats_gen = client.container_stats(container_id, stream=False)
+        stats_data = await anext(stats_gen)
         await client.close()
 
         # Format the response using existing helper

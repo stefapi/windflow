@@ -505,6 +505,114 @@ export interface StackVersion {
   created_at: string
 }
 
+// Docker Container Detail sub-types (mirrors STORY-024 Pydantic schemas — snake_case)
+
+export interface ContainerHealthLogEntry {
+  start: string | null
+  end: string | null
+  exit_code: number | null
+  output: string | null
+}
+
+export interface ContainerHealthInfo {
+  status: string | null
+  failing_streak: number | null
+  log: ContainerHealthLogEntry[]
+}
+
+export interface ContainerStateInfo {
+  status: string | null
+  running: boolean | null
+  paused: boolean | null
+  restarting: boolean | null
+  oom_killed: boolean | null
+  dead: boolean | null
+  exit_code: number | null
+  error: string | null
+  started_at: string | null
+  finished_at: string | null
+  health: ContainerHealthInfo | null
+}
+
+export interface ContainerConfigInfo {
+  hostname: string | null
+  domainname: string | null
+  user: string | null
+  attach_stdin: boolean | null
+  attach_stdout: boolean | null
+  attach_stderr: boolean | null
+  tty: boolean | null
+  open_stdin: boolean | null
+  stdin_once: boolean | null
+  env: string[] | null
+  cmd: string[] | null
+  entrypoint: string[] | null
+  image: string | null
+  working_dir: string | null
+  labels: Record<string, string> | null
+  stop_signal: string | null
+  stop_timeout: number | null
+}
+
+export interface ContainerLogConfigInfo {
+  type: string | null
+  config: Record<string, string> | null
+}
+
+export interface ContainerRestartPolicyInfo {
+  name: string | null
+  maximum_retry_count: number | null
+}
+
+export interface ContainerResourcesInfo {
+  memory: number | null
+  memory_reservation: number | null
+  memory_swap: number | null
+  cpu_shares: number | null
+  cpu_period: number | null
+  cpu_quota: number | null
+  cpus: number | null
+  cpuset_cpus: string | null
+  pids_limit: number | null
+}
+
+export interface ContainerHostConfigInfo {
+  binds: string[] | null
+  container_id_file: string | null
+  log_config: ContainerLogConfigInfo | null
+  network_mode: string | null
+  port_bindings: Record<string, Array<{ HostIp: string; HostPort: string }>> | null
+  restart_policy: ContainerRestartPolicyInfo | null
+  auto_remove: boolean | null
+  volume_driver: string | null
+  volumes_from: string[] | null
+  cap_add: string[] | null
+  cap_drop: string[] | null
+  dns: string[] | null
+  privileged: boolean | null
+  readonly_rootfs: boolean | null
+  security_opt: string[] | null
+  shm_size: number | null
+  runtime: string | null
+  resources: ContainerResourcesInfo | null
+}
+
+export interface ContainerNetworkEndpointInfo {
+  ip_address: string | null
+  gateway: string | null
+  mac_address: string | null
+  network_id: string | null
+  endpoint_id: string | null
+  ipv6_gateway: string | null
+  global_ipv6_address: string | null
+  ip_prefix_len: number | null
+  driver: string | null
+}
+
+export interface ContainerNetworkSettingsInfo {
+  networks: Record<string, ContainerNetworkEndpointInfo>
+}
+
 // Docker Container types
 export type ContainerState = 'running' | 'exited' | 'paused' | 'restarting' | 'created' | 'dead'
 
@@ -544,12 +652,14 @@ export interface ContainerDetail {
   created: string
   path: string
   args: string[]
-  state: Record<string, unknown>
+  state: ContainerStateInfo
   image: string
-  config: Record<string, unknown>
-  host_config: Record<string, unknown>
-  network_settings: Record<string, unknown>
+  config: ContainerConfigInfo
+  host_config: ContainerHostConfigInfo
+  network_settings: ContainerNetworkSettingsInfo
   mounts: Record<string, unknown>[]
+  size_rw: number | null
+  size_root_fs: number | null
 }
 
 export interface ContainerEnvVar {
@@ -811,4 +921,35 @@ export interface BatchContainerActionResponse {
   action: string
   affected: number
   errors: string[]
+}
+
+// Container Config Update types (STORY-028.1 — docker update)
+
+/** Requête PATCH restart policy — correspond à ContainerUpdateRestartPolicyRequest backend */
+export interface ContainerUpdateRestartPolicyRequest {
+  name: string // 'no' | 'always' | 'on-failure' | 'unless-stopped'
+  maximum_retry_count?: number
+}
+
+/** Requête PATCH resources — correspond à ContainerUpdateResourcesRequest backend */
+export interface ContainerUpdateResourcesRequest {
+  memory_limit?: number // bytes
+  cpu_shares?: number
+  pids_limit?: number // -1 = unlimited
+}
+
+/** Réponse PATCH restart policy / resources — correspond à ContainerUpdateResponse backend */
+export interface ContainerUpdateResponse {
+  warnings: string[]
+}
+
+/** Requête POST rename — correspond à ContainerRenameRequest backend */
+export interface ContainerRenameRequest {
+  new_name: string // pattern Docker: ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$
+}
+
+/** Réponse POST rename — correspond à ContainerRenameResponse backend */
+export interface ContainerRenameResponse {
+  success: boolean
+  message: string
 }

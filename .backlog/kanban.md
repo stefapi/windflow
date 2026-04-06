@@ -1,53 +1,29 @@
 # KANBAN BOARD
 
-## 🏗️ IN PROGRESS (En cours)
+## BACKLOG
 
 _(vide)_
 
-## 🚧 REVIEW (En attente de validation)
+### EPIC-008
+- [ ] STORY-005 : Images Docker - Liste
+- [ ] STORY-006 : Images Docker - Pull/suppression
+- [ ] STORY-007 : Export stacks JSON
+- [ ] STORY-008 : Import stacks JSON
+- [ ] STORY-009 : Mise a jour deploiements
 
-_(vide)_
+## DONE
 
-## 📋 BACKLOG (À faire)
-
-### EPIC-009 : Container Detail — Complétude des informations et UX
-- [ ] STORY-024 : Backend — Schémas Pydantic structurés pour ContainerDetail
-- [ ] STORY-025 : Frontend — Header enrichi du Container Detail
-- [ ] STORY-026 : Frontend — Onglet État & Configuration détaillés
-- [ ] STORY-027 : Frontend — Onglet Aperçu synthétique conforme maquette UI
-- [ ] STORY-028 : Backend + Frontend — Onglet Config éditable
-- [ ] STORY-029 : Backend + Frontend — Métriques Network I/O et Disk I/O
-### EPIC-008 : Couverture Frontend des APIs Backend (Qualité — Q1 2026)
-- [ ] STORY-005 : Gestion des images Docker - Liste et visualisation
-- [ ] STORY-006 : Gestion des images Docker - Pull et suppression
-- [ ] STORY-007 : Export de stacks au format JSON
-- [ ] STORY-008 : Import de stacks depuis fichier JSON
-- [ ] STORY-009 : Mise à jour des déploiements existants
-- [ ] STORY-010 : Duplication de stack
-- [ ] STORY-011 : Archivage de stack
-- [ ] STORY-012 : Promotion container standalone en stack
-- [ ] STORY-013 : Gestion des volumes Docker - Liste et création
-- [ ] STORY-014 : Gestion des volumes Docker - Suppression
-- [ ] STORY-015 : Visualisation des réseaux Docker
-- [ ] STORY-016 : Statistiques détaillées par stack
-- [ ] STORY-017 : Détection des shells disponibles dans le terminal
-- [ ] STORY-018 : Widget informations système Docker
-- [ ] STORY-019 : Création manuelle de containers Docker
-- [ ] STORY-020 : Page informations système Docker
-### EPIC-001 : Système de Plugins & Marketplace (Phase 2 — Q2 2026)
-### EPIC-002 : Gestion des Machines Virtuelles — KVM & Proxmox (Phase 2 — Q2 2026)
-### EPIC-003 : Sécurité, GitOps & Multi-Machines (Phase 3-4 — Q3–Q4 2026)
-### EPIC-005 : Tests d'Intégration Backend (Qualité — Q1 2026)
-### EPIC-006 : Tests d'Intégration Frontend (Qualité — Q1 2026)
-### EPIC-007 : Infrastructure de Mocks pour Tests (Qualité — Phase 1)
-
-## ✅ DONE (Terminé)
-
-- [x] STORY-001 : Backend — Endpoints Compute Stats et Global
-- [x] STORY-021 : Frontend — Vue globale Compute avec bandeau et 3 sections
-- [x] STORY-002 : Backend — Refactoring des services de listage Docker
-- [x] STORY-022 : Frontend — Refactoring de Compute.vue en sous-composants
-- [x] STORY-023 : Frontend — Harmonisation tables containers et actions en masse
-- [x] STORY-003 : Wizard d'adoption d'objets découverts
-- [x] STORY-004 : Actions globales de stack (Start/Stop/Redeploy)
-
+- [x] EPIC-009 : Container Detail Completeness — DONE
+- [x] STORY-029 : Metriques Network/Disk I/O (parente)
+- [x] STORY-029.1 : Backend enrichissement metriques Network/Block I/O
+- [x] STORY-029.2 : Frontend debits, badges et graphiques I/O
+- [x] STORY-028.3 : Renommage container
+- [x] STORY-028 : Onglet Config editable
+- [x] STORY-028.2 : Frontend Onglet Config editable
+- [x] STORY-028.1 : Backend API Update and Rename
+- [x] STORY-027.2 : Card Ressources auto-refresh
+- [x] STORY-027.1 : Cards statiques layout
+- [x] STORY-027 : Apercu synthetique
+- [x] STORY-026 : Etat and Config detailles
+- [x] STORY-025 : Header enrichi
+- [x] STORY-024 : Schemas Pydantic ContainerDetail

@@ -88,16 +88,25 @@ export function standaloneToRow(container: StandaloneContainer): ContainerTableR
 
 /**
  * Return a Tailwind CSS color class based on container status and health.
+ * Supports all 6 Docker states: running, paused, exited, dead, created, restarting.
  */
 export function getContainerStatusColor(status: string, healthStatus?: string | null): string {
   if (healthStatus === 'healthy') return 'text-green-500'
   if (healthStatus === 'unhealthy') return 'text-orange-500'
-  if (status === 'running') return 'text-green-500'
-  return 'text-red-400'
+  switch (status) {
+    case 'running': return 'text-green-500'
+    case 'paused': return 'text-yellow-500'
+    case 'exited': return 'text-red-400'
+    case 'dead': return 'text-red-600'
+    case 'created': return 'text-blue-400'
+    case 'restarting': return 'text-orange-500'
+    default: return 'text-gray-400'
+  }
 }
 
 /**
  * Return an Element Plus tag type based on container status and health.
+ * Supports all 6 Docker states: running, paused, exited, dead, created, restarting.
  */
 export function getContainerStatusType(
   status: string,
@@ -105,19 +114,35 @@ export function getContainerStatusType(
 ): 'success' | 'warning' | 'danger' | 'info' {
   if (healthStatus === 'healthy') return 'success'
   if (healthStatus === 'unhealthy') return 'warning'
-  if (status === 'running') return 'success'
-  if (status === 'exited') return 'danger'
-  return 'info'
+  switch (status) {
+    case 'running': return 'success'
+    case 'paused': return 'warning'
+    case 'exited': return 'danger'
+    case 'dead': return 'danger'
+    case 'created': return 'info'
+    case 'restarting': return 'warning'
+    default: return 'info'
+  }
 }
 
 /**
- * Return a human-readable status label.
+ * Return a human-readable French status label.
+ * Shows health status when available (healthy/unhealthy/starting),
+ * otherwise shows the container state with a French label.
  */
 export function getContainerStatusLabel(status: string, healthStatus?: string | null): string {
-  if (healthStatus === 'healthy') return 'healthy'
-  if (healthStatus === 'unhealthy') return 'unhealthy'
-  if (healthStatus === 'starting') return 'starting'
-  return status
+  if (healthStatus === 'healthy') return 'Sain'
+  if (healthStatus === 'unhealthy') return 'Non sain'
+  if (healthStatus === 'starting') return 'Démarrage...'
+  const labels: Record<string, string> = {
+    running: 'En cours',
+    paused: 'En pause',
+    exited: 'Arrêté',
+    dead: 'Mort',
+    created: 'Créé',
+    restarting: 'Redémarrage',
+  }
+  return labels[status] ?? status
 }
 
 /**

@@ -28,14 +28,20 @@ vi.mock('@/composables/useSecretMasker', () => ({
 const mockInspectContainer = vi.fn()
 const mockStopContainer = vi.fn()
 const mockRestartContainer = vi.fn()
+const mockPauseContainer = vi.fn()
+const mockUnpauseContainer = vi.fn()
 vi.mock('@/stores', () => ({
   useContainersStore: () => ({
     inspectContainer: mockInspectContainer,
     stopContainer: mockStopContainer,
     restartContainer: mockRestartContainer,
+    pauseContainer: mockPauseContainer,
+    unpauseContainer: mockUnpauseContainer,
     containerDetail: null,
     detailLoading: false,
     error: null,
+    allContainers: [],
+    fetchContainers: vi.fn(),
   }),
   useAuthStore: () => ({
     token: 'mock-jwt-token',
@@ -59,6 +65,15 @@ vi.mock('@/composables/useContainerLogs', () => ({
     clearLogs: vi.fn(),
     downloadLogs: vi.fn(),
   }),
+}))
+
+// Mock containersApi.rename
+const mockRename = vi.fn()
+vi.mock('@/services/api', () => ({
+  containersApi: {
+    rename: (...args: unknown[]) => mockRename(...args),
+    getStats: vi.fn().mockResolvedValue({ data: {} }),
+  },
 }))
 
 // Mock useContainerProcesses composable
@@ -227,6 +242,38 @@ describe('ContainerDetail.vue', () => {
             template: '<div class="container-logs-stub">Logs Mock</div>',
             props: ['containerId', 'containerName'],
           },
+          'ContainerOverviewTab': {
+            template: '<div class="container-overview-tab-stub">Overview Mock</div>',
+            props: ['containerId', 'containerName', 'containerStatus'],
+          },
+          'ContainerInfoTab': {
+            template: '<div class="container-info-tab-stub">Info Mock</div>',
+            props: ['detail'],
+          },
+          'ContainerConfigTab': {
+            template: '<div class="container-config-tab-stub">Config Mock</div>',
+            props: ['detail'],
+          },
+          'ContainerStats': {
+            template: '<div class="container-stats-stub">Stats Mock</div>',
+            props: ['containerId'],
+          },
+          'ContainerProcesses': {
+            template: '<div class="container-processes-stub">Processes Mock</div>',
+            props: ['containerId', 'containerName'],
+          },
+          'el-dialog': {
+            template: '<div class="el-dialog-stub" v-if="modelValue"><slot /><slot name="footer" /></div>',
+            props: ['modelValue', 'title', 'width', 'closeOnClickModal'],
+            emits: ['update:modelValue'],
+          },
+          'el-form': {
+            template: '<form class="el-form-stub"><slot /></form>',
+          },
+          'el-form-item': {
+            template: '<div class="el-form-item-stub"><slot /></div>',
+            props: ['error'],
+          },
         },
       },
     })
@@ -259,7 +306,7 @@ describe('ContainerDetail.vue', () => {
 
       const wrapper = await mountComponent()
 
-      expect((wrapper.vm as unknown as { activeTab: string }).activeTab).toBe('infos')
+      expect((wrapper.vm as unknown as { activeTab: string }).activeTab).toBe('apercu')
     })
 
     it('should compute containerId from route params', async () => {
@@ -273,36 +320,6 @@ describe('ContainerDetail.vue', () => {
     })
   })
 
-  describe('Methods', () => {
-    it('should truncate ID correctly', async () => {
-      mockInspectContainer.mockResolvedValue(mockContainerDetail)
-
-      const wrapper = await mountComponent()
-
-      const vm = wrapper.vm as unknown as {
-        truncateId: (id: string | undefined) => string
-      }
-
-      expect(vm.truncateId('abc123def456ghi789')).toBe('abc123def456')
-      expect(vm.truncateId('short')).toBe('short')
-      expect(vm.truncateId(undefined)).toBe('-')
-    })
-
-    it('should format date correctly', async () => {
-      mockInspectContainer.mockResolvedValue(mockContainerDetail)
-
-      const wrapper = await mountComponent()
-
-      const vm = wrapper.vm as unknown as {
-        formatDate: (dateStr: string | undefined) => string
-      }
-
-      const result = vm.formatDate('2024-01-15T10:30:00Z')
-      expect(result).toContain('2024')
-
-      expect(vm.formatDate(undefined)).toBe('-')
-    })
-  })
 
   describe('Environment variables detection', () => {
     it('should detect secret variables', async () => {
@@ -386,12 +403,12 @@ describe('ContainerDetail.vue', () => {
     })
 
     it('should disable Terminal tab when container is not running', async () => {
-      mockInspectContainer.mockResolvedValue({ ...mockContainerDetail, state: { Status: 'stopped' } })
+      mockInspectContainer.mockResolvedValue({ ...mockContainerDetail, state: { status: 'stopped' } })
 
       const wrapper = await mountComponent()
 
       const vm = wrapper.vm as unknown as { containerDetail: typeof mockContainerDetail }
-      vm.containerDetail = { ...mockContainerDetail, state: { Status: 'stopped' } }
+      vm.containerDetail = { ...mockContainerDetail, state: { status: 'stopped' } }
       await wrapper.vm.$nextTick()
 
       // Terminal tab should be disabled for stopped containers
@@ -453,6 +470,354 @@ describe('ContainerDetail.vue', () => {
 
       expect(mockRestartContainer).toHaveBeenCalledWith('container-456')
     })
+  })
 
+  describe('STORY-025: Pause/Unpause actions', () => {
+    it('should call pauseContainer when pause action is triggered', async () => {
+      mockPauseContainer.mockResolvedValue(undefined)
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent('container-pause-1')
+
+      const vm = wrapper.vm as unknown as {
+        handleAction: (action: string) => Promise<void>
+      }
+
+      await vm.handleAction('pause')
+
+      expect(mockPauseContainer).toHaveBeenCalledWith('container-pause-1')
+    })
+
+    it('should call unpauseContainer when unpause action is triggered', async () => {
+      mockUnpauseContainer.mockResolvedValue(undefined)
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent('container-unpause-1')
+
+      const vm = wrapper.vm as unknown as {
+        handleAction: (action: string) => Promise<void>
+      }
+
+      await vm.handleAction('unpause')
+
+      expect(mockUnpauseContainer).toHaveBeenCalledWith('container-unpause-1')
+    })
+  })
+
+  describe('STORY-025: Container state computed', () => {
+    it('should return running state', async () => {
+      mockInspectContainer.mockResolvedValue({
+        ...mockContainerDetail,
+        state: { status: 'running' },
+      })
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        containerState: string
+      }
+      vm.containerDetail = { ...mockContainerDetail, state: { status: 'running' } }
+      await wrapper.vm.$nextTick()
+
+      expect(vm.containerState).toBe('running')
+    })
+
+    it('should return paused state', async () => {
+      mockInspectContainer.mockResolvedValue({
+        ...mockContainerDetail,
+        state: { status: 'paused' },
+      })
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        containerState: string
+      }
+      vm.containerDetail = { ...mockContainerDetail, state: { status: 'paused' } }
+      await wrapper.vm.$nextTick()
+
+      expect(vm.containerState).toBe('paused')
+    })
+
+    it('should return exited state', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        containerState: string
+      }
+      vm.containerDetail = { ...mockContainerDetail, state: { status: 'exited' } }
+      await wrapper.vm.$nextTick()
+
+      expect(vm.containerState).toBe('exited')
+    })
+
+    it('should return unknown when no detail', async () => {
+      mockInspectContainer.mockResolvedValue(null)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as { containerState: string }
+      // When no detail, containerState defaults to 'unknown'
+      expect(vm.containerState).toBe('unknown')
+    })
+  })
+
+  describe('STORY-025: Container uptime', () => {
+    it('should compute containerUptime for running container', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        containerUptime: string
+      }
+      // Set startedAt to 1 hour ago
+      const oneHourAgo = new Date(Date.now() - 3600000).toISOString()
+      vm.containerDetail = {
+        ...mockContainerDetail,
+        state: { status: 'running', started_at: oneHourAgo },
+      }
+      await wrapper.vm.$nextTick()
+
+      // Should contain duration info (format depends on formatDuration implementation)
+      expect(typeof vm.containerUptime).toBe('string')
+    })
+
+    it('should return empty uptime when not running', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        containerUptime: string
+      }
+      vm.containerDetail = {
+        ...mockContainerDetail,
+        state: { status: 'exited' },
+      }
+      await wrapper.vm.$nextTick()
+
+      // containerUptime returns null when not running
+      expect(vm.containerUptime).toBeFalsy()
+    })
+  })
+
+  describe('STORY-028.3: Rename functionality', () => {
+    it('should show the "Renommer" button when container is loaded', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as { containerDetail: typeof mockContainerDetail }
+      vm.containerDetail = mockContainerDetail
+      await wrapper.vm.$nextTick()
+
+      const html = wrapper.html()
+      expect(html).toContain('Renommer')
+    })
+
+    it('should not show the "Renommer" button when container is null', async () => {
+      mockInspectContainer.mockResolvedValue(null)
+
+      const wrapper = await mountComponent()
+
+      // containerDetail is null by default after mount with null response
+      const html = wrapper.html()
+      expect(html).not.toContain('Renommer')
+    })
+
+    it('should open rename dialog with current name pre-filled', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        renameDialogVisible: boolean
+        renameNewName: string
+        openRenameDialog: () => void
+      }
+
+      vm.containerDetail = mockContainerDetail
+      await wrapper.vm.$nextTick()
+
+      // Dialog should be closed initially
+      expect(vm.renameDialogVisible).toBe(false)
+
+      // Open dialog
+      vm.openRenameDialog()
+      await wrapper.vm.$nextTick()
+
+      expect(vm.renameDialogVisible).toBe(true)
+      expect(vm.renameNewName).toBe('test-container')
+    })
+
+    it('should validate container name — reject invalid characters', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        renameNewName: string
+        renameError: string
+        handleRename: () => Promise<void>
+      }
+
+      vm.containerDetail = mockContainerDetail
+      await wrapper.vm.$nextTick()
+
+      // Test empty name
+      vm.renameNewName = '   '
+      await vm.handleRename()
+      expect(vm.renameError).toBeTruthy()
+
+      // Test invalid starting character
+      vm.renameNewName = '_invalid'
+      await vm.handleRename()
+      expect(vm.renameError).toBeTruthy()
+
+      // Test invalid characters
+      vm.renameNewName = 'invalid name!'
+      await vm.handleRename()
+      expect(vm.renameError).toBeTruthy()
+    })
+
+    it('should call API rename with correct parameters', async () => {
+      mockRename.mockResolvedValue({ data: { success: true, message: 'Renamed' } })
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent('container-rename-1')
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        renameNewName: string
+        renameDialogVisible: boolean
+        handleRename: () => Promise<void>
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.renameNewName = 'new-container-name'
+      vm.renameDialogVisible = true
+      await wrapper.vm.$nextTick()
+
+      await vm.handleRename()
+
+      expect(mockRename).toHaveBeenCalledWith('container-rename-1', { new_name: 'new-container-name' })
+    })
+
+    it('should close dialog and refresh after successful rename', async () => {
+      mockRename.mockResolvedValue({ data: { success: true, message: 'Renamed' } })
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent('container-rename-2')
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        renameNewName: string
+        renameDialogVisible: boolean
+        handleRename: () => Promise<void>
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.renameNewName = 'renamed-container'
+      vm.renameDialogVisible = true
+      await wrapper.vm.$nextTick()
+
+      await vm.handleRename()
+      await flushPromises()
+
+      // Dialog should be closed
+      expect(vm.renameDialogVisible).toBe(false)
+      // Should have refreshed detail
+      expect(mockInspectContainer).toHaveBeenCalled()
+    })
+
+    it('should show error when rename API fails', async () => {
+      mockRename.mockRejectedValue(new Error('Container already exists'))
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent('container-rename-3')
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        renameNewName: string
+        renameDialogVisible: boolean
+        renameError: string
+        handleRename: () => Promise<void>
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.renameNewName = 'duplicate-name'
+      vm.renameDialogVisible = true
+      await wrapper.vm.$nextTick()
+
+      await vm.handleRename()
+      await flushPromises()
+
+      // Should have error set
+      expect(vm.renameError).toBeTruthy()
+      // Dialog should remain open on error
+      expect(vm.renameDialogVisible).toBe(true)
+    })
+
+    it('should reset rename state when dialog closes', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        renameDialogVisible: boolean
+        renameNewName: string
+        renameError: string
+        openRenameDialog: () => void
+        onRenameDialogClosed: () => void
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.openRenameDialog()
+      await wrapper.vm.$nextTick()
+
+      expect(vm.renameDialogVisible).toBe(true)
+      expect(vm.renameNewName).toBe('test-container')
+
+      // Simulate dialog close
+      vm.onRenameDialogClosed()
+
+      expect(vm.renameNewName).toBe('')
+      expect(vm.renameError).toBe('')
+    })
+
+    it('should close dialog without action if name is unchanged', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        renameDialogVisible: boolean
+        renameNewName: string
+        handleRename: () => Promise<void>
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.renameNewName = 'test-container' // same as current name
+      vm.renameDialogVisible = true
+      await wrapper.vm.$nextTick()
+
+      await vm.handleRename()
+
+      // Dialog should close without API call
+      expect(vm.renameDialogVisible).toBe(false)
+      expect(mockRename).not.toHaveBeenCalled()
+    })
   })
 })

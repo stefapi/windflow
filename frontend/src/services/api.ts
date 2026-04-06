@@ -50,6 +50,11 @@ import type {
   StackActionResponse,
   StackRedeployRequest,
   StackRedeployResponse,
+  ContainerUpdateRestartPolicyRequest,
+  ContainerUpdateResourcesRequest,
+  ContainerUpdateResponse,
+  ContainerRenameRequest,
+  ContainerRenameResponse,
 } from '@/types/api'
 
 // Auth API
@@ -290,6 +295,15 @@ export const containersApi = {
   restart: (id: string, timeout: number = 10) =>
     http.post<void>(`/docker/containers/${id}/restart`, null, { params: { timeout } }),
 
+  pause: (id: string) =>
+    http.post<void>(`/docker/containers/${id}/pause`),
+
+  unpause: (id: string) =>
+    http.post<void>(`/docker/containers/${id}/unpause`),
+
+  getStats: (id: string) =>
+    http.get(`/docker/containers/${id}/stats`),
+
   remove: (id: string, force: boolean = false) =>
     http.delete<void>(`/docker/containers/${id}`, { params: { force } }),
 
@@ -301,6 +315,15 @@ export const containersApi = {
 
   batchStop: (containerIds: string[]) =>
     http.post<BatchContainerActionResponse>('/docker/containers/batch/stop', { container_ids: containerIds }),
+
+  updateRestartPolicy: (id: string, data: ContainerUpdateRestartPolicyRequest) =>
+    http.patch<ContainerUpdateResponse>(`/docker/containers/${id}/restart-policy`, data),
+
+  updateResources: (id: string, data: ContainerUpdateResourcesRequest) =>
+    http.patch<ContainerUpdateResponse>(`/docker/containers/${id}/resources`, data),
+
+  rename: (id: string, data: ContainerRenameRequest) =>
+    http.post<ContainerRenameResponse>(`/docker/containers/${id}/rename`, data),
 }
 
 // Compute API

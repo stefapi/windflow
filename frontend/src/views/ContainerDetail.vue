@@ -4,7 +4,8 @@
     <el-card class="page-header">
       <template #header>
         <div class="header-content">
-          <div class="header-left">
+          <!-- Ligne 1 : Retour + Identité -->
+          <div class="header-top">
             <el-button
               link
               @click="goBack"
@@ -14,44 +15,174 @@
               </el-icon>
               Retour
             </el-button>
-            <div class="container-title">
-              <h2>{{ containerDetail?.name || 'Container' }}</h2>
-              <el-tag
-                :type="containerState === 'running' ? 'success' : 'danger'"
-                size="large"
-              >
-                {{ containerState }}
-              </el-tag>
-            </div>
           </div>
-          <div class="header-actions">
+
+          <div class="header-identity">
+            <h2 class="container-name">{{ containerDetail?.name || 'Container' }}</h2>
             <el-button
-              v-if="containerState === 'running'"
+              v-if="containerDetail"
+              link
+              type="primary"
+              :icon="Edit"
+              @click="openRenameDialog"
+            >
+              Renommer
+            </el-button>
+            <code
+              v-if="containerDetail?.image"
+              class="container-image"
+            >{{ containerDetail.image }}</code>
+            <el-tag
+              :type="statusTagType"
+              size="large"
+              effect="dark"
+            >
+              {{ statusLabel }}
+            </el-tag>
+            <span
+              v-if="containerUptime"
+              class="container-uptime"
+            >{{ containerUptime }}</span>
+          </div>
+
+          <!-- Ligne 2 : Métadonnées inline -->
+          <div class="header-meta">
+            <span
+              v-if="targetName"
+              class="meta-item"
+            >
+              <el-icon><Monitor /></el-icon>
+              Target : {{ targetName }}
+            </span>
+            <span
+              v-if="headerStats.cpuPercent !== null"
+              class="meta-item"
+            >
+              <el-icon><Cpu /></el-icon>
+              CPU : {{ headerStats.cpuPercent.toFixed(1) }}%
+            </span>
+            <span
+              v-if="headerStats.memoryUsage"
+              class="meta-item"
+            >
+              <el-icon><Memo /></el-icon>
+              RAM : {{ headerStats.memoryUsage }}
+            </span>
+          </div>
+
+          <!-- Ligne 3 : Barre d'actions -->
+          <div class="header-actions">
+            <el-tooltip
+              v-if="!['exited', 'dead', 'created'].includes(containerState)"
+              content="Container déjà en cours d'exécution"
+              placement="top"
+            >
+              <el-button
+                type="success"
+                disabled
+              >
+                <el-icon class="el-icon--left"><VideoPlay /></el-icon>
+                Démarrer
+              </el-button>
+            </el-tooltip>
+            <el-button
+              v-else
+              type="success"
+              @click="handleAction('start')"
+            >
+              <el-icon class="el-icon--left"><VideoPlay /></el-icon>
+              Démarrer
+            </el-button>
+
+            <el-tooltip
+              v-if="containerState !== 'running'"
+              content="Le container doit être en cours d'exécution"
+              placement="top"
+            >
+              <el-button
+                type="warning"
+                disabled
+              >
+                <el-icon class="el-icon--left"><VideoPause /></el-icon>
+                Pause
+              </el-button>
+            </el-tooltip>
+            <el-button
+              v-else
               type="warning"
+              @click="handleAction('pause')"
+            >
+              <el-icon class="el-icon--left"><VideoPause /></el-icon>
+              Pause
+            </el-button>
+
+            <el-button
+              v-if="containerState === 'paused'"
+              type="success"
+              @click="handleAction('unpause')"
+            >
+              <el-icon class="el-icon--left"><VideoPlay /></el-icon>
+              Reprendre
+            </el-button>
+
+            <el-tooltip
+              v-if="!['running', 'paused'].includes(containerState)"
+              content="Le container est déjà arrêté"
+              placement="top"
+            >
+              <el-button
+                type="danger"
+                disabled
+              >
+                <el-icon class="el-icon--left"><SwitchButton /></el-icon>
+                Arrêter
+              </el-button>
+            </el-tooltip>
+            <el-button
+              v-else
+              type="danger"
               @click="handleAction('stop')"
             >
-              <el-icon class="el-icon--left">
-                <VideoPause />
-              </el-icon>
+              <el-icon class="el-icon--left"><SwitchButton /></el-icon>
               Arrêter
             </el-button>
+
+            <el-tooltip
+              v-if="containerState !== 'running'"
+              content="Le container doit être en cours d'exécution"
+              placement="top"
+            >
+              <el-button
+                type="primary"
+                disabled
+              >
+                <el-icon class="el-icon--left"><RefreshRight /></el-icon>
+                Redémarrer
+              </el-button>
+            </el-tooltip>
             <el-button
-              v-if="containerState === 'running'"
+              v-else
               type="primary"
               @click="handleAction('restart')"
             >
-              <el-icon class="el-icon--left">
-                <RefreshRight />
-              </el-icon>
+              <el-icon class="el-icon--left"><RefreshRight /></el-icon>
               Redémarrer
             </el-button>
+
+            <el-button
+              type="danger"
+              plain
+              @click="handleDelete"
+            >
+              <el-icon class="el-icon--left"><Delete /></el-icon>
+              Supprimer
+            </el-button>
+
             <el-button
               type="default"
               @click="showInspectDrawer"
             >
-              <el-icon class="el-icon--left">
-                <ZoomIn />
-              </el-icon>
+              <el-icon class="el-icon--left"><ZoomIn /></el-icon>
               Inspect
             </el-button>
           </div>
@@ -83,253 +214,22 @@
       <!-- Tabs -->
       <el-tabs v-model="activeTab">
         <el-tab-pane
+          label="Aperçu"
+          name="apercu"
+        >
+          <ContainerOverviewTab
+            v-if="containerId"
+            :detail="containerDetail"
+            :container-id="containerId!"
+            :container-state="containerState"
+          />
+        </el-tab-pane>
+
+        <el-tab-pane
           label="Infos"
           name="infos"
         >
-          <div class="info-sections">
-            <!-- General Info -->
-            <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
-                Informations générales
-              </h3>
-              <el-descriptions
-                :column="2"
-                border
-              >
-                <el-descriptions-item label="ID">
-                  <template #default>
-                    <div class="id-with-copy">
-                      <code>{{ truncateId(containerDetail?.id) }}</code>
-                      <el-button
-                        link
-                        size="small"
-                        @click="copyId"
-                      >
-                        <el-icon><CopyDocument /></el-icon>
-                      </el-button>
-                    </div>
-                  </template>
-                </el-descriptions-item>
-                <el-descriptions-item label="Image">
-                  <template #default>
-                    <code>{{ containerDetail?.image || '-' }}</code>
-                  </template>
-                </el-descriptions-item>
-                <el-descriptions-item label="Créé le">
-                  <template #default>
-                    {{ formatDate(containerDetail?.created) }}
-                  </template>
-                </el-descriptions-item>
-                <el-descriptions-item label="Commande">
-                  <template #default>
-                    <code class="command-text">{{ containerDetail?.path }} {{ containerDetail?.args?.join(' ') }}</code>
-                  </template>
-                </el-descriptions-item>
-                <el-descriptions-item label="Stack parente">
-                  <template #default>
-                    <el-tag
-                      v-if="parentStack"
-                      size="small"
-                    >
-                      {{ parentStack }}
-                    </el-tag>
-                    <span
-                      v-else
-                      class="text-muted"
-                    >-</span>
-                  </template>
-                </el-descriptions-item>
-              </el-descriptions>
-            </div>
-
-            <!-- Ports Section -->
-            <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
-                Ports
-              </h3>
-              <el-table
-                :data="parsedPorts"
-                empty-text="Aucun port exposé"
-                stripe
-                size="small"
-              >
-                <el-table-column
-                  prop="hostIp"
-                  label="Host IP"
-                  width="140"
-                />
-                <el-table-column
-                  prop="hostPort"
-                  label="Host Port"
-                  width="120"
-                />
-                <el-table-column
-                  prop="containerPort"
-                  label="Container Port"
-                  width="140"
-                />
-                <el-table-column
-                  prop="protocol"
-                  label="Protocole"
-                  width="100"
-                />
-              </el-table>
-            </div>
-
-            <!-- Volumes Section -->
-            <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
-                Volumes
-              </h3>
-              <el-table
-                :data="parsedMounts"
-                empty-text="Aucun volume monté"
-                stripe
-                size="small"
-              >
-                <el-table-column
-                  prop="type"
-                  label="Type"
-                  width="100"
-                >
-                  <template #default="{ row }">
-                    <el-tag size="small">
-                      {{ row.type }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column
-                  prop="source"
-                  label="Source"
-                  min-width="200"
-                />
-                <el-table-column
-                  prop="destination"
-                  label="Destination"
-                  min-width="200"
-                />
-                <el-table-column
-                  label="Actions"
-                  width="120"
-                >
-                  <template #default>
-                    <el-button
-                      link
-                      size="small"
-                      disabled
-                      title="Parcourir (bientôt disponible)"
-                    >
-                      <el-icon><FolderOpened /></el-icon>
-                    </el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </div>
-
-            <!-- Network Section -->
-            <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-              <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
-                Réseau
-              </h3>
-              <el-table
-                :data="parsedNetworks"
-                empty-text="Aucune information réseau"
-                stripe
-                size="small"
-              >
-                <el-table-column
-                  prop="networkName"
-                  label="Réseau"
-                  width="150"
-                />
-                <el-table-column
-                  prop="ipAddress"
-                  label="Adresse IP"
-                  width="150"
-                />
-                <el-table-column
-                  prop="macAddress"
-                  label="Adresse MAC"
-                  width="180"
-                />
-                <el-table-column
-                  prop="gateway"
-                  label="Passerelle"
-                  width="150"
-                />
-              </el-table>
-            </div>
-
-            <!-- Environment Variables Section -->
-            <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-              <div class="section-header">
-                <h3 class="m-0 text-base font-semibold text-[var(--color-text-primary)]">
-                  Variables d'environnement
-                </h3>
-                <el-input
-                  v-model="envSearch"
-                  placeholder="Rechercher..."
-                  size="small"
-                  clearable
-                  class="env-search"
-                >
-                  <template #prefix>
-                    <el-icon><Search /></el-icon>
-                  </template>
-                </el-input>
-              </div>
-              <el-table
-                :data="filteredEnvVars"
-                empty-text="Aucune variable d'environnement"
-                stripe
-                size="small"
-                max-height="400"
-              >
-                <el-table-column
-                  prop="key"
-                  label="Variable"
-                  min-width="200"
-                >
-                  <template #default="{ row }">
-                    <code>{{ row.key }}</code>
-                    <el-tag
-                      v-if="row.isSecret"
-                      type="warning"
-                      size="small"
-                      class="secret-tag"
-                    >
-                      Secret
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column
-                  label="Valeur"
-                  min-width="300"
-                >
-                  <template #default="{ row }">
-                    <div class="value-cell">
-                      <code v-if="!row.isSecret || isRevealed(row.key)">{{ row.value }}</code>
-                      <code
-                        v-else
-                        class="masked-value"
-                      >{{ maskValue(row.value) }}</code>
-                      <el-button
-                        v-if="row.isSecret"
-                        link
-                        size="small"
-                        @click="toggleSecret(row.key)"
-                      >
-                        <el-icon>
-                          <View v-if="!isRevealed(row.key)" />
-                          <Hide v-else />
-                        </el-icon>
-                      </el-button>
-                    </div>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </div>
-          </div>
+          <ContainerInfoTab :detail="containerDetail" />
         </el-tab-pane>
 
         <!-- Logs Tab -->
@@ -382,6 +282,13 @@
         </el-tab-pane>
 
         <el-tab-pane
+          label="Config"
+          name="config"
+        >
+          <ContainerConfigTab :detail="containerDetail" />
+        </el-tab-pane>
+
+        <el-tab-pane
           label="Processus"
           name="processes"
           :disabled="containerState !== 'running'"
@@ -400,6 +307,46 @@
         </el-tab-pane>
       </el-tabs>
     </el-card>
+
+    <!-- Rename Dialog -->
+    <el-dialog
+      v-model="renameDialogVisible"
+      title="Renommer le container"
+      width="450px"
+      :close-on-click-modal="false"
+      @closed="onRenameDialogClosed"
+    >
+      <el-form @submit.prevent="handleRename">
+        <el-form-item
+          :error="renameError"
+        >
+          <el-input
+            ref="renameInputRef"
+            v-model="renameNewName"
+            placeholder="Nouveau nom du container"
+            clearable
+            :disabled="renameLoading"
+            @keyup.enter="handleRename"
+          />
+        </el-form-item>
+        <div class="rename-hint">
+          Le nom doit commencer par une lettre ou un chiffre et ne contenir que des lettres, chiffres, <code>_</code>, <code>.</code>, <code>-</code>.
+        </div>
+      </el-form>
+      <template #footer>
+        <el-button @click="renameDialogVisible = false">
+          Annuler
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="renameLoading"
+          :disabled="!isRenameValid"
+          @click="handleRename"
+        >
+          Confirmer
+        </el-button>
+      </template>
+    </el-dialog>
 
     <!-- Inspect Drawer -->
     <el-drawer
@@ -422,28 +369,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft,
-  CopyDocument,
   VideoPause,
+  VideoPlay,
+  SwitchButton,
+  Delete,
   RefreshRight,
-  Search,
-  View,
-  Hide,
   Loading,
-  FolderOpened,
   ZoomIn,
+  Monitor,
+  Cpu,
+  Memo,
+  Edit,
 } from '@element-plus/icons-vue'
 import { useContainersStore } from '@/stores'
-import { isSecretKey, maskValue, useSecretMasker } from '@/composables/useSecretMasker'
+import { containersApi } from '@/services/api'
+import { getContainerStatusType, getContainerStatusLabel } from '@/components/compute/helpers'
+import ContainerOverviewTab from '@/components/ContainerOverviewTab.vue'
+import ContainerInfoTab from '@/components/ContainerInfoTab.vue'
 import ContainerLogs from '@/components/ContainerLogs.vue'
 import ContainerTerminal from '@/components/ContainerTerminal.vue'
 import ContainerStats from '@/components/ContainerStats.vue'
+import ContainerConfigTab from '@/components/ContainerConfigTab.vue'
 import ContainerProcesses from '@/components/ContainerProcesses.vue'
-import type { ContainerDetail, ContainerEnvVar, ContainerPortMapping, ContainerMount, ContainerNetworkInfo } from '@/types/api'
+import type { ContainerDetail } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -451,166 +404,157 @@ const containersStore = useContainersStore()
 
 // State
 const containerDetail = ref<ContainerDetail | null>(null)
-const activeTab = ref('infos')
-const envSearch = ref('')
+const activeTab = ref('apercu')
 const inspectDrawerVisible = ref(false)
 const inspectContent = ref('')
 
-// Secret masker - only use functions, revealedKeys is internal
-const { toggleSecret, isRevealed } = useSecretMasker()
+// Rename state
+const renameDialogVisible = ref(false)
+const renameNewName = ref('')
+const renameLoading = ref(false)
+const renameError = ref('')
+const renameInputRef = ref<InstanceType<typeof import('element-plus')['ElInput']> | null>(null)
+
+/** Docker container name validation pattern */
+const CONTAINER_NAME_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/
+
+/** Computed: is the rename form valid */
+const isRenameValid = computed(() => {
+  return renameNewName.value.trim().length > 0 && CONTAINER_NAME_REGEX.test(renameNewName.value.trim())
+})
 
 // Computed
 const containerId = computed(() => route.params['id'] as string | undefined)
 
 const containerState = computed(() => {
-  const state = containerDetail.value?.state
-  if (typeof state === 'object' && state !== null) {
-    const stateRecord = state as Record<string, unknown>
-    const status = stateRecord['Status']
-    return typeof status === 'string' ? status : 'unknown'
-  }
-  return 'unknown'
+  return containerDetail.value?.state?.status ?? 'unknown'
 })
 
-const parentStack = computed(() => {
-  const labels = containerDetail.value?.config
-  if (labels && typeof labels === 'object') {
-    const config = labels as Record<string, unknown>
-    const project = config['com.docker.compose.project']
-    return typeof project === 'string' ? project : null
+const containerHealth = computed<string | null>(() => {
+  return containerDetail.value?.state?.health?.status ?? null
+})
+
+const statusTagType = computed(() => getContainerStatusType(containerState.value, containerHealth.value))
+const statusLabel = computed(() => getContainerStatusLabel(containerState.value, containerHealth.value))
+
+// Target name from query params
+const targetName = computed(() => {
+  return (route.query['targetName'] as string) || (route.query['target'] as string) || null
+})
+
+// Uptime computed from state.started_at / state.finished_at
+const containerUptime = computed(() => {
+  const state = containerDetail.value?.state
+  if (!state) return null
+
+  const isRunning = state.running === true || state.status === 'running'
+  if (isRunning && state.started_at) {
+    const duration = formatDuration(state.started_at)
+    return duration ? `En cours (${duration})` : null
   }
+
+  if (state.finished_at) {
+    const since = formatDuration(state.finished_at)
+    return since ? `Arrêté depuis ${since}` : null
+  }
+
   return null
 })
 
-// Parse ports from container details
-const parsedPorts = computed<ContainerPortMapping[]>(() => {
-  const hostConfig = containerDetail.value?.host_config
-  if (!hostConfig || typeof hostConfig !== 'object') return []
-
-  const config = hostConfig as Record<string, unknown>
-  const portBindings = config['PortBindings'] as Record<string, Array<{ HostIp: string; HostPort: string }>> | undefined
-  if (!portBindings) return []
-
-  const ports: ContainerPortMapping[] = []
-  for (const [containerPort, bindings] of Object.entries(portBindings)) {
-    if (bindings && bindings.length > 0) {
-      for (const binding of bindings) {
-        const match = containerPort.match(/^(\d+)\/(tcp|udp)$/i)
-        ports.push({
-          hostIp: binding.HostIp || '0.0.0.0',
-          hostPort: binding.HostPort,
-          containerPort: match?.[1] ?? containerPort,
-          protocol: match?.[2]?.toUpperCase() ?? 'TCP',
-        })
-      }
-    }
-  }
-  return ports
-})
-
-// Parse mounts from container details
-const parsedMounts = computed<ContainerMount[]>(() => {
-  const mounts = containerDetail.value?.mounts
-  if (!mounts || !Array.isArray(mounts)) return []
-
-  return mounts.map((mount: Record<string, unknown>) => ({
-    type: String(mount['Type'] || mount['type'] || 'unknown'),
-    source: String(mount['Source'] || mount['source'] || '-'),
-    destination: String(mount['Destination'] || mount['destination'] || '-'),
-    mode: String(mount['Mode'] || mount['mode'] || 'rw'),
-    name: mount['Name'] !== undefined ? String(mount['Name']) : mount['name'] !== undefined ? String(mount['name']) : undefined,
-  }))
-})
-
-// Parse networks from container details
-const parsedNetworks = computed<ContainerNetworkInfo[]>(() => {
-  const networkSettings = containerDetail.value?.network_settings
-  if (!networkSettings || typeof networkSettings !== 'object') return []
-
-  const settings = networkSettings as Record<string, unknown>
-  const networks = settings['Networks'] as Record<string, Record<string, unknown>> | undefined
-  if (!networks) return []
-
-  const result: ContainerNetworkInfo[] = []
-  for (const [networkName, networkConfig] of Object.entries(networks)) {
-    result.push({
-      networkId: String(networkConfig['NetworkID'] || '-'),
-      networkName,
-      ipAddress: String(networkConfig['IPAddress'] || '-'),
-      macAddress: String(networkConfig['MacAddress'] || '-'),
-      gateway: String(networkConfig['Gateway'] || '-'),
-    })
-  }
-  return result
-})
-
-// Parse environment variables
-const parsedEnvVars = computed<ContainerEnvVar[]>(() => {
-  const config = containerDetail.value?.config
-  if (!config || typeof config !== 'object') return []
-
-  const cfg = config as Record<string, unknown>
-  const envArray = cfg['Env'] as string[] | undefined
-  if (!envArray || !Array.isArray(envArray)) return []
-
-  return envArray.map(env => {
-    const equalIndex = env.indexOf('=')
-    if (equalIndex === -1) {
-      return { key: env, value: '', isSecret: false }
-    }
-    const key = env.substring(0, equalIndex)
-    const value = env.substring(equalIndex + 1)
-    return {
-      key,
-      value,
-      isSecret: isSecretKey(key),
-    }
-  })
-})
-
-// Filtered environment variables
-const filteredEnvVars = computed(() => {
-  if (!envSearch.value.trim()) {
-    return parsedEnvVars.value
-  }
-  const search = envSearch.value.toLowerCase()
-  return parsedEnvVars.value.filter(
-    env => env.key.toLowerCase().includes(search)
-  )
+// Header stats snapshot (CPU/RAM)
+const headerStats = reactive({
+  cpuPercent: null as number | null,
+  memoryUsage: null as string | null,
 })
 
 // Methods
-function truncateId(id: string | undefined): string {
-  if (!id) return '-'
-  return id.length > 12 ? id.substring(0, 12) : id
-}
 
-function formatDate(dateStr: string | undefined): string {
-  if (!dateStr) return '-'
+/** Format a duration between a past ISO date string and now */
+function formatDuration(isoDateStr: string | null): string | null {
+  if (!isoDateStr) return null
   try {
-    const date = new Date(dateStr)
-    return date.toLocaleString('fr-FR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+    const date = new Date(isoDateStr)
+    if (isNaN(date.getTime())) return null
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    if (diffMs < 0) return null
+
+    const seconds = Math.floor(diffMs / 1000)
+    const minutes = Math.floor(seconds / 60)
+    const hours = Math.floor(minutes / 60)
+    const days = Math.floor(hours / 24)
+
+    if (days > 0) return `${days}j ${hours % 24}h`
+    if (hours > 0) return `${hours}h ${minutes % 60}min`
+    if (minutes > 0) return `${minutes} min`
+    return 'quelques secondes'
   } catch {
-    return dateStr
+    return null
   }
 }
 
-async function copyId(): Promise<void> {
-  const id = containerDetail.value?.['id']
-  if (!id || typeof id !== 'string') return
+/** Fetch a single stats snapshot for the header */
+async function fetchHeaderStats(): Promise<void> {
+  const id = containerId.value
+  if (!id || containerState.value !== 'running') return
   try {
-    await window.navigator.clipboard.writeText(id)
-    ElMessage.success('ID copié dans le presse-papier')
+    const response = await containersApi.getStats(id)
+    const data = response.data as Record<string, unknown>
+    if (!data) return
+
+    // Docker stats API returns cpu_percent and memory_usage or similar fields
+    headerStats.cpuPercent = typeof data['cpu_percent'] === 'number' ? data['cpu_percent'] : null
+    headerStats.memoryUsage = typeof data['memory_usage'] === 'string' ? data['memory_usage'] : null
+
+    // Fallback: compute from raw cpu_stats if direct field not available
+    if (headerStats.cpuPercent === null && data['cpu_stats'] && typeof data['cpu_stats'] === 'object') {
+      const cpuStats = data['cpu_stats'] as Record<string, unknown>
+      const cpuUsage = cpuStats['cpu_usage'] as Record<string, unknown> | undefined
+      if (cpuUsage && typeof cpuUsage['percent'] === 'number') {
+        headerStats.cpuPercent = cpuUsage['percent']
+      }
+    }
+
+    // Fallback: compute memory from memory_stats if direct field not available
+    if (headerStats.memoryUsage === null && data['memory_stats'] && typeof data['memory_stats'] === 'object') {
+      const memStats = data['memory_stats'] as Record<string, unknown>
+      const usage = memStats['usage']
+      if (typeof usage === 'number' && usage > 0) {
+        headerStats.memoryUsage = `${Math.round(usage / 1024 / 1024)} MB`
+      }
+    }
   } catch {
-    ElMessage.error('Erreur lors de la copie')
+    // Stats are optional for the header — silently ignore errors
   }
 }
+
+/** Delete with ElMessageBox confirmation */
+async function handleDelete(): Promise<void> {
+  const id = containerId.value
+  if (!id) return
+
+  try {
+    await ElMessageBox.confirm(
+      `Voulez-vous vraiment supprimer le container "${containerDetail.value?.name || id}" ? Cette action est irréversible.`,
+      'Confirmer la suppression',
+      {
+        confirmButtonText: 'Supprimer',
+        cancelButtonText: 'Annuler',
+        type: 'warning',
+      },
+    )
+    await containersStore.removeContainer(id, true)
+    ElMessage.success('Container supprimé')
+    router.push('/compute')
+  } catch (error) {
+    if (error !== 'cancel' && error instanceof Error) {
+      ElMessage.error(error.message || 'Erreur lors de la suppression')
+    }
+  }
+}
+
+
+
 
 async function loadContainerDetail(): Promise<void> {
   const id = containerId.value
@@ -631,6 +575,21 @@ async function handleAction(action: string): Promise<void> {
 
   try {
     switch (action) {
+      case 'start':
+        await containersStore.startContainer(id)
+        ElMessage.success('Container démarré')
+        await loadContainerDetail()
+        break
+      case 'pause':
+        await containersStore.pauseContainer(id)
+        ElMessage.success('Container mis en pause')
+        await loadContainerDetail()
+        break
+      case 'unpause':
+        await containersStore.unpauseContainer(id)
+        ElMessage.success('Container repris')
+        await loadContainerDetail()
+        break
       case 'stop':
         await containersStore.stopContainer(id)
         ElMessage.success('Container arrêté')
@@ -640,6 +599,11 @@ async function handleAction(action: string): Promise<void> {
         await containersStore.restartContainer(id)
         ElMessage.success('Container redémarré')
         await loadContainerDetail()
+        break
+      case 'remove':
+        await containersStore.removeContainer(id, true)
+        ElMessage.success('Container supprimé')
+        router.push('/compute')
         break
     }
   } catch (error) {
@@ -652,6 +616,61 @@ function goBack(): void {
   router.back()
 }
 
+/** Open the rename dialog, pre-filled with the current name */
+function openRenameDialog(): void {
+  renameNewName.value = containerDetail.value?.name ?? ''
+  renameError.value = ''
+  renameDialogVisible.value = true
+  // Focus input after dialog opens
+  setTimeout(() => {
+    renameInputRef.value?.focus()
+  }, 100)
+}
+
+/** Handle rename confirmation */
+async function handleRename(): Promise<void> {
+  const id = containerId.value
+  if (!id) return
+
+  const newName = renameNewName.value.trim()
+
+  // Validate
+  if (!newName) {
+    renameError.value = 'Le nom ne peut pas être vide'
+    return
+  }
+  if (!CONTAINER_NAME_REGEX.test(newName)) {
+    renameError.value = 'Nom invalide. Utilisez uniquement des lettres, chiffres, _ . - (sans commencer par _ . -)'
+    return
+  }
+  if (newName === containerDetail.value?.name) {
+    renameDialogVisible.value = false
+    return
+  }
+
+  renameError.value = ''
+  renameLoading.value = true
+
+  try {
+    await containersApi.rename(id, { new_name: newName })
+    ElMessage.success(`Container renommé en "${newName}"`)
+    renameDialogVisible.value = false
+    await loadContainerDetail()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur lors du renommage'
+    renameError.value = message
+    ElMessage.error(message)
+  } finally {
+    renameLoading.value = false
+  }
+}
+
+/** Reset rename state when dialog closes */
+function onRenameDialogClosed(): void {
+  renameNewName.value = ''
+  renameError.value = ''
+}
+
 function showInspectDrawer(): void {
   if (containerDetail.value) {
     inspectContent.value = JSON.stringify(containerDetail.value, null, 2)
@@ -662,8 +681,10 @@ function showInspectDrawer(): void {
 }
 
 // Lifecycle
-onMounted(() => {
-  loadContainerDetail()
+onMounted(async () => {
+  await loadContainerDetail()
+  // Fetch stats snapshot after detail is loaded (non-blocking)
+  fetchHeaderStats()
 })
 </script>
 
@@ -678,32 +699,72 @@ onMounted(() => {
 
 .header-content {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.container-title {
-  display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 12px;
 }
 
-.container-title h2 {
+.header-top {
+  display: flex;
+  align-items: center;
+}
+
+.header-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.container-name {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.container-image {
+  font-size: 13px;
+  font-family: monospace;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-hover);
+  padding: 2px 8px;
+  border-radius: 4px;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.container-uptime {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  border-top: 1px solid var(--el-border-color-lighter);
 }
 
 .loading-container {
@@ -791,7 +852,6 @@ onMounted(() => {
   margin-left: 8px;
 }
 
-/* Placeholder content */
 .placeholder-content {
   display: flex;
   justify-content: center;
@@ -799,36 +859,49 @@ onMounted(() => {
   min-height: 200px;
 }
 
-/* Inspect Drawer */
 .inspect-container {
   display: flex;
   height: 100%;
   flex-direction: column;
 }
 
+.rename-hint {
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
+  line-height: 1.5;
+}
+
+.rename-hint code {
+  background: var(--el-fill-color-light);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
 .inspect-textarea :deep(textarea) {
   font-size: 11px;
-
-  /* Propriétés font uniquement - couleurs gérées par la classe code-block UnoCSS */
   font-family: monospace;
   line-height: 1.4;
 }
 
-/* Responsive adjustments for mobile */
 @media (width <= 768px) {
-  .header-content {
+  .header-identity {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
   }
 
-  .header-left {
-    flex-wrap: wrap;
+  .container-name {
+    max-width: 100%;
   }
 
-  .container-title {
-    width: 100%;
-    margin-top: 8px;
+  .container-image {
+    max-width: 100%;
+  }
+
+  .header-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 
   .header-actions {

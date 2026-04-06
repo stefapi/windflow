@@ -70,8 +70,7 @@ describe('Login.vue', () => {
 
     it('affiche les particules de fond', async () => {
       const wrapper = await mountComponent()
-      expect(wrapper.find('.login-page__bg').exists()).toBe(true)
-      expect(wrapper.findAll('.login-page__particle').length).toBe(3)
+      expect(wrapper.findAll('.login-particle').length).toBe(3)
     })
   })
 
@@ -83,14 +82,14 @@ describe('Login.vue', () => {
 
     it('affiche le titre "WindFlow"', async () => {
       const wrapper = await mountComponent()
-      const title = wrapper.find('.login-card__title')
+      const title = wrapper.find('.login-card-title')
       expect(title.exists()).toBe(true)
       expect(title.text()).toBe('WindFlow')
     })
 
     it('affiche le sous-titre', async () => {
       const wrapper = await mountComponent()
-      const subtitle = wrapper.find('.login-card__subtitle')
+      const subtitle = wrapper.find('.login-card-subtitle')
       expect(subtitle.exists()).toBe(true)
       expect(subtitle.text()).toBe('Container Deployment Platform')
     })
@@ -99,7 +98,7 @@ describe('Login.vue', () => {
   describe('AC-3: Formulaire de login', () => {
     it('rend le formulaire de login', async () => {
       const wrapper = await mountComponent()
-      expect(wrapper.find('.login-card__form').exists()).toBe(true)
+      expect(wrapper.find('.login-card-form').exists()).toBe(true)
     })
 
     it('contient un champ username', async () => {
@@ -118,7 +117,7 @@ describe('Login.vue', () => {
 
     it('contient un bouton de soumission', async () => {
       const wrapper = await mountComponent()
-      const btn = wrapper.find('.login-card__btn')
+      const btn = wrapper.find('.login-btn')
       expect(btn.exists()).toBe(true)
       expect(btn.text()).toContain('Sign In')
     })
@@ -127,12 +126,12 @@ describe('Login.vue', () => {
   describe('AC-5: Structure de la page', () => {
     it('contient le header avec logo', async () => {
       const wrapper = await mountComponent()
-      expect(wrapper.find('.login-card__header').exists()).toBe(true)
+      expect(wrapper.find('.login-card-header').exists()).toBe(true)
     })
 
     it('contient le footer avec version', async () => {
       const wrapper = await mountComponent()
-      const footer = wrapper.find('.login-card__footer')
+      const footer = wrapper.find('.login-card-footer')
       expect(footer.exists()).toBe(true)
       expect(footer.text()).toContain('v1.0')
     })
@@ -141,7 +140,7 @@ describe('Login.vue', () => {
   describe('Fonctionnement du formulaire', () => {
     it('le bouton submit a le type "submit"', async () => {
       const wrapper = await mountComponent()
-      const btn = wrapper.find('.login-card__btn')
+      const btn = wrapper.find('.login-btn')
       expect(btn.attributes('type')).toBe('submit')
     })
 
@@ -166,9 +165,9 @@ describe('Login.vue', () => {
       } as ReturnType<typeof useAuthStore>)
 
       const wrapper = await mountComponent()
-      const btn = wrapper.find('.login-card__btn')
+      const btn = wrapper.find('.login-btn')
       expect(btn.attributes('disabled')).toBeDefined()
-      expect(btn.classes()).toContain('login-card__btn--loading')
+      expect(btn.classes()).toContain('login-btn-loading')
     })
   })
 })

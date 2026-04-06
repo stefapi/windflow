@@ -8,6 +8,27 @@ import { useAuthStore } from '@/stores'
 
 export type StatsStreamStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
+export interface NetworkInterfaceData {
+  name: string
+  rx_bytes: number
+  tx_bytes: number
+  rx_packets: number
+  tx_packets: number
+  rx_errors: number
+  tx_errors: number
+  rx_dropped: number
+  tx_dropped: number
+}
+
+export interface BlkioDeviceData {
+  major: number
+  minor: number
+  read_bytes: number
+  write_bytes: number
+  read_ops: number
+  write_ops: number
+}
+
 export interface ContainerStats {
   cpu_percent: number
   memory_percent: number
@@ -18,6 +39,19 @@ export interface ContainerStats {
   block_read_bytes: number
   block_write_bytes: number
   timestamp: string
+  // Enriched network data (STORY-029.2)
+  network_interfaces: NetworkInterfaceData[]
+  total_rx_errors: number
+  total_tx_errors: number
+  total_rx_dropped: number
+  total_tx_dropped: number
+  // Enriched block I/O data (STORY-029.2)
+  blkio_devices: BlkioDeviceData[]
+  // Calculated rates (bytes/s)
+  network_rx_rate: number
+  network_tx_rate: number
+  block_read_rate: number
+  block_write_rate: number
 }
 
 export interface UseContainerStatsOptions {
@@ -47,6 +81,11 @@ export interface StatsHistoryEntry {
   network_tx_bytes: number
   block_read_bytes: number
   block_write_bytes: number
+  // Calculated rates (bytes/s)
+  network_rx_rate: number
+  network_tx_rate: number
+  block_read_rate: number
+  block_write_rate: number
   timestamp: number
 }
 
@@ -58,6 +97,33 @@ const getWebSocketBaseUrl = (): string => {
   const host = window.location.host
   return `${protocol}//${host}`
 }
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function parseNetworkInterfaces(raw: any[]): NetworkInterfaceData[] {
+  return raw.map((iface) => ({
+    name: String(iface['name'] ?? ''),
+    rx_bytes: Number(iface['rx_bytes'] ?? 0),
+    tx_bytes: Number(iface['tx_bytes'] ?? 0),
+    rx_packets: Number(iface['rx_packets'] ?? 0),
+    tx_packets: Number(iface['tx_packets'] ?? 0),
+    rx_errors: Number(iface['rx_errors'] ?? 0),
+    tx_errors: Number(iface['tx_errors'] ?? 0),
+    rx_dropped: Number(iface['rx_dropped'] ?? 0),
+    tx_dropped: Number(iface['tx_dropped'] ?? 0),
+  }))
+}
+
+function parseBlkioDevices(raw: any[]): BlkioDeviceData[] {
+  return raw.map((dev) => ({
+    major: Number(dev['major'] ?? 0),
+    minor: Number(dev['minor'] ?? 0),
+    read_bytes: Number(dev['read_bytes'] ?? 0),
+    write_bytes: Number(dev['write_bytes'] ?? 0),
+    read_ops: Number(dev['read_ops'] ?? 0),
+    write_ops: Number(dev['write_ops'] ?? 0),
+  }))
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export function useContainerStats(options: UseContainerStatsOptions): UseContainerStatsReturn {
   const { containerId, autoConnect = true } = options
@@ -134,6 +200,35 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
 
             case 'stats': {
               // Real-time stats update
+              const now = Date.now()
+              const previousStats = stats.value
+
+              // Calculate rates (bytes/s) by delta with previous sample
+              let networkRxRate = 0
+              let networkTxRate = 0
+              let blockReadRate = 0
+              let blockWriteRate = 0
+
+              if (previousStats) {
+                const prevTime = new Date(previousStats.timestamp).getTime()
+                const deltaTimeMs = now - prevTime
+                if (deltaTimeMs > 0) {
+                  const deltaSeconds = deltaTimeMs / 1000
+                  const newRx = data.network?.rx_bytes ?? 0
+                  const newTx = data.network?.tx_bytes ?? 0
+                  const newRead = data.block_io?.read_bytes ?? 0
+                  const newWrite = data.block_io?.write_bytes ?? 0
+                  networkRxRate = Math.max(0, (newRx - previousStats.network_rx_bytes) / deltaSeconds)
+                  networkTxRate = Math.max(0, (newTx - previousStats.network_tx_bytes) / deltaSeconds)
+                  blockReadRate = Math.max(0, (newRead - previousStats.block_read_bytes) / deltaSeconds)
+                  blockWriteRate = Math.max(0, (newWrite - previousStats.block_write_bytes) / deltaSeconds)
+                }
+              }
+
+              // Parse enriched data from backend (STORY-029.1)
+              const networkInterfaces = parseNetworkInterfaces(data.network?.interfaces ?? [])
+              const blkioDevices = parseBlkioDevices(data.block_io?.devices ?? [])
+
               const newStats: ContainerStats = {
                 cpu_percent: data.cpu?.percent ?? 0,
                 memory_percent: data.memory?.percent ?? 0,
@@ -144,13 +239,26 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
                 block_read_bytes: data.block_io?.read_bytes ?? 0,
                 block_write_bytes: data.block_io?.write_bytes ?? 0,
                 timestamp: data.timestamp,
+                // Enriched network data
+                network_interfaces: networkInterfaces,
+                total_rx_errors: data.network?.total_rx_errors ?? 0,
+                total_tx_errors: data.network?.total_tx_errors ?? 0,
+                total_rx_dropped: data.network?.total_rx_dropped ?? 0,
+                total_tx_dropped: data.network?.total_tx_dropped ?? 0,
+                // Enriched block I/O data
+                blkio_devices: blkioDevices,
+                // Calculated rates
+                network_rx_rate: networkRxRate,
+                network_tx_rate: networkTxRate,
+                block_read_rate: blockReadRate,
+                block_write_rate: blockWriteRate,
               }
 
               // Update stats
               stats.value = newStats
 
               // Add to history for sparklines
-              addStatsToHistory(newStats)
+              addStatsToHistory(newStats, now)
 
               // In manual mode, disconnect after receiving stats
               if (manualMode) {
@@ -245,7 +353,7 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
   /**
    * Add stats to history for sparklines
    */
-  function addStatsToHistory(newStats: ContainerStats): void {
+  function addStatsToHistory(newStats: ContainerStats, timestampMs?: number): void {
     history.value.push({
       cpu_percent: newStats.cpu_percent,
       memory_percent: newStats.memory_percent,
@@ -254,7 +362,12 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
       network_tx_bytes: newStats.network_tx_bytes,
       block_read_bytes: newStats.block_read_bytes,
       block_write_bytes: newStats.block_write_bytes,
-      timestamp: Date.now(),
+      // Calculated rates
+      network_rx_rate: newStats.network_rx_rate,
+      network_tx_rate: newStats.network_tx_rate,
+      block_read_rate: newStats.block_read_rate,
+      block_write_rate: newStats.block_write_rate,
+      timestamp: timestampMs ?? Date.now(),
     })
 
     // Keep only last 60 entries (5 minutes at 5 second intervals)

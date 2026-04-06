@@ -1,6 +1,6 @@
 # STORY-028 : Backend + Frontend — Onglet Config éditable
 
-**Statut :** TODO
+**Statut :** DONE
 **Epic Parent :** EPIC-009 — Container Detail — Complétude des informations et UX
 
 ## Description
@@ -12,33 +12,24 @@ Actuellement, l'onglet Infos affiche les env vars en lecture seule. Docker perme
 Le backend expose déjà des endpoints d'action sur les containers dans `backend/app/api/v1/docker.py`. Il faut ajouter des endpoints de mise à jour.
 
 ## Critères d'acceptation (AC)
-- [ ] AC 1 : Un nouvel onglet **Config** est ajouté après l'onglet Stats
-- [ ] AC 2 : La section **Env Vars** affiche les variables dans un tableau éditable (clé/valeur) avec possibilité d'ajouter/supprimer des lignes
-- [ ] AC 3 : La section **Labels** affiche les labels dans un tableau éditable (clé/valeur) avec possibilité d'ajouter/supprimer
-- [ ] AC 4 : La section **Restart Policy** permet de changer la politique via un sélecteur (no, always, on-failure, unless-stopped) avec un bouton "Appliquer"
-- [ ] AC 5 : La section **Resource Limits** permet de modifier Memory limit, CPU shares, PidsLimit via des inputs numériques avec un bouton "Appliquer"
-- [ ] AC 6 : Un endpoint `PATCH /api/v1/docker/containers/{id}/restart-policy` accepte `{name: str, maximum_retry_count: int | None}`
-- [ ] AC 7 : Un endpoint `PATCH /api/v1/docker/containers/{id}/resources` accepte `{memory_limit: int | None, cpu_shares: int | None, pids_limit: int | None}`
-- [ ] AC 8 : Un endpoint `POST /api/v1/docker/containers/{id}/rename` accepte `{new_name: str}`
-- [ ] AC 9 : Les modifications de restart policy et resources utilisent `docker update` (sans recréation) — retourne le résultat immédiatement
-- [ ] AC 10 : Les modifications d'env vars / labels affichent un avertissement : "⚠️ Modifier les variables d'environnement nécessite de recréer le container. Un arrêt de quelques secondes est à prévoir." avec confirmation obligatoire
-- [ ] AC 11 : Un bouton "Renommer" avec validation du nouveau nom est disponible
-- [ ] AC 12 : Les inputs sont pré-remplis avec les valeurs actuelles du container
+- [x] AC 1 : Un nouvel onglet **Config** est ajouté après l'onglet Stats
+- [x] AC 2 : La section **Env Vars** affiche les variables dans un tableau éditable (clé/valeur) avec possibilité d'ajouter/supprimer des lignes
+- [x] AC 3 : La section **Labels** affiche les labels dans un tableau éditable (clé/valeur) avec possibilité d'ajouter/supprimer
+- [x] AC 4 : La section **Restart Policy** permet de changer la politique via un sélecteur (no, always, on-failure, unless-stopped) avec un bouton "Appliquer"
+- [x] AC 5 : La section **Resource Limits** permet de modifier Memory limit, CPU shares, PidsLimit via des inputs numériques avec un bouton "Appliquer"
+- [x] AC 6 : Un endpoint `PATCH /api/v1/docker/containers/{id}/restart-policy` accepte `{name: str, maximum_retry_count: int | None}`
+- [x] AC 7 : Un endpoint `PATCH /api/v1/docker/containers/{id}/resources` accepte `{memory_limit: int | None, cpu_shares: int | None, pids_limit: int | None}`
+- [x] AC 8 : Un endpoint `POST /api/v1/docker/containers/{id}/rename` accepte `{new_name: str}`
+- [x] AC 9 : Les modifications de restart policy et resources utilisent `docker update` (sans recréation) — retourne le résultat immédiatement
+- [x] AC 10 : Les modifications d'env vars / labels affichent un avertissement : "⚠️ Modifier les variables d'environnement nécessite de recréer le container. Un arrêt de quelques secondes est à prévoir." avec confirmation obligatoire
+- [x] AC 11 : Un bouton "Renommer" avec validation du nouveau nom est disponible
+- [x] AC 12 : Les inputs sont pré-remplis avec les valeurs actuelles du container
+
+## Sous-stories
+- [x] STORY-028.1 : Backend API — Update & Rename — Couvre AC 6, AC 7, AC 8, AC 9
+- [x] STORY-028.2 : Frontend — Onglet Config éditable — Couvre AC 1, AC 2, AC 3, AC 4, AC 5, AC 10, AC 12
+- [x] STORY-028.3 : Frontend — Renommage du container — Couvre AC 8, AC 11
 
 ## Dépendances
 - STORY-024 (schémas structurés) — pour lire les valeurs actuelles structurées
 - STORY-026 (onglet État détaillé) — pour afficher les valeurs actuelles de config dans le bon format
-
-## État d'avancement technique
-- [ ] Backend : Créer endpoint PATCH restart-policy
-- [ ] Backend : Créer endpoint PATCH resources
-- [ ] Backend : Créer endpoint POST rename
-- [ ] Frontend : Créer l'onglet Config avec sections éditables
-- [ ] Frontend : Implémenter les formulaires d'édition
-- [ ] Frontend : Ajouter les confirmations et avertissements
-
-## Tâches d'implémentation détaillées
-<!-- Section remplie par la skill analyse-story -->
-
-## Tests à écrire
-<!-- Section remplie par la skill analyse-story -->

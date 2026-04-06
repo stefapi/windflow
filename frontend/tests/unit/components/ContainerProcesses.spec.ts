@@ -95,7 +95,7 @@ describe('ContainerProcesses.vue', () => {
     })
 
     await flushPromises()
-    expect(http.get).toHaveBeenCalledWith('/api/v1/docker/containers/abc123/top')
+    expect(http.get).toHaveBeenCalledWith('/docker/containers/abc123/top')
   })
 
   it('should display process count', async () => {

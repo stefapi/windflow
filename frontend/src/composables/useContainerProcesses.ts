@@ -58,7 +58,7 @@ export function useContainerProcesses(options: UseContainerProcessesOptions): Us
 
     try {
       const response = await http.get<ContainerProcessListResponse>(
-        `/api/v1/docker/containers/${containerId}/top`
+        `/docker/containers/${containerId}/top`
       )
 
       processes.value = response.data.processes

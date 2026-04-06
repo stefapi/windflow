@@ -101,26 +101,73 @@ def calculate_memory_percent(stats_data: dict) -> tuple[float, int, int]:
     return 0.0, used_memory, limit
 
 
-def calculate_network_io(stats_data: dict) -> tuple[int, int]:
+def calculate_network_io(stats_data: dict) -> dict:
     """
-    Calcule les I/O réseau (rx/tx bytes).
+    Calcule les I/O réseau détaillées par interface.
+
+    Retourne un dict structuré avec les totaux globaux et le détail
+    par interface (bytes, packets, errors, drops).
 
     Args:
         stats_data: Données de stats Docker brutes
 
     Returns:
-        Tuple (bytes reçus, bytes envoyés)
+        Dict structuré :
+        {
+            "rx_bytes": int, "tx_bytes": int,
+            "total_rx_errors": int, "total_tx_errors": int,
+            "total_rx_dropped": int, "total_tx_dropped": int,
+            "interfaces": [{"name": str, "rx_bytes": int, ...}, ...]
+        }
     """
     networks = stats_data.get("networks", {})
 
     total_rx = 0
     total_tx = 0
+    total_rx_errors = 0
+    total_tx_errors = 0
+    total_rx_dropped = 0
+    total_tx_dropped = 0
+    interfaces = []
 
-    for iface_stats in networks.values():
-        total_rx += iface_stats.get("rx_bytes", 0)
-        total_tx += iface_stats.get("tx_bytes", 0)
+    for iface_name, iface_stats in networks.items():
+        rx_bytes = iface_stats.get("rx_bytes", 0)
+        tx_bytes = iface_stats.get("tx_bytes", 0)
+        rx_packets = iface_stats.get("rx_packets", 0)
+        tx_packets = iface_stats.get("tx_packets", 0)
+        rx_errors = iface_stats.get("rx_errors", 0)
+        tx_errors = iface_stats.get("tx_errors", 0)
+        rx_dropped = iface_stats.get("rx_dropped", 0)
+        tx_dropped = iface_stats.get("tx_dropped", 0)
 
-    return total_rx, total_tx
+        total_rx += rx_bytes
+        total_tx += tx_bytes
+        total_rx_errors += rx_errors
+        total_tx_errors += tx_errors
+        total_rx_dropped += rx_dropped
+        total_tx_dropped += tx_dropped
+
+        interfaces.append({
+            "name": iface_name,
+            "rx_bytes": rx_bytes,
+            "tx_bytes": tx_bytes,
+            "rx_packets": rx_packets,
+            "tx_packets": tx_packets,
+            "rx_errors": rx_errors,
+            "tx_errors": tx_errors,
+            "rx_dropped": rx_dropped,
+            "tx_dropped": tx_dropped,
+        })
+
+    return {
+        "rx_bytes": total_rx,
+        "tx_bytes": total_tx,
+        "total_rx_errors": total_rx_errors,
+        "total_tx_errors": total_tx_errors,
+        "total_rx_dropped": total_rx_dropped,
+        "total_tx_dropped": total_tx_dropped,
+        "interfaces": interfaces,
+    }
 
 
 def _sum_blkio_entries(entries: list | None) -> tuple[int, int]:
@@ -153,37 +200,109 @@ def _sum_blkio_entries(entries: list | None) -> tuple[int, int]:
     return total_read, total_write
 
 
-def calculate_block_io(stats_data: dict) -> tuple[int, int]:
+def _build_device_stats(
+    service_bytes_entries: list | None,
+    serviced_entries: list | None,
+) -> list[dict]:
     """
-    Calcule les I/O disque (read/write bytes).
+    Agrège les entrées blkio par device (major, minor) en combinant
+    io_service_bytes_recursive (bytes) et io_serviced_recursive (IOPS).
+
+    Args:
+        service_bytes_entries: Liste d'entrées io_service_bytes_recursive
+        serviced_entries: Liste d'entrées io_serviced_recursive
+
+    Returns:
+        Liste de dicts par device :
+        [{"major": int, "minor": int, "read_bytes": int, "write_bytes": int,
+          "read_ops": int, "write_ops": int}, ...]
+    """
+    devices: dict[tuple[int, int], dict[str, int]] = {}
+
+    # Agréger io_service_bytes_recursive (bytes)
+    for entry in service_bytes_entries or []:
+        if not isinstance(entry, dict):
+            continue
+        major = entry.get("major", 0)
+        minor = entry.get("minor", 0)
+        key = (major, minor)
+        if key not in devices:
+            devices[key] = {
+                "major": major, "minor": minor,
+                "read_bytes": 0, "write_bytes": 0,
+                "read_ops": 0, "write_ops": 0,
+            }
+        op = entry.get("op", "")
+        value = entry.get("value", 0) or 0
+        if isinstance(op, str):
+            op_lower = op.lower()
+            if op_lower == "read":
+                devices[key]["read_bytes"] += value
+            elif op_lower == "write":
+                devices[key]["write_bytes"] += value
+
+    # Agréger io_serviced_recursive (IOPS)
+    for entry in serviced_entries or []:
+        if not isinstance(entry, dict):
+            continue
+        major = entry.get("major", 0)
+        minor = entry.get("minor", 0)
+        key = (major, minor)
+        if key not in devices:
+            devices[key] = {
+                "major": major, "minor": minor,
+                "read_bytes": 0, "write_bytes": 0,
+                "read_ops": 0, "write_ops": 0,
+            }
+        op = entry.get("op", "")
+        value = entry.get("value", 0) or 0
+        if isinstance(op, str):
+            op_lower = op.lower()
+            if op_lower == "read":
+                devices[key]["read_ops"] += value
+            elif op_lower == "write":
+                devices[key]["write_ops"] += value
+
+    return list(devices.values())
+
+
+def calculate_block_io(stats_data: dict) -> dict:
+    """
+    Calcule les I/O disque détaillées par device (bytes + IOPS).
 
     Supporte cgroups v1 ET cgroups v2 :
     - cgroups v1 : io_service_bytes_recursive (principal)
     - cgroups v2 : io_service_bytes_recursive (Docker 25+) ou
                    throttle_io_service_bytes_recursive (fallback en bytes)
 
-    Note: throttle_io_serviced_recursive (sans "bytes") mesure le nombre
-    d'opérations I/O (IOPS), PAS les bytes — ne pas l'utiliser ici.
-
     Args:
         stats_data: Données de stats Docker brutes
 
     Returns:
-        Tuple (bytes lus, bytes écrits)
+        Dict structuré :
+        {
+            "read_bytes": int, "write_bytes": int,
+            "devices": [{"major": int, "minor": int, "read_bytes": int,
+                         "write_bytes": int, "read_ops": int, "write_ops": int}, ...]
+        }
     """
     blkio_stats = stats_data.get("blkio_stats", {})
 
-    # 1) io_service_bytes_recursive — cgroups v1 et Docker 25+ cgroups v2
-    total_read, total_write = _sum_blkio_entries(
-        blkio_stats.get("io_service_bytes_recursive")
-    )
+    # Entries principales
+    service_bytes = blkio_stats.get("io_service_bytes_recursive")
+    serviced = blkio_stats.get("io_serviced_recursive")
 
-    # 2) Fallback : throttle_io_service_bytes_recursive (bytes throttled, cgroups v1/v2)
-    #    ATTENTION : ne pas confondre avec throttle_io_serviced_recursive (IOPS, pas bytes)
-    if total_read == 0 and total_write == 0:
-        total_read, total_write = _sum_blkio_entries(
-            blkio_stats.get("throttle_io_service_bytes_recursive")
-        )
+    # Construire les stats par device
+    devices = _build_device_stats(service_bytes, serviced)
+
+    # Si aucune donnée dans l'entrée principale, essayer le fallback
+    if not devices:
+        fallback_bytes = blkio_stats.get("throttle_io_service_bytes_recursive")
+        devices = _build_device_stats(fallback_bytes, None)
+
+    # Calculer les totaux globaux
+    total_read = sum(d["read_bytes"] for d in devices)
+    total_write = sum(d["write_bytes"] for d in devices)
 
     if total_read == 0 and total_write == 0:
         logger.debug(
@@ -191,7 +310,11 @@ def calculate_block_io(stats_data: dict) -> tuple[int, int]:
             "possibly cgroups v2 with older Docker version)"
         )
 
-    return total_read, total_write
+    return {
+        "read_bytes": total_read,
+        "write_bytes": total_write,
+        "devices": devices,
+    }
 
 
 def format_stats_response(container_id: str, stats_data: dict) -> dict:
@@ -207,8 +330,8 @@ def format_stats_response(container_id: str, stats_data: dict) -> dict:
     """
     cpu_percent = calculate_cpu_percent(stats_data)
     memory_percent, memory_used, memory_limit = calculate_memory_percent(stats_data)
-    network_rx, network_tx = calculate_network_io(stats_data)
-    block_read, block_write = calculate_block_io(stats_data)
+    network_data = calculate_network_io(stats_data)
+    block_data = calculate_block_io(stats_data)
 
     return {
         "type": "stats",
@@ -222,14 +345,8 @@ def format_stats_response(container_id: str, stats_data: dict) -> dict:
             "used": memory_used,
             "limit": memory_limit,
         },
-        "network": {
-            "rx_bytes": network_rx,
-            "tx_bytes": network_tx,
-        },
-        "block_io": {
-            "read_bytes": block_read,
-            "write_bytes": block_write,
-        },
+        "network": network_data,
+        "block_io": block_data,
     }
 
 

@@ -112,16 +112,29 @@
         <div class="stat-header">
           <el-icon><Connection /></el-icon>
           <span>Réseau</span>
+          <el-tag
+            v-if="hasNetworkErrors"
+            type="warning"
+            size="small"
+            class="io-badge-warning"
+          >
+            ⚠ {{ networkErrorsCount }} erreurs/drops
+          </el-tag>
         </div>
+        <!-- Rates (débits) -->
         <div class="io-grid">
           <div class="io-item">
             <span class="io-label">↓ Reçu</span>
-            <span class="io-value">{{ formatBytes(stats?.network_rx_bytes ?? 0) }}</span>
+            <span class="io-value io-rate">{{ formatRate(stats?.network_rx_rate ?? 0) }}</span>
           </div>
           <div class="io-item">
             <span class="io-label">↑ Envoyé</span>
-            <span class="io-value">{{ formatBytes(stats?.network_tx_bytes ?? 0) }}</span>
+            <span class="io-value io-rate">{{ formatRate(stats?.network_tx_rate ?? 0) }}</span>
           </div>
+        </div>
+        <!-- Cumulative totals -->
+        <div class="io-totals">
+          Total : ↓ {{ formatBytes(stats?.network_rx_bytes ?? 0) }} &nbsp; ↑ {{ formatBytes(stats?.network_tx_bytes ?? 0) }}
         </div>
       </div>
 
@@ -131,14 +144,33 @@
           <el-icon><Coin /></el-icon>
           <span>Disque</span>
         </div>
+        <!-- Rates (débits) -->
         <div class="io-grid">
           <div class="io-item">
-            <span class="io-label">Lecture</span>
-            <span class="io-value">{{ formatBytes(stats?.block_read_bytes ?? 0) }}</span>
+            <span class="io-label">↓ Lecture</span>
+            <span class="io-value io-rate">{{ formatRate(stats?.block_read_rate ?? 0) }}</span>
           </div>
           <div class="io-item">
-            <span class="io-label">Écriture</span>
-            <span class="io-value">{{ formatBytes(stats?.block_write_bytes ?? 0) }}</span>
+            <span class="io-label">↑ Écriture</span>
+            <span class="io-value io-rate">{{ formatRate(stats?.block_write_rate ?? 0) }}</span>
+          </div>
+        </div>
+        <!-- Cumulative totals -->
+        <div class="io-totals">
+          Total : ↓ {{ formatBytes(stats?.block_read_bytes ?? 0) }} &nbsp; ↑ {{ formatBytes(stats?.block_write_bytes ?? 0) }}
+        </div>
+        <!-- IOPS per device -->
+        <div
+          v-if="blkioDevicesWithOps.length > 0"
+          class="io-iops"
+        >
+          <div
+            v-for="dev in blkioDevicesWithOps"
+            :key="`${dev.major}:${dev.minor}`"
+            class="iops-device"
+          >
+            <span class="iops-label">Device {{ dev.major }}:{{ dev.minor }}</span>
+            <span class="iops-values">R: {{ dev.read_ops }} ops/s &nbsp; W: {{ dev.write_ops }} ops/s</span>
           </div>
         </div>
       </div>
@@ -224,6 +256,8 @@ import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 import { ResourceBar } from '@/components/ui'
 import { useContainerStats } from '@/composables/useContainerStats'
+import { formatBytes } from '@/utils/format'
+import type { BlkioDeviceData } from '@/composables/useContainerStats'
 
 // Register ECharts components
 use([LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
@@ -264,6 +298,37 @@ watch(autoRefresh, (newValue) => {
     // Manual mode: disconnect and keep last stats displayed
     disconnect()
   }
+})
+
+/** Format a rate (bytes/s) for display */
+function formatRate(bytesPerSec: number | null | undefined): string {
+  if (bytesPerSec == null || bytesPerSec === 0) return '0 B/s'
+  return `${formatBytes(bytesPerSec)}/s`
+}
+
+/** Network errors/drops badge */
+const hasNetworkErrors = computed(() => {
+  if (!stats.value) return false
+  return (
+    (stats.value.total_rx_errors + stats.value.total_tx_errors +
+    stats.value.total_rx_dropped + stats.value.total_tx_dropped) > 0
+  )
+})
+
+const networkErrorsCount = computed(() => {
+  if (!stats.value) return 0
+  return (
+    stats.value.total_rx_errors + stats.value.total_tx_errors +
+    stats.value.total_rx_dropped + stats.value.total_tx_dropped
+  )
+})
+
+/** Blkio devices with IOPS > 0 */
+const blkioDevicesWithOps = computed<{ major: number; minor: number; read_ops: number; write_ops: number }[]>(() => {
+  if (!stats.value?.blkio_devices) return []
+  return stats.value.blkio_devices.filter(
+    (dev: BlkioDeviceData) => dev.read_ops > 0 || dev.write_ops > 0,
+  )
 })
 
 // Helper to get optimal CPU scale (autoscale with padding)
@@ -449,17 +514,17 @@ const memoryChartOptions = computed(() => {
   }
 })
 
-// ECharts options for Network chart with autoscale (RX + TX on same chart)
+// ECharts options for Network chart — débits (rate/s)
 const networkChartOptions = computed(() => {
   const historySlice = history.value.slice(-60)
-  const rxData = historySlice.map((entry) => entry.network_rx_bytes)
-  const txData = historySlice.map((entry) => entry.network_tx_bytes)
+  const rxData = historySlice.map((entry) => entry.network_rx_rate)
+  const txData = historySlice.map((entry) => entry.network_tx_rate)
 
   // Calculate dynamic max with padding (max of both RX and TX)
   const maxRx = rxData.length > 0 ? Math.max(...rxData) : 0
   const maxTx = txData.length > 0 ? Math.max(...txData) : 0
   const maxValue = Math.max(maxRx, maxTx)
-  const paddedMax = Math.max(maxValue * 1.15, 1024) // 15% padding, minimum 1KB
+  const paddedMax = Math.max(maxValue * 1.15, 1) // 15% padding, minimum 1 B/s
 
   // Get optimal scale
   const scale = getOptimalScale(paddedMax)
@@ -500,7 +565,7 @@ const networkChartOptions = computed(() => {
       axisLabel: {
         color: getCssVar('--color-text-secondary'),
         fontSize: 10,
-        formatter: (value: number) => `${value} ${scale.unit}`,
+        formatter: (value: number) => `${value} ${scale.unit}/s`,
       },
     },
     tooltip: {
@@ -511,7 +576,7 @@ const networkChartOptions = computed(() => {
       formatter: (params: Array<{ seriesName: string; value: number }>) => {
         const parts = params.map((p) => {
           const bytes = p.value * scale.divisor
-          return `${p.seriesName}: ${formatBytesAxis(bytes)}`
+          return `${p.seriesName}: ${formatBytesAxis(bytes)}/s`
         })
         return parts.join('<br/>')
       },
@@ -569,16 +634,16 @@ const networkChartOptions = computed(() => {
   }
 })
 
-// ECharts options for Block I/O chart with autoscale (Read + Write on same chart)
+// ECharts options for Block I/O chart — débits (rate/s)
 const ioChartOptions = computed(() => {
   const historySlice = history.value.slice(-60)
-  const readData = historySlice.map((entry) => entry.block_read_bytes)
-  const writeData = historySlice.map((entry) => entry.block_write_bytes)
+  const readData = historySlice.map((entry) => entry.block_read_rate)
+  const writeData = historySlice.map((entry) => entry.block_write_rate)
   // Calculate dynamic max with padding (max of both Read and Write)
   const maxRead = readData.length > 0 ? Math.max(...readData) : 0
   const maxWrite = writeData.length > 0 ? Math.max(...writeData) : 0
   const maxValue = Math.max(maxRead, maxWrite)
-  const paddedMax = Math.max(maxValue * 1.15, 1024) // 15% padding, minimum 1KB
+  const paddedMax = Math.max(maxValue * 1.15, 1) // 15% padding, minimum 1 B/s
 
   // Get optimal scale
   const scale = getOptimalScale(paddedMax)
@@ -619,7 +684,7 @@ const ioChartOptions = computed(() => {
       axisLabel: {
         color: getCssVar('--color-text-secondary'),
         fontSize: 10,
-        formatter: (value: number) => `${value} ${scale.unit}`,
+        formatter: (value: number) => `${value} ${scale.unit}/s`,
       },
     },
     tooltip: {
@@ -630,7 +695,7 @@ const ioChartOptions = computed(() => {
       formatter: (params: Array<{ seriesName: string; value: number }>) => {
         const parts = params.map((p) => {
           const bytes = p.value * scale.divisor
-          return `${p.seriesName}: ${formatBytesAxis(bytes)}`
+          return `${p.seriesName}: ${formatBytesAxis(bytes)}/s`
         })
         return parts.join('<br/>')
       },
@@ -716,14 +781,6 @@ const connectionStatusText = computed(() => {
 })
 
 // Methods
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  if (bytes < 1024 * 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  return `${(bytes / (1024 * 1024 * 1024 * 1024)).toFixed(2)} TB`
-}
 
 function handleRefresh(): void {
   if (autoRefresh.value) {
@@ -891,6 +948,46 @@ function clearError(): void {
   font-size: 13px;
   text-align: center;
   color: var(--color-text-placeholder);
+}
+
+.io-rate {
+  font-weight: 600;
+}
+
+.io-totals {
+  margin-top: 8px;
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--color-text-secondary);
+}
+
+.io-badge-warning {
+  margin-left: auto;
+}
+
+.io-iops {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--color-border-light);
+}
+
+.iops-device {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.iops-label {
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--color-text-secondary);
+}
+
+.iops-values {
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--color-text-primary);
 }
 
 /* Responsive adjustments */

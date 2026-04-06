@@ -180,24 +180,22 @@ describe('WindFlowLogo', () => {
       expect(wrapper.find('.windflow-logo--light').exists()).toBe(true)
     })
 
-    it('applique la couleur CSS #60a5fa en variant dark (pour currentColor)', () => {
+    it('applique la CSS variable --color-accent-hover en variant dark', () => {
       const wrapper = mount(WindFlowLogo, {
         props: { variant: 'dark' },
       })
 
       const svg = wrapper.find('.windflow-logo__svg')
-      // jsdom converts hex to rgb() format
-      expect(svg.attributes('style')).toContain('color: rgb(96, 165, 250)')
+      expect(svg.attributes('style')).toContain('color: var(--color-accent-hover)')
     })
 
-    it('applique la couleur CSS #3b82f6 en variant light (pour currentColor)', () => {
+    it('applique la CSS variable --color-accent en variant light', () => {
       const wrapper = mount(WindFlowLogo, {
         props: { variant: 'light' },
       })
 
       const svg = wrapper.find('.windflow-logo__svg')
-      // jsdom converts hex to rgb() format
-      expect(svg.attributes('style')).toContain('color: rgb(59, 130, 246)')
+      expect(svg.attributes('style')).toContain('color: var(--color-accent)')
     })
 
     it('utilise la CSS custom property en variant auto', () => {

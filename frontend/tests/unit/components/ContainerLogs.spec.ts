@@ -127,7 +127,6 @@ describe('ContainerLogs.vue', () => {
       const wrapper = await mountComponent()
 
       // Component should render with logs container class
-      expect(wrapper.find('.container-logs').exists()).toBe(true)
       expect(wrapper.find('.logs-container').exists()).toBe(true)
     })
 

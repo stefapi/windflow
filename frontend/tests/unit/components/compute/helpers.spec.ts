@@ -70,6 +70,7 @@ describe('serviceToRow', () => {
       uptime: null,
       ports: [],
       healthStatus: null,
+      link: '/containers/svc-1',
     })
   })
 
@@ -127,8 +128,8 @@ describe('getContainerStatusColor', () => {
     expect(getContainerStatusColor('exited')).toBe('text-red-400')
   })
 
-  it('should return red for unknown status', () => {
-    expect(getContainerStatusColor('created')).toBe('text-red-400')
+  it('should return blue for created status', () => {
+    expect(getContainerStatusColor('created')).toBe('text-blue-400')
   })
 })
 
@@ -159,20 +160,20 @@ describe('getContainerStatusType', () => {
 // ─── getContainerStatusLabel ──────────────────────────────────────────────────
 
 describe('getContainerStatusLabel', () => {
-  it('should return "healthy" for healthy health status', () => {
-    expect(getContainerStatusLabel('running', 'healthy')).toBe('healthy')
+  it('should return "Sain" for healthy health status', () => {
+    expect(getContainerStatusLabel('running', 'healthy')).toBe('Sain')
   })
 
-  it('should return "unhealthy" for unhealthy health status', () => {
-    expect(getContainerStatusLabel('running', 'unhealthy')).toBe('unhealthy')
+  it('should return "Non sain" for unhealthy health status', () => {
+    expect(getContainerStatusLabel('running', 'unhealthy')).toBe('Non sain')
   })
 
-  it('should return "starting" for starting health status', () => {
-    expect(getContainerStatusLabel('running', 'starting')).toBe('starting')
+  it('should return "Démarrage..." for starting health status', () => {
+    expect(getContainerStatusLabel('running', 'starting')).toBe('Démarrage...')
   })
 
-  it('should return the raw status when no health status', () => {
-    expect(getContainerStatusLabel('exited')).toBe('exited')
+  it('should return the French label when no health status', () => {
+    expect(getContainerStatusLabel('exited')).toBe('Arrêté')
   })
 })
 

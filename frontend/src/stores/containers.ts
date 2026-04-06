@@ -124,6 +124,24 @@ export const useContainersStore = defineStore('containers', () => {
     }
   }
 
+  async function pauseContainer(id: string): Promise<void> {
+    await containersApi.pause(id)
+    const container = containers.value.find(c => c.id === id)
+    if (container) {
+      container.state = 'paused'
+      container.status = 'Up (Paused)'
+    }
+  }
+
+  async function unpauseContainer(id: string): Promise<void> {
+    await containersApi.unpause(id)
+    const container = containers.value.find(c => c.id === id)
+    if (container) {
+      container.state = 'running'
+      container.status = 'Up'
+    }
+  }
+
   async function removeContainer(id: string, force: boolean = false): Promise<void> {
     await containersApi.remove(id, force)
     // Remove from local state
@@ -286,6 +304,8 @@ export const useContainersStore = defineStore('containers', () => {
     stopContainer,
     restartContainer,
     removeContainer,
+    pauseContainer,
+    unpauseContainer,
     getContainerLogs,
     // Batch actions
     startContainers,
