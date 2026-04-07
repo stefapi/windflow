@@ -1,10 +1,16 @@
 <template>
   <div class="info-sections">
-    <!-- General Info -->
-    <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-      <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
-        Informations générales
-      </h3>
+    <!-- Informations générales (bleu) -->
+    <el-card
+      class="info-card card-info-general"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-blue">
+          <el-icon><InfoFilled /></el-icon>
+          <span>Informations générales</span>
+        </div>
+      </template>
       <el-descriptions
         :column="2"
         border
@@ -53,28 +59,31 @@
           </template>
         </el-descriptions-item>
       </el-descriptions>
-    </div>
+    </el-card>
 
-    <!-- State Section (STORY-026) -->
-    <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-      <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
-        État du container
-      </h3>
+    <!-- État du container (orange) -->
+    <el-card
+      class="info-card card-info-state"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-orange">
+          <el-icon><Warning /></el-icon>
+          <span>État du container</span>
+          <el-tag
+            :type="stateTagType"
+            size="small"
+            effect="dark"
+            class="ml-2"
+          >
+            {{ state?.status ?? '-' }}
+          </el-tag>
+        </div>
+      </template>
       <el-descriptions
         :column="2"
         border
       >
-        <el-descriptions-item label="Statut">
-          <template #default>
-            <el-tag
-              :type="stateTagType"
-              size="small"
-              effect="dark"
-            >
-              {{ state?.status ?? '-' }}
-            </el-tag>
-          </template>
-        </el-descriptions-item>
         <el-descriptions-item label="En cours d'exécution">
           <template #default>
             <el-tag
@@ -242,13 +251,19 @@
           </el-table-column>
         </el-table>
       </div>
-    </div>
+    </el-card>
 
-    <!-- Config Section (STORY-026) -->
-    <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-      <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
-        Configuration du container
-      </h3>
+    <!-- Configuration du container (violet) -->
+    <el-card
+      class="info-card card-info-config"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-purple">
+          <el-icon><Setting /></el-icon>
+          <span>Configuration du container</span>
+        </div>
+      </template>
       <el-descriptions
         :column="2"
         border
@@ -310,29 +325,40 @@
           </template>
         </el-descriptions-item>
       </el-descriptions>
-    </div>
+    </el-card>
 
-    <!-- Labels Section -->
-    <div
-      v-if="config?.labels && Object.keys(config.labels).length > 0"
-      class="bg-[var(--color-bg-secondary)] rounded-lg p-4"
+    <!-- Labels (gris) -->
+    <el-card
+      v-if="config?.labels && Object.keys(config.labels!).length > 0"
+      class="info-card card-info-labels"
+      shadow="hover"
     >
-      <div class="section-header">
-        <h3 class="m-0 text-base font-semibold text-[var(--color-text-primary)]">
-          Labels ({{ Object.keys(config.labels!).length }})
-        </h3>
-        <el-input
-          v-model="labelSearch"
-          placeholder="Rechercher..."
-          size="small"
-          clearable
-          class="env-search"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-      </div>
+      <template #header>
+        <div class="card-header header-grey">
+          <div class="card-header-left">
+            <el-icon><PriceTag /></el-icon>
+            <span>Labels</span>
+            <el-tag
+              size="small"
+              type="info"
+              class="ml-2"
+            >
+              {{ Object.keys(config.labels!).length }}
+            </el-tag>
+          </div>
+          <el-input
+            v-model="labelSearch"
+            placeholder="Rechercher..."
+            size="small"
+            clearable
+            class="header-search"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+        </div>
+      </template>
       <el-table
         :data="filteredLabels"
         empty-text="Aucun label"
@@ -359,13 +385,19 @@
           </template>
         </el-table-column>
       </el-table>
-    </div>
+    </el-card>
 
-    <!-- Host Config / Resources Section (STORY-026) -->
-    <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-      <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
-        Configuration hôte & Ressources
-      </h3>
+    <!-- Configuration hôte & Ressources (rouge) -->
+    <el-card
+      class="info-card card-info-host"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-red">
+          <el-icon><Cpu /></el-icon>
+          <span>Configuration hôte & Ressources</span>
+        </div>
+      </template>
       <el-descriptions
         :column="2"
         border
@@ -545,17 +577,20 @@
           </el-descriptions-item>
         </el-descriptions>
       </div>
+    </el-card>
 
-    </div>
-
-    <!-- Security & Capabilities Section -->
-    <div
+    <!-- Sécurité & Capabilities (rouge) -->
+    <el-card
       v-if="(hostConfig?.security_opt && hostConfig.security_opt.length > 0) || (hostConfig?.cap_add && hostConfig.cap_add.length > 0) || (hostConfig?.cap_drop && hostConfig.cap_drop.length > 0)"
-      class="bg-[var(--color-bg-secondary)] rounded-lg p-4"
+      class="info-card card-info-security"
+      shadow="hover"
     >
-      <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
-        Sécurité & Capabilities
-      </h3>
+      <template #header>
+        <div class="card-header header-red">
+          <el-icon><Lock /></el-icon>
+          <span>Sécurité & Capabilities</span>
+        </div>
+      </template>
       <div
         v-if="hostConfig?.security_opt && hostConfig.security_opt.length > 0"
         class="mb-3"
@@ -608,16 +643,20 @@
           </div>
         </div>
       </div>
-    </div>
+    </el-card>
 
-    <!-- Disk Usage Section (STORY-026) -->
-    <div
+    <!-- Occupation disque (gris) -->
+    <el-card
       v-if="detail?.size_rw != null || detail?.size_root_fs != null"
-      class="bg-[var(--color-bg-secondary)] rounded-lg p-4"
+      class="info-card card-info-disk"
+      shadow="hover"
     >
-      <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
-        Occupation disque
-      </h3>
+      <template #header>
+        <div class="card-header header-grey">
+          <el-icon><Coin /></el-icon>
+          <span>Occupation disque</span>
+        </div>
+      </template>
       <el-descriptions
         :column="2"
         border
@@ -662,13 +701,27 @@
           </span>
         </div>
       </div>
-    </div>
+    </el-card>
 
-    <!-- Ports Section -->
-    <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-      <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
-        Ports
-      </h3>
+    <!-- Ports (violet) -->
+    <el-card
+      class="info-card card-info-ports"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-purple">
+          <el-icon><Connection /></el-icon>
+          <span>Ports</span>
+          <el-tag
+            v-if="parsedPorts.length > 0"
+            size="small"
+            type="info"
+            class="ml-2"
+          >
+            {{ parsedPorts.length }}
+          </el-tag>
+        </div>
+      </template>
       <el-table
         :data="parsedPorts"
         empty-text="Aucun port exposé"
@@ -696,13 +749,27 @@
           width="100"
         />
       </el-table>
-    </div>
+    </el-card>
 
-    <!-- Volumes Section -->
-    <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-      <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
-        Volumes
-      </h3>
+    <!-- Volumes (vert) -->
+    <el-card
+      class="info-card card-info-volumes"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-green">
+          <el-icon><FolderOpened /></el-icon>
+          <span>Volumes</span>
+          <el-tag
+            v-if="parsedMounts.length > 0"
+            size="small"
+            type="info"
+            class="ml-2"
+          >
+            {{ parsedMounts.length }}
+          </el-tag>
+        </div>
+      </template>
       <el-table
         :data="parsedMounts"
         empty-text="Aucun volume monté"
@@ -736,13 +803,27 @@
           width="80"
         />
       </el-table>
-    </div>
+    </el-card>
 
-    <!-- Network Section -->
-    <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-      <h3 class="m-0 mb-3 text-base font-semibold text-[var(--color-text-primary)]">
-        Réseau
-      </h3>
+    <!-- Réseau (vert) -->
+    <el-card
+      class="info-card card-info-network"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-green">
+          <el-icon><Share /></el-icon>
+          <span>Réseau</span>
+          <el-tag
+            v-if="parsedNetworks.length > 0"
+            size="small"
+            type="info"
+            class="ml-2"
+          >
+            {{ parsedNetworks.length }}
+          </el-tag>
+        </div>
+      </template>
       <el-table
         :data="parsedNetworks"
         empty-text="Aucune information réseau"
@@ -770,26 +851,40 @@
           width="150"
         />
       </el-table>
-    </div>
+    </el-card>
 
-    <!-- Environment Variables Section -->
-    <div class="bg-[var(--color-bg-secondary)] rounded-lg p-4">
-      <div class="section-header">
-        <h3 class="m-0 text-base font-semibold text-[var(--color-text-primary)]">
-          Variables d'environnement
-        </h3>
-        <el-input
-          v-model="envSearch"
-          placeholder="Rechercher..."
-          size="small"
-          clearable
-          class="env-search"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-      </div>
+    <!-- Variables d'environnement (gris) -->
+    <el-card
+      class="info-card card-info-env"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-grey">
+          <div class="card-header-left">
+            <el-icon><Document /></el-icon>
+            <span>Variables d'environnement</span>
+            <el-tag
+              v-if="parsedEnvVars.length > 0"
+              size="small"
+              type="info"
+              class="ml-2"
+            >
+              {{ parsedEnvVars.length }}
+            </el-tag>
+          </div>
+          <el-input
+            v-model="envSearch"
+            placeholder="Rechercher..."
+            size="small"
+            clearable
+            class="header-search"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+        </div>
+      </template>
       <el-table
         :data="filteredEnvVars"
         empty-text="Aucune variable d'environnement"
@@ -840,7 +935,7 @@
           </template>
         </el-table-column>
       </el-table>
-    </div>
+    </el-card>
   </div>
 </template>
 
@@ -852,6 +947,17 @@ import {
   Search,
   View,
   Hide,
+  InfoFilled,
+  Warning,
+  Setting,
+  PriceTag,
+  Lock,
+  Coin,
+  Connection,
+  FolderOpened,
+  Share,
+  Document,
+  Cpu,
 } from '@element-plus/icons-vue'
 import { isSecretKey, maskValue, useSecretMasker } from '@/composables/useSecretMasker'
 import { formatBytes } from '@/utils/format'
@@ -1082,6 +1188,101 @@ async function copyId(): Promise<void> {
   gap: 16px;
 }
 
+/* ─── Card header pattern (same as ContainerOverviewTab) ─── */
+.info-card :deep(.el-card__header) {
+  padding: 12px 16px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-search {
+  width: 200px;
+}
+
+/* ─── Header color classes ─── */
+.header-blue {
+  color: var(--el-color-primary);
+}
+
+.header-green {
+  color: var(--el-color-success);
+}
+
+.header-purple {
+  color: #9b59b6;
+}
+
+.header-orange {
+  color: var(--el-color-warning);
+}
+
+.header-red {
+  color: var(--el-color-danger);
+}
+
+.header-grey {
+  color: var(--el-color-info);
+  justify-content: space-between;
+}
+
+/* ─── Card border-bottom colors ─── */
+.card-info-general :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-primary);
+}
+
+.card-info-state :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-warning);
+}
+
+.card-info-config :deep(.el-card__header) {
+  border-bottom: 3px solid #9b59b6;
+}
+
+.card-info-labels :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-info);
+}
+
+.card-info-host :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-danger);
+}
+
+.card-info-security :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-danger);
+}
+
+.card-info-disk :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-info);
+}
+
+.card-info-ports :deep(.el-card__header) {
+  border-bottom: 3px solid #9b59b6;
+}
+
+.card-info-volumes :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-success);
+}
+
+.card-info-network :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-success);
+}
+
+.card-info-env :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-info);
+}
+
+/* ─── Utility classes ─── */
 .id-with-copy {
   display: inline-flex;
   align-items: center;
@@ -1098,17 +1299,6 @@ async function copyId(): Promise<void> {
   color: var(--color-text-secondary);
 }
 
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.env-search {
-  width: 200px;
-}
-
 .value-cell {
   display: flex;
   align-items: center;
@@ -1122,5 +1312,33 @@ async function copyId(): Promise<void> {
 
 .secret-tag {
   margin-left: 6px;
+}
+
+.text-red-500 {
+  color: var(--el-color-danger);
+  font-weight: 600;
+}
+
+.text-xs {
+  font-size: 12px;
+}
+
+code {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.ml-2 {
+  margin-left: 8px;
+}
+
+@media (width <= 768px) {
+  .header-search {
+    width: 100%;
+  }
+
+  .card-header {
+    flex-wrap: wrap;
+  }
 }
 </style>

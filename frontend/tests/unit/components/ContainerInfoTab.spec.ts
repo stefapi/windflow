@@ -17,8 +17,22 @@ vi.mock('@/composables/useSecretMasker', () => ({
   },
 }))
 
+// Mock formatBytes
+vi.mock('@/utils/format', () => ({
+  formatBytes: (bytes: number) => {
+    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`
+    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${bytes} B`
+  },
+}))
+
 // Stub Element Plus components
 const globalStubs = {
+  'el-card': {
+    template: '<div class="el-card"><slot name="header" /><slot /></div>',
+    props: ['shadow', 'class'],
+  },
   'el-descriptions': {
     template: '<div class="el-descriptions"><slot /></div>',
   },
@@ -57,8 +71,17 @@ const globalStubs = {
   Search: { template: '<span />' },
   View: { template: '<span />' },
   Hide: { template: '<span />' },
-  ArrowRight: { template: '<span />' },
-  ArrowDown: { template: '<span />' },
+  InfoFilled: { template: '<span />' },
+  Warning: { template: '<span />' },
+  Setting: { template: '<span />' },
+  PriceTag: { template: '<span />' },
+  Lock: { template: '<span />' },
+  Coin: { template: '<span />' },
+  Connection: { template: '<span />' },
+  FolderOpened: { template: '<span />' },
+  Share: { template: '<span />' },
+  Document: { template: '<span />' },
+  Cpu: { template: '<span />' },
 }
 
 function createContainer() {
@@ -170,7 +193,6 @@ describe('ContainerInfoTab', () => {
       health: null,
     }
     const wrapper = mountComponent(detail)
-    // The component shows "OUI" tag for OOM, the label "OOM Killed" is a prop on stub
     expect(wrapper.text()).toContain('OUI')
   })
 
@@ -270,7 +292,6 @@ describe('ContainerInfoTab', () => {
       privileged: true,
     }
     const wrapper = mountComponent(detail)
-    // The component renders "Oui" inside an el-tag when privileged is true
     expect(wrapper.text()).toContain('Oui')
   })
 
@@ -344,6 +365,24 @@ describe('ContainerInfoTab', () => {
     }
     const wrapper = mountComponent(detail)
     expect(wrapper.text()).toContain("Variables d'environnement")
+  })
+})
+
+describe('Card-based layout', () => {
+  it('renders all expected section cards', () => {
+    const wrapper = mountComponent(createContainer())
+    const cards = wrapper.findAll('.el-card')
+    // general, state, config, host, ports, volumes, network, env = 8 cards
+    expect(cards.length).toBeGreaterThanOrEqual(8)
+  })
+
+  it('renders header color classes', () => {
+    const wrapper = mountComponent(createContainer())
+    const html = wrapper.html()
+    expect(html).toContain('header-blue')
+    expect(html).toContain('header-orange')
+    expect(html).toContain('header-purple')
+    expect(html).toContain('header-green')
   })
 })
 

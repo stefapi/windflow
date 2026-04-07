@@ -1,6 +1,6 @@
 # EPIC-009 : Refonte de la page ContainerDetail — Homogénéisation et édition complète
 
-**Statut :** TODO
+**Statut :** IN_PROGRESS
 **Priorité :** Haute
 
 ## Vision
@@ -311,7 +311,7 @@ Méthodes à ajouter :
 
 ## Stories liées
 
-- [ ] STORY-024 : Homogénéisation visuelle — onglet Infos au design d'Aperçu
+- [x] STORY-024 : Homogénéisation visuelle — onglet Infos au design d'Aperçu
 - [ ] STORY-025 : Backend — Endpoint de recréation de container (`/recreate`)
 - [ ] STORY-026 : Backend — Endpoints connect/disconnect réseau
 - [ ] STORY-027 : Frontend Config — Édition des ports et image (recréation)

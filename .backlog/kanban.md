@@ -5,7 +5,6 @@
 _(vide)_
 
 ### EPIC-009 : Refonte ContainerDetail — Homogénéisation et édition complète
-- [ ] STORY-024 : Homogénéisation visuelle — onglet Infos au design d'Aperçu
 - [ ] STORY-025 : Backend — Endpoint de recréation de container (`/recreate`)
 - [ ] STORY-026 : Backend — Endpoints connect/disconnect réseau
 - [ ] STORY-027 : Frontend Config — Édition des ports et image (recréation)
@@ -22,4 +21,4 @@ _(vide)_
 
 ## DONE
 
-_(vide)_
+- [x] STORY-024 : Homogénéisation visuelle — onglet Infos au design d'Aperçu

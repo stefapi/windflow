@@ -1,10 +1,16 @@
 <template>
   <div class="config-tab">
-    <!-- Section 1 : Variables d'environnement -->
-    <div class="config-section">
-      <div class="section-header">
-        <h3>Variables d'environnement</h3>
-      </div>
+    <!-- Section 1 : Variables d'environnement (gris) -->
+    <el-card
+      class="config-card card-config-env"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-grey">
+          <el-icon><Document /></el-icon>
+          <span>Variables d'environnement</span>
+        </div>
+      </template>
 
       <el-alert
         type="warning"
@@ -77,13 +83,19 @@
           Appliquer
         </el-button>
       </div>
-    </div>
+    </el-card>
 
-    <!-- Section 2 : Labels -->
-    <div class="config-section">
-      <div class="section-header">
-        <h3>Labels</h3>
-      </div>
+    <!-- Section 2 : Labels (gris) -->
+    <el-card
+      class="config-card card-config-labels"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-grey">
+          <el-icon><PriceTag /></el-icon>
+          <span>Labels</span>
+        </div>
+      </template>
 
       <el-alert
         type="warning"
@@ -155,13 +167,19 @@
           Appliquer
         </el-button>
       </div>
-    </div>
+    </el-card>
 
-    <!-- Section 3 : Restart Policy -->
-    <div class="config-section">
-      <div class="section-header">
-        <h3>Restart Policy</h3>
-      </div>
+    <!-- Section 3 : Restart Policy (orange) -->
+    <el-card
+      class="config-card card-config-restart"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-orange">
+          <el-icon><RefreshRight /></el-icon>
+          <span>Restart Policy</span>
+        </div>
+      </template>
 
       <el-descriptions
         :column="1"
@@ -214,13 +232,19 @@
           Appliquer
         </el-button>
       </div>
-    </div>
+    </el-card>
 
-    <!-- Section 4 : Resource Limits -->
-    <div class="config-section">
-      <div class="section-header">
-        <h3>Resource Limits</h3>
-      </div>
+    <!-- Section 4 : Resource Limits (rouge) -->
+    <el-card
+      class="config-card card-config-resources"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-red">
+          <el-icon><Cpu /></el-icon>
+          <span>Resource Limits</span>
+        </div>
+      </template>
 
       <el-descriptions
         :column="1"
@@ -291,14 +315,21 @@
           Appliquer
         </el-button>
       </div>
-    </div>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CirclePlus, Delete } from '@element-plus/icons-vue'
+import {
+  CirclePlus,
+  Delete,
+  Document,
+  PriceTag,
+  RefreshRight,
+  Cpu,
+} from '@element-plus/icons-vue'
 import { containersApi } from '@/services/api'
 import { formatBytes } from '@/utils/format'
 import { isSecretKey, useSecretMasker } from '@/composables/useSecretMasker'
@@ -506,29 +537,54 @@ async function applyResources(): Promise<void> {
 .config-tab {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding: 8px 0;
+  gap: 16px;
+  padding: 4px 0;
 }
 
-.config-section {
-  background-color: var(--color-bg-secondary, #f5f7fa);
-  border-radius: 8px;
-  padding: 16px;
+/* ─── Card header pattern (same as ContainerOverviewTab) ─── */
+.config-card :deep(.el-card__header) {
+  padding: 12px 16px;
 }
 
-.section-header {
+.card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-}
-
-.section-header h3 {
-  margin: 0;
-  font-size: 16px;
+  gap: 8px;
   font-weight: 600;
+  font-size: 14px;
 }
 
+/* ─── Header color classes ─── */
+.header-grey {
+  color: var(--el-color-info);
+}
+
+.header-orange {
+  color: var(--el-color-warning);
+}
+
+.header-red {
+  color: var(--el-color-danger);
+}
+
+/* ─── Card border-bottom colors ─── */
+.card-config-env :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-info);
+}
+
+.card-config-labels :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-info);
+}
+
+.card-config-restart :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-warning);
+}
+
+.card-config-resources :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-danger);
+}
+
+/* ─── Section content styles ─── */
 .section-alert {
   margin-bottom: 12px;
 }

@@ -1,5 +1,5 @@
 /**
- * ContainerConfigTab.vue Unit Tests — STORY-028.2
+ * ContainerConfigTab.vue Unit Tests — STORY-024
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -108,6 +108,7 @@ describe('ContainerConfigTab.vue', () => {
       global: {
         plugins: [ElementPlus],
         stubs: {
+          'el-card': { template: '<div class="el-card-stub"><slot name="header" /><slot /></div>', props: ['shadow', 'class'] },
           'el-table': { template: '<div class="el-table-stub"><slot /></div>', props: ['data'] },
           'el-table-column': { template: '<div class="el-table-column-stub" />', props: ['label', 'prop', 'width', 'minWidth'] },
           'el-input': { template: '<input class="el-input-stub" />', props: ['modelValue', 'type', 'placeholder', 'size'] },
@@ -128,7 +129,7 @@ describe('ContainerConfigTab.vue', () => {
     return wrapper
   }
 
-  describe('Rendering — 4 sections', () => {
+  describe('Rendering — 4 cards', () => {
     it('should mount successfully', async () => {
       const wrapper = await mountComponent()
       expect(wrapper.exists()).toBe(true)
@@ -139,21 +140,19 @@ describe('ContainerConfigTab.vue', () => {
       expect(wrapper.find('.config-tab').exists()).toBe(true)
     })
 
-    it('should render 4 config sections', async () => {
+    it('should render 4 config cards', async () => {
       const wrapper = await mountComponent()
-      const sections = wrapper.findAll('.config-section')
-      expect(sections.length).toBe(4)
+      const cards = wrapper.findAll('.el-card-stub')
+      expect(cards.length).toBe(4)
     })
 
-    it('should render section headers', async () => {
+    it('should render card headers with correct titles', async () => {
       const wrapper = await mountComponent()
-      const headers = wrapper.findAll('.section-header h3')
-      expect(headers.length).toBe(4)
-      const headerTexts = headers.map(h => h.text())
-      expect(headerTexts).toContain('Variables d\'environnement')
-      expect(headerTexts).toContain('Labels')
-      expect(headerTexts).toContain('Restart Policy')
-      expect(headerTexts).toContain('Resource Limits')
+      const text = wrapper.text()
+      expect(text).toContain('Variables d\'environnement')
+      expect(text).toContain('Labels')
+      expect(text).toContain('Restart Policy')
+      expect(text).toContain('Resource Limits')
     })
   })
 
@@ -184,7 +183,6 @@ describe('ContainerConfigTab.vue', () => {
     it('should pre-fill resources from detail', async () => {
       const wrapper = await mountComponent()
       const vm = wrapper.vm as unknown as { memoryValue: number; memoryUnit: string; cpuShares: number; pidsLimit: number }
-      // 536870912 bytes = 512 MB
       expect(vm.memoryValue).toBe(512)
       expect(vm.memoryUnit).toBe('MB')
       expect(vm.cpuShares).toBe(1024)
@@ -303,7 +301,6 @@ describe('ContainerConfigTab.vue', () => {
       await vm.applyRestartPolicy()
       await flushPromises()
 
-      // Should not throw — error is caught internally
       expect(mockUpdateRestartPolicy).toHaveBeenCalled()
     })
   })
@@ -326,7 +323,7 @@ describe('ContainerConfigTab.vue', () => {
       await flushPromises()
 
       expect(mockUpdateResources).toHaveBeenCalledWith('abc123', {
-        memory_limit: 256 * 1024 * 1024, // 256 MB in bytes
+        memory_limit: 256 * 1024 * 1024,
         cpu_shares: 512,
         pids_limit: 50,
       })
@@ -349,7 +346,7 @@ describe('ContainerConfigTab.vue', () => {
       await flushPromises()
 
       expect(mockUpdateResources).toHaveBeenCalledWith('abc123', {
-        memory_limit: 2 * 1024 * 1024 * 1024, // 2 GB in bytes
+        memory_limit: 2 * 1024 * 1024 * 1024,
         cpu_shares: undefined,
         pids_limit: -1,
       })
