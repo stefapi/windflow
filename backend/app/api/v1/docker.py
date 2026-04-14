@@ -23,6 +23,8 @@ from ...schemas.docker import (
     ContainerNetworkSettingsInfo,
     ContainerProcess,
     ContainerProcessListResponse,
+    ContainerRecreateRequest,
+    ContainerRecreateResponse,
     ContainerRenameRequest,
     ContainerRenameResponse,
     ContainerResponse,
@@ -622,6 +624,102 @@ async def remove_container(
         )
 
 
+@router.post(
+    "/containers/{container_id}/recreate",
+    response_model=ContainerRecreateResponse,
+    summary="Recreate container",
+    description=(
+        "Recreate a container with updated configuration. "
+        "Stops, removes, and recreates the container. "
+        "None fields preserve the current value. "
+        "Named volumes and bind mounts are preserved."
+    ),
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
+)
+async def recreate_container(
+    request: Request,
+    container_id: str,
+    recreate_data: ContainerRecreateRequest,
+):
+    """Recrée un container avec une nouvelle configuration."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Recreating container {container_id}",
+        extra={"correlation_id": correlation_id},
+    )
+
+    try:
+        client = await get_docker_client()
+
+        new_id, new_detail = await client.recreate_container(
+            container_id=container_id,
+            image=recreate_data.image,
+            pull_image=recreate_data.pull_image,
+            env=recreate_data.env,
+            labels=recreate_data.labels,
+            port_bindings=recreate_data.port_bindings,
+            mounts=recreate_data.mounts,
+            privileged=recreate_data.privileged,
+            readonly_rootfs=recreate_data.readonly_rootfs,
+            cap_add=recreate_data.cap_add,
+            cap_drop=recreate_data.cap_drop,
+            stop_timeout=recreate_data.stop_timeout,
+        )
+        await client.close()
+
+        container_response = ContainerDetailResponse(
+            id=new_detail.id,
+            name=new_detail.name,
+            created=new_detail.created,
+            path=new_detail.path,
+            args=new_detail.args,
+            state=ContainerStateInfo.from_docker_dict(new_detail.state),
+            image=new_detail.image,
+            config=ContainerConfigInfo.from_docker_dict(new_detail.config),
+            host_config=ContainerHostConfigInfo.from_docker_dict(new_detail.host_config),
+            network_settings=ContainerNetworkSettingsInfo.from_docker_dict(new_detail.network_settings),
+            mounts=new_detail.mounts,
+            size_rw=new_detail.size_rw,
+            size_root_fs=new_detail.size_root_fs,
+        )
+
+        return ContainerRecreateResponse(
+            success=True,
+            message=f"Container {container_id} recréé avec succès en {new_id}",
+            old_container_id=container_id,
+            new_container_id=new_id,
+            container=container_response,
+        )
+
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Container {container_id} non trouvé",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except RuntimeError as e:
+        # Chemin critique : container supprimé mais recréation échouée
+        logger.critical(
+            f"Critical recreate failure for {container_id}: {e}",
+            extra={"correlation_id": correlation_id},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Container {container_id} supprimé mais la recréation a échoué: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error recreating container: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la recréation du container: {str(e)}",
+        )
+
+
 @router.patch(
     "/containers/{container_id}/restart-policy",
     response_model=ContainerUpdateResponse,
@@ -653,7 +751,7 @@ async def update_restart_policy(
         result = await client.update_container(container_id, update_config)
         await client.close()
 
-        return ContainerUpdateResponse(warnings=result.get("Warnings", []))
+        return ContainerUpdateResponse(warnings=result.get("Warnings") or [])
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
@@ -708,7 +806,7 @@ async def update_resources(
         result = await client.update_container(container_id, update_config)
         await client.close()
 
-        return ContainerUpdateResponse(warnings=result.get("Warnings", []))
+        return ContainerUpdateResponse(warnings=result.get("Warnings") or [])
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:

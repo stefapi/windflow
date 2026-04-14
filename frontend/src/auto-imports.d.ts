@@ -57,6 +57,7 @@ declare global {
   const h: typeof import('vue')['h']
   const http: typeof import('./services/http')['default']
   const ignorableWatch: typeof import('@vueuse/core')['ignorableWatch']
+  const imagesApi: typeof import('./services/api')['imagesApi']
   const inject: typeof import('vue')['inject']
   const injectLocal: typeof import('@vueuse/core')['injectLocal']
   const isDefined: typeof import('@vueuse/core')['isDefined']

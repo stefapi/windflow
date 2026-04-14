@@ -18,7 +18,9 @@
           </div>
 
           <div class="header-identity">
-            <h2 class="container-name">{{ containerDetail?.name || 'Container' }}</h2>
+            <h2 class="container-name">
+              {{ containerDetail?.name || 'Container' }}
+            </h2>
             <el-button
               v-if="containerDetail"
               link
@@ -68,6 +70,36 @@
               <el-icon><Memo /></el-icon>
               RAM : {{ headerStats.memoryUsage }}
             </span>
+            <span class="meta-item">
+              <el-icon><RefreshRight /></el-icon>
+              Restart :
+              <el-tag
+                size="small"
+                type="info"
+              >
+                {{ restartPolicyLabel }}
+              </el-tag>
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="openRestartPolicyDialog"
+              >
+                Modifier
+              </el-button>
+            </span>
+            <span class="meta-item">
+              <el-icon><Setting /></el-icon>
+              Ressources : {{ resourcesSummary }}
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="openResourcesDialog"
+              >
+                Modifier
+              </el-button>
+            </span>
           </div>
 
           <!-- Ligne 3 : Barre d'actions -->
@@ -81,7 +113,9 @@
                 type="success"
                 disabled
               >
-                <el-icon class="el-icon--left"><VideoPlay /></el-icon>
+                <el-icon class="el-icon--left">
+                  <VideoPlay />
+                </el-icon>
                 Démarrer
               </el-button>
             </el-tooltip>
@@ -90,7 +124,9 @@
               type="success"
               @click="handleAction('start')"
             >
-              <el-icon class="el-icon--left"><VideoPlay /></el-icon>
+              <el-icon class="el-icon--left">
+                <VideoPlay />
+              </el-icon>
               Démarrer
             </el-button>
 
@@ -103,7 +139,9 @@
                 type="warning"
                 disabled
               >
-                <el-icon class="el-icon--left"><VideoPause /></el-icon>
+                <el-icon class="el-icon--left">
+                  <VideoPause />
+                </el-icon>
                 Pause
               </el-button>
             </el-tooltip>
@@ -112,7 +150,9 @@
               type="warning"
               @click="handleAction('pause')"
             >
-              <el-icon class="el-icon--left"><VideoPause /></el-icon>
+              <el-icon class="el-icon--left">
+                <VideoPause />
+              </el-icon>
               Pause
             </el-button>
 
@@ -121,7 +161,9 @@
               type="success"
               @click="handleAction('unpause')"
             >
-              <el-icon class="el-icon--left"><VideoPlay /></el-icon>
+              <el-icon class="el-icon--left">
+                <VideoPlay />
+              </el-icon>
               Reprendre
             </el-button>
 
@@ -134,7 +176,9 @@
                 type="danger"
                 disabled
               >
-                <el-icon class="el-icon--left"><SwitchButton /></el-icon>
+                <el-icon class="el-icon--left">
+                  <SwitchButton />
+                </el-icon>
                 Arrêter
               </el-button>
             </el-tooltip>
@@ -143,7 +187,9 @@
               type="danger"
               @click="handleAction('stop')"
             >
-              <el-icon class="el-icon--left"><SwitchButton /></el-icon>
+              <el-icon class="el-icon--left">
+                <SwitchButton />
+              </el-icon>
               Arrêter
             </el-button>
 
@@ -156,7 +202,9 @@
                 type="primary"
                 disabled
               >
-                <el-icon class="el-icon--left"><RefreshRight /></el-icon>
+                <el-icon class="el-icon--left">
+                  <RefreshRight />
+                </el-icon>
                 Redémarrer
               </el-button>
             </el-tooltip>
@@ -165,7 +213,9 @@
               type="primary"
               @click="handleAction('restart')"
             >
-              <el-icon class="el-icon--left"><RefreshRight /></el-icon>
+              <el-icon class="el-icon--left">
+                <RefreshRight />
+              </el-icon>
               Redémarrer
             </el-button>
 
@@ -174,7 +224,9 @@
               plain
               @click="handleDelete"
             >
-              <el-icon class="el-icon--left"><Delete /></el-icon>
+              <el-icon class="el-icon--left">
+                <Delete />
+              </el-icon>
               Supprimer
             </el-button>
 
@@ -182,8 +234,31 @@
               type="default"
               @click="showInspectDrawer"
             >
-              <el-icon class="el-icon--left"><ZoomIn /></el-icon>
+              <el-icon class="el-icon--left">
+                <ZoomIn />
+              </el-icon>
               Inspect
+            </el-button>
+
+            <el-divider direction="vertical" />
+
+            <el-button
+              type="default"
+              @click="openRestartPolicyDialog"
+            >
+              <el-icon class="el-icon--left">
+                <RefreshRight />
+              </el-icon>
+              Restart Policy
+            </el-button>
+            <el-button
+              type="default"
+              @click="openResourcesDialog"
+            >
+              <el-icon class="el-icon--left">
+                <Cpu />
+              </el-icon>
+              Ressources
             </el-button>
           </div>
         </div>
@@ -348,6 +423,123 @@
       </template>
     </el-dialog>
 
+    <!-- Restart Policy Dialog -->
+    <el-dialog
+      v-model="restartPolicyDialogVisible"
+      title="Modifier la restart policy"
+      width="450px"
+      :close-on-click-modal="false"
+    >
+      <el-form
+        label-position="top"
+        @submit.prevent="handleUpdateRestartPolicy"
+      >
+        <el-form-item label="Politique de redémarrage">
+          <el-select
+            v-model="restartPolicyForm.name"
+            style="width: 100%"
+          >
+            <el-option
+              label="no — Ne jamais redémarrer"
+              value="no"
+            />
+            <el-option
+              label="always — Toujours redémarrer"
+              value="always"
+            />
+            <el-option
+              label="on-failure — Redémarrer en cas d'erreur"
+              value="on-failure"
+            />
+            <el-option
+              label="unless-stopped — Redémarrer sauf arrêt manuel"
+              value="unless-stopped"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item
+          v-if="restartPolicyForm.name === 'on-failure'"
+          label="Maximum retry count"
+        >
+          <el-input-number
+            v-model="restartPolicyForm.maximumRetryCount"
+            :min="0"
+            :step="1"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="restartPolicyDialogVisible = false">
+          Annuler
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="restartPolicyLoading"
+          @click="handleUpdateRestartPolicy"
+        >
+          Confirmer
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Resources Dialog -->
+    <el-dialog
+      v-model="resourcesDialogVisible"
+      title="Modifier les ressources"
+      width="450px"
+      :close-on-click-modal="false"
+    >
+      <el-form
+        label-position="top"
+        @submit.prevent="handleUpdateResources"
+      >
+        <el-form-item label="Limite mémoire (MB)">
+          <el-input-number
+            v-model="resourcesForm.memoryLimit"
+            :min="0"
+            :step="64"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <div class="form-hint">
+          Laisser à 0 pour illimité
+        </div>
+        <el-form-item label="CPU shares">
+          <el-input-number
+            v-model="resourcesForm.cpuShares"
+            :min="0"
+            :max="1024"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <div class="form-hint">
+          Laisser à 0 pour illimité
+        </div>
+        <el-form-item label="Limite PIDs">
+          <el-input-number
+            v-model="resourcesForm.pidsLimit"
+            :min="0"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <div class="form-hint">
+          Laisser à 0 pour illimité
+        </div>
+      </el-form>
+      <template #footer>
+        <el-button @click="resourcesDialogVisible = false">
+          Annuler
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="resourcesLoading"
+          @click="handleUpdateResources"
+        >
+          Confirmer
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- Inspect Drawer -->
     <el-drawer
       v-model="inspectDrawerVisible"
@@ -385,6 +577,7 @@ import {
   Cpu,
   Memo,
   Edit,
+  Setting,
 } from '@element-plus/icons-vue'
 import { useContainersStore } from '@/stores'
 import { containersApi } from '@/services/api'
@@ -396,7 +589,7 @@ import ContainerTerminal from '@/components/ContainerTerminal.vue'
 import ContainerStats from '@/components/ContainerStats.vue'
 import ContainerConfigTab from '@/components/ContainerConfigTab.vue'
 import ContainerProcesses from '@/components/ContainerProcesses.vue'
-import type { ContainerDetail } from '@/types/api'
+import type { ContainerDetail, ContainerUpdateRestartPolicyRequest, ContainerUpdateResourcesRequest } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -415,12 +608,51 @@ const renameLoading = ref(false)
 const renameError = ref('')
 const renameInputRef = ref<InstanceType<typeof import('element-plus')['ElInput']> | null>(null)
 
+// Restart Policy state
+const restartPolicyDialogVisible = ref(false)
+const restartPolicyLoading = ref(false)
+const restartPolicyForm = reactive({
+  name: 'no' as string,
+  maximumRetryCount: 0 as number | null,
+})
+
+// Resources state
+const resourcesDialogVisible = ref(false)
+const resourcesLoading = ref(false)
+const resourcesForm = reactive({
+  memoryLimit: 0 as number | null,
+  cpuShares: 0 as number | null,
+  pidsLimit: 0 as number | null,
+})
+
 /** Docker container name validation pattern */
 const CONTAINER_NAME_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/
 
 /** Computed: is the rename form valid */
 const isRenameValid = computed(() => {
   return renameNewName.value.trim().length > 0 && CONTAINER_NAME_REGEX.test(renameNewName.value.trim())
+})
+
+/** Computed: restart policy display label */
+const restartPolicyLabel = computed(() => {
+  return containerDetail.value?.host_config?.restart_policy?.name ?? 'non défini'
+})
+
+/** Computed: resources summary for header-meta display */
+const resourcesSummary = computed(() => {
+  const resources = containerDetail.value?.host_config?.resources
+  if (!resources) return 'non défini'
+  const parts: string[] = []
+  if (resources.memory && resources.memory > 0) {
+    parts.push(`Mémoire ${Math.round(resources.memory / 1024 / 1024)} MB`)
+  }
+  if (resources.cpu_shares && resources.cpu_shares > 0) {
+    parts.push(`CPU ${resources.cpu_shares}`)
+  }
+  if (resources.pids_limit && resources.pids_limit > 0) {
+    parts.push(`PIDs ${resources.pids_limit}`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : 'illimité'
 })
 
 // Computed
@@ -671,6 +903,71 @@ function onRenameDialogClosed(): void {
   renameError.value = ''
 }
 
+/** Open the restart policy dialog, pre-filled with current values */
+function openRestartPolicyDialog(): void {
+  const policy = containerDetail.value?.host_config?.restart_policy
+  restartPolicyForm.name = policy?.name ?? 'no'
+  restartPolicyForm.maximumRetryCount = policy?.maximum_retry_count ?? 0
+  restartPolicyDialogVisible.value = true
+}
+
+/** Handle restart policy update confirmation */
+async function handleUpdateRestartPolicy(): Promise<void> {
+  const id = containerId.value
+  if (!id) return
+
+  restartPolicyLoading.value = true
+  try {
+    const data: ContainerUpdateRestartPolicyRequest = {
+      name: restartPolicyForm.name,
+    }
+    if (restartPolicyForm.name === 'on-failure' && restartPolicyForm.maximumRetryCount !== null) {
+      data.maximum_retry_count = restartPolicyForm.maximumRetryCount
+    }
+    await containersApi.updateRestartPolicy(id, data)
+    ElMessage.success('Restart policy mise à jour')
+    restartPolicyDialogVisible.value = false
+    await loadContainerDetail()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur lors de la mise à jour de la restart policy'
+    ElMessage.error(message)
+  } finally {
+    restartPolicyLoading.value = false
+  }
+}
+
+/** Open the resources dialog, pre-filled with current values */
+function openResourcesDialog(): void {
+  const resources = containerDetail.value?.host_config?.resources
+  resourcesForm.memoryLimit = resources?.memory ? Math.round(resources.memory / 1024 / 1024) : 0
+  resourcesForm.cpuShares = resources?.cpu_shares ?? 0
+  resourcesForm.pidsLimit = resources?.pids_limit ?? 0
+  resourcesDialogVisible.value = true
+}
+
+/** Handle resources update confirmation */
+async function handleUpdateResources(): Promise<void> {
+  const id = containerId.value
+  if (!id) return
+
+  resourcesLoading.value = true
+  try {
+    const data: ContainerUpdateResourcesRequest = {}
+    data.memory_limit = resourcesForm.memoryLimit ? resourcesForm.memoryLimit * 1024 * 1024 : undefined
+    data.cpu_shares = resourcesForm.cpuShares || undefined
+    data.pids_limit = resourcesForm.pidsLimit || undefined
+    await containersApi.updateResources(id, data)
+    ElMessage.success('Ressources mises à jour')
+    resourcesDialogVisible.value = false
+    await loadContainerDetail()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur lors de la mise à jour des ressources'
+    ElMessage.error(message)
+  } finally {
+    resourcesLoading.value = false
+  }
+}
+
 function showInspectDrawer(): void {
   if (containerDetail.value) {
     inspectContent.value = JSON.stringify(containerDetail.value, null, 2)
@@ -876,6 +1173,14 @@ onMounted(async () => {
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 11px;
+}
+
+.form-hint {
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
+  margin-top: -8px;
+  margin-bottom: 12px;
+  line-height: 1.5;
 }
 
 .inspect-textarea :deep(textarea) {

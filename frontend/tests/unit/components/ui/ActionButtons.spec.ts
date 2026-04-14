@@ -131,4 +131,21 @@ describe('ActionButtons', () => {
       expect(button.attributes('data-size')).toBe('large')
     })
   })
+
+  describe('Export action', () => {
+    it('renders export action button', () => {
+      const wrapper = mountActionButtons({ actions: ['export'] })
+      const buttons = wrapper.findAll('.el-button')
+      expect(buttons.length).toBe(1)
+      expect(wrapper.find('.action-buttons__btn--export').exists()).toBe(true)
+    })
+
+    it('emits action event with type export when clicked', async () => {
+      const wrapper = mountActionButtons({ actions: ['export'] })
+      const button = wrapper.find('.el-button')
+      await button.trigger('click')
+      expect(wrapper.emitted('action')).toBeTruthy()
+      expect(wrapper.emitted('action')![0]).toEqual(['export'])
+    })
+  })
 })

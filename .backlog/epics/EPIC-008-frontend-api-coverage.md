@@ -45,7 +45,7 @@ Cette epic intègre également les concepts du **Modèle Compute** (cf. `doc/gen
 
 | Endpoint | Méthode | Description | Frontend | Statut |
 |----------|---------|-------------|----------|--------|
-| `/docker/images` | GET | Liste des images | ❌ Absent | 🔴 À implémenter |
+| `/docker/images` | GET | Liste des images | ✅ `imagesApi.list` | ✅ Couvert (STORY-005) |
 | `/docker/images/pull` | POST | Pull image | ❌ Absent | 🔴 À implémenter |
 | `/docker/images/{id}` | DELETE | Supprimer image | ❌ Absent | 🔴 À implémenter |
 
@@ -180,7 +180,7 @@ Cette epic vise à implémenter progressivement les interfaces frontend pour les
 Fonctionnalités essentielles pour les opérations quotidiennes :
 - **Gestion des images Docker** (liste, pull, suppression) - Vue `Images.vue` à implémenter
 - **Export/Import de stacks** (partage et sauvegarde) - Intégration dans `Stacks.vue`
-- **Mise à jour des déploiements** - Endpoint PUT manquant dans `deploymentsApi`
+- **Édition à chaud des containers Compute** - Restart policy et limites ressources (les modifications avec recréation sont dans EPIC-009)
 
 ### 🟡 Priorité Moyenne (UX)
 Améliorations de l'expérience utilisateur :
@@ -212,15 +212,16 @@ Fonctionnalités avancées :
 - [x] STORY-004 : Actions globales de stack (Start/Stop/Redeploy)
 
 #### Images Docker
-- [ ] STORY-005 : Gestion des images Docker - Liste et visualisation
-- [ ] STORY-006 : Gestion des images Docker - Pull et suppression
+- [x] STORY-005 : Gestion des images Docker - Liste et visualisation
+- [x] STORY-006 : Gestion des images Docker - Pull et suppression
+- [ ] STORY-031 : Images Docker — Sélection, actions en lot, usage et détail
 
 #### Export/Import Stacks
-- [ ] STORY-007 : Export de stacks au format JSON
+- [x] STORY-007 : Export de stacks au format JSON
 - [ ] STORY-008 : Import de stacks depuis fichier JSON
 
-#### Deployments
-- [ ] STORY-009 : Mise à jour des déploiements existants
+#### Compute - Containers
+- [x] STORY-009 : Édition à chaud des containers — Restart policy et limites ressources
 
 ### 🟡 Priorité Moyenne
 

@@ -525,6 +525,11 @@ class DockerClientService:
         restart_policy: str = "no",
         network_mode: str = "bridge",
         privileged: bool = False,
+        mounts: Optional[list[dict[str, Any]]] = None,
+        cap_add: Optional[list[str]] = None,
+        cap_drop: Optional[list[str]] = None,
+        readonly_rootfs: Optional[bool] = None,
+        port_bindings: Optional[dict[str, Any]] = None,
     ) -> str:
         """
         Crée un container sans le démarrer.
@@ -542,6 +547,13 @@ class DockerClientService:
             restart_policy: Politique de redémarrage (no, always, unless-stopped, on-failure)
             network_mode: Mode réseau (bridge, host, none)
             privileged: Mode privilégié
+            mounts: Points de montage au format abstrait
+                (ex: {"type": "bind", "source": "/host", "destination": "/container", "mode": "rw"})
+            cap_add: Capabilities Linux à ajouter (ex: ["NET_ADMIN", "SYS_PTRACE"])
+            cap_drop: Capabilities Linux à retirer
+            readonly_rootfs: Système de fichiers racine en lecture seule
+            port_bindings: Bindings de ports au format Docker
+                (ex: {"80/tcp": [{"HostPort": "8080"}]})
 
         Returns:
             Container ID
@@ -558,7 +570,7 @@ class DockerClientService:
             },
         }
 
-        # Ajouter les ports
+        # Ajouter les ports (format simplifié)
         if ports:
             config["ExposedPorts"] = {}
             config["HostConfig"]["PortBindings"] = {}
@@ -566,12 +578,49 @@ class DockerClientService:
                 config["ExposedPorts"][container_port] = {}
                 config["HostConfig"]["PortBindings"][container_port] = [host_config]
 
-        # Ajouter les volumes
+        # Ajouter les port_bindings (format Docker natif)
+        if port_bindings:
+            if "ExposedPorts" not in config:
+                config["ExposedPorts"] = {}
+            config["HostConfig"]["PortBindings"] = port_bindings
+            for port_spec in port_bindings:
+                config["ExposedPorts"][port_spec] = {}
+
+        # Ajouter les volumes (format simplifié)
         if volumes:
             config["Volumes"] = volumes
             config["HostConfig"]["Binds"] = [
                 f"{host}:{container}" for host, container in volumes.items()
             ]
+
+        # Ajouter les mounts (format abstrait)
+        if mounts:
+            docker_mounts: list[dict[str, Any]] = []
+            bind_list: list[str] = []
+            for m in mounts:
+                docker_mounts.append({
+                    "Type": m.get("type", "bind"),
+                    "Source": m.get("source", ""),
+                    "Target": m.get("destination", ""),
+                    "ReadOnly": m.get("mode", "rw") == "ro",
+                })
+                if m.get("type", "bind") == "bind":
+                    mode = m.get("mode", "rw")
+                    bind_list.append(f"{m.get('source', '')}:{m.get('destination', '')}:{mode}")
+            config["HostConfig"]["Mounts"] = docker_mounts
+            if bind_list:
+                existing_binds = config["HostConfig"].get("Binds", [])
+                config["HostConfig"]["Binds"] = existing_binds + bind_list
+
+        # Ajouter les capabilities
+        if cap_add:
+            config["HostConfig"]["CapAdd"] = cap_add
+        if cap_drop:
+            config["HostConfig"]["CapDrop"] = cap_drop
+
+        # Readonly rootfs
+        if readonly_rootfs is not None:
+            config["HostConfig"]["ReadonlyRootfs"] = readonly_rootfs
 
         response = await self._request(
             "POST",
@@ -581,6 +630,146 @@ class DockerClientService:
         )
         data = await response.json()
         return data.get("Id", "")
+
+    async def recreate_container(
+        self,
+        container_id: str,
+        image: Optional[str] = None,
+        pull_image: bool = False,
+        env: Optional[list[str]] = None,
+        labels: Optional[dict[str, str]] = None,
+        port_bindings: Optional[dict[str, Any]] = None,
+        mounts: Optional[list[dict[str, Any]]] = None,
+        privileged: Optional[bool] = None,
+        readonly_rootfs: Optional[bool] = None,
+        cap_add: Optional[list[str]] = None,
+        cap_drop: Optional[list[str]] = None,
+        stop_timeout: int = 10,
+    ) -> tuple[str, "ContainerDetail"]:
+        """
+        Recrée un container avec une nouvelle configuration.
+
+        Orchestration complète : inspect → merge → pull optionnel → stop → remove → create → start.
+        Si la suppression réussit mais la création ou le démarrage échouent, l'erreur
+        est irrécupérable (le container original est perdu).
+
+        Args:
+            container_id: ID du container à recréer
+            image: Nouvelle image Docker. None = conserver l'image actuelle.
+            pull_image: Puller l'image avant recréation.
+            env: Variables d'environnement. None = conserver les actuelles.
+            labels: Labels. None = conserver les actuels.
+            port_bindings: Bindings de ports. None = conserver les actuels.
+            mounts: Points de montage. None = conserver les actuels.
+            privileged: Mode privilégié. None = conserver l'actuel.
+            readonly_rootfs: Rootfs readonly. None = conserver l'actuel.
+            cap_add: Capabilities à ajouter. None = conserver les actuelles.
+            cap_drop: Capabilities à retirer. None = conserver les actuelles.
+            stop_timeout: Timeout d'arrêt en secondes (défaut 10).
+
+        Returns:
+            Tuple (new_container_id, ContainerDetail du nouveau container).
+
+        Raises:
+            Exception: Si le container n'existe pas, ou si la recréation échoue
+                après suppression (chemin critique).
+        """
+        # 1. Inspect le container existant
+        detail = await self.get_container(container_id)
+
+        # 2. Merge config : None = conserver la valeur existante
+        merged_image = image if image is not None else detail.config.get("image", "")
+        merged_env = env if env is not None else detail.config.get("env") or []
+        merged_labels = labels if labels is not None else detail.config.get("labels") or {}
+        merged_port_bindings = (
+            port_bindings if port_bindings is not None
+            else detail.host_config.get("port_bindings")
+        )
+        merged_mounts = mounts if mounts is not None else detail.mounts
+        merged_privileged = (
+            privileged if privileged is not None
+            else detail.host_config.get("privileged", False)
+        )
+        merged_readonly_rootfs = (
+            readonly_rootfs if readonly_rootfs is not None
+            else detail.host_config.get("readonly_rootfs")
+        )
+        merged_cap_add = cap_add if cap_add is not None else detail.host_config.get("cap_add")
+        merged_cap_drop = cap_drop if cap_drop is not None else detail.host_config.get("cap_drop")
+
+        # Conserver les paramètres non-overridable
+        merged_network_mode = detail.host_config.get("network_mode", "bridge")
+        merged_restart_policy = detail.host_config.get("restart_policy", {})
+        merged_restart_policy_name = (
+            merged_restart_policy.get("name", "no")
+            if isinstance(merged_restart_policy, dict)
+            else "no"
+        )
+        merged_command = detail.config.get("cmd")
+        merged_entrypoint = detail.config.get("entrypoint")
+
+        # Conserver le nom du container (sans le / initial)
+        container_name = detail.name.lstrip("/")
+
+        # 3. Pull optionnel de l'image
+        if pull_image and merged_image:
+            try:
+                await self.pull_image(merged_image)
+            except Exception as e:
+                logger.warning(f"Pull image failed for {merged_image}: {e}")
+
+        # 4. Stopper le container
+        try:
+            await self.stop_container(container_id, timeout=stop_timeout)
+        except Exception:
+            pass  # Le container peut déjà être arrêté
+
+        # 5. Supprimer le container (VOLUMES PRÉSERVÉS !)
+        await self.remove_container(container_id, force=True, remove_volumes=False)
+
+        # 6-7. Chemin critique : create + start
+        try:
+            new_id = await self.create_container(
+                name=container_name,
+                image=merged_image,
+                command=merged_command,
+                env=merged_env,
+                labels=merged_labels,
+                restart_policy=merged_restart_policy_name,
+                network_mode=merged_network_mode,
+                privileged=merged_privileged,
+                mounts=merged_mounts,
+                cap_add=merged_cap_add,
+                cap_drop=merged_cap_drop,
+                readonly_rootfs=merged_readonly_rootfs,
+                port_bindings=merged_port_bindings,
+            )
+        except Exception as create_exc:
+            logger.critical(
+                f"CRITICAL: Container {container_id} removed but new creation failed. "
+                f"Error: {create_exc}"
+            )
+            raise RuntimeError(
+                f"Container {container_id} was removed but the new container "
+                f"could not be created: {create_exc}"
+            ) from create_exc
+
+        try:
+            await self.start_container(new_id)
+        except Exception as start_exc:
+            logger.critical(
+                f"CRITICAL: Container {container_id} removed, new container {new_id} "
+                f"created but failed to start. Error: {start_exc}"
+            )
+            raise RuntimeError(
+                f"Container {container_id} was removed, new container {new_id} "
+                f"was created but could not be started: {start_exc}"
+            ) from start_exc
+
+        # 8. Récupérer le détail du nouveau container
+        new_detail = await self.get_container(new_id)
+
+        return new_id, new_detail
 
     async def start_container(self, container_id: str) -> None:
         """

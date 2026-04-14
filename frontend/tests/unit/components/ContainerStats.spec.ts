@@ -12,11 +12,11 @@ import ContainerStats from '@/components/ContainerStats.vue'
 import type { ContainerStats as ContainerStatsType, StatsStreamStatus } from '@/composables/useContainerStats'
 
 // Mutable mock state
-let mockStats: Ref<ContainerStatsType | null> = ref(null)
-let mockStatus: Ref<StatsStreamStatus> = ref('disconnected')
-let mockError: Ref<string | null> = ref(null)
-let mockIsStreaming = ref(false)
-let mockHistory: Ref<ContainerStatsType[]> = ref([])
+const mockStats: Ref<ContainerStatsType | null> = ref(null)
+const mockStatus: Ref<StatsStreamStatus> = ref('disconnected')
+const mockError: Ref<string | null> = ref(null)
+const mockIsStreaming = ref(false)
+const mockHistory: Ref<ContainerStatsType[]> = ref([])
 
 const mockConnect = vi.fn()
 const mockDisconnect = vi.fn()

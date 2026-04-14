@@ -940,7 +940,7 @@ export interface ContainerUpdateResourcesRequest {
 
 /** Réponse PATCH restart policy / resources — correspond à ContainerUpdateResponse backend */
 export interface ContainerUpdateResponse {
-  warnings: string[]
+  warnings: string[] | null
 }
 
 /** Requête POST rename — correspond à ContainerRenameRequest backend */

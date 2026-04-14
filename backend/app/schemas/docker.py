@@ -8,7 +8,7 @@ des réponses de l'API Docker.
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # =============================================================================
 # Containers
@@ -464,6 +464,98 @@ class ContainerCreateRequest(BaseModel):
     privileged: bool = Field(False, description="Mode privilégié")
 
 
+class ContainerRecreateRequest(BaseModel):
+    """
+    Requête de recréation d'un container avec overrides optionnels.
+
+    Tous les champs sont optionnels. Si un champ est None, la valeur actuelle
+    du container est conservée (merge, pas remplacement total).
+    """
+
+    image: Optional[str] = Field(
+        None,
+        description="Nouvelle image Docker. Si None, conserve l'image actuelle.",
+    )
+    pull_image: bool = Field(
+        False,
+        description="Puller l'image avant de recréer le container.",
+    )
+    env: Optional[list[str]] = Field(
+        None,
+        description="Variables d'environnement (format KEY=VALUE). Si None, conserve les variables actuelles.",
+    )
+    labels: Optional[dict[str, str]] = Field(
+        None,
+        description="Labels du container. Si None, conserve les labels actuels.",
+    )
+    port_bindings: Optional[dict[str, Any]] = Field(
+        None,
+        description=(
+            "Bindings de ports au format Docker "
+            '(ex: {"80/tcp": [{"HostPort": "8080"}]}). '
+            "Si None, conserve les bindings actuels."
+        ),
+    )
+    mounts: Optional[list[dict[str, Any]]] = Field(
+        None,
+        description=(
+            "Points de montage au format abstrait "
+            '(ex: {"type": "bind", "source": "/host", "destination": "/container", "mode": "rw"}). '
+            "Si None, conserve les mounts actuels."
+        ),
+    )
+    privileged: Optional[bool] = Field(
+        None,
+        description="Mode privilégié. Si None, conserve la valeur actuelle.",
+    )
+    readonly_rootfs: Optional[bool] = Field(
+        None,
+        description="Système de fichiers racine en lecture seule. Si None, conserve la valeur actuelle.",
+    )
+    cap_add: Optional[list[str]] = Field(
+        None,
+        description="Capabilities à ajouter (ex: ['NET_ADMIN', 'SYS_PTRACE']). Si None, conserve les caps actuelles.",
+    )
+    cap_drop: Optional[list[str]] = Field(
+        None,
+        description="Capabilities à retirer. Si None, conserve les caps actuelles.",
+    )
+    stop_timeout: int = Field(
+        10,
+        ge=0,
+        le=300,
+        description="Timeout d'arrêt en secondes avant SIGKILL (0-300s, défaut 10s).",
+    )
+
+
+class ContainerRecreateResponse(BaseModel):
+    """
+    Réponse de recréation d'un container Docker.
+
+    Contient les identifiants de l'ancien et du nouveau container,
+    ainsi que les détails complets du nouveau container.
+    """
+
+    success: bool = Field(..., description="Indique si la recréation a réussi.")
+    message: str = Field(..., description="Message descriptif du résultat.")
+    old_container_id: str = Field(
+        ...,
+        description="ID de l'ancien container (supprimé).",
+    )
+    new_container_id: str = Field(
+        ...,
+        description="ID du nouveau container (créé et démarré).",
+    )
+    container: ContainerDetailResponse = Field(
+        ...,
+        description="Détails complets du nouveau container.",
+    )
+    warnings: list[str] = Field(
+        default_factory=list,
+        description="Avertissements retournés par Docker lors de la création.",
+    )
+
+
 class ContainerLogsRequest(BaseModel):
     """Requête de récupération des logs."""
 
@@ -500,6 +592,18 @@ class ImageResponse(BaseModel):
     size: int = Field(..., description="Taille en bytes")
     virtual_size: int = Field(0, alias="virtualSize", description="Taille virtuelle")
     labels: dict[str, str] = Field(default_factory=dict, description="Labels")
+
+    @field_validator("repo_tags", "repo_digests", mode="before")
+    @classmethod
+    def none_to_list(cls, v: Any) -> Any:
+        """Convert None to empty list — Docker may return None for dangling images."""
+        return v if v is not None else []
+
+    @field_validator("labels", mode="before")
+    @classmethod
+    def none_to_dict(cls, v: Any) -> Any:
+        """Convert None to empty dict — Docker may return None for dangling images."""
+        return v if v is not None else {}
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -700,9 +804,9 @@ class ContainerRenameRequest(BaseModel):
 class ContainerUpdateResponse(BaseModel):
     """Réponse de mise à jour d'un container (restart policy ou resources)."""
 
-    warnings: list[str] = Field(
-        default_factory=list,
-        description="Avertissements retournés par Docker",
+    warnings: Optional[list[str]] = Field(
+        default=None,
+        description="Avertissements retournés par Docker (None si aucun)",
     )
 
 

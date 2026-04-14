@@ -15,10 +15,10 @@
     <!-- STEP 0: Basic Info -->
     <template #step-0>
       <el-form
+        ref="infoFormRef"
         :model="form"
         :rules="infoRules"
         label-position="top"
-        ref="infoFormRef"
       >
         <el-form-item
           label="Nom"
@@ -54,7 +54,9 @@
               :loading="testingReachability"
               @click="testReachability"
             >
-              <el-icon class="mr-1"><Promotion /></el-icon>
+              <el-icon class="mr-1">
+                <Promotion />
+              </el-icon>
               Tester la connectivité
             </el-button>
 
@@ -119,10 +121,10 @@
     <!-- STEP 1: SSH Credentials -->
     <template #step-1>
       <el-form
+        ref="credFormRef"
         :model="credentialsForm"
         :rules="credRules"
         label-position="top"
-        ref="credFormRef"
       >
         <el-form-item label="Méthode d'authentification">
           <el-radio-group v-model="credentialsForm.auth_method">
@@ -238,7 +240,9 @@
           :loading="testingConnection"
           @click="testSSHConnection"
         >
-          <el-icon class="mr-1"><Connection /></el-icon>
+          <el-icon class="mr-1">
+            <Connection />
+          </el-icon>
           Tester la connexion
         </el-button>
 

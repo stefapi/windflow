@@ -134,7 +134,12 @@ async function handleRedeploy() {
   <div class="stack-actions-bar">
     <div class="stack-info">
       <span class="stack-name">{{ stack.name }}</span>
-      <el-tag :type="statusColor" size="small" effect="dark" class="status-tag">
+      <el-tag
+        :type="statusColor"
+        size="small"
+        effect="dark"
+        class="status-tag"
+      >
         {{ statusLabel }}
       </el-tag>
       <span class="services-count">
@@ -188,14 +193,25 @@ async function handleRedeploy() {
         <strong>{{ stack.name }}</strong> :
       </p>
 
-      <el-radio-group v-model="selectedStrategy" class="strategy-group">
-        <el-radio value="stop_start" size="large" class="strategy-radio">
+      <el-radio-group
+        v-model="selectedStrategy"
+        class="strategy-group"
+      >
+        <el-radio
+          value="stop_start"
+          size="large"
+          class="strategy-radio"
+        >
           <div class="strategy-option">
             <strong>Arrêt puis démarrage</strong>
             <p>Arrête tous les services, puis les redémarre. Temps d'arrêt court garanti.</p>
           </div>
         </el-radio>
-        <el-radio value="rolling" size="large" class="strategy-radio">
+        <el-radio
+          value="rolling"
+          size="large"
+          class="strategy-radio"
+        >
           <div class="strategy-option">
             <strong>Rolling (séquentiel)</strong>
             <p>Redémarre les services un par un. Maintient la disponibilité si possible.</p>
@@ -204,7 +220,9 @@ async function handleRedeploy() {
       </el-radio-group>
 
       <template #footer>
-        <el-button @click="redeployDialogVisible = false">Annuler</el-button>
+        <el-button @click="redeployDialogVisible = false">
+          Annuler
+        </el-button>
         <el-button
           type="primary"
           :loading="loading"

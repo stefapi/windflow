@@ -69,9 +69,13 @@ vi.mock('@/composables/useContainerLogs', () => ({
 
 // Mock containersApi.rename
 const mockRename = vi.fn()
+const mockUpdateRestartPolicy = vi.fn()
+const mockUpdateResources = vi.fn()
 vi.mock('@/services/api', () => ({
   containersApi: {
     rename: (...args: unknown[]) => mockRename(...args),
+    updateRestartPolicy: (...args: unknown[]) => mockUpdateRestartPolicy(...args),
+    updateResources: (...args: unknown[]) => mockUpdateResources(...args),
     getStats: vi.fn().mockResolvedValue({ data: {} }),
   },
 }))
@@ -113,6 +117,15 @@ describe('ContainerDetail.vue', () => {
       'com.docker.compose.project': 'my-stack',
     },
     host_config: {
+      restart_policy: {
+        name: 'always',
+        maximum_retry_count: 0,
+      },
+      resources: {
+        memory: 134217728, // 128 MB en bytes
+        cpu_shares: 512,
+        pids_limit: 100,
+      },
       PortBindings: {
         '80/tcp': [{ HostIp: '0.0.0.0', HostPort: '8080' }],
         '443/tcp': [{ HostIp: '0.0.0.0', HostPort: '8443' }],
@@ -218,6 +231,9 @@ describe('ContainerDetail.vue', () => {
           'el-input': {
             template: '<input class="el-input-stub" />',
             props: ['modelValue', 'type', 'rows', 'readonly', 'placeholder', 'size', 'clearable'],
+            methods: {
+              focus: vi.fn(),
+            },
           },
           'el-input-number': {
             template: '<input type="number" class="el-input-number-stub" />',
@@ -273,6 +289,18 @@ describe('ContainerDetail.vue', () => {
           'el-form-item': {
             template: '<div class="el-form-item-stub"><slot /></div>',
             props: ['error'],
+          },
+          'el-select': {
+            template: '<select class="el-select-stub"><slot /></select>',
+            props: ['modelValue', 'style'],
+          },
+          'el-option': {
+            template: '<option class="el-option-stub"><slot /></option>',
+            props: ['label', 'value'],
+          },
+          'el-divider': {
+            template: '<hr class="el-divider-stub" />',
+            props: ['direction'],
           },
         },
       },
@@ -818,6 +846,401 @@ describe('ContainerDetail.vue', () => {
       // Dialog should close without API call
       expect(vm.renameDialogVisible).toBe(false)
       expect(mockRename).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('STORY-009: Restart Policy Dialog', () => {
+    it('should open restart policy dialog when clicking the header button', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        restartPolicyDialogVisible: boolean
+        restartPolicyForm: { name: string; maximumRetryCount: number | null }
+        openRestartPolicyDialog: () => void
+      }
+
+      vm.containerDetail = mockContainerDetail
+      await wrapper.vm.$nextTick()
+
+      expect(vm.restartPolicyDialogVisible).toBe(false)
+
+      vm.openRestartPolicyDialog()
+      await wrapper.vm.$nextTick()
+
+      expect(vm.restartPolicyDialogVisible).toBe(true)
+    })
+
+    it('should pre-fill restart policy form with current container values', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        restartPolicyDialogVisible: boolean
+        restartPolicyForm: { name: string; maximumRetryCount: number | null }
+        openRestartPolicyDialog: () => void
+      }
+
+      vm.containerDetail = mockContainerDetail
+      await wrapper.vm.$nextTick()
+
+      vm.openRestartPolicyDialog()
+      await wrapper.vm.$nextTick()
+
+      // mockContainerDetail has restart_policy.name = 'always'
+      expect(vm.restartPolicyForm.name).toBe('always')
+      expect(vm.restartPolicyForm.maximumRetryCount).toBe(0)
+    })
+
+    it('should call updateRestartPolicy API with correct parameters', async () => {
+      mockUpdateRestartPolicy.mockResolvedValue({ data: { success: true } })
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent('container-rp-1')
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        restartPolicyForm: { name: string; maximumRetryCount: number | null }
+        restartPolicyDialogVisible: boolean
+        openRestartPolicyDialog: () => void
+        handleUpdateRestartPolicy: () => Promise<void>
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.openRestartPolicyDialog()
+      await wrapper.vm.$nextTick()
+
+      // Change policy to on-failure with retry count
+      vm.restartPolicyForm.name = 'on-failure'
+      vm.restartPolicyForm.maximumRetryCount = 5
+      await wrapper.vm.$nextTick()
+
+      await vm.handleUpdateRestartPolicy()
+      await flushPromises()
+
+      expect(mockUpdateRestartPolicy).toHaveBeenCalledWith('container-rp-1', {
+        name: 'on-failure',
+        maximum_retry_count: 5,
+      })
+    })
+
+    it('should not include maximum_retry_count when policy is not on-failure', async () => {
+      mockUpdateRestartPolicy.mockResolvedValue({ data: { success: true } })
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent('container-rp-no-retry')
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        restartPolicyForm: { name: string; maximumRetryCount: number | null }
+        restartPolicyDialogVisible: boolean
+        openRestartPolicyDialog: () => void
+        handleUpdateRestartPolicy: () => Promise<void>
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.openRestartPolicyDialog()
+      await wrapper.vm.$nextTick()
+
+      // Policy is 'always' (from mockContainerDetail), change to 'no'
+      vm.restartPolicyForm.name = 'no'
+      await wrapper.vm.$nextTick()
+
+      await vm.handleUpdateRestartPolicy()
+      await flushPromises()
+
+      expect(mockUpdateRestartPolicy).toHaveBeenCalledWith('container-rp-no-retry', {
+        name: 'no',
+      })
+    })
+
+    it('should show maximum_retry_count field only when policy is on-failure', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        restartPolicyForm: { name: string; maximumRetryCount: number | null }
+        restartPolicyDialogVisible: boolean
+        openRestartPolicyDialog: () => void
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.openRestartPolicyDialog()
+      await wrapper.vm.$nextTick()
+
+      // With 'always' policy, the conditional field should not be relevant
+      expect(vm.restartPolicyForm.name).toBe('always')
+
+      // Switch to 'on-failure' — the conditional field becomes visible
+      vm.restartPolicyForm.name = 'on-failure'
+      vm.restartPolicyForm.maximumRetryCount = 3
+      await wrapper.vm.$nextTick()
+
+      expect(vm.restartPolicyForm.name).toBe('on-failure')
+      expect(vm.restartPolicyForm.maximumRetryCount).toBe(3)
+    })
+
+    it('should close dialog and refresh after successful restart policy update', async () => {
+      mockUpdateRestartPolicy.mockResolvedValue({ data: { success: true } })
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent('container-rp-refresh')
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        restartPolicyForm: { name: string; maximumRetryCount: number | null }
+        restartPolicyDialogVisible: boolean
+        openRestartPolicyDialog: () => void
+        handleUpdateRestartPolicy: () => Promise<void>
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.openRestartPolicyDialog()
+      await wrapper.vm.$nextTick()
+
+      expect(vm.restartPolicyDialogVisible).toBe(true)
+
+      await vm.handleUpdateRestartPolicy()
+      await flushPromises()
+
+      expect(vm.restartPolicyDialogVisible).toBe(false)
+      // loadContainerDetail calls inspectContainer: once on mount, once after update
+      expect(mockInspectContainer).toHaveBeenCalledTimes(2)
+    })
+
+    it('should show error and keep dialog open when updateRestartPolicy API fails', async () => {
+      mockUpdateRestartPolicy.mockRejectedValue(new Error('API error'))
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent('container-rp-err')
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        restartPolicyForm: { name: string; maximumRetryCount: number | null }
+        restartPolicyDialogVisible: boolean
+        restartPolicyLoading: boolean
+        openRestartPolicyDialog: () => void
+        handleUpdateRestartPolicy: () => Promise<void>
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.openRestartPolicyDialog()
+      await wrapper.vm.$nextTick()
+
+      await vm.handleUpdateRestartPolicy()
+      await flushPromises()
+
+      // Dialog should remain open on error
+      expect(vm.restartPolicyDialogVisible).toBe(true)
+      // Loading should be reset
+      expect(vm.restartPolicyLoading).toBe(false)
+    })
+  })
+
+  describe('STORY-009: Resources Dialog', () => {
+    it('should open resources dialog when clicking the header button', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        resourcesDialogVisible: boolean
+        resourcesForm: { memoryLimit: number | null; cpuShares: number | null; pidsLimit: number | null }
+        openResourcesDialog: () => void
+      }
+
+      vm.containerDetail = mockContainerDetail
+      await wrapper.vm.$nextTick()
+
+      expect(vm.resourcesDialogVisible).toBe(false)
+
+      vm.openResourcesDialog()
+      await wrapper.vm.$nextTick()
+
+      expect(vm.resourcesDialogVisible).toBe(true)
+    })
+
+    it('should pre-fill resources form with current values (memory in MB)', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        resourcesDialogVisible: boolean
+        resourcesForm: { memoryLimit: number | null; cpuShares: number | null; pidsLimit: number | null }
+        openResourcesDialog: () => void
+      }
+
+      vm.containerDetail = mockContainerDetail
+      await wrapper.vm.$nextTick()
+
+      vm.openResourcesDialog()
+      await wrapper.vm.$nextTick()
+
+      // 134217728 bytes / 1024 / 1024 = 128 MB
+      expect(vm.resourcesForm.memoryLimit).toBe(128)
+      expect(vm.resourcesForm.cpuShares).toBe(512)
+      expect(vm.resourcesForm.pidsLimit).toBe(100)
+    })
+
+    it('should call updateResources API with MB to bytes conversion', async () => {
+      mockUpdateResources.mockResolvedValue({ data: { success: true } })
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent('container-res-1')
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        resourcesForm: { memoryLimit: number | null; cpuShares: number | null; pidsLimit: number | null }
+        resourcesDialogVisible: boolean
+        openResourcesDialog: () => void
+        handleUpdateResources: () => Promise<void>
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.openResourcesDialog()
+      await wrapper.vm.$nextTick()
+
+      // Modify values
+      vm.resourcesForm.memoryLimit = 256
+      vm.resourcesForm.cpuShares = 1024
+      vm.resourcesForm.pidsLimit = 200
+      await wrapper.vm.$nextTick()
+
+      await vm.handleUpdateResources()
+      await flushPromises()
+
+      expect(mockUpdateResources).toHaveBeenCalledWith('container-res-1', {
+        memory_limit: 256 * 1024 * 1024, // 268435456 bytes
+        cpu_shares: 1024,
+        pids_limit: 200,
+      })
+    })
+
+    it('should send undefined for zero/falsy resource values', async () => {
+      mockUpdateResources.mockResolvedValue({ data: { success: true } })
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent('container-res-zero')
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        resourcesForm: { memoryLimit: number | null; cpuShares: number | null; pidsLimit: number | null }
+        resourcesDialogVisible: boolean
+        openResourcesDialog: () => void
+        handleUpdateResources: () => Promise<void>
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.openResourcesDialog()
+      await wrapper.vm.$nextTick()
+
+      // Set all to 0 (falsy)
+      vm.resourcesForm.memoryLimit = 0
+      vm.resourcesForm.cpuShares = 0
+      vm.resourcesForm.pidsLimit = 0
+      await wrapper.vm.$nextTick()
+
+      await vm.handleUpdateResources()
+      await flushPromises()
+
+      expect(mockUpdateResources).toHaveBeenCalledWith('container-res-zero', {
+        memory_limit: undefined,
+        cpu_shares: undefined,
+        pids_limit: undefined,
+      })
+    })
+
+    it('should close dialog and refresh after successful resources update', async () => {
+      mockUpdateResources.mockResolvedValue({ data: { success: true } })
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent('container-res-refresh')
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        resourcesForm: { memoryLimit: number | null; cpuShares: number | null; pidsLimit: number | null }
+        resourcesDialogVisible: boolean
+        openResourcesDialog: () => void
+        handleUpdateResources: () => Promise<void>
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.openResourcesDialog()
+      await wrapper.vm.$nextTick()
+
+      expect(vm.resourcesDialogVisible).toBe(true)
+
+      await vm.handleUpdateResources()
+      await flushPromises()
+
+      expect(vm.resourcesDialogVisible).toBe(false)
+      // loadContainerDetail calls inspectContainer: once on mount, once after update
+      expect(mockInspectContainer).toHaveBeenCalledTimes(2)
+    })
+
+    it('should show error and keep dialog open when updateResources API fails', async () => {
+      mockUpdateResources.mockRejectedValue(new Error('API error'))
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent('container-res-err')
+
+      const vm = wrapper.vm as unknown as {
+        containerDetail: typeof mockContainerDetail
+        resourcesForm: { memoryLimit: number | null; cpuShares: number | null; pidsLimit: number | null }
+        resourcesDialogVisible: boolean
+        resourcesLoading: boolean
+        openResourcesDialog: () => void
+        handleUpdateResources: () => Promise<void>
+      }
+
+      vm.containerDetail = mockContainerDetail
+      vm.openResourcesDialog()
+      await wrapper.vm.$nextTick()
+
+      await vm.handleUpdateResources()
+      await flushPromises()
+
+      // Dialog should remain open on error
+      expect(vm.resourcesDialogVisible).toBe(true)
+      // Loading should be reset
+      expect(vm.resourcesLoading).toBe(false)
+    })
+  })
+
+  describe('STORY-009: Header action buttons presence', () => {
+    it('should render Restart Policy button in header actions', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as { containerDetail: typeof mockContainerDetail }
+      vm.containerDetail = mockContainerDetail
+      await wrapper.vm.$nextTick()
+
+      const html = wrapper.html()
+      expect(html).toContain('Restart Policy')
+    })
+
+    it('should render Ressources button in header actions', async () => {
+      mockInspectContainer.mockResolvedValue(mockContainerDetail)
+
+      const wrapper = await mountComponent()
+
+      const vm = wrapper.vm as unknown as { containerDetail: typeof mockContainerDetail }
+      vm.containerDetail = mockContainerDetail
+      await wrapper.vm.$nextTick()
+
+      const html = wrapper.html()
+      expect(html).toContain('Ressources')
     })
   })
 })

@@ -1,7 +1,10 @@
 <template>
   <div class="overview-grid">
     <!-- Card Services (bleu) -->
-    <el-card class="overview-card card-services" shadow="hover">
+    <el-card
+      class="overview-card card-services"
+      shadow="hover"
+    >
       <template #header>
         <div class="card-header header-blue">
           <el-icon><Monitor /></el-icon>
@@ -81,7 +84,10 @@
     </el-card>
 
     <!-- Card Volumes (vert) -->
-    <el-card class="overview-card card-volumes" shadow="hover">
+    <el-card
+      class="overview-card card-volumes"
+      shadow="hover"
+    >
       <template #header>
         <div class="card-header header-green">
           <el-icon><FolderOpened /></el-icon>
@@ -165,7 +171,10 @@
     </el-card>
 
     <!-- Card Réseau (violet) -->
-    <el-card class="overview-card card-network" shadow="hover">
+    <el-card
+      class="overview-card card-network"
+      shadow="hover"
+    >
       <template #header>
         <div class="card-header header-purple">
           <el-icon><Connection /></el-icon>
@@ -284,7 +293,10 @@
     </el-card>
 
     <!-- Card Ressources (rouge) -->
-    <el-card class="overview-card card-resources" shadow="hover">
+    <el-card
+      class="overview-card card-resources"
+      shadow="hover"
+    >
       <template #header>
         <div class="card-header header-red">
           <el-icon><Cpu /></el-icon>

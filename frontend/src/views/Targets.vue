@@ -8,7 +8,9 @@
             type="primary"
             @click="openCreateDialog"
           >
-            <el-icon class="mr-1"><Plus /></el-icon>
+            <el-icon class="mr-1">
+              <Plus />
+            </el-icon>
             {{ t('targets.add', 'Ajouter une cible') }}
           </el-button>
         </div>
@@ -45,27 +47,27 @@
                 v-if="row.scan_date"
                 class="flex items-center gap-3 mb-4"
               >
-              <el-tag
-                v-if="row.access_profile?.access_level === 'root'"
-                type="danger"
-                size="small"
-              >
-                root
-              </el-tag>
-              <el-tag
-                v-else-if="row.access_profile?.sudo_verified"
-                :type="row.access_profile?.sudo_passwordless ? 'success' : 'warning'"
-                size="small"
-              >
-                {{ row.access_profile?.sudo_passwordless ? 'sudo (no pass)' : 'sudo' }}
-              </el-tag>
-              <el-tag
-                v-else-if="row.access_profile?.access_level === 'limited'"
-                type="info"
-                size="small"
-              >
-                limited
-              </el-tag>
+                <el-tag
+                  v-if="row.access_profile?.access_level === 'root'"
+                  type="danger"
+                  size="small"
+                >
+                  root
+                </el-tag>
+                <el-tag
+                  v-else-if="row.access_profile?.sudo_verified"
+                  :type="row.access_profile?.sudo_passwordless ? 'success' : 'warning'"
+                  size="small"
+                >
+                  {{ row.access_profile?.sudo_passwordless ? 'sudo (no pass)' : 'sudo' }}
+                </el-tag>
+                <el-tag
+                  v-else-if="row.access_profile?.access_level === 'limited'"
+                  type="info"
+                  size="small"
+                >
+                  limited
+                </el-tag>
                 <span class="text-label">{{ formatDate(row.scan_date) }}</span>
                 <el-button
                   size="small"
@@ -226,7 +228,7 @@
           align="right"
         >
           <template #default="{ row }">
-              <el-button-group>
+            <el-button-group>
               <el-button
                 size="small"
                 title="Vérifier la connexion"

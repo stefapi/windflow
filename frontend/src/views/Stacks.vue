@@ -11,6 +11,11 @@
           >
             Create Stack
           </el-button>
+          <el-button
+            @click="showImportDialog = true"
+          >
+            Import
+          </el-button>
         </div>
       </template>
 
@@ -57,7 +62,7 @@
         >
           <template #default="{ row }">
             <ActionButtons
-              :actions="['edit', 'deploy', 'delete']"
+              :actions="['edit', 'deploy', 'export', 'delete']"
               @action="(type) => handleStackAction(type, row)"
             />
           </template>
@@ -467,6 +472,47 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- Dialog d'import -->
+    <el-dialog
+      v-model="showImportDialog"
+      title="Import Stack"
+      width="500px"
+      destroy-on-close
+    >
+      <el-form label-width="120px">
+        <el-form-item label="JSON File">
+          <input
+            ref="fileInputRef"
+            type="file"
+            accept=".json"
+            class="import-file-input"
+            @change="handleFileSelect"
+          >
+        </el-form-item>
+        <el-alert
+          v-if="importError"
+          :title="importError"
+          type="error"
+          show-icon
+          closable
+          style="margin-top: 12px"
+        />
+      </el-form>
+      <template #footer>
+        <el-button @click="showImportDialog = false">
+          Cancel
+        </el-button>
+        <el-button
+          type="primary"
+          :disabled="!selectedImportFile"
+          :loading="importing"
+          @click="handleImport"
+        >
+          Import
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -502,6 +548,11 @@ const deploying = ref(false)
 const versions = ref<StackVersion[]>([])
 const loadingVersions = ref(false)
 const creatingVersion = ref(false)
+const showImportDialog = ref(false)
+const selectedImportFile = ref<File | null>(null)
+const importing = ref(false)
+const importError = ref<string | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const editForm = reactive({
   name: '',
@@ -745,6 +796,94 @@ async function confirmDelete(id: string): Promise<void> {
   }
 }
 
+function handleFileSelect(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  importError.value = null
+  selectedImportFile.value = null
+
+  if (!file) return
+
+  // Vérifier l'extension
+  if (!file.name.endsWith('.json')) {
+    importError.value = 'Please select a JSON file (.json)'
+    return
+  }
+
+  // Lire et valider le contenu JSON
+  const reader = new FileReader()
+  reader.onload = (e): void => {
+    try {
+      const content = JSON.parse(e.target?.result as string)
+
+      // Validation de la structure (AC 2)
+      if (content.version !== '1.0') {
+        importError.value = 'Invalid format: unsupported version (expected "1.0")'
+        return
+      }
+      if (!content.stack || typeof content.stack !== 'object') {
+        importError.value = 'Invalid format: "stack" section is missing'
+        return
+      }
+      if (!content.stack.name) {
+        importError.value = 'Invalid format: stack name is required'
+        return
+      }
+      if (!content.stack.template) {
+        importError.value = 'Invalid format: stack template is required'
+        return
+      }
+
+      selectedImportFile.value = file
+    } catch {
+      importError.value = 'Invalid JSON file: unable to parse content'
+    }
+  }
+  reader.readAsText(file)
+}
+
+async function handleImport(): Promise<void> {
+  if (!selectedImportFile.value) return
+  importing.value = true
+  importError.value = null
+  try {
+    const response = await stacksApi.import(selectedImportFile.value)
+    ElMessage.success(`Stack "${response.data.name}" imported successfully`)
+    showImportDialog.value = false
+    selectedImportFile.value = null
+    // Rafraîchir la liste et sélectionner la nouvelle stack
+    await stacksStore.fetchStacks(authStore.organizationId || undefined)
+    const newStack = stacksStore.stacks.find(s => s.id === response.data.stack_id)
+    if (newStack) {
+      selectStack(newStack)
+    }
+  } catch (err: unknown) {
+    // Afficher l'erreur du backend si disponible (AC 4)
+    const axiosErr = err as { response?: { data?: { detail?: string } } }
+    importError.value = axiosErr.response?.data?.detail || 'Failed to import stack'
+  } finally {
+    importing.value = false
+  }
+}
+
+async function exportStack(stack: Stack): Promise<void> {
+  try {
+    const response = await stacksApi.export(stack.id)
+    const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${stack.name}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    ElMessage.success(`Stack "${stack.name}" exported successfully`)
+  } catch {
+    ElMessage.error('Failed to export stack')
+  }
+}
+
 // Handle action button clicks
 function handleStackAction(type: ActionType, stack: Stack): void {
   switch (type) {
@@ -753,6 +892,9 @@ function handleStackAction(type: ActionType, stack: Stack): void {
       break
     case 'deploy':
       openDeployDialog(stack)
+      break
+    case 'export':
+      exportStack(stack)
       break
     case 'delete':
       confirmDelete(stack.id)
@@ -884,5 +1026,9 @@ onMounted(() => {
 
 .history-section {
   padding: 8px 0;
+}
+
+.import-file-input {
+  width: 100%;
 }
 </style>

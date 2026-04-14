@@ -51,10 +51,11 @@ import {
   Upload,
   Check,
   Key,
+  Download,
 } from '@element-plus/icons-vue'
 
 /** Predefined action types */
-export type ActionType = 'start' | 'stop' | 'restart' | 'logs' | 'delete' | 'edit' | 'deploy' | 'scan' | 'select' | 'password'
+export type ActionType = 'start' | 'stop' | 'restart' | 'logs' | 'delete' | 'edit' | 'deploy' | 'scan' | 'select' | 'password' | 'export'
 
 /** Action configuration (simplified for string usage) */
 export type ActionConfig = ActionType | ActionConfigObject
@@ -128,6 +129,10 @@ const defaultActionConfig: Record<ActionType, { icon: typeof VideoPlay; tooltip:
   password: {
     icon: Key,
     tooltip: 'Changer le mot de passe',
+  },
+  export: {
+    icon: Download,
+    tooltip: 'Exporter',
   },
 }
 
@@ -228,5 +233,10 @@ function handleAction(type: ActionType): void {
 .action-buttons__btn--password:hover:not(:disabled) {
   color: var(--color-warning);
   border-color: var(--color-warning);
+}
+
+.action-buttons__btn--export:hover:not(:disabled) {
+  color: var(--color-info);
+  border-color: var(--color-info);
 }
 </style>
