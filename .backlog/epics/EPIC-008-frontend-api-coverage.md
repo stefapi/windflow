@@ -226,7 +226,7 @@ Fonctionnalités avancées :
 ### 🟡 Priorité Moyenne
 
 #### Modèle Compute - Stack Management
-- [ ] STORY-010 : Duplication de stack
+- [x] STORY-010 : Duplication de stack
 - [ ] STORY-011 : Archivage de stack
 - [ ] STORY-012 : Promotion container standalone en stack
 

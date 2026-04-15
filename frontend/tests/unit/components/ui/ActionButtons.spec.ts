@@ -148,4 +148,21 @@ describe('ActionButtons', () => {
       expect(wrapper.emitted('action')![0]).toEqual(['export'])
     })
   })
+
+  describe('Duplicate action', () => {
+    it('renders duplicate action button with correct class', () => {
+      const wrapper = mountActionButtons({ actions: ['duplicate'] })
+      const buttons = wrapper.findAll('.el-button')
+      expect(buttons.length).toBe(1)
+      expect(wrapper.find('.action-buttons__btn--duplicate').exists()).toBe(true)
+    })
+
+    it('emits action event with type duplicate when clicked', async () => {
+      const wrapper = mountActionButtons({ actions: ['duplicate'] })
+      const button = wrapper.find('.el-button')
+      await button.trigger('click')
+      expect(wrapper.emitted('action')).toBeTruthy()
+      expect(wrapper.emitted('action')![0]).toEqual(['duplicate'])
+    })
+  })
 })

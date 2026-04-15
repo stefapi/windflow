@@ -280,6 +280,42 @@ class StackUpdate(BaseModel):
     )
 
 
+class StackDuplicateRequest(BaseModel):
+    """
+    Schema pour duplication de stack.
+
+    Permet de dupliquer un stack existant avec un nouveau nom
+    et optionnellement dans une autre organisation.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "new_name": "Nginx Reverse Proxy (copy)",
+                    "organization_id": "org-001",
+                },
+                {
+                    "new_name": "PostgreSQL Backup Stack",
+                },
+            ]
+        }
+    )
+
+    new_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Nom du nouveau stack",
+        json_schema_extra={"example": "Nginx Reverse Proxy (copy)"},
+    )
+    organization_id: Optional[str] = Field(
+        None,
+        description="ID de l'organisation cible — par défaut celle du stack original",
+        json_schema_extra={"example": "org-001"},
+    )
+
+
 class StackResponse(StackBase):
     """
     Schema pour réponse Stack.

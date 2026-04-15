@@ -62,7 +62,7 @@
         >
           <template #default="{ row }">
             <ActionButtons
-              :actions="['edit', 'deploy', 'export', 'delete']"
+              :actions="['edit', 'deploy', 'export', 'duplicate', 'delete']"
               @action="(type) => handleStackAction(type, row)"
             />
           </template>
@@ -513,6 +513,36 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- Dialog de duplication -->
+    <el-dialog
+      v-model="showDuplicateDialog"
+      title="Duplicate Stack"
+      width="500px"
+      destroy-on-close
+    >
+      <el-form label-width="120px">
+        <el-form-item label="New Name">
+          <el-input
+            v-model="duplicateForm.new_name"
+            placeholder="Enter new stack name"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showDuplicateDialog = false">
+          Cancel
+        </el-button>
+        <el-button
+          type="primary"
+          :disabled="!duplicateForm.new_name.trim()"
+          :loading="duplicating"
+          @click="handleDuplicate"
+        >
+          Duplicate
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -553,6 +583,10 @@ const selectedImportFile = ref<File | null>(null)
 const importing = ref(false)
 const importError = ref<string | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const showDuplicateDialog = ref(false)
+const duplicateStackRef = ref<Stack | null>(null)
+const duplicating = ref(false)
+const duplicateForm = reactive({ new_name: '' })
 
 const editForm = reactive({
   name: '',
@@ -884,6 +918,33 @@ async function exportStack(stack: Stack): Promise<void> {
   }
 }
 
+function openDuplicateDialog(stack: Stack): void {
+  duplicateStackRef.value = stack
+  duplicateForm.new_name = `${stack.name} (copy)`
+  showDuplicateDialog.value = true
+}
+
+async function handleDuplicate(): Promise<void> {
+  if (!duplicateStackRef.value) return
+  duplicating.value = true
+  try {
+    const response = await stacksApi.duplicate(duplicateStackRef.value.id, {
+      new_name: duplicateForm.new_name,
+    })
+    ElMessage.success(`Stack "${response.data.name}" duplicated successfully`)
+    showDuplicateDialog.value = false
+    await stacksStore.fetchStacks(authStore.organizationId || undefined)
+    const newStack = stacksStore.stacks.find(s => s.id === response.data.id)
+    if (newStack) {
+      selectStack(newStack)
+    }
+  } catch {
+    ElMessage.error('Failed to duplicate stack')
+  } finally {
+    duplicating.value = false
+  }
+}
+
 // Handle action button clicks
 function handleStackAction(type: ActionType, stack: Stack): void {
   switch (type) {
@@ -895,6 +956,9 @@ function handleStackAction(type: ActionType, stack: Stack): void {
       break
     case 'export':
       exportStack(stack)
+      break
+    case 'duplicate':
+      openDuplicateDialog(stack)
       break
     case 'delete':
       confirmDelete(stack.id)

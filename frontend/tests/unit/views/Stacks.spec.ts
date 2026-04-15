@@ -20,6 +20,7 @@ vi.mock('@/services/api', () => ({
     restoreVersion: vi.fn().mockResolvedValue({ data: {} }),
     export: vi.fn().mockResolvedValue({ data: { version: '1.0', stack: { name: 'Test Stack', description: null, version: '1.0', category: null, tags: [], template: '', variables: {}, icon_url: null, screenshots: [], documentation_url: null, author: null, license: null } } }),
     import: vi.fn().mockResolvedValue({ data: { message: 'Stack imported successfully', stack_id: 'new-stack-1', name: 'Imported Stack' } }),
+    duplicate: vi.fn().mockResolvedValue({ data: { id: 'duplicated-stack-1', name: 'Test Stack (copy)', description: 'Copie de Test Stack: A test stack', compose_content: 'version: "3.8"', metadata: {}, organization_id: 'org-1', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' } }),
   },
   targetsApi: {
     list: vi.fn().mockResolvedValue({ data: { items: [] } }),
@@ -183,12 +184,13 @@ describe('Stacks.vue', () => {
   })
 
   describe('ActionButtons integration', () => {
-    it('has correct action types for stacks', () => {
+    it('has correct action types for stacks including duplicate', () => {
       // Verify that ActionButtons accepts the expected action types
-      const expectedActions = ['edit', 'deploy', 'export', 'delete']
+      const expectedActions = ['edit', 'deploy', 'export', 'duplicate', 'delete']
       expect(expectedActions).toContain('edit')
       expect(expectedActions).toContain('deploy')
       expect(expectedActions).toContain('export')
+      expect(expectedActions).toContain('duplicate')
       expect(expectedActions).toContain('delete')
     })
   })
@@ -507,6 +509,181 @@ describe('Stacks.vue', () => {
       await handleImport()
 
       expect((wrapper.vm as unknown as Record<string, unknown>).importError).toBe('Stack already exists')
+    })
+  })
+
+  describe('openDuplicateDialog', () => {
+    it('pre-fills name with original name plus copy suffix', async () => {
+      const wrapper = mount(Stacks, {
+        global: {
+          plugins: [createPinia()],
+          stubs: {
+            'el-card': { template: '<div><slot /><slot name="header" /></div>' },
+            'el-table': { template: '<div><slot /></div>' },
+            'el-table-column': { template: '<div></div>' },
+            'el-button': { template: '<button><slot /></button>' },
+            'el-tag': { template: '<span><slot /></span>' },
+            'el-icon': { template: '<i><slot /></i>' },
+            'el-tooltip': { template: '<span><slot /></span>' },
+            StatusBadge: { template: '<span data-testid="status-badge">{{ status }}</span>', props: ['status', 'size'] },
+            ActionButtons: { template: '<div data-testid="action-buttons"></div>', props: ['actions'] },
+          },
+        },
+      })
+
+      const openDuplicateDialog = (wrapper.vm as unknown as { openDuplicateDialog: (s: Stack) => void }).openDuplicateDialog
+      openDuplicateDialog(mockStack)
+
+      const vm = wrapper.vm as unknown as Record<string, unknown>
+      expect((vm.duplicateForm as { new_name: string }).new_name).toBe('Test Stack (copy)')
+      expect(vm.showDuplicateDialog).toBe(true)
+      expect((vm.duplicateStackRef as Stack | null)?.id).toBe(mockStack.id)
+    })
+  })
+
+  describe('handleDuplicate', () => {
+    it('calls stacksApi.duplicate with correct id and name', async () => {
+      const { stacksApi } = await import('@/services/api')
+      const wrapper = mount(Stacks, {
+        global: {
+          plugins: [createPinia()],
+          stubs: {
+            'el-card': { template: '<div><slot /><slot name="header" /></div>' },
+            'el-table': { template: '<div><slot /></div>' },
+            'el-table-column': { template: '<div></div>' },
+            'el-button': { template: '<button><slot /></button>' },
+            'el-tag': { template: '<span><slot /></span>' },
+            'el-icon': { template: '<i><slot /></i>' },
+            'el-tooltip': { template: '<span><slot /></span>' },
+            StatusBadge: { template: '<span data-testid="status-badge">{{ status }}</span>', props: ['status', 'size'] },
+            ActionButtons: { template: '<div data-testid="action-buttons"></div>', props: ['actions'] },
+          },
+        },
+      })
+
+      const vm = wrapper.vm as unknown as Record<string, unknown>
+      const openDuplicateDialog = (wrapper.vm as unknown as { openDuplicateDialog: (s: Stack) => void }).openDuplicateDialog
+      openDuplicateDialog(mockStack)
+
+      const handleDuplicate = (wrapper.vm as unknown as { handleDuplicate: () => Promise<void> }).handleDuplicate
+      await handleDuplicate()
+
+      expect(stacksApi.duplicate).toHaveBeenCalledWith('stack-1', { new_name: 'Test Stack (copy)' })
+    })
+
+    it('shows success message after successful duplication', async () => {
+      const { ElMessage } = await import('element-plus')
+      const wrapper = mount(Stacks, {
+        global: {
+          plugins: [createPinia()],
+          stubs: {
+            'el-card': { template: '<div><slot /><slot name="header" /></div>' },
+            'el-table': { template: '<div><slot /></div>' },
+            'el-table-column': { template: '<div></div>' },
+            'el-button': { template: '<button><slot /></button>' },
+            'el-tag': { template: '<span><slot /></span>' },
+            'el-icon': { template: '<i><slot /></i>' },
+            'el-tooltip': { template: '<span><slot /></span>' },
+            StatusBadge: { template: '<span data-testid="status-badge">{{ status }}</span>', props: ['status', 'size'] },
+            ActionButtons: { template: '<div data-testid="action-buttons"></div>', props: ['actions'] },
+          },
+        },
+      })
+
+      const openDuplicateDialog = (wrapper.vm as unknown as { openDuplicateDialog: (s: Stack) => void }).openDuplicateDialog
+      openDuplicateDialog(mockStack)
+
+      const handleDuplicate = (wrapper.vm as unknown as { handleDuplicate: () => Promise<void> }).handleDuplicate
+      await handleDuplicate()
+
+      expect(ElMessage.success).toHaveBeenCalledWith('Stack "Test Stack (copy)" duplicated successfully')
+    })
+
+    it('shows error message on API failure', async () => {
+      const { stacksApi } = await import('@/services/api')
+      const { ElMessage } = await import('element-plus')
+      ;(stacksApi.duplicate as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('API error'))
+
+      const wrapper = mount(Stacks, {
+        global: {
+          plugins: [createPinia()],
+          stubs: {
+            'el-card': { template: '<div><slot /><slot name="header" /></div>' },
+            'el-table': { template: '<div><slot /></div>' },
+            'el-table-column': { template: '<div></div>' },
+            'el-button': { template: '<button><slot /></button>' },
+            'el-tag': { template: '<span><slot /></span>' },
+            'el-icon': { template: '<i><slot /></i>' },
+            'el-tooltip': { template: '<span><slot /></span>' },
+            StatusBadge: { template: '<span data-testid="status-badge">{{ status }}</span>', props: ['status', 'size'] },
+            ActionButtons: { template: '<div data-testid="action-buttons"></div>', props: ['actions'] },
+          },
+        },
+      })
+
+      const openDuplicateDialog = (wrapper.vm as unknown as { openDuplicateDialog: (s: Stack) => void }).openDuplicateDialog
+      openDuplicateDialog(mockStack)
+
+      const handleDuplicate = (wrapper.vm as unknown as { handleDuplicate: () => Promise<void> }).handleDuplicate
+      await handleDuplicate()
+
+      expect(ElMessage.error).toHaveBeenCalledWith('Failed to duplicate stack')
+    })
+
+    it('refreshes stack list after successful duplication', async () => {
+      const wrapper = mount(Stacks, {
+        global: {
+          plugins: [createPinia()],
+          stubs: {
+            'el-card': { template: '<div><slot /><slot name="header" /></div>' },
+            'el-table': { template: '<div><slot /></div>' },
+            'el-table-column': { template: '<div></div>' },
+            'el-button': { template: '<button><slot /></button>' },
+            'el-tag': { template: '<span><slot /></span>' },
+            'el-icon': { template: '<i><slot /></i>' },
+            'el-tooltip': { template: '<span><slot /></span>' },
+            StatusBadge: { template: '<span data-testid="status-badge">{{ status }}</span>', props: ['status', 'size'] },
+            ActionButtons: { template: '<div data-testid="action-buttons"></div>', props: ['actions'] },
+          },
+        },
+      })
+
+      const openDuplicateDialog = (wrapper.vm as unknown as { openDuplicateDialog: (s: Stack) => void }).openDuplicateDialog
+      openDuplicateDialog(mockStack)
+
+      const handleDuplicate = (wrapper.vm as unknown as { handleDuplicate: () => Promise<void> }).handleDuplicate
+      await handleDuplicate()
+
+      const vm = wrapper.vm as unknown as { stacksStore: { fetchStacks: ReturnType<typeof vi.fn> } }
+      expect(vm.stacksStore.fetchStacks).toHaveBeenCalled()
+    })
+  })
+
+  describe('handleStackAction duplicate', () => {
+    it('routes duplicate action to openDuplicateDialog', async () => {
+      const wrapper = mount(Stacks, {
+        global: {
+          plugins: [createPinia()],
+          stubs: {
+            'el-card': { template: '<div><slot /><slot name="header" /></div>' },
+            'el-table': { template: '<div><slot /></div>' },
+            'el-table-column': { template: '<div></div>' },
+            'el-button': { template: '<button><slot /></button>' },
+            'el-tag': { template: '<span><slot /></span>' },
+            'el-icon': { template: '<i><slot /></i>' },
+            'el-tooltip': { template: '<span><slot /></span>' },
+            StatusBadge: { template: '<span data-testid="status-badge">{{ status }}</span>', props: ['status', 'size'] },
+            ActionButtons: { template: '<div data-testid="action-buttons"></div>', props: ['actions'] },
+          },
+        },
+      })
+
+      const handleStackAction = (wrapper.vm as unknown as { handleStackAction: (type: string, stack: Stack) => void }).handleStackAction
+      handleStackAction('duplicate', mockStack)
+
+      const vm = wrapper.vm as unknown as Record<string, unknown>
+      expect(vm.showDuplicateDialog).toBe(true)
+      expect((vm.duplicateForm as { new_name: string }).new_name).toBe('Test Stack (copy)')
     })
   })
 })

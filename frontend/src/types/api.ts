@@ -260,6 +260,11 @@ export interface StackUpdate {
   metadata?: Record<string, unknown>
 }
 
+export interface StackDuplicateRequest {
+  new_name: string
+  organization_id?: string
+}
+
 // Deployment types
 export type DeploymentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 

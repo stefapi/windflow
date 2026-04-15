@@ -48,6 +48,7 @@ import type {
   AdoptionResponse,
   BatchContainerActionResponse,
   StackActionResponse,
+  StackDuplicateRequest,
   StackRedeployRequest,
   StackRedeployResponse,
   ContainerUpdateRestartPolicyRequest,
@@ -208,6 +209,9 @@ export const stacksApi = {
 
   redeploy: (id: string, data: StackRedeployRequest) =>
     http.post<StackRedeployResponse>(`/stacks/${id}/redeploy`, data),
+
+  duplicate: (id: string, data: StackDuplicateRequest) =>
+    http.post<Stack>(`/stacks/${id}/duplicate`, data),
 }
 
 // Deployments API

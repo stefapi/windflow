@@ -18,6 +18,7 @@ from ...models.user import User
 from ...schemas.stack import (
     StackActionResponse,
     StackCreate,
+    StackDuplicateRequest,
     StackRedeployRequest,
     StackRedeployResponse,
     StackResponse,
@@ -1884,3 +1885,93 @@ async def redeploy_stack(
         action="redeploy",
         strategy=strategy,
     )
+
+
+@router.post(
+    "/{stack_id}/duplicate",
+    response_model=StackResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Duplicate a stack",
+    description="""
+    Duplicate an existing stack with a new name.
+
+    ## Features
+    - **Copy Template**: Copies the full Docker Compose template
+    - **Copy Variables**: Preserves all configurable variables
+    - **Tag**: Adds a "duplicate" tag to the new stack
+    - **Private**: The duplicated stack is private by default
+    - **Organization**: Optionally target a different organization
+
+    **Authentication Required**
+    """,
+    responses={
+        200: {
+            "description": "Stack duplicated successfully",
+        },
+        404: {
+            "description": "Source stack not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Stack non trouvé: stack-123"}
+                }
+            },
+        },
+        409: {
+            "description": "A stack with this name already exists in the target organization",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Un stack nommé 'My Stack (copy)' existe déjà"}
+                }
+            },
+        },
+    },
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(20, 60))],
+)
+async def duplicate_stack(
+    stack_id: str,
+    data: StackDuplicateRequest,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+) -> StackResponse:
+    """
+    Duplique un stack existant.
+
+    Crée une copie du stack avec un nouveau nom, optionnellement
+    dans une autre organisation.
+    """
+    original_stack = await StackService.get_by_id(session, stack_id)
+
+    if not original_stack:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Stack non trouvé: {stack_id}",
+        )
+
+    # Vérifier l'unicité du nom dans l'organisation cible
+    target_org_id = data.organization_id or original_stack.organization_id
+    existing = await StackService.get_by_name(session, data.new_name, target_org_id)
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Un stack nommé '{data.new_name}' existe déjà",
+        )
+
+    # Construire les données de la copie
+    original_tags = list(original_stack.tags) if original_stack.tags else []
+    stack_data = StackCreate(
+        name=data.new_name,
+        description=f"Copie de {original_stack.name}: {original_stack.description or ''}",
+        template=original_stack.template,
+        variables=original_stack.variables or {},
+        version=original_stack.version,
+        category=original_stack.category,
+        tags=original_tags + ["duplicate"],
+        is_public=False,
+        organization_id=target_org_id,
+    )
+
+    new_stack = await StackService.create(session, stack_data)
+
+    return StackResponse.model_validate(new_stack)

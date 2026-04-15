@@ -52,10 +52,11 @@ import {
   Check,
   Key,
   Download,
+  CopyDocument,
 } from '@element-plus/icons-vue'
 
 /** Predefined action types */
-export type ActionType = 'start' | 'stop' | 'restart' | 'logs' | 'delete' | 'edit' | 'deploy' | 'scan' | 'select' | 'password' | 'export'
+export type ActionType = 'start' | 'stop' | 'restart' | 'logs' | 'delete' | 'edit' | 'deploy' | 'scan' | 'select' | 'password' | 'export' | 'duplicate'
 
 /** Action configuration (simplified for string usage) */
 export type ActionConfig = ActionType | ActionConfigObject
@@ -133,6 +134,10 @@ const defaultActionConfig: Record<ActionType, { icon: typeof VideoPlay; tooltip:
   export: {
     icon: Download,
     tooltip: 'Exporter',
+  },
+  duplicate: {
+    icon: CopyDocument,
+    tooltip: 'Dupliquer',
   },
 }
 

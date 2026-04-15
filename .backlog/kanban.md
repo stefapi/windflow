@@ -18,7 +18,16 @@ _(vide)_
 - [ ] STORY-007 : Export stacks JSON
 - [ ] STORY-008 : Import stacks JSON
 
+## IN PROGRESS
+
+_(vide)_
+
+## REVIEW
+
+_(vide)_
+
 ## DONE
 
 - [x] STORY-024 : Homogénéisation visuelle — onglet Infos au design d'Aperçu
 - [x] STORY-009 : Édition à chaud des containers — Restart policy et limites ressources
+- [x] STORY-010 : Duplication de stack
