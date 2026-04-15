@@ -161,25 +161,27 @@ Avant de clôturer une session de travail, vérifier :
 
 ### 5.1 Pipeline de Skills
 
-Le traitement d'une epic suit un pipeline en 4 étapes, chacune gérée par une skill dédiée :
+Le traitement d'une epic suit un pipeline en 5 étapes, chacune gérée par une skill dédiée :
 
 ```
-create-*        →  analyse-story    →  treat-story       →  finalise-epic
-(Description+AC)   (Tâches détaillées)  (Implémentation)     (Quality Gate)
+create-*        →  analyse-story    →  treat-story       →  finalise-story    →  finalise-epic
+(Description+AC)   (Tâches détaillées)  (Implémentation)     (Quality Gate story)  (Quality Gate epic)
 ```
 
 | Étape | Skill | Produit | Statut story |
 |-------|-------|---------|--------------|
 | 1. Création | `create-stories`, `create-improvement`, `create-refactoring` | Fichier story avec description + AC | `TODO` |
 | 2. Analyse | `analyse-story` | Tâches d'implémentation détaillées, tests à écrire | `TODO` |
-| 3. Implémentation | `treat-story` | Code, tests, documentation | `TODO` → `IN_PROGRESS` → `REVIEW` → `DONE` |
-| 4. Finalisation | `finalise-epic` | Rapport de conformité (quality gate avant clôture) | Epic : vérification toutes stories DONE |
+| 3. Implémentation | `treat-story` | Code, tests, documentation | `TODO` → `IN_PROGRESS` → `REVIEW` |
+| 4. Finalisation story | `finalise-story` | Vérification complétude, tests passants, clôture story | `REVIEW` → `DONE` |
+| 5. Finalisation epic | `finalise-epic` | Rapport de conformité (quality gate avant clôture) | Epic : vérification toutes stories DONE |
 
 **Règles du pipeline :**
 - Les skills de création (étape 1) ne génèrent **que** la description et les AC — pas de tâches techniques
 - L'analyse (étape 2) explore le code, identifie les patterns et écrit les tâches détaillées dans la story — **sans coder**
 - L'implémentation (étape 3) exécute les tâches **dans l'ordre**, fichier par fichier, en suivant exactement les instructions de l'analyse
-- La finalisation (étape 4) est un **quality gate en lecture seule** — elle ne modifie aucun fichier de code, uniquement le rapport dans l'epic. Elle doit être lancée **après** que toutes les stories sont DONE, et **avant** `close-epic`
+- La finalisation story (étape 4) est un **quality gate exécutif au niveau story** — elle vérifie que tout est complet, lance les tests, et passe la story à DONE si conforme
+- La finalisation epic (étape 5) est un **quality gate en lecture seule** — elle ne modifie aucun fichier de code, uniquement le rapport dans l'epic. Elle doit être lancée **après** que toutes les stories sont DONE, et **avant** `close-epic`
 
 ### 5.1.1 `analyse-story` — Évaluation de complexité et découpe en sous-stories
 
@@ -302,9 +304,8 @@ Quand `treat-story` est appelée sur une story qui a été découpée en sous-st
 
 1. **Tests :** Implémente les tests décrits dans `## Tests à écrire` et lance les commandes de validation.
 2. **Review :** Change le statut à `REVIEW` et déplace dans la colonne correspondante du kanban.
-3. **Validation :** Une fois les tests validés, change le statut à `DONE`.
-4. **Clôture Kanban :** Déplace la story dans "DONE" dans le kanban.
-5. **Notes :** Ajoute une section "Notes d'implémentation" à la fin du fichier story avec :
+3. **Finalisation :** Lance `finalise-story` pour valider la complétude, les tests et appliquer la clôture (DONE).
+4. **Notes :** `finalise-story` vérifie la présence de la section "Notes d'implémentation" à la fin du fichier story avec :
    - Fichiers modifiés/créés
    - Décisions techniques prises
    - Divergences par rapport à l'analyse (si applicable)
