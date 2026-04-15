@@ -105,12 +105,7 @@ En tant que [Rôle], je veux [Amélioration souhaitée] afin de [Bénéfice].
 <!-- Rempli par analyse-story -->
 
 ## Tâches d'implémentation détaillées
-<!-- Rempli par analyse-story — inclura :
-- Analyse du code existant
-- Fichiers impactés et risques de régression
-- Plan de non-régression
-- Tâches d'implémentation ordonnées
--->
+<!-- Rempli par analyse-story -->
 
 ## Tests à écrire
 <!-- Rempli par analyse-story -->

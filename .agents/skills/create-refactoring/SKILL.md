@@ -110,14 +110,7 @@ Ce refactoring ne doit **pas** changer le comportement externe de l'application.
 <!-- Rempli par analyse-story -->
 
 ## Tâches d'implémentation détaillées
-<!-- Rempli par analyse-story — inclura :
-- Analyse de l'architecture existante
-- Choix de la méthode de refactoring
-- Fichiers impactés et risques de régression
-- Comportement à préserver (entrées/sorties/effets de bord)
-- Plan de non-régression
-- Tâches d'implémentation ordonnées
--->
+<!-- Rempli par analyse-story -->
 
 ## Tests à écrire
 <!-- Rempli par analyse-story -->
