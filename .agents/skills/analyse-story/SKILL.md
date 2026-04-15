@@ -86,16 +86,7 @@ Lire le fichier epic dans `.backlog/epics/EPIC-XXX-*.md` pour comprendre :
 | `.clinerules/45-observability.md` | Logging structuré, corrélation, métriques |
 | `.clinerules/55-project-structure.md` | Organisation des répertoires, localisation des fichiers de test |
 
-**Selon le périmètre de la story, lire également :**
-- `doc/general_specs/07-api-design.md` — Si endpoints API concernés
-- `doc/general_specs/11-UI-mockups.md` — Si UI frontend concernée
-- `doc/general_specs/04-data-model.md` — Si modèles de données impactés
-- `doc/general_specs/05-authentication.md` — Si auth/RBAC concerné
-- `doc/general_specs/06-rbac-permissions.md` — Si permissions (rôles autorisés/interdits)
-- `doc/general_specs/16-workflows.md` — Si workflows métier
-- `doc/WEBSOCKET-REAL-TIME.md` — Si WebSocket
-- `doc/DYNAMIC-FORMS.md` — Si formulaires dynamiques
-- `doc/STACK-DEFINITIONS.md` — Si stacks Docker
+**Selon le périmètre de la story, lire également le contenu du répertoire docs/*.md **
 
 ---
 
@@ -126,9 +117,16 @@ Pour chaque couche identifiée, **lire les fichiers existants pertinents** en su
 - Lire le router dans `frontend/src/router/`
 - Identifier les **patterns existants** (Composition API, structure template, gestion d'erreurs)
 
+**CLI :**
+- Lire les composants similaires dans `frontend/src/components/`
+- Lire les composables similaires dans `frontend/src/composables/`
+- Lire les modèles dans `backend/app/models/` si DB concernée
+- Lire les services existants similaires dans `backend/app/services/`
+
 **Tests :**
 - Lire les tests existants similaires dans `backend/tests/`
 - Lire les tests existants similaires dans `frontend/tests/`
+- Lire les tests existants similaires dans `cli/tests/`
 - Identifier les **fixtures et mocks** déjà disponibles (conftest.py)
 
 ### 2.3 Recherche de dépendances et impacts
@@ -174,7 +172,7 @@ Exemples :
 Une story est considérée **complexe** si elle remplit **au moins un** des critères suivants :
 - **Plus de 5 tâches d'implémentation** identifiées lors de l'exploration (Phase 2)
 - **Plus de 6 fichiers** à modifier/créer
-- **Mélange backend + frontend** (couche full-stack avec modifications significatives des deux côtés)
+- **Mélange backend + frontend ou CLI** (couche full-stack avec modifications significatives des deux côtés)
 - **Plus de 8 critères d'acceptation** (AC)
 
 ### Processus de décision
@@ -185,7 +183,7 @@ Une story est considérée **complexe** si elle remplit **au moins un** des crit
 **Critères remplis :**
 - [ ] > 5 tâches identifiées → [Oui/Non — compter les tâches envisagées]
 - [ ] > 6 fichiers impactés → [Oui/Non — lister les fichiers]
-- [ ] Backend + Frontend → [Oui/Non]
+- [ ] Backend + Frontend ou CLI → [Oui/Non]
 - [ ] > 8 AC → [Oui/Non — nombre d'AC]
 
 **Verdict :** [Simple | Complexe]
@@ -203,6 +201,7 @@ Regrouper les tâches envisagées par **cohésion fonctionnelle** :
 - Backend API / Services / Models / Schemas
 - Frontend Composants / Stores / Composables / Types
 - Helpers / Utils / Shared
+- CLI /Services / Models / Composants / Composables
 - Tests
 
 #### Étape B : Proposer le découpage à l'utilisateur
@@ -315,7 +314,7 @@ Avant de rédiger les tâches, passer en revue **obligatoirement** les points su
 ### Authentification & autorisation
 
 - **Authentification requise ?** → Identifier si `get_current_user` doit être injecté dans les endpoints
-- **Rôles concernés ?** → Lister les rôles autorisés et interdits (consulter `doc/general_specs/06-rbac-permissions.md`)
+- **Rôles concernés ?** → Lister les rôles autorisés et interdits (consulter `docs/*.md`)
 - **Isolation des ressources ?** → Si des ressources appartiennent à un user, vérifier que l'accès cross-user est bloqué
 
 ### Validation & injection
@@ -379,8 +378,9 @@ Ajouter une nouvelle section `## Tâches d'implémentation détaillées` après 
 **Ordre des tâches (API-first — conforme `.clinerules/20-architecture-and-api.md`) :**
 1. **Backend d'abord** : models → schemas → services → endpoints
 2. **Frontend ensuite** : types → stores/composables → composants → vues → router
-3. **Tests à la fin** (ou dans chaque tâche si couplage fort)
-4. **Nettoyage/refactoring** en dernier
+3. **CLI ensuite**
+4. **Tests à la fin** (ou dans chaque tâche si couplage fort)
+5. **Nettoyage/refactoring** en dernier
 
 **Exigences sécurité dans les tâches (conforme `.clinerules/40-security.md`) :**
 - Pour tout endpoint : mentionner explicitement `require_role(...)` ou `get_current_user`
@@ -467,6 +467,7 @@ Réécrire la section `## État d'avancement technique` avec des checkboxes corr
 - [ ] Tâche 3 : [Titre]
 - [ ] Tests unitaires backend
 - [ ] Tests unitaires frontend
+- [ ] Tests unitaires CLI
 - [ ] Build & lint OK
 ```
 
@@ -497,6 +498,7 @@ Avant d'écrire dans le fichier, présenter un résumé :
 ### Périmètre identifié
 - Backend : [Oui/Non] — [Services, API, Models concernés]
 - Frontend : [Oui/Non] — [Vues, Composants, Stores concernés]
+- CLI : [Oui/Non] — [Services, Composants, Stores concernés]
 - Infra : [Oui/Non] — [Docker, Config concernés]
 
 ### Exigences sécurité
@@ -513,6 +515,7 @@ Avant d'écrire dans le fichier, présenter un résumé :
 ### Tests planifiés
 - Backend : N tests (dont X tests sécurité)
 - Frontend : N tests (dont X tests sécurité)
+- ClI : N tests (dont X tests sécurité)
 
 ### Dépendances externes
 - [Autres stories requises, si applicable]
@@ -705,7 +708,7 @@ Avant de conclure l'exécution de cette skill, vérifier :
 - [ ] La story a été lue et comprise (AC, description, contexte)
 - [ ] L'epic parent a été consulté
 - [ ] Les fichiers `.clinerules/` pertinents ont tous été consultés (05, 20, 30, 35, 40, 55 au minimum)
-- [ ] Les specs pertinentes dans `doc/general_specs/` ont été consultées selon le périmètre
+- [ ] Les specs pertinentes dans `docs/*.md` ont été consultées selon le périmètre
 - [ ] Le code existant a été exploré (fichiers similaires, patterns, dépendances)
 - [ ] Les fichiers de référence (patterns) sont identifiés pour chaque type de fichier à créer
 - [ ] L'analyse de sécurité (phase 2.6) a été effectuée et ses conclusions sont documentées dans le contexte technique
@@ -726,8 +729,10 @@ Avant de conclure l'exécution de cette skill, vérifier :
 | `.backlog/stories/STORY-XXX-*.md` | Lecture + Enrichissement (tâches détaillées, tests, contexte sécurité) |
 | `.backlog/epics/EPIC-XXX-*.md` | Lecture seule (contexte) |
 | `.clinerules/*.md` | Lecture seule (règles de dev — **à consulter avant de rédiger**) |
-| `doc/general_specs/*.md` | Lecture seule (contraintes, specs, rôles RBAC) |
+| `docs/*.md` | Lecture seule (contraintes, specs, rôles RBAC) |
 | `backend/**/*.py` | Lecture seule (exploration patterns) |
 | `frontend/src/**/*` | Lecture seule (exploration patterns) |
+| `cli/src/**/*` | Lecture seule (exploration patterns) |
 | `backend/tests/**/*.py` | Lecture seule (exploration patterns tests) |
 | `frontend/tests/**/*` | Lecture seule (exploration patterns tests) |
+| `cli/tests/**/*` | Lecture seule (exploration patterns tests) |

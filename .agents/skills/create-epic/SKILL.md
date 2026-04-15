@@ -1,11 +1,11 @@
 ---
 name: create-epic
-description: Crée une epic à partir d'un item de la roadmap doc/general_specs/18-roadmap.md
+description: Crée une epic à partir d'un item de la roadmap docs/Roadmap.md
 ---
 
 # create-epic
 
-Cette skill permet de créer **une et une seule epic** à partir d'un item sélectionné dans la roadmap du projet(`doc/general_specs/18-roadmap.md`).
+Cette skill permet de créer **une et une seule epic** à partir d'un item sélectionné dans la roadmap du projet(`docs/Roadmap.md`).
 
 ## Usage
 
@@ -17,14 +17,14 @@ Utilise cette skill quand :
 ## Prérequis
 
 Avant d'exécuter cette skill, vérifier :
-- [ ] Le fichier `doc/general_specs/18-roadmap.md` existe et est lisible
+- [ ] Le fichier `docs/Roadmap.md` existe et est lisible
 - [ ] Le dossier `.backlog/epics/` existe
 - [ ] Le fichier `.backlog/kanban.md` existe
 
 ## Étapes
 
 ### 1. Lecture de la roadmap
-Lire le fichier `doc/general_specs/18-roadmap.md` pour identifier les items disponibles.
+Lire le fichier `docs/Roadmap.md` pour identifier les items disponibles.
 
 ### 2. Sélection de l'item
 Demander à l'utilisateur quel item de la roadmap doit être transformé en epic et proposant les sujets les plus prioritaires en premier.
@@ -162,12 +162,12 @@ Respecter les règles définies dans `.clinerules/01-Project-management.md` :
 
 ## Fichiers concernés
 
-| Fichier | Action |
-|---------|--------|
-| `doc/general_specs/18-roadmap.md` | Lecture (source) |
+| Fichier                             | Action |
+|-------------------------------------|--------|
+| `docs/Roadmap.md`                   | Lecture (source) |
 | `.backlog/epics/EPIC-XXX-[slug].md` | Création |
-| `.backlog/kanban.md` | Mise à jour (ajout epic dans BACKLOG) |
-| `.backlog/epic.md` | Référence (template) |
+| `.backlog/kanban.md`                | Mise à jour (ajout epic dans BACKLOG) |
+| `.backlog/epic.md`                  | Référence (template) |
 
 ## Gestion des erreurs
 
