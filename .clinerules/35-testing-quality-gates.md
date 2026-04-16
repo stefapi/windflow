@@ -2,15 +2,16 @@
 
 ## Pyramide des tests
 
-Unitaires > Intégration > E2E (peu, sur workflows critiques).
+Backend : `unit/` + `integration/` uniquement (pas de `e2e/`).
+Frontend : `tests/unit/`, `tests/integration/`, `tests/e2e/` (Playwright).
 
 ---
 
 ## Couverture minimale
 
 - Minimum : 80% pour tout nouveau composant
-- Cible backend : 85%+
-- Cible frontend : 80%+
+- Cible backend : 80% (`--cov-fail-under=80` dans Makefile et CI)
+- Cible frontend : aucun seuil configuré dans vitest.config.ts (pas de bloc `coverage.threshold`)
 - Chemins critiques (auth, déploiement, RBAC) : viser 95%
 
 ---
@@ -19,11 +20,27 @@ Unitaires > Intégration > E2E (peu, sur workflows critiques).
 
 | Niveau | Backend | Frontend |
 |--------|---------|----------|
-| Unitaires | `pytest` + `pytest-asyncio` | `Vitest` |
+| Unitaires | `pytest` + `pytest-asyncio` | `Vitest` + `@vue/test-utils ^2.4.6` + `@pinia/testing ^1.0.2` |
 | Intégration | `pytest` + DB réelle + Redis | `Vitest` + mocks HTTP |
-| E2E | — | `Playwright` (workflows critiques) |
+| E2E | — | `Playwright ^1.56.0` (navigateurs chromium + firefox + webkit) |
 
-Toutes les commandes de lancement sont dans le `Makefile` (voir `.clinerules/55-project-structure.md`).
+### Outils de test backend complémentaires
+
+- pytest-cov, pytest-mock, pytest-xdist, pytest-timeout, pytest-benchmark
+- pytest-sugar, pytest-clarity
+- faker, factory-boy, freezegun
+- aioresponses
+
+### Outils de test frontend complémentaires
+
+- jsdom `^26.0.0` (environnement Vitest)
+- @playwright/test `^1.56.0`
+
+### Client HTTP de test
+
+- httpx `AsyncClient` avec `ASGITransport` pour les tests d'endpoint API
+
+Toutes les commandes de lancement sont dans le `Makefile` (voir `.clinerules/50-dev-workflow.md`).
 
 ---
 
@@ -64,7 +81,7 @@ async def test_create_raises_on_invalid_data(mock_docker_client):
 ```python
 # backend/tests/unit/test_api/test_xxx.py
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
 @pytest.mark.asyncio
 async def test_get_xxx_list_authenticated(client: AsyncClient, auth_headers):
@@ -230,10 +247,11 @@ it('n\'affiche pas les tokens/secrets dans le DOM', ...)
 Se référer au `Makefile` (source de vérité) :
 
 ```bash
-make test-backend          # pytest backend complet
-make test-frontend         # Vitest frontend complet
-make lint                  # Lint backend + frontend
-make typecheck             # mypy + tsc strict
+make backend-test           # pytest backend complet
+make frontend-test          # Vitest frontend complet
+make lint                   # Lint backend + frontend + CLI
+make backend-typecheck      # mypy
+make frontend-typecheck     # tsc strict
 ```
 
 ### Commandes ciblées lors du développement

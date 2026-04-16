@@ -13,8 +13,32 @@
 - validation inputs côté client ET serveur (Pydantic côté backend)
 - protection CSRF pour opérations critiques
 
+### Bibliothèques d'authentification
+- python-jose (JWT)
+- passlib + argon2-cffi (hash des mots de passe)
+- email-validator
+
+### Mode dev sans auth
+- `disable_auth: bool = False` par défaut
+- Permet de contourner JWT en développement
+
+### Keycloak SSO
+- Optionnel (`keycloak_enabled: bool = False` par défaut)
+- Extension activable via `make enable-sso`
+
+## Rate limiting
+- fastapi-limiter avec Redis comme stockage
+- Configuration par endpoint
+
+## Headers de sécurité
+- CSP configurable
+- HSTS
+- X-Frame-Options
+- Security headers middleware dédié
+
 ## Secrets
-- HashiCorp Vault obligatoire
+- HashiCorp Vault **optionnel** (`vault_enabled: bool = False` par défaut)
+- Activable via `make enable-secrets`
 - jamais de secrets en dur
 - rotation + audit trail
 

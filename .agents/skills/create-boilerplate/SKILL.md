@@ -5,7 +5,23 @@ description: Génère un boilerplate complet à partir d'une description libre, 
 
 # create-boilerplate
 
-Cette skill génère un **boilerplate complet et fonctionnel** à partir d'une description libre fournie par l'utilisateur. Elle conduit un **interview structuré** pour cerner précisément le besoin, génère les fichiers appropriés en respectant les conventions du projet, puis synchronise les `.clinerules` via `update-rules`.
+Cette skill génère un **squelette de projet prêt à être développé** à partir d'une description libre fournie par l'utilisateur. Elle conduit un **interview structuré** pour cerner précisément le besoin, génère la **structure, la configuration et l'outillage** appropriés en respectant les conventions du projet, puis synchronise les `.clinerules` via `update-rules`.
+
+> ⚠️ **Règle fondamentale — Boilerplate ≠ Fonctionnel**
+>
+> Cette skill génère **uniquement** :
+> - Fichiers de configuration (pyproject.toml, package.json, tsconfig.json, etc.)
+> - Structure de répertoires et stubs de code vides
+> - Outillage (CI, Docker, Makefile, linting, testing, observabilité)
+> - Fichiers d'infrastructure (docker-compose, nginx, .env.sample, etc.)
+>
+> Elle ne génère **jamais** :
+> - Logique métier
+> - Endpoints implémentés (uniquement leur déclaration vide)
+> - Services fonctionnels
+> - Tout code qui appartient aux stories du backlog
+>
+> L'implémentation fonctionnelle est du ressort des skills `analyse-story` et `treat-story`.
 
 ## Usage
 
@@ -29,7 +45,7 @@ Utilise cette skill quand :
 2. **Pas de liste prédéfinie** : l'IA interprète la demande à partir du texte libre
 3. **Questions ciblées et groupées** : poser toutes les questions pertinentes en une seule fois, regroupées par thème
 4. **Référence aux `.clinerules`** : toujours lire et respecter les principes du projet
-5. **Code complet et fonctionnel** : les fichiers générés doivent être prêts à l'emploi, pas de placeholders vides
+5. **Structure uniquement** : les fichiers de code source sont des stubs vides ou minimaux — pas d'implémentation fonctionnelle
 6. **Synchronisation finale** : appeler `update-rules` en fin de génération pour garantir la cohérence des `.clinerules`
 7. **Standards du marché** : utiliser les meilleures pratiques et patterns reconnus pour chaque technologie
 
@@ -237,19 +253,40 @@ Confirmez-vous la génération ? (oui/non)
 
 ## Phase 6 : Génération des fichiers
 
-Créer chaque fichier avec du **code complet et fonctionnel** :
+Créer chaque fichier en respectant strictement la frontière **boilerplate / implémentation** :
 
-- **Pas de TODOs ou placeholders vides** — chaque fichier doit être utilisable immédiatement
+### Fichiers de configuration & outillage (complets)
+Ces fichiers doivent être **complets et prêts à l'emploi** :
+- `pyproject.toml`, `package.json`, `tsconfig.json`, `vite.config.ts`, `.eslintrc`, etc.
+- `Dockerfile`, `docker-compose.*.yml`, `nginx.conf`
+- `.github/workflows/*.yml`, `.gitea/workflows/*.yml`
+- `.env.sample`, `.editorconfig`, `.gitignore`
+- `Makefile` (cibles d'installation, lint, test, build, dev, deploy)
+
+### Fichiers de code source (stubs uniquement)
+Ces fichiers doivent contenir **uniquement la structure — pas d'implémentation** :
+- Point d'entrée (`main.py`, `main.ts`) : initialisation de l'app, montage des middlewares/routes — pas de logique métier
+- Modules vides avec leurs `__init__.py` / `index.ts` déclarés
+- Routeurs/composants avec des stubs `# TODO: implement` ou `pass`
+- Modèles de données : structure des classes uniquement (champs, types) — pas de méthodes métier
+- Schémas Pydantic / types TypeScript : déclarations de structure uniquement
+- Services : classes vides avec signatures de méthodes commentées ou `pass`
+
+### Fichiers de test (structure minimale)
+- Un fichier de test de smoke / sanity check par composant (ex: `test_health.py`, `App.spec.ts`)
+- Pas de tests fonctionnels complets — c'est le rôle des stories
+
+**Règles communes :**
 - **Respecter les conventions** du projet (nommage, structure, types)
-- **Inclure les imports** et dépendances nécessaires
-- **Ajouter des commentaires** pour les sections non évidentes
-- **Fournir des valeurs par défaut raisonnables** (avec commentaires pour la personnalisation)
+- **Inclure les imports** nécessaires dans les fichiers de config
+- **Ajouter des commentaires** pour indiquer ce qui reste à implémenter
+- **Fournir des valeurs par défaut raisonnables** dans les fichiers de config
 
 **Ordre de création recommandé :**
 1. Fichiers de configuration racine (`package.json`, `pyproject.toml`, `tsconfig.json`, etc.)
 2. Fichiers de build/outil (`vite.config.ts`, `.eslintrc`, `Dockerfile`, etc.)
-3. Code source (structure de répertoires + fichiers)
-4. Fichiers de test (structure minimale + exemples)
+3. Structure de répertoires + stubs de code source
+4. Fichier(s) de test smoke minimal
 5. Documentation (`README.md` du composant, etc.)
 6. Complétion des fichiers existants (`Makefile`, `.env.sample`, `.gitignore`, CI)
 
@@ -310,7 +347,8 @@ Après génération et synchronisation, effectuer les vérifications possibles :
 
 - [ ] L'interview structuré a été conduit (Phase 1)
 - [ ] Les décisions ont été synthétisées et confirmées (Phase 2)
-- [ ] Tous les fichiers boilerplate sont créés avec du code fonctionnel (Phase 6)
+- [ ] Tous les fichiers boilerplate sont créés : config complets, code source en stubs (Phase 6)
+- [ ] Aucune logique métier n'a été implémentée (uniquement la structure et la configuration)
 - [ ] `update-rules` a été exécuté sur les composants concernés (Phase 7)
 - [ ] Les `.clinerules` sont synchronisés avec le code réel
 - [ ] Le `.env.sample` est complété avec les nouvelles variables

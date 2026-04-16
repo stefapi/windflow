@@ -5,6 +5,34 @@
 - TypeScript : strict, pas de `any` sauf exception justifiée
 - Validation : mypy + tsc strict (au minimum en CI)
 
+### Outils de formatage/lint backend
+
+| Outil | Rôle | Configuration |
+|-------|------|---------------|
+| black | Formatage du code | — |
+| isort | Tri des imports | `profile=black` |
+| flake8 | Lint | Config dans `.flake8` |
+| mypy | Vérification de types | `ignore_missing_imports=false`, `disallow_untyped_defs=false`, overrides pour modules tiers |
+| bandit | Sécurité | Niveau `low` minimum |
+| pylint | Qualité | Config dans `.pylintrc` |
+
+### Outils de formatage/lint frontend
+
+| Outil | Rôle | Version |
+|-------|------|---------|
+| Prettier | Formatage | `^3.6.2` |
+| ESLint | Lint | v9 flat config |
+| Stylelint | Lint CSS | `^16.25.0` |
+
+### Configuration TypeScript
+
+`strict` + options additionnelles :
+- `noUnusedLocals`
+- `noUnusedParameters`
+- `noUncheckedIndexedAccess`
+- `noImplicitOverride`
+- `noPropertyAccessFromIndexSignature`
+
 ## Clean code
 - Fonctions courtes (≈30 lignes max si possible)
 - Noms explicites
@@ -17,12 +45,12 @@
 - Front : fichiers kebab-case, JS/TS camelCase
 - DB : snake_case + UUID PK + created_at/updated_at
 
-## Gestion d’erreurs
+## Gestion d'erreurs
 Backend :
 - exceptions personnalisées héritant de `WindFlowException`
 - codes HTTP appropriés
 - logs structurés avec contexte
-- messages d’erreur internationalisés si la base le prévoit
+- messages d'erreur internationalisés si la base le prévoit
 
 Frontend :
 - gestion centralisée via store Pinia
