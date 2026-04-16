@@ -71,11 +71,13 @@ vi.mock('@/composables/useContainerLogs', () => ({
 const mockRename = vi.fn()
 const mockUpdateRestartPolicy = vi.fn()
 const mockUpdateResources = vi.fn()
+const mockPromote = vi.fn()
 vi.mock('@/services/api', () => ({
   containersApi: {
     rename: (...args: unknown[]) => mockRename(...args),
     updateRestartPolicy: (...args: unknown[]) => mockUpdateRestartPolicy(...args),
     updateResources: (...args: unknown[]) => mockUpdateResources(...args),
+    promote: (...args: unknown[]) => mockPromote(...args),
     getStats: vi.fn().mockResolvedValue({ data: {} }),
   },
 }))
@@ -1213,6 +1215,146 @@ describe('ContainerDetail.vue', () => {
       expect(vm.resourcesDialogVisible).toBe(true)
       // Loading should be reset
       expect(vm.resourcesLoading).toBe(false)
+    })
+
+    describe('STORY-012: Promote container to stack', () => {
+      const standaloneContainerDetail = {
+        ...mockContainerDetail,
+        name: 'standalone-nginx',
+        config: {
+          ...mockContainerDetail.config,
+          labels: {},
+        },
+      }
+
+      const managedContainerDetail = {
+        ...mockContainerDetail,
+        name: 'managed-container',
+        config: {
+          ...mockContainerDetail.config,
+          labels: { 'windflow.managed': 'true' },
+        },
+      }
+
+      const discoveredContainerDetail = {
+        ...mockContainerDetail,
+        name: 'discovered-container',
+        config: {
+          ...mockContainerDetail.config,
+          labels: { 'com.docker.compose.project': 'my-stack' },
+        },
+      }
+
+      it('test_show_promote_button_for_standalone', async () => {
+        mockInspectContainer.mockResolvedValue(standaloneContainerDetail)
+
+        const wrapper = await mountComponent()
+
+        const vm = wrapper.vm as unknown as { containerDetail: typeof standaloneContainerDetail }
+        vm.containerDetail = standaloneContainerDetail
+        await wrapper.vm.$nextTick()
+
+        const html = wrapper.html()
+        expect(html).toContain('Promouvoir en stack')
+      })
+
+      it('test_hide_promote_button_for_managed', async () => {
+        mockInspectContainer.mockResolvedValue(managedContainerDetail)
+
+        const wrapper = await mountComponent()
+
+        const vm = wrapper.vm as unknown as { containerDetail: typeof managedContainerDetail }
+        vm.containerDetail = managedContainerDetail
+        await wrapper.vm.$nextTick()
+
+        const html = wrapper.html()
+        expect(html).not.toContain('Promouvoir en stack')
+      })
+
+      it('test_hide_promote_button_for_discovered', async () => {
+        mockInspectContainer.mockResolvedValue(discoveredContainerDetail)
+
+        const wrapper = await mountComponent()
+
+        const vm = wrapper.vm as unknown as { containerDetail: typeof discoveredContainerDetail }
+        vm.containerDetail = discoveredContainerDetail
+        await wrapper.vm.$nextTick()
+
+        const html = wrapper.html()
+        expect(html).not.toContain('Promouvoir en stack')
+      })
+
+      it('test_promote_dialog_opens_with_container_name', async () => {
+        mockInspectContainer.mockResolvedValue(standaloneContainerDetail)
+
+        const wrapper = await mountComponent()
+
+        const vm = wrapper.vm as unknown as {
+          containerDetail: typeof standaloneContainerDetail
+          openPromoteDialog: () => void
+          promoteDialogVisible: boolean
+          promoteStackName: string
+        }
+        vm.containerDetail = standaloneContainerDetail
+        await wrapper.vm.$nextTick()
+
+        vm.openPromoteDialog()
+        await wrapper.vm.$nextTick()
+
+        expect(vm.promoteDialogVisible).toBe(true)
+        expect(vm.promoteStackName).toBe('standalone-nginx')
+      })
+
+      it('test_promote_calls_api_and_redirects', async () => {
+        mockPromote.mockResolvedValue({
+          data: { success: true, message: 'ok', stack_id: 'stack-123', stack_name: 'standalone-nginx' },
+        })
+        mockInspectContainer.mockResolvedValue(standaloneContainerDetail)
+
+        const wrapper = await mountComponent()
+
+        const vm = wrapper.vm as unknown as {
+          containerDetail: typeof standaloneContainerDetail
+          promoteStackName: string
+          promoteDialogVisible: boolean
+          handlePromote: () => Promise<void>
+        }
+        vm.containerDetail = standaloneContainerDetail
+        vm.promoteStackName = 'standalone-nginx'
+        vm.promoteDialogVisible = true
+        await wrapper.vm.$nextTick()
+
+        await vm.handlePromote()
+        await flushPromises()
+
+        expect(mockPromote).toHaveBeenCalledWith('abc123def456', { name: 'standalone-nginx' })
+      })
+
+      it('test_promote_shows_error_on_api_failure', async () => {
+        mockPromote.mockRejectedValue(new Error('Nom déjà pris'))
+        mockInspectContainer.mockResolvedValue(standaloneContainerDetail)
+
+        const wrapper = await mountComponent()
+
+        const vm = wrapper.vm as unknown as {
+          containerDetail: typeof standaloneContainerDetail
+          promoteStackName: string
+          promoteDialogVisible: boolean
+          promoteError: string
+          handlePromote: () => Promise<void>
+        }
+        vm.containerDetail = standaloneContainerDetail
+        vm.promoteStackName = 'standalone-nginx'
+        vm.promoteDialogVisible = true
+        await wrapper.vm.$nextTick()
+
+        await vm.handlePromote()
+        await flushPromises()
+
+        expect(vm.promoteError).toBe('Nom déjà pris')
+        // Dialog should remain open on error
+        expect(vm.promoteDialogVisible).toBe(true)
+      })
     })
   })
 

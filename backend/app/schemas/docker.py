@@ -817,9 +817,39 @@ class ContainerRenameResponse(BaseModel):
     message: str = Field(..., description="Message de confirmation")
 
 
+class ContainerPromoteRequest(BaseModel):
+    """Requête de promotion d'un container standalone en stack WindFlow."""
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Nom de la stack à créer",
+    )
+
+
+class ContainerPromoteResponse(BaseModel):
+    """Réponse de promotion d'un container en stack."""
+
+    success: bool = Field(..., description="Succès de l'opération")
+    message: str = Field(..., description="Message de confirmation")
+    stack_id: str = Field(..., description="ID de la stack créée")
+    stack_name: str = Field(..., description="Nom de la stack créée")
+
+
 # =============================================================================
 # Processes (container top)
 # =============================================================================
+
+
+class ContainerShellResponse(BaseModel):
+    """Shell disponible dans un container."""
+
+    path: str = Field(..., description="Chemin absolu du shell (ex: /bin/bash)")
+    label: str = Field(..., description="Nom affichable du shell (ex: bash)")
+    available: bool = Field(..., description="Si le shell est disponible dans le container")
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ContainerProcess(BaseModel):

@@ -58,12 +58,12 @@
       </el-col>
     </el-row>
 
-    <!-- Métriques système unifiées (valeurs actuelles + historique) -->
+    <!-- Métriques système unifiées + Docker System -->
     <el-row
       :gutter="20"
       style="margin-top: 20px"
     >
-      <el-col :span="24">
+      <el-col :span="12">
         <ResourceMetricsWidget
           :metrics="dashboardStore.resourceMetrics"
           :error="metricsError"
@@ -71,6 +71,9 @@
           :loading="dashboardStore.loading"
           :no-target="!targetsStore.currentTarget"
         />
+      </el-col>
+      <el-col :span="12">
+        <DockerInfoWidget />
       </el-col>
     </el-row>
 
@@ -158,6 +161,7 @@ import AlertsNotificationsWidget from '@/components/dashboard/AlertsNotification
 import ResourceMetricsWidget from '@/components/dashboard/ResourceMetricsWidget.vue'
 import RecentDeploymentsWidget from '@/components/dashboard/RecentDeploymentsWidget.vue'
 import PluginWidgetZone from '@/components/dashboard/PluginWidgetZone.vue'
+import DockerInfoWidget from '@/components/dashboard/DockerInfoWidget.vue'
 
 // Dev-only: import placeholder widget
 const PlaceholderWidget = import.meta.env.DEV

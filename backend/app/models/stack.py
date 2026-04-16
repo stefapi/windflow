@@ -5,10 +5,10 @@ Modèle Stack pour gestion des templates Docker Compose.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -72,6 +72,8 @@ class Stack(Base):
 
     # Statut public et statistiques
     is_public: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
     downloads: Mapped[int] = mapped_column(default=0, nullable=False)
     rating: Mapped[float] = mapped_column(default=0.0, nullable=False)
 

@@ -33,6 +33,7 @@ import type {
   WorkflowCreate,
   PaginatedResponse,
   DashboardStats,
+  StackStatsResponse,
   ScheduledTask,
   ScheduledTaskCreate,
   ScheduledTaskUpdate,
@@ -56,6 +57,17 @@ import type {
   ContainerUpdateResponse,
   ContainerRenameRequest,
   ContainerRenameResponse,
+  ContainerPromoteRequest,
+  ContainerPromoteResponse,
+  VolumeResponse,
+  VolumeCreateRequest,
+  ImageResponse,
+  ImagePullRequest,
+  ImagePullResponse,
+  StackImportResponse,
+  NetworkResponse,
+  ContainerShell,
+  SystemInfoResponse,
 } from '@/types/api'
 
 // Auth API
@@ -212,6 +224,23 @@ export const stacksApi = {
 
   duplicate: (id: string, data: StackDuplicateRequest) =>
     http.post<Stack>(`/stacks/${id}/duplicate`, data),
+
+  archive: (id: string) =>
+    http.post<StackActionResponse>(`/stacks/${id}/archive`),
+
+  unarchive: (id: string) =>
+    http.post<StackActionResponse>(`/stacks/${id}/unarchive`),
+
+  export: (id: string) =>
+    http.get<Record<string, unknown>>(`/stacks/${id}/export`),
+
+  import: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return http.post<StackImportResponse>('/stacks/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
 }
 
 // Deployments API
@@ -277,6 +306,9 @@ export const dashboardApi = {
     const params = organizationId ? { organization_id: organizationId } : {}
     return http.get<DashboardStats>('/stats/dashboard', { params })
   },
+
+  getStackStats: (stackId: string) =>
+    http.get<StackStatsResponse>(`/stats/stacks/${stackId}`),
 }
 
 // Docker Containers API
@@ -328,6 +360,48 @@ export const containersApi = {
 
   rename: (id: string, data: ContainerRenameRequest) =>
     http.post<ContainerRenameResponse>(`/docker/containers/${id}/rename`, data),
+
+  promote: (id: string, data: ContainerPromoteRequest) =>
+    http.post<ContainerPromoteResponse>(`/docker/containers/${id}/promote`, data),
+
+  getShells: (id: string) =>
+    http.get<ContainerShell[]>(`/docker/containers/${id}/shells`),
+}
+
+// Docker Images API
+export const imagesApi = {
+  list: (all: boolean = false) =>
+    http.get<ImageResponse[]>('/docker/images', { params: { all } }),
+
+  pull: (data: ImagePullRequest) =>
+    http.post<ImagePullResponse>('/docker/images/pull', data),
+
+  remove: (imageId: string, force: boolean = false) =>
+    http.delete<void>(`/docker/images/${imageId}`, { params: { force } }),
+}
+
+// Docker Volumes API
+export const volumesApi = {
+  list: () =>
+    http.get<VolumeResponse[]>('/docker/volumes'),
+
+  create: (data: VolumeCreateRequest) =>
+    http.post<VolumeResponse>('/docker/volumes', data),
+
+  remove: (name: string, force?: boolean) =>
+    http.delete<void>(`/docker/volumes/${name}`, { params: { force } }),
+}
+
+// Docker Networks API
+export const networksApi = {
+  list: () =>
+    http.get<NetworkResponse[]>('/docker/networks'),
+}
+
+// Docker System API
+export const dockerSystemApi = {
+  info: () =>
+    http.get<SystemInfoResponse>('/docker/system/info'),
 }
 
 // Compute API
@@ -389,6 +463,10 @@ export default {
   dashboard: dashboardApi,
   schedules: schedulesApi,
   containers: containersApi,
+  images: imagesApi,
   compute: computeApi,
   discovery: discoveryApi,
+  volumes: volumesApi,
+  networks: networksApi,
+  dockerSystem: dockerSystemApi,
 }

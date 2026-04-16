@@ -186,6 +186,7 @@ async def list_stacks(
     request: Request,
     skip: int = 0,
     limit: int = 100,
+    include_archived: bool = False,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
 ):
@@ -193,11 +194,13 @@ async def list_stacks(
     Liste les stacks Docker Compose de l'organisation.
 
     Retourne une version allégée des stacks pour le listing.
+    Par défaut, les stacks archivées sont exclues.
 
     Args:
         request: Requête HTTP (pour correlation_id)
         skip: Nombre d'éléments à ignorer pour la pagination
         limit: Nombre maximum d'éléments à retourner
+        include_archived: Inclure les stacks archivées dans le résultat
         current_user: Utilisateur courant
         session: Session de base de données
 
@@ -213,11 +216,13 @@ async def list_stacks(
             "organization_id": str(current_user.organization_id),
             "skip": skip,
             "limit": limit,
+            "include_archived": include_archived,
         },
     )
 
     stacks = await StackService.list_by_organization(
-        session, current_user.organization_id, skip, limit
+        session, current_user.organization_id, skip, limit,
+        include_archived=include_archived,
     )
 
     return stacks
@@ -1975,3 +1980,197 @@ async def duplicate_stack(
     new_stack = await StackService.create(session, stack_data)
 
     return StackResponse.model_validate(new_stack)
+
+
+@router.post(
+    "/{stack_id}/archive",
+    response_model=StackActionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Archive a stack",
+    description="""
+    Archive a stack to remove it from the main listing.
+
+    ## Features
+    - **Soft archive**: Sets `is_archived=True` and `archived_at=now`
+    - **Idempotent**: Archiving an already archived stack is a no-op
+    - **Organization scoped**: Only accessible if the stack belongs to the user's organization
+
+    **Authentication Required**
+    """,
+    responses={
+        200: {
+            "description": "Stack archived successfully",
+        },
+        404: {
+            "description": "Stack not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Stack non trouvé: stack-123"}
+                }
+            },
+        },
+        403: {
+            "description": "Forbidden — stack belongs to another organization",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Accès non autorisé à ce stack"}
+                }
+            },
+        },
+    },
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(20, 60))],
+)
+async def archive_stack(
+    stack_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+) -> StackActionResponse:
+    """
+    Archive un stack.
+
+    Marque le stack comme archivé pour le retirer de la vue principale.
+    """
+    correlation_id = getattr(request.state, "correlation_id", None)
+
+    stack = await StackService.get_by_id(session, stack_id)
+
+    if not stack:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Stack non trouvé: {stack_id}",
+        )
+
+    if stack.organization_id != current_user.organization_id:
+        logger.warning(
+            "Archive denied — org mismatch",
+            extra={
+                "correlation_id": correlation_id,
+                "user_id": str(current_user.id),
+                "stack_id": stack_id,
+                "stack_org": stack.organization_id,
+                "user_org": str(current_user.organization_id),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès non autorisé à ce stack",
+        )
+
+    updated_stack = await StackService.archive(session, stack_id)
+
+    logger.info(
+        "Stack archived",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "stack_id": stack_id,
+        },
+    )
+
+    return StackActionResponse(
+        success=True,
+        message=f"Stack '{updated_stack.name}' archivée avec succès",
+        stack_id=stack_id,
+        stack_name=updated_stack.name,
+        affected_services=0,
+        action="archive",
+    )
+
+
+@router.post(
+    "/{stack_id}/unarchive",
+    response_model=StackActionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Unarchive a stack",
+    description="""
+    Restore an archived stack to the main listing.
+
+    ## Features
+    - **Restore**: Sets `is_archived=False` and `archived_at=None`
+    - **Idempotent**: Unarchiving a non-archived stack is a no-op
+    - **Organization scoped**: Only accessible if the stack belongs to the user's organization
+
+    **Authentication Required**
+    """,
+    responses={
+        200: {
+            "description": "Stack unarchived successfully",
+        },
+        404: {
+            "description": "Stack not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Stack non trouvé: stack-123"}
+                }
+            },
+        },
+        403: {
+            "description": "Forbidden — stack belongs to another organization",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Accès non autorisé à ce stack"}
+                }
+            },
+        },
+    },
+    tags=["stacks"],
+    dependencies=[Depends(conditional_rate_limiter(20, 60))],
+)
+async def unarchive_stack(
+    stack_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+) -> StackActionResponse:
+    """
+    Désarchive un stack.
+
+    Restaure un stack archivé dans la vue principale.
+    """
+    correlation_id = getattr(request.state, "correlation_id", None)
+
+    stack = await StackService.get_by_id(session, stack_id)
+
+    if not stack:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Stack non trouvé: {stack_id}",
+        )
+
+    if stack.organization_id != current_user.organization_id:
+        logger.warning(
+            "Unarchive denied — org mismatch",
+            extra={
+                "correlation_id": correlation_id,
+                "user_id": str(current_user.id),
+                "stack_id": stack_id,
+                "stack_org": stack.organization_id,
+                "user_org": str(current_user.organization_id),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès non autorisé à ce stack",
+        )
+
+    updated_stack = await StackService.unarchive(session, stack_id)
+
+    logger.info(
+        "Stack unarchived",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "stack_id": stack_id,
+        },
+    )
+
+    return StackActionResponse(
+        success=True,
+        message=f"Stack '{updated_stack.name}' désarchivée avec succès",
+        stack_id=stack_id,
+        stack_name=updated_stack.name,
+        affected_services=0,
+        action="unarchive",
+    )

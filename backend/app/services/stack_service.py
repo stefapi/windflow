@@ -4,6 +4,7 @@ Service métier pour gestion des stacks Docker Compose.
 Implémente le pattern Repository avec SQLAlchemy 2.0 async.
 """
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -38,15 +39,17 @@ class StackService:
 
     @staticmethod
     async def list_by_organization(
-        db: AsyncSession, organization_id: str, skip: int = 0, limit: int = 100
+        db: AsyncSession,
+        organization_id: str,
+        skip: int = 0,
+        limit: int = 100,
+        include_archived: bool = False,
     ) -> List[Stack]:
-        """Liste les stacks d'une organisation."""
-        result = await db.execute(
-            select(Stack)
-            .where(Stack.organization_id == organization_id)
-            .offset(skip)
-            .limit(limit)
-        )
+        """Liste les stacks d'une organisation, excluant les archivées par défaut."""
+        query = select(Stack).where(Stack.organization_id == organization_id)
+        if not include_archived:
+            query = query.where(Stack.is_archived == False)  # noqa: E712
+        result = await db.execute(query.offset(skip).limit(limit))
         return list(result.scalars().all())
 
     @staticmethod
@@ -72,6 +75,56 @@ class StackService:
         for field, value in update_data.items():
             setattr(stack, field, value)
 
+        await db.commit()
+        await db.refresh(stack)
+        return stack
+
+    @staticmethod
+    async def archive(db: AsyncSession, stack_id: str) -> Stack:
+        """
+        Archive un stack.
+
+        Args:
+            db: Session de base de données
+            stack_id: ID du stack à archiver
+
+        Returns:
+            Stack: Stack mis à jour
+
+        Raises:
+            ValueError: Si le stack n'existe pas
+        """
+        stack = await StackService.get_by_id(db, stack_id)
+        if not stack:
+            raise ValueError(f"Stack non trouvé: {stack_id}")
+
+        stack.is_archived = True
+        stack.archived_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(stack)
+        return stack
+
+    @staticmethod
+    async def unarchive(db: AsyncSession, stack_id: str) -> Stack:
+        """
+        Désarchive un stack.
+
+        Args:
+            db: Session de base de données
+            stack_id: ID du stack à désarchiver
+
+        Returns:
+            Stack: Stack mis à jour
+
+        Raises:
+            ValueError: Si le stack n'existe pas
+        """
+        stack = await StackService.get_by_id(db, stack_id)
+        if not stack:
+            raise ValueError(f"Stack non trouvé: {stack_id}")
+
+        stack.is_archived = False
+        stack.archived_at = None
         await db.commit()
         await db.refresh(stack)
         return stack

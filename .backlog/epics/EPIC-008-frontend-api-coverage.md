@@ -106,7 +106,7 @@ Cette epic intègre également les concepts du **Modèle Compute** (cf. `doc/gen
 | `/stacks/{id}/stop` | POST | Arrêter toute la stack | ❌ Absent | 🔴 À implémenter |
 | `/stacks/{id}/redeploy` | POST | Redéployer (pull images + recréation rolling/stop-start) | ❌ Absent | 🔴 À implémenter |
 | `/stacks/{id}/duplicate` | POST | Dupliquer la stack | ❌ Absent | 🟡 À implémenter |
-| `/stacks/{id}/archive` | POST | Archiver la stack | ❌ Absent | 🟡 À implémenter |
+| `/stacks/{id}/archive` | POST | Archiver la stack | ✅ `stacksApi.archive` | ✅ Couvert (STORY-011) |
 | `/stacks/{id}/sync-git` | POST | Mettre à jour depuis Git | ❌ Absent | 🟢 Nice-to-have |
 
 #### Discovery & Adoption (Modèle Compute - `backend/app/api/v1/discovery.py`)
@@ -218,7 +218,7 @@ Fonctionnalités avancées :
 
 #### Export/Import Stacks
 - [x] STORY-007 : Export de stacks au format JSON
-- [ ] STORY-008 : Import de stacks depuis fichier JSON
+- [x] STORY-008 : Import de stacks depuis fichier JSON
 
 #### Compute - Containers
 - [x] STORY-009 : Édition à chaud des containers — Restart policy et limites ressources
@@ -227,20 +227,20 @@ Fonctionnalités avancées :
 
 #### Modèle Compute - Stack Management
 - [x] STORY-010 : Duplication de stack
-- [ ] STORY-011 : Archivage de stack
-- [ ] STORY-012 : Promotion container standalone en stack
+- [x] STORY-011 : Archivage de stack
+- [x] STORY-012 : Promotion container standalone en stack
 
 #### Volumes Docker
-- [ ] STORY-013 : Gestion des volumes Docker - Liste et création
-- [ ] STORY-014 : Gestion des volumes Docker - Suppression
+- [x] STORY-013 : Gestion des volumes Docker - Liste et création
+- [x] STORY-014 : Gestion des volumes Docker - Suppression
 
 #### Networks Docker
-- [ ] STORY-015 : Visualisation des réseaux Docker
+- [x] STORY-015 : Visualisation des réseaux Docker
 
 #### Stats & Terminal
-- [ ] STORY-016 : Statistiques détaillées par stack
-- [ ] STORY-017 : Détection des shells disponibles dans le terminal
-- [ ] STORY-018 : Widget informations système Docker
+- [x] STORY-016 : Statistiques détaillées par stack
+- [x] STORY-017 : Détection des shells disponibles dans le terminal
+- [x] STORY-018 : Widget informations système Docker
 
 ### 🟢 Priorité Basse
 

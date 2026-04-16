@@ -151,3 +151,14 @@ class DashboardStats(BaseModel):
     alerts: List[AlertItem] = Field(
         default_factory=list, description="Alertes et notifications actives"
     )
+
+
+class StackStatsResponse(BaseModel):
+    """Statistiques détaillées d'une stack."""
+
+    deployments_by_status: dict[str, int] = Field(
+        ..., description="Nombre de déploiements par statut"
+    )
+    deployments_last_30_days: int = Field(
+        ..., description="Nombre de déploiements sur les 30 derniers jours"
+    )

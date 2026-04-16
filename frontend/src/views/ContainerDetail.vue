@@ -243,6 +243,23 @@
             <el-divider direction="vertical" />
 
             <el-button
+              v-if="isStandalone"
+              type="primary"
+              plain
+              @click="openPromoteDialog"
+            >
+              <el-icon class="el-icon--left">
+                <Upload />
+              </el-icon>
+              Promouvoir en stack
+            </el-button>
+
+            <el-divider
+              v-if="isStandalone"
+              direction="vertical"
+            />
+
+            <el-button
               type="default"
               @click="openRestartPolicyDialog"
             >
@@ -540,6 +557,45 @@
       </template>
     </el-dialog>
 
+    <!-- Promote Dialog -->
+    <el-dialog
+      v-model="promoteDialogVisible"
+      title="Promouvoir en stack"
+      width="450px"
+      :close-on-click-modal="false"
+      @closed="onPromoteDialogClosed"
+    >
+      <el-form @submit.prevent="handlePromote">
+        <el-form-item
+          :error="promoteError"
+        >
+          <el-input
+            v-model="promoteStackName"
+            placeholder="Nom de la stack"
+            clearable
+            :disabled="promoteLoading"
+            @keyup.enter="handlePromote"
+          />
+        </el-form-item>
+        <div class="rename-hint">
+          Le nom doit commencer par une lettre ou un chiffre.
+        </div>
+      </el-form>
+      <template #footer>
+        <el-button @click="promoteDialogVisible = false">
+          Annuler
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="promoteLoading"
+          :disabled="!isPromoteValid"
+          @click="handlePromote"
+        >
+          Confirmer
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- Inspect Drawer -->
     <el-drawer
       v-model="inspectDrawerVisible"
@@ -578,6 +634,7 @@ import {
   Memo,
   Edit,
   Setting,
+  Upload,
 } from '@element-plus/icons-vue'
 import { useContainersStore } from '@/stores'
 import { containersApi } from '@/services/api'
@@ -589,7 +646,7 @@ import ContainerTerminal from '@/components/ContainerTerminal.vue'
 import ContainerStats from '@/components/ContainerStats.vue'
 import ContainerConfigTab from '@/components/ContainerConfigTab.vue'
 import ContainerProcesses from '@/components/ContainerProcesses.vue'
-import type { ContainerDetail, ContainerUpdateRestartPolicyRequest, ContainerUpdateResourcesRequest } from '@/types/api'
+import type { ContainerDetail, ContainerUpdateRestartPolicyRequest, ContainerUpdateResourcesRequest, ContainerPromoteRequest } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -625,12 +682,34 @@ const resourcesForm = reactive({
   pidsLimit: 0 as number | null,
 })
 
+// Promote state
+const promoteDialogVisible = ref(false)
+const promoteStackName = ref('')
+const promoteLoading = ref(false)
+const promoteError = ref('')
+
 /** Docker container name validation pattern */
 const CONTAINER_NAME_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/
+
+/** Stack name validation pattern */
+const STACK_NAME_REGEX = /^[a-zA-Z0-9].{0,254}$/
 
 /** Computed: is the rename form valid */
 const isRenameValid = computed(() => {
   return renameNewName.value.trim().length > 0 && CONTAINER_NAME_REGEX.test(renameNewName.value.trim())
+})
+
+/** Computed: is the container standalone (not managed by WindFlow or Docker Compose) */
+const isStandalone = computed(() => {
+  const labels = containerDetail.value?.config?.labels
+  if (!labels) return true
+  return !labels['windflow.managed'] && !labels['com.docker.compose.project']
+})
+
+/** Computed: is the promote form valid */
+const isPromoteValid = computed(() => {
+  const name = promoteStackName.value.trim()
+  return name.length > 0 && name.length <= 255 && STACK_NAME_REGEX.test(name)
 })
 
 /** Computed: restart policy display label */
@@ -901,6 +980,53 @@ async function handleRename(): Promise<void> {
 function onRenameDialogClosed(): void {
   renameNewName.value = ''
   renameError.value = ''
+}
+
+/** Open the promote dialog, pre-filled with the container name */
+function openPromoteDialog(): void {
+  promoteStackName.value = containerDetail.value?.name ?? ''
+  promoteError.value = ''
+  promoteDialogVisible.value = true
+}
+
+/** Handle promote confirmation */
+async function handlePromote(): Promise<void> {
+  const id = containerId.value
+  if (!id) return
+
+  const name = promoteStackName.value.trim()
+
+  if (!name) {
+    promoteError.value = 'Le nom ne peut pas être vide'
+    return
+  }
+  if (!STACK_NAME_REGEX.test(name)) {
+    promoteError.value = 'Nom invalide. Le nom doit commencer par une lettre ou un chiffre.'
+    return
+  }
+
+  promoteError.value = ''
+  promoteLoading.value = true
+
+  try {
+    const data: ContainerPromoteRequest = { name }
+    await containersApi.promote(id, data)
+    ElMessage.success(`Stack "${name}" créée avec succès`)
+    promoteDialogVisible.value = false
+    router.push('/stacks')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur lors de la promotion'
+    promoteError.value = message
+    ElMessage.error(message)
+  } finally {
+    promoteLoading.value = false
+  }
+}
+
+/** Reset promote state when dialog closes */
+function onPromoteDialogClosed(): void {
+  promoteStackName.value = ''
+  promoteError.value = ''
 }
 
 /** Open the restart policy dialog, pre-filled with current values */

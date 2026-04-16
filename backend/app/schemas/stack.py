@@ -376,6 +376,16 @@ class StackResponse(StackBase):
     is_public: bool = Field(
         ..., description="Stack public", json_schema_extra={"example": True}
     )
+    is_archived: bool = Field(
+        default=False,
+        description="Stack archivé",
+        json_schema_extra={"example": False},
+    )
+    archived_at: Optional[datetime] = Field(
+        None,
+        description="Date d'archivage",
+        json_schema_extra={"example": None},
+    )
     downloads: int = Field(
         default=0,
         description="Nombre de téléchargements",
@@ -490,6 +500,16 @@ class StackSummaryResponse(BaseModel):
     )
     downloads: int = Field(
         default=0, description="Téléchargements", json_schema_extra={"example": 1250}
+    )
+    is_archived: bool = Field(
+        default=False,
+        description="Stack archivé",
+        json_schema_extra={"example": False},
+    )
+    archived_at: Optional[datetime] = Field(
+        None,
+        description="Date d'archivage",
+        json_schema_extra={"example": None},
     )
     rating: float = Field(
         default=0.0, description="Note", json_schema_extra={"example": 4.5}

@@ -45,6 +45,7 @@ declare global {
   const deploymentEvents: typeof import('./services/websocket')['deploymentEvents']
   const deploymentsApi: typeof import('./services/api')['deploymentsApi']
   const discoveryApi: typeof import('./services/api')['discoveryApi']
+  const dockerSystemApi: typeof import('./services/api')['dockerSystemApi']
   const eagerComputed: typeof import('@vueuse/core')['eagerComputed']
   const effectScope: typeof import('vue')['effectScope']
   const eventHelpers: typeof import('./services/websocket')['eventHelpers']
@@ -73,6 +74,7 @@ declare global {
   const mapStores: typeof import('pinia')['mapStores']
   const mapWritableState: typeof import('pinia')['mapWritableState']
   const markRaw: typeof import('vue')['markRaw']
+  const networksApi: typeof import('./services/api')['networksApi']
   const nextTick: typeof import('vue')['nextTick']
   const notificationEvents: typeof import('./services/websocket')['notificationEvents']
   const onActivated: typeof import('vue')['onActivated']
@@ -319,6 +321,7 @@ declare global {
   const useWindowSize: typeof import('@vueuse/core')['useWindowSize']
   const usersApi: typeof import('./services/api')['usersApi']
   const validationRules: typeof import('@/composables/ui')['validationRules']
+  const volumesApi: typeof import('./services/api')['volumesApi']
   const watch: typeof import('vue')['watch']
   const watchArray: typeof import('@vueuse/core')['watchArray']
   const watchAtMost: typeof import('@vueuse/core')['watchAtMost']
@@ -389,6 +392,7 @@ declare module 'vue' {
     readonly deploymentEvents: UnwrapRef<typeof import('./services/websocket')['deploymentEvents']>
     readonly deploymentsApi: UnwrapRef<typeof import('./services/api')['deploymentsApi']>
     readonly discoveryApi: UnwrapRef<typeof import('./services/api')['discoveryApi']>
+    readonly dockerSystemApi: UnwrapRef<typeof import('./services/api')['dockerSystemApi']>
     readonly eagerComputed: UnwrapRef<typeof import('@vueuse/core')['eagerComputed']>
     readonly effectScope: UnwrapRef<typeof import('vue')['effectScope']>
     readonly eventHelpers: UnwrapRef<typeof import('./services/websocket')['eventHelpers']>
@@ -401,6 +405,7 @@ declare module 'vue' {
     readonly h: UnwrapRef<typeof import('vue')['h']>
     readonly http: UnwrapRef<typeof import('./services/http')['default']>
     readonly ignorableWatch: UnwrapRef<typeof import('@vueuse/core')['ignorableWatch']>
+    readonly imagesApi: UnwrapRef<typeof import('./services/api')['imagesApi']>
     readonly inject: UnwrapRef<typeof import('vue')['inject']>
     readonly injectLocal: UnwrapRef<typeof import('@vueuse/core')['injectLocal']>
     readonly isDefined: UnwrapRef<typeof import('@vueuse/core')['isDefined']>
@@ -416,6 +421,7 @@ declare module 'vue' {
     readonly mapStores: UnwrapRef<typeof import('pinia')['mapStores']>
     readonly mapWritableState: UnwrapRef<typeof import('pinia')['mapWritableState']>
     readonly markRaw: UnwrapRef<typeof import('vue')['markRaw']>
+    readonly networksApi: UnwrapRef<typeof import('./services/api')['networksApi']>
     readonly nextTick: UnwrapRef<typeof import('vue')['nextTick']>
     readonly notificationEvents: UnwrapRef<typeof import('./services/websocket')['notificationEvents']>
     readonly onActivated: UnwrapRef<typeof import('vue')['onActivated']>
@@ -662,6 +668,7 @@ declare module 'vue' {
     readonly useWindowSize: UnwrapRef<typeof import('@vueuse/core')['useWindowSize']>
     readonly usersApi: UnwrapRef<typeof import('./services/api')['usersApi']>
     readonly validationRules: UnwrapRef<typeof import('@/composables/ui')['validationRules']>
+    readonly volumesApi: UnwrapRef<typeof import('./services/api')['volumesApi']>
     readonly watch: UnwrapRef<typeof import('vue')['watch']>
     readonly watchArray: UnwrapRef<typeof import('@vueuse/core')['watchArray']>
     readonly watchAtMost: UnwrapRef<typeof import('@vueuse/core')['watchAtMost']>

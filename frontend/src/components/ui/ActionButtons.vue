@@ -53,10 +53,11 @@ import {
   Key,
   Download,
   CopyDocument,
+  Box,
 } from '@element-plus/icons-vue'
 
 /** Predefined action types */
-export type ActionType = 'start' | 'stop' | 'restart' | 'logs' | 'delete' | 'edit' | 'deploy' | 'scan' | 'select' | 'password' | 'export' | 'duplicate'
+export type ActionType = 'start' | 'stop' | 'restart' | 'logs' | 'delete' | 'edit' | 'deploy' | 'scan' | 'select' | 'password' | 'export' | 'duplicate' | 'archive'
 
 /** Action configuration (simplified for string usage) */
 export type ActionConfig = ActionType | ActionConfigObject
@@ -138,6 +139,10 @@ const defaultActionConfig: Record<ActionType, { icon: typeof VideoPlay; tooltip:
   duplicate: {
     icon: CopyDocument,
     tooltip: 'Dupliquer',
+  },
+  archive: {
+    icon: Box,
+    tooltip: 'Archiver',
   },
 }
 
@@ -243,5 +248,10 @@ function handleAction(type: ActionType): void {
 .action-buttons__btn--export:hover:not(:disabled) {
   color: var(--color-info);
   border-color: var(--color-info);
+}
+
+.action-buttons__btn--archive:hover:not(:disabled) {
+  color: var(--color-warning);
+  border-color: var(--color-warning);
 }
 </style>

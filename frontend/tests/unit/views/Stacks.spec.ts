@@ -21,9 +21,14 @@ vi.mock('@/services/api', () => ({
     export: vi.fn().mockResolvedValue({ data: { version: '1.0', stack: { name: 'Test Stack', description: null, version: '1.0', category: null, tags: [], template: '', variables: {}, icon_url: null, screenshots: [], documentation_url: null, author: null, license: null } } }),
     import: vi.fn().mockResolvedValue({ data: { message: 'Stack imported successfully', stack_id: 'new-stack-1', name: 'Imported Stack' } }),
     duplicate: vi.fn().mockResolvedValue({ data: { id: 'duplicated-stack-1', name: 'Test Stack (copy)', description: 'Copie de Test Stack: A test stack', compose_content: 'version: "3.8"', metadata: {}, organization_id: 'org-1', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' } }),
+    archive: vi.fn().mockResolvedValue({ data: { success: true, message: 'Stack archived', stack_id: 'stack-1', stack_name: 'Test Stack', affected_services: 0, action: 'archive' } }),
+    unarchive: vi.fn().mockResolvedValue({ data: { success: true, message: 'Stack unarchived', stack_id: 'stack-1', stack_name: 'Test Stack', affected_services: 0, action: 'unarchive' } }),
   },
   targetsApi: {
     list: vi.fn().mockResolvedValue({ data: { items: [] } }),
+  },
+  dashboardApi: {
+    getStackStats: vi.fn().mockResolvedValue({ data: { deployments_by_status: { running: 2, failed: 1 }, deployments_last_30_days: 3 } }),
   },
 }))
 
@@ -44,11 +49,15 @@ vi.mock('element-plus', () => ({
 vi.mock('@/stores', () => ({
   useStacksStore: () => ({
     stacks: [],
+    activeStacks: [],
+    archivedStacks: [],
     loading: false,
     fetchStacks: vi.fn(),
     createStack: vi.fn(),
     updateStack: vi.fn(),
     deleteStack: vi.fn(),
+    archiveStack: vi.fn(),
+    unarchiveStack: vi.fn(),
   }),
   useTargetsStore: () => ({
     targets: [],
@@ -184,13 +193,14 @@ describe('Stacks.vue', () => {
   })
 
   describe('ActionButtons integration', () => {
-    it('has correct action types for stacks including duplicate', () => {
+    it('has correct action types for stacks including archive', () => {
       // Verify that ActionButtons accepts the expected action types
-      const expectedActions = ['edit', 'deploy', 'export', 'duplicate', 'delete']
+      const expectedActions = ['edit', 'deploy', 'export', 'duplicate', 'archive', 'delete']
       expect(expectedActions).toContain('edit')
       expect(expectedActions).toContain('deploy')
       expect(expectedActions).toContain('export')
       expect(expectedActions).toContain('duplicate')
+      expect(expectedActions).toContain('archive')
       expect(expectedActions).toContain('delete')
     })
   })
@@ -561,7 +571,6 @@ describe('Stacks.vue', () => {
         },
       })
 
-      const vm = wrapper.vm as unknown as Record<string, unknown>
       const openDuplicateDialog = (wrapper.vm as unknown as { openDuplicateDialog: (s: Stack) => void }).openDuplicateDialog
       openDuplicateDialog(mockStack)
 
@@ -684,6 +693,199 @@ describe('Stacks.vue', () => {
       const vm = wrapper.vm as unknown as Record<string, unknown>
       expect(vm.showDuplicateDialog).toBe(true)
       expect((vm.duplicateForm as { new_name: string }).new_name).toBe('Test Stack (copy)')
+    })
+  })
+
+  describe('archive action', () => {
+    it('calls ElMessageBox.confirm then stacksStore.archiveStack on confirm', async () => {
+      const { ElMessageBox } = await import('element-plus')
+
+      const wrapper = mount(Stacks, {
+        global: {
+          plugins: [createPinia()],
+          stubs: {
+            'el-card': { template: '<div><slot /><slot name="header" /></div>' },
+            'el-table': { template: '<div><slot /></div>' },
+            'el-table-column': { template: '<div></div>' },
+            'el-button': { template: '<button><slot /></button>' },
+            'el-tag': { template: '<span><slot /></span>' },
+            'el-icon': { template: '<i><slot /></i>' },
+            'el-tooltip': { template: '<span><slot /></span>' },
+            'el-switch': { template: '<span data-testid="toggle-archived"></span>' },
+            StatusBadge: { template: '<span data-testid="status-badge">{{ status }}</span>', props: ['status', 'size'] },
+            ActionButtons: { template: '<div data-testid="action-buttons"></div>', props: ['actions'] },
+          },
+        },
+      })
+
+      const handleStackAction = (wrapper.vm as unknown as { handleStackAction: (type: string, stack: Stack) => void }).handleStackAction
+      handleStackAction('archive', mockStack)
+
+      // Wait for async confirm
+      await vi.waitFor(() => {
+        expect(ElMessageBox.confirm).toHaveBeenCalled()
+      })
+
+      const { ElMessage } = await import('element-plus')
+      expect(ElMessage.success).toHaveBeenCalled()
+    })
+
+    it('does not call archiveStack when confirmation is cancelled', async () => {
+      const { ElMessageBox } = await import('element-plus')
+      ;(ElMessageBox.confirm as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('cancelled'))
+
+      const wrapper = mount(Stacks, {
+        global: {
+          plugins: [createPinia()],
+          stubs: {
+            'el-card': { template: '<div><slot /><slot name="header" /></div>' },
+            'el-table': { template: '<div><slot /></div>' },
+            'el-table-column': { template: '<div></div>' },
+            'el-button': { template: '<button><slot /></button>' },
+            'el-tag': { template: '<span><slot /></span>' },
+            'el-icon': { template: '<i><slot /></i>' },
+            'el-tooltip': { template: '<span><slot /></span>' },
+            'el-switch': { template: '<span data-testid="toggle-archived"></span>' },
+            StatusBadge: { template: '<span data-testid="status-badge">{{ status }}</span>', props: ['status', 'size'] },
+            ActionButtons: { template: '<div data-testid="action-buttons"></div>', props: ['actions'] },
+          },
+        },
+      })
+
+      const handleStackAction = (wrapper.vm as unknown as { handleStackAction: (type: string, stack: Stack) => void }).handleStackAction
+      handleStackAction('archive', mockStack)
+
+      await vi.waitFor(() => {
+        expect(ElMessageBox.confirm).toHaveBeenCalled()
+      })
+
+      const vm = wrapper.vm as unknown as { stacksStore: { archiveStack: ReturnType<typeof vi.fn> } }
+      expect(vm.stacksStore.archiveStack).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('unarchive action', () => {
+    it('calls stacksStore.unarchiveStack', async () => {
+      const wrapper = mount(Stacks, {
+        global: {
+          plugins: [createPinia()],
+          stubs: {
+            'el-card': { template: '<div><slot /><slot name="header" /></div>' },
+            'el-table': { template: '<div><slot /></div>' },
+            'el-table-column': { template: '<div></div>' },
+            'el-button': { template: '<button><slot /></button>' },
+            'el-tag': { template: '<span><slot /></span>' },
+            'el-icon': { template: '<i><slot /></i>' },
+            'el-tooltip': { template: '<span><slot /></span>' },
+            'el-switch': { template: '<span data-testid="toggle-archived"></span>' },
+            StatusBadge: { template: '<span data-testid="status-badge">{{ status }}</span>', props: ['status', 'size'] },
+            ActionButtons: { template: '<div data-testid="action-buttons"></div>', props: ['actions'] },
+          },
+        },
+      })
+
+      const handleUnarchive = (wrapper.vm as unknown as { handleUnarchive: (stack: Stack) => Promise<void> }).handleUnarchive
+      await handleUnarchive(mockStack)
+
+      const vm = wrapper.vm as unknown as { stacksStore: { unarchiveStack: ReturnType<typeof vi.fn> } }
+      expect(vm.stacksStore.unarchiveStack).toHaveBeenCalledWith(mockStack.id)
+    })
+  })
+
+  describe('archived stacks section', () => {
+    it('is hidden by default (showArchived is false)', async () => {
+      const wrapper = mount(Stacks, {
+        global: {
+          plugins: [createPinia()],
+          stubs: {
+            'el-card': { template: '<div><slot /><slot name="header" /></div>' },
+            'el-table': { template: '<div><slot /></div>' },
+            'el-table-column': { template: '<div></div>' },
+            'el-button': { template: '<button><slot /></button>' },
+            'el-tag': { template: '<span><slot /></span>' },
+            'el-icon': { template: '<i><slot /></i>' },
+            'el-tooltip': { template: '<span><slot /></span>' },
+            'el-switch': { template: '<span data-testid="toggle-archived"></span>' },
+            StatusBadge: { template: '<span data-testid="status-badge">{{ status }}</span>', props: ['status', 'size'] },
+            ActionButtons: { template: '<div data-testid="action-buttons"></div>', props: ['actions'] },
+          },
+        },
+      })
+
+      const vm = wrapper.vm as unknown as { showArchived: boolean }
+      expect(vm.showArchived).toBe(false)
+    })
+  })
+
+  describe('loadStackStats', () => {
+    const defaultStubs = {
+      'el-card': { template: '<div><slot /><slot name="header" /></div>' },
+      'el-table': { template: '<div><slot /></div>' },
+      'el-table-column': { template: '<div></div>' },
+      'el-button': { template: '<button><slot /></button>' },
+      'el-tag': { template: '<span><slot /></span>' },
+      'el-icon': { template: '<i><slot /></i>' },
+      'el-tooltip': { template: '<span><slot /></span>' },
+      StatusBadge: { template: '<span data-testid="status-badge">{{ status }}</span>', props: ['status', 'size'] },
+      ActionButtons: { template: '<div data-testid="action-buttons"></div>', props: ['actions'] },
+    }
+
+    it('appelle dashboardApi.getStackStats avec le bon stackId quand une stack est sélectionnée', async () => {
+      const { dashboardApi } = await import('@/services/api')
+      const wrapper = mount(Stacks, {
+        global: { plugins: [createPinia()], stubs: defaultStubs },
+      })
+
+      const selectStack = (wrapper.vm as unknown as { selectStack: (s: Stack) => void }).selectStack
+      selectStack(mockStack)
+
+      await vi.waitFor(() => {
+        expect(dashboardApi.getStackStats).toHaveBeenCalledWith('stack-1')
+      })
+    })
+
+    it('affiche un message d\'erreur si l\'API échoue', async () => {
+      const { dashboardApi } = await import('@/services/api')
+      const { ElMessage } = await import('element-plus')
+      ;(dashboardApi.getStackStats as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('API error'))
+
+      const wrapper = mount(Stacks, {
+        global: { plugins: [createPinia()], stubs: defaultStubs },
+      })
+
+      const selectStack = (wrapper.vm as unknown as { selectStack: (s: Stack) => void }).selectStack
+      selectStack(mockStack)
+
+      await vi.waitFor(() => {
+        expect(ElMessage.error).toHaveBeenCalledWith('Erreur lors du chargement des statistiques')
+      })
+    })
+
+    it('reset les stats quand une autre stack est sélectionnée', async () => {
+      const { dashboardApi } = await import('@/services/api')
+      ;(dashboardApi.getStackStats as ReturnType<typeof vi.fn>).mockClear()
+      const wrapper = mount(Stacks, {
+        global: { plugins: [createPinia()], stubs: defaultStubs },
+      })
+
+      const selectStack = (wrapper.vm as unknown as { selectStack: (s: Stack) => void }).selectStack
+
+      // Sélectionner stack1
+      selectStack(mockStack)
+      await vi.waitFor(() => {
+        expect(dashboardApi.getStackStats).toHaveBeenCalledWith('stack-1')
+      })
+
+      // Sélectionner stack2
+      const stack2: Stack = { ...mockStack, id: 'stack-2', name: 'Other Stack' }
+      selectStack(stack2)
+
+      await vi.waitFor(() => {
+        expect(dashboardApi.getStackStats).toHaveBeenCalledWith('stack-2')
+      })
+
+      // Vérifier que getStackStats a été appelé 2 fois au total (une fois par stack)
+      expect(dashboardApi.getStackStats).toHaveBeenCalledTimes(2)
     })
   })
 })

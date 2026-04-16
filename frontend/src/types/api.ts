@@ -243,6 +243,8 @@ export interface Stack extends BaseModel {
   metadata: Record<string, unknown>
   organization_id: string
   default_name?: string
+  is_archived?: boolean
+  archived_at?: string | null
 }
 
 export interface StackCreate {
@@ -498,6 +500,12 @@ export interface DashboardStats {
   alerts: AlertItem[]
 }
 
+// Stack Stats
+export interface StackStatsResponse {
+  deployments_by_status: Record<string, number>
+  deployments_last_30_days: number
+}
+
 export interface StackVersion {
   id: string
   stack_id: string
@@ -648,6 +656,12 @@ export interface ContainerLogsResponse {
   logs: string
   container_id: string
   timestamp: string
+}
+
+export interface ContainerShell {
+  path: string
+  label: string
+  available: boolean
 }
 
 // Docker Container Detail types (for inspect)
@@ -957,4 +971,109 @@ export interface ContainerRenameRequest {
 export interface ContainerRenameResponse {
   success: boolean
   message: string
+}
+
+/** Requête POST promote — correspond à ContainerPromoteRequest backend */
+export interface ContainerPromoteRequest {
+  name: string
+}
+
+/** Réponse POST promote — correspond à ContainerPromoteResponse backend */
+export interface ContainerPromoteResponse {
+  success: boolean
+  message: string
+  stack_id: string
+  stack_name: string
+}
+
+// Docker Images
+
+/** Image Docker — miroir du schéma Pydantic ImageResponse backend */
+export interface ImageResponse {
+  id: string
+  repoTags: string[]
+  repoDigests: string[]
+  created: string
+  size: number
+  virtualSize: number
+  labels: Record<string, string>
+}
+
+/** Requête POST /docker/images/pull — miroir du schéma Pydantic ImagePullRequest backend */
+export interface ImagePullRequest {
+  name: string
+  tag?: string
+}
+
+/** Réponse POST /docker/images/pull — miroir du schéma Pydantic ImagePullResponse backend */
+export interface ImagePullResponse {
+  status: string
+  progress?: string | null
+  id?: string | null
+}
+
+// Stack Import/Export
+
+/** Réponse POST /stacks/import — retournée par import_export.py */
+export interface StackImportResponse {
+  message: string
+  stack_id: string
+  name: string
+}
+
+// Docker Volumes
+
+/** Volume Docker — miroir du schéma Pydantic VolumeResponse backend */
+export interface VolumeResponse {
+  name: string
+  driver: string
+  mountpoint: string
+  created_at: string
+  labels: Record<string, string>
+  scope: string
+}
+
+/** Requête POST /docker/volumes — miroir du schéma Pydantic VolumeCreateRequest backend */
+export interface VolumeCreateRequest {
+  name: string
+  driver?: string
+  labels?: Record<string, string>
+}
+
+// Docker Networks
+
+/** Réseau Docker — miroir du schéma Pydantic NetworkResponse backend */
+export interface NetworkResponse {
+  id: string
+  name: string
+  driver: string
+  scope: string
+  internal: boolean
+  attachable: boolean
+  ingress: boolean
+  created: string
+  subnet: string
+  gateway: string
+}
+
+// Docker System
+
+/** Informations système Docker — miroir du schéma Pydantic SystemInfoResponse backend */
+export interface SystemInfoResponse {
+  id: string
+  name: string
+  server_version: string
+  containers: number
+  containers_running: number
+  containers_paused: number
+  containers_stopped: number
+  images: number
+  driver: string
+  docker_root_dir: string
+  kernel_version: string
+  operating_system: string
+  os_type: string
+  architecture: string
+  cpus: number
+  memory: number
 }

@@ -35,6 +35,8 @@ import {
 } from '@element-plus/icons-vue'
 import { useTerminal } from '@/composables/useTerminal'
 import { useAuthStore } from '@/stores/auth'
+import { containersApi } from '@/services/api'
+import type { ContainerShell } from '@/types/api'
 
 // Types pour les props
 interface Props {
@@ -52,18 +54,41 @@ const props = withDefaults(defineProps<Props>(), {
   fontSize: 14
 })
 
-// Shells prédéfinis
-const PREDEFINED_SHELLS = [
-  { value: '/bin/sh', label: 'sh' },
-  { value: '/bin/bash', label: 'bash' },
-  { value: '/bin/ash', label: 'ash' },
-]
+// Shells disponibles (chargés dynamiquement via l'API)
+const availableShells = ref<ContainerShell[]>([])
+const shellsLoading = ref(false)
 
 // Mode de commande : 'shell' pour les prédéfinis, 'custom' pour commande libre
 const commandMode = ref<'shell' | 'custom'>('shell')
 const selectedShell = ref(props.shell)
 const customCommand = ref('')
 const loginUser = ref(props.user)
+
+/**
+ * Charge les shells disponibles depuis l'API.
+ * Fallback sur /bin/sh en cas d'erreur ou liste vide.
+ */
+async function loadShells() {
+  shellsLoading.value = true
+  try {
+    const response = await containersApi.getShells(props.containerId)
+    const shells = response.data.filter((s: ContainerShell) => s.available)
+    if (shells.length > 0) {
+      availableShells.value = shells
+      selectedShell.value = shells[0]?.path ?? '/bin/sh'
+    } else {
+      // Fallback si aucun shell disponible
+      availableShells.value = [{ path: '/bin/sh', label: 'sh', available: true }]
+      selectedShell.value = '/bin/sh'
+    }
+  } catch {
+    // Fallback en cas d'erreur API
+    availableShells.value = [{ path: '/bin/sh', label: 'sh', available: true }]
+    selectedShell.value = '/bin/sh'
+  } finally {
+    shellsLoading.value = false
+  }
+}
 
 // La commande effective à envoyer au serveur
 const effectiveCommand = computed(() => {
@@ -262,6 +287,7 @@ let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
   initTerminal()
+  loadShells()
 
   // Observer les changements de taille
   if (terminalRef.value?.parentElement) {
@@ -375,18 +401,20 @@ defineExpose({
             </el-radio-button>
           </el-radio-group>
 
-          <!-- Sélecteur de shell prédéfini -->
+          <!-- Sélecteur de shell dynamique -->
           <el-select
             v-if="commandMode === 'shell'"
             v-model="selectedShell"
             size="small"
             class="shell-select"
+            :loading="shellsLoading"
+            placeholder="Loading shells..."
           >
             <el-option
-              v-for="s in PREDEFINED_SHELLS"
-              :key="s.value"
+              v-for="s in availableShells"
+              :key="s.path"
               :label="s.label"
-              :value="s.value"
+              :value="s.path"
             />
           </el-select>
 

@@ -10,8 +10,12 @@ from typing import Any, List, Optional
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...auth.dependencies import get_current_active_user
 from ...core.rate_limit import conditional_rate_limiter
+from ...database import get_db
+from ...models.user import User
 from ...schemas.docker import (
     BatchContainerActionRequest,
     BatchContainerActionResponse,
@@ -23,11 +27,14 @@ from ...schemas.docker import (
     ContainerNetworkSettingsInfo,
     ContainerProcess,
     ContainerProcessListResponse,
+    ContainerPromoteRequest,
+    ContainerPromoteResponse,
     ContainerRecreateRequest,
     ContainerRecreateResponse,
     ContainerRenameRequest,
     ContainerRenameResponse,
     ContainerResponse,
+    ContainerShellResponse,
     ContainerStateInfo,
     ContainerStatsResponse,
     ContainerUpdateResourcesRequest,
@@ -43,7 +50,9 @@ from ...schemas.docker import (
     VolumeCreateRequest,
     VolumeResponse,
 )
+from ...schemas.stack import StackCreate
 from ...services.docker_client_service import get_docker_client
+from ...services.stack_service import StackService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -874,9 +883,188 @@ async def rename_container(
         )
 
 
+@router.post(
+    "/containers/{container_id}/promote",
+    response_model=ContainerPromoteResponse,
+    summary="Promote container to stack",
+    description="Promote a standalone container to a WindFlow managed stack.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
+)
+async def promote_container(
+    request: Request,
+    container_id: str,
+    promote_data: ContainerPromoteRequest,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Promeut un container standalone en stack WindFlow managée."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Promoting container {container_id} to stack '{promote_data.name}'",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "container_id": container_id,
+        },
+    )
+
+    try:
+        # 1. Inspect the container via Docker API
+        client = await get_docker_client()
+        container_info = await client.inspect_container(container_id)
+        await client.close()
+
+        # 2. Check if container is already managed
+        labels = container_info.get("Config", {}).get("Labels") or {}
+        if labels.get("windflow.managed"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ce container est déjà managé par WindFlow",
+            )
+
+        # 3. Build Compose template from container config
+        container_config = container_info.get("Config", {})
+        host_config = container_info.get("HostConfig", {})
+
+        service_def: dict[str, Any] = {}
+
+        # Image
+        image = container_config.get("Image")
+        if image:
+            service_def["image"] = image
+
+        # Environment variables
+        env_list = container_config.get("Env")
+        if env_list:
+            service_def["environment"] = env_list
+
+        # Ports
+        port_bindings = host_config.get("PortBindings") or {}
+        if port_bindings:
+            ports: list[str] = []
+            for container_port, bindings in port_bindings.items():
+                port_parts = container_port.split("/")
+                container_port_num = port_parts[0]
+                if bindings and len(bindings) > 0:
+                    host_port = bindings[0].get("HostPort", "")
+                    if host_port:
+                        ports.append(f"{host_port}:{container_port_num}")
+                    else:
+                        ports.append(container_port_num)
+                else:
+                    ports.append(container_port_num)
+            if ports:
+                service_def["ports"] = ports
+
+        # Volumes
+        binds = host_config.get("Binds")
+        if binds:
+            service_def["volumes"] = binds
+
+        # Restart policy
+        restart_policy = host_config.get("RestartPolicy", {})
+        rp_name = restart_policy.get("Name")
+        if rp_name and rp_name != "":
+            rp_entry: dict[str, Any] = {"condition": rp_name}
+            max_retry = restart_policy.get("MaximumRetryCount")
+            if max_retry:
+                rp_entry["max_attempts"] = max_retry
+            service_def["restart"] = rp_entry
+
+        # Resources
+        memory = host_config.get("Memory")
+        cpu_shares = host_config.get("CpuShares")
+        pids_limit = host_config.get("PidsLimit")
+        deploy: dict[str, Any] = {}
+        if memory and memory > 0:
+            deploy.setdefault("resources", {}).setdefault("limits", {})["memory"] = memory
+        if cpu_shares and cpu_shares > 0:
+            deploy.setdefault("resources", {}).setdefault("limits", {})["cpus"] = cpu_shares / 1024
+        if pids_limit and pids_limit > 0:
+            deploy.setdefault("resources", {}).setdefault("limits", {})["pids"] = pids_limit
+        if deploy:
+            service_def["deploy"] = deploy
+
+        # Container name as service key
+        container_name = container_info.get("Name", "").lstrip("/") or "service"
+        # Sanitize name for compose service key
+        service_key = container_name.replace("_", "-").replace(".", "-").lower()
+        # Ensure it starts with alphanumeric
+        import re
+        service_key = re.sub(r"[^a-z0-9-]", "", service_key)
+        if not service_key or not service_key[0].isalnum():
+            service_key = f"svc-{service_key}"
+        if not service_key:
+            service_key = "service"
+
+        compose_template: dict[str, Any] = {
+            "version": "3.8",
+            "services": {
+                service_key: service_def,
+            },
+        }
+
+        # 4. Check name uniqueness
+        existing = await StackService.get_by_name(
+            session, promote_data.name, str(current_user.organization_id)
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Une stack avec le nom '{promote_data.name}' existe déjà",
+            )
+
+        # 5. Create the stack
+        stack_data = StackCreate(
+            name=promote_data.name,
+            description=f"Stack promue depuis le container {container_name}",
+            template=compose_template,
+            variables={},
+            organization_id=str(current_user.organization_id),
+        )
+        stack = await StackService.create(session, stack_data)
+
+        logger.info(
+            f"Container {container_id} promoted to stack {stack.id}",
+            extra={
+                "correlation_id": correlation_id,
+                "user_id": str(current_user.id),
+                "container_id": container_id,
+                "stack_id": str(stack.id),
+            },
+        )
+
+        return ContainerPromoteResponse(
+            success=True,
+            message=f"Container promu en stack '{promote_data.name}'",
+            stack_id=str(stack.id),
+            stack_name=stack.name,
+        )
+
+    except HTTPException:
+        raise
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Container {container_id} non trouvé",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error promoting container: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la promotion: {str(e)}",
+        )
+
+
 @router.get(
     "/containers/{container_id}/shells",
-    response_model=List[dict],
+    response_model=List[ContainerShellResponse],
     summary="List available shells",
     description="Detect available shells in a container for terminal access.",
     tags=["docker"],
@@ -885,18 +1073,20 @@ async def rename_container(
 async def get_container_shells(
     request: Request,
     container_id: str,
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Détecte les shells disponibles dans un conteneur.
 
     Retourne une liste de shells avec leur chemin et disponibilité.
+    Nécessite une authentification valide.
     """
     from ...services.terminal_service import TerminalService
 
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Detecting shells in container {container_id}",
-        extra={"correlation_id": correlation_id},
+        extra={"correlation_id": correlation_id, "user_id": str(current_user.id)},
     )
 
     try:
@@ -905,7 +1095,9 @@ async def get_container_shells(
         await terminal_service.close()
 
         return [
-            {"path": shell.path, "label": shell.label, "available": shell.available}
+            ContainerShellResponse(
+                path=shell.path, label=shell.label, available=shell.available
+            )
             for shell in shells
         ]
 
@@ -1481,7 +1673,7 @@ async def list_networks(request: Request):
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(50, 60))],
 )
-async def get_system_info(request: Request):
+async def get_system_info(request: Request, current_user: User = Depends(get_current_active_user)):
     """Récupère les informations système Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info("Getting Docker system info", extra={"correlation_id": correlation_id})

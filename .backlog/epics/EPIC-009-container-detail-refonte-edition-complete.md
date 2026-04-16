@@ -312,7 +312,7 @@ Méthodes à ajouter :
 ## Stories liées
 
 - [x] STORY-024 : Homogénéisation visuelle — onglet Infos au design d'Aperçu
-- [ ] STORY-025 : Backend — Endpoint de recréation de container (`/recreate`)
+- [x] STORY-025 : Backend — Endpoint de recréation de container (`/recreate`)
 - [ ] STORY-026 : Backend — Endpoints connect/disconnect réseau
 - [ ] STORY-027 : Frontend Config — Édition des ports et image (recréation)
 - [ ] STORY-028 : Frontend Config — Gestion des réseaux à chaud

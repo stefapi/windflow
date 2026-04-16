@@ -5,23 +5,31 @@
       <template #header>
         <div class="card-header">
           <span>Stacks Management</span>
-          <el-button
-            type="primary"
-            @click="openCreateDialog"
-          >
-            Create Stack
-          </el-button>
-          <el-button
-            @click="showImportDialog = true"
-          >
-            Import
-          </el-button>
+          <div class="card-header__actions">
+            <el-button
+              type="primary"
+              @click="openCreateDialog"
+            >
+              Create Stack
+            </el-button>
+            <el-button
+              @click="showImportDialog = true"
+            >
+              Import
+            </el-button>
+            <el-switch
+              v-model="showArchived"
+              active-text="Archivées"
+              data-testid="toggle-archived"
+              style="margin-left: 12px"
+            />
+          </div>
         </div>
       </template>
 
       <el-table
         v-loading="stacksStore.loading"
-        :data="stacksStore.stacks"
+        :data="stacksStore.activeStacks"
         stripe
         @row-click="selectStack"
       >
@@ -62,9 +70,69 @@
         >
           <template #default="{ row }">
             <ActionButtons
-              :actions="['edit', 'deploy', 'export', 'duplicate', 'delete']"
+              :actions="['edit', 'deploy', 'export', 'duplicate', 'archive', 'delete']"
               @action="(type) => handleStackAction(type, row)"
             />
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
+    <!-- Section Stacks archivées -->
+    <el-card
+      v-if="showArchived && stacksStore.archivedStacks.length > 0"
+      class="archived-section"
+      style="margin-top: 20px"
+    >
+      <template #header>
+        <div class="card-header">
+          <span>Stacks archivées ({{ stacksStore.archivedStacks.length }})</span>
+        </div>
+      </template>
+
+      <el-table
+        :data="stacksStore.archivedStacks"
+        stripe
+      >
+        <el-table-column
+          prop="name"
+          label="Name"
+          min-width="150"
+        />
+        <el-table-column
+          prop="description"
+          label="Description"
+          min-width="200"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="Archivée le"
+          width="180"
+        >
+          <template #default="{ row }">
+            {{ row.archived_at ? formatDate(row.archived_at) : '—' }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Actions"
+          width="150"
+          fixed="right"
+        >
+          <template #default="{ row }">
+            <el-button
+              size="small"
+              type="warning"
+              @click="handleUnarchive(row)"
+            >
+              Désarchiver
+            </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              @click="confirmDelete(row.id)"
+            >
+              Supprimer
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -365,6 +433,58 @@
             />
           </div>
         </el-tab-pane>
+
+        <!-- Onglet Statistics -->
+        <el-tab-pane
+          label="Statistics"
+          name="stats"
+        >
+          <div
+            v-if="loadingStats"
+            class="stats-loading"
+          >
+            <el-skeleton
+              :rows="3"
+              animated
+            />
+          </div>
+          <div
+            v-else-if="!stackStats"
+            class="stats-empty"
+          >
+            <el-empty description="Aucune statistique disponible" />
+          </div>
+          <div
+            v-else
+            class="stats-content"
+          >
+            <el-descriptions
+              :column="1"
+              border
+            >
+              <el-descriptions-item label="Déploiements (30 derniers jours)">
+                {{ stackStats.deployments_last_30_days }}
+              </el-descriptions-item>
+            </el-descriptions>
+            <div
+              v-if="Object.keys(stackStats.deployments_by_status).length > 0"
+              class="stats-status-list"
+            >
+              <h4>Répartition par statut</h4>
+              <div class="status-items">
+                <el-tag
+                  v-for="[status, count] in Object.entries(stackStats.deployments_by_status)"
+                  :key="status"
+                  :type="getStatusTagType(status)"
+                  size="large"
+                  class="status-tag"
+                >
+                  {{ status }} : {{ count }}
+                </el-tag>
+              </div>
+            </div>
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </el-card>
 
@@ -550,9 +670,9 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useStacksStore, useTargetsStore, useDeploymentsStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
-import { stacksApi } from '@/services/api'
+import { stacksApi, dashboardApi } from '@/services/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { Stack, StackCreate, StackVersion } from '@/types/api'
+import type { Stack, StackCreate, StackVersion, StackStatsResponse } from '@/types/api'
 import ActionButtons from '@/components/ui/ActionButtons.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import type { StatusType } from '@/components/ui/StatusBadge.vue'
@@ -587,6 +707,9 @@ const showDuplicateDialog = ref(false)
 const duplicateStackRef = ref<Stack | null>(null)
 const duplicating = ref(false)
 const duplicateForm = reactive({ new_name: '' })
+const showArchived = ref(false)
+const stackStats = ref<StackStatsResponse | null>(null)
+const loadingStats = ref(false)
 
 const editForm = reactive({
   name: '',
@@ -717,7 +840,9 @@ function selectStack(stack: Stack): void {
   validationErrors.value = []
   activeTab.value = 'compose'
   versions.value = []
+  stackStats.value = null
   loadVersions()
+  loadStackStats(stack.id)
 }
 
 function startEditing(): void {
@@ -945,6 +1070,31 @@ async function handleDuplicate(): Promise<void> {
   }
 }
 
+// Handle archive action with confirmation
+async function handleArchive(stack: Stack): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      `Are you sure you want to archive "${stack.name}"?`,
+      'Archive Stack',
+      { type: 'warning' },
+    )
+    await stacksStore.archiveStack(stack.id)
+    ElMessage.success(`Stack "${stack.name}" archived successfully`)
+  } catch {
+    // cancelled or error
+  }
+}
+
+// Handle unarchive action
+async function handleUnarchive(stack: Stack): Promise<void> {
+  try {
+    await stacksStore.unarchiveStack(stack.id)
+    ElMessage.success(`Stack "${stack.name}" unarchived successfully`)
+  } catch {
+    ElMessage.error('Failed to unarchive stack')
+  }
+}
+
 // Handle action button clicks
 function handleStackAction(type: ActionType, stack: Stack): void {
   switch (type) {
@@ -959,6 +1109,9 @@ function handleStackAction(type: ActionType, stack: Stack): void {
       break
     case 'duplicate':
       openDuplicateDialog(stack)
+      break
+    case 'archive':
+      handleArchive(stack)
       break
     case 'delete':
       confirmDelete(stack.id)
@@ -993,6 +1146,30 @@ async function createSnapshot(): Promise<void> {
   } finally {
     creatingVersion.value = false
   }
+}
+
+async function loadStackStats(stackId: string): Promise<void> {
+  loadingStats.value = true
+  try {
+    const response = await dashboardApi.getStackStats(stackId)
+    stackStats.value = response.data
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail || 'Erreur lors du chargement des statistiques')
+    stackStats.value = null
+  } finally {
+    loadingStats.value = false
+  }
+}
+
+function getStatusTagType(status: string): 'success' | 'danger' | 'warning' | 'info' | 'primary' {
+  const statusMap: Record<string, 'success' | 'danger' | 'warning' | 'info' | 'primary'> = {
+    completed: 'success',
+    failed: 'danger',
+    running: 'primary',
+    pending: 'warning',
+    cancelled: 'info',
+  }
+  return statusMap[status] ?? 'info'
 }
 
 function previewVersion(version: StackVersion): void {
@@ -1094,5 +1271,39 @@ onMounted(() => {
 
 .import-file-input {
   width: 100%;
+}
+
+.card-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.archived-section {
+  background-color: var(--el-fill-color-light);
+}
+
+.stats-loading,
+.stats-empty {
+  padding: 20px;
+}
+
+.stats-status-list {
+  margin-top: 20px;
+}
+
+.stats-status-list h4 {
+  margin-bottom: 10px;
+}
+
+.status-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status-tag {
+  min-width: 120px;
+  text-align: center;
 }
 </style>

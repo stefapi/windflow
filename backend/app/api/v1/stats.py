@@ -24,6 +24,7 @@ from ...schemas.dashboard import (
     ResourceCounter,
     ResourceMetricPoint,
     ResourceMetrics,
+    StackStatsResponse,
     TargetHealthItem,
 )
 
@@ -289,8 +290,12 @@ async def get_dashboard_stats(
     )
 
 
-@router.get("/stats/stacks/{stack_id}")
-async def get_stack_stats(stack_id: str, db: AsyncSession = Depends(get_db)):
+@router.get("/stats/stacks/{stack_id}", response_model=StackStatsResponse)
+async def get_stack_stats(
+    stack_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> StackStatsResponse:
     """Statistiques détaillées d'un stack."""
 
     # Déploiements par statut
@@ -311,9 +316,9 @@ async def get_stack_stats(stack_id: str, db: AsyncSession = Depends(get_db)):
     )
     recent_deployments = (await db.execute(recent_deployments_stmt)).scalar()
 
-    return {
-        "deployments_by_status": {
+    return StackStatsResponse(
+        deployments_by_status={
             status: count for status, count in deployments_by_status
         },
-        "deployments_last_30_days": recent_deployments,
-    }
+        deployments_last_30_days=recent_deployments,
+    )
