@@ -12,23 +12,9 @@ Le projet suit cette hiérarchie de fichiers :
 ## 2. Règles de Numérotation
 - **Epics** : `EPIC-XXX` (numérotation séquentielle globale, ex: EPIC-001, EPIC-002...)
 - **Stories** : `STORY-XXX` (numérotation séquentielle globale, pas par epic, ex: STORY-401, STORY-402...)
-- **Sous-stories** : `STORY-XXX.N` (numérotation séquentielle au sein de la story parente, ex: STORY-026.1, STORY-026.2, STORY-026.3)
 - **Bugs** : `BUG-XXX` (numérotation séquentielle globale, ex: BUG-001, BUG-002...)
 
 Réutilise les numéros libres si besoin
-
-### 2.1 Conventions des Sous-stories
-
-Les sous-stories sont des subdivisions d'une story parente, créées par `analyse-story` lorsque la complexité le justifie (cf. section 5.1.1).
-
-**Nomming des fichiers :**
-- Fichier : `STORY-XXX.N-titre-court.md` dans `.backlog/stories/`
-- Exemple : `STORY-026.1-etat-healthcheck.md`, `STORY-026.2-config-ressources.md`
-
-**Relations de référence :**
-- Chaque sous-story référence sa story parente **et** l'epic de plus haut niveau
-- La story parente liste ses sous-stories mais ne contient **pas** de tâches d'implémentation
-- Les sous-stories ne sont **pas** listées dans l'epic parent (uniquement dans la story parente)
 
 ## 3. Cycle de Vie des Éléments
 
@@ -110,7 +96,6 @@ Les sous-stories sont des subdivisions d'une story parente, créées par `analys
 
 **Présence obligatoire dans le Kanban :**
 - Toute story avec un statut `TODO`, `IN_PROGRESS`, `REVIEW`, ou `BLOCKED` DOIT apparaître dans `.backlog/kanban.md`
-- Toute sous-story avec un statut `TODO`, `IN_PROGRESS`, `REVIEW`, ou `BLOCKED` DOIT apparaître dans `.backlog/kanban.md` (individuellement, au même titre qu'une story)
 - Tout bug avec un statut `CONFIRMED`, `IN_PROGRESS`, ou `REVIEW` DOIT apparaître dans `.backlog/kanban.md`
 
 **Correspondance statut ↔ colonne Kanban :**
@@ -161,129 +146,48 @@ Avant de clôturer une session de travail, vérifier :
 
 ### 5.1 Pipeline de Skills
 
-Le traitement d'une epic suit un pipeline en 5 étapes, chacune gérée par une skill dédiée :
+Le traitement d'une story suit un pipeline dont les étapes peuvent varier selon la complexité détectée ou les difficultés d'implémentation :
 
 ```
-create-*        →  analyse-story    →  treat-story       →  finalise-story    →  finalise-epic
-(Description+AC)   (Tâches détaillées)  (Implémentation)     (Quality Gate story)  (Quality Gate epic)
+create-*  →  analyse-story  ──────────────────────────►  treat-story  →  finalise-story
+                  │                                           │
+                  ▼ (si complexité détectée)                 ▼ (si échecs répétés)
+             split-story (proactif)                     split-story (réactif)
+                  │                                           │
+                  ▼                                           ▼
+            treat-story ×N                             treat-story ×N
+            (sous-stories)                             (sous-stories)
 ```
 
 | Étape | Skill | Produit | Statut story |
 |-------|-------|---------|--------------|
 | 1. Création | `create-stories`, `create-improvement`, `create-refactoring` | Fichier story avec description + AC | `TODO` |
-| 2. Analyse | `analyse-story` | Tâches d'implémentation détaillées, tests à écrire | `TODO` |
-| 3. Implémentation | `treat-story` | Code, tests, documentation | `TODO` → `IN_PROGRESS` → `REVIEW` |
-| 4. Finalisation story | `finalise-story` | Vérification complétude, tests passants, clôture story | `REVIEW` → `DONE` |
-| 5. Finalisation epic | `finalise-epic` | Rapport de conformité (quality gate avant clôture) | Epic : vérification toutes stories DONE |
+| 2. Analyse | `analyse-story` | Tâches d'implémentation détaillées, tests à écrire ; délègue à `split-story` si la story est trop complexe | `TODO` |
+| 2b. Découpe *(si nécessaire)* | `split-story` | Sous-stories autonomes remplaçant la story originale | `TODO` |
+| 3. Implémentation | `treat-story` | Code, tests, documentation | `TODO` → `IN_PROGRESS` → `REVIEW` → `DONE` |
+| 3b. Re-découpe *(si blocage)* | `split-story` | Sous-stories créées à partir d'une story `IN_PROGRESS` ou `BLOCKED` | `TODO` |
 
 **Règles du pipeline :**
 - Les skills de création (étape 1) ne génèrent **que** la description et les AC — pas de tâches techniques
-- L'analyse (étape 2) explore le code, identifie les patterns et écrit les tâches détaillées dans la story — **sans coder**
+- L'analyse (étape 2) explore le code, identifie les patterns et écrit les tâches détaillées dans la story — **sans coder** ; si elle détecte une complexité excessive, elle délègue la découpe à `split-story` au lieu de continuer
+- La découpe (étape 2b) crée des sous-stories autonomes dans `.backlog/stories/` et referme la story mère — l'implémentation se fait ensuite sur les sous-stories
 - L'implémentation (étape 3) exécute les tâches **dans l'ordre**, fichier par fichier, en suivant exactement les instructions de l'analyse
-- La finalisation story (étape 4) est un **quality gate exécutif au niveau story** — elle vérifie que tout est complet, lance les tests, et passe la story à DONE si conforme
-- La finalisation epic (étape 5) est un **quality gate en lecture seule** — elle ne modifie aucun fichier de code, uniquement le rapport dans l'epic. Elle doit être lancée **après** que toutes les stories sont DONE, et **avant** `close-epic`
+- Si l'implémentation échoue de façon répétée ou reste bloquée, `split-story` peut être invoquée en mode réactif (étape 3b) pour découper la story en cours et repartir sur des périmètres plus petits
 
-### 5.1.1 `analyse-story` — Évaluation de complexité et découpe en sous-stories
+### 5.1.1 Skills utilitaires
 
-Lors de l'étape d'analyse (étape 2), la skill `analyse-story` DOIT évaluer la complexité de la story avant de produire les tâches d'implémentation. Si la story est trop complexe pour être traitée en une seule session par un LLM (context window ~200k tokens), elle doit être découpée en sous-stories.
+En complément du pipeline de stories, des skills autonomes sont disponibles pour des tâches récurrentes :
 
-#### Critères de complexité
+| Skill | Usage | Produit |
+|-------|-------|---------|
+| `create-boilerplate` | Génère la structure, la configuration et l'outillage d'un composant (sans implémenter de logique métier) | Squelette projet + mise à jour `.clinerules` |
+| `create-epic` | Crée une epic à partir d'un item de la roadmap | Fichier epic dans `.backlog/epics/` |
+| `clean-epic` | Nettoie une epic en supprimant les références aux stories inexistantes | Epic nettoyée |
+| `close-epic` | Ferme une epic en supprimant ses stories et en la marquant DONE | Epic et stories fermées |
+| `split-story` | Découpe une story en sous-stories autonomes — **mode proactif** (appelé par `analyse-story` si complexité détectée, story `TODO`) ou **mode réactif** (appelé manuellement après échecs répétés sur une story `IN_PROGRESS`/`BLOCKED`) | Sous-stories créées dans `.backlog/stories/`, story mère fermée (`ABANDONED`) |
+| `update-rules` | Met à jour les `.clinerules` en analysant le code réel (backend, frontend, cli) | `.clinerules` synchronisés avec le code |
 
-Une story est considérée **complexe** si elle remplit **au moins un** des critères suivants :
-- **Plus de 5 tâches d'implémentation** identifiées lors de l'analyse
-- **Plus de 6 fichiers** à modifier/créer
-- **Mélange backend + frontend** (couche full-stack avec modifications des deux côtés)
-- **Plus de 8 critères d'acceptation** (AC)
-
-Si la story est complexe, procéder à la découpe (cf. processus ci-dessous).
-Si la story n'est pas complexe, procéder à l'analyse classique (tâches détaillées dans la story).
-
-#### Processus de découpe
-
-1. **Analyser** les domaines fonctionnels/techniques de la story pour identifier des groupes de tâches cohérents
-2. **Proposer un découpage** à l'utilisateur avec :
-   - Nombre de sous-stories proposées
-   - Titre et périmètre de chaque sous-story
-   - AC couverts par chaque sous-story
-   - Dépendances entre sous-stories (ordre séquentiel)
-3. **Attendre la validation** de l'utilisateur avant de créer les fichiers
-4. **Créer les fichiers de sous-stories** en utilisant le template `.backlog/sub-story.md`
-5. **Transformer la story parente** : retirer les tâches d'implémentation, ajouter la section `## Sous-stories` listant les sous-stories créées
-
-#### Principes de découpe
-
-- **Cohésion fonctionnelle** : chaque sous-story doit couvrir un domaine cohérent (ex: backend API, frontend composant, helpers/utils, styles)
-- **Autonomie** : chaque sous-story doit pouvoir être implémentée et testée indépendamment (dans la mesure du possible)
-- **Ordre logique** : les sous-stories sont numérotées séquentiellement (.1, .2, .3...) dans l'ordre d'implémentation recommandé
-- **AC répartis** : chaque AC de la story parente doit être couvert par exactement une sous-story
-- **Taille cible** : chaque sous-story doit viser 2-4 tâches d'implémentation et rester traitable en une session LLM
-
-#### Structure résultante après découpe
-
-**Story parente (transformée) :**
-```markdown
-# STORY-XXX : Titre de la Story
-**Statut :** TODO
-**Epic Parent :** EPIC-YYY — Titre de l'Epic
-
-## Description
-[Description inchangée]
-
-## Critères d'acceptation (AC)
-[Liste complète des AC — cochée quand la sous-story correspondante est DONE]
-
-## Sous-stories
-- [ ] STORY-XXX.1 : [Titre sous-story 1] — Couvre AC 1, AC 2, AC 3
-- [ ] STORY-XXX.2 : [Titre sous-story 2] — Couvre AC 4, AC 5
-- [ ] STORY-XXX.3 : [Titre sous-story 3] — Couvre AC 6, AC 7, AC 8
-
-## Dépendances
-STORY-XXX.2 dépend de STORY-XXX.1
-STORY-XXX.3 dépend de STORY-XXX.2
-```
-
-**Sous-story (fichier individuel) :**
-```markdown
-# STORY-XXX.N : [Titre de la sous-story]
-**Statut :** TODO
-**Story Parente :** STORY-XXX — [Titre de la Story]
-**Epic Parent :** EPIC-YYY — [Titre de l'Epic]
-
-## Description
-[Sous-ensemble de la description parente, spécifique à cette sous-story]
-
-## Critères d'acceptation (AC)
-- [ ] AC X : [Critère hérité de la story parente]
-- [ ] AC Y : [Critère hérité de la story parente]
-
-## Contexte technique
-[Spécifique à cette sous-story : fichiers concernés, patterns, prérequis]
-
-## Dépendances
-- STORY-XXX.(N-1) : [si dépendance sur la sous-story précédente]
-
-## Tâches d'implémentation détaillées
-[Remplies par analyse-story — 2 à 4 tâches ciblées]
-
-## Tests à écrire
-[Spécifiques à cette sous-story]
-
-## État d'avancement technique
-- [ ] Tâche 1 ...
-- [ ] Tâche 2 ...
-```
-
-### 5.1.2 `treat-story` — Traitement des sous-stories
-
-Quand `treat-story` est appelée sur une story qui a été découpée en sous-stories :
-1. Vérifier la présence de la section `## Sous-stories` dans la story parente
-2. **Traiter les sous-stories séquentiellement** (.1, puis .2, puis .3...)
-3. Pour chaque sous-story :
-   - Suivre le même protocole que pour une story classique (§5.2 à §5.4)
-   - Mettre à jour le statut de la sous-story
-   - Cocher la case correspondante dans la section `## Sous-stories` de la story parente
-   - Cocher les AC validés dans la story parente
-4. Quand toutes les sous-stories sont `DONE`, la story parente passe automatiquement à `DONE`
+**`create-boilerplate`** est une skill générique qui analyse une demande en texte libre, demande des précisions si nécessaire, génère la **structure, la configuration et l'outillage** du composant (fichiers de config, Makefile, Docker, CI, stubs de code vides) et met à jour les `.clinerules` pour refléter les choix technologiques. Elle ne génère **jamais** de logique métier — l'implémentation est du ressort des stories. Elle n'est pas liée au cycle de vie des stories.
 
 ### 5.2 Avant le développement
 
@@ -304,8 +208,9 @@ Quand `treat-story` est appelée sur une story qui a été découpée en sous-st
 
 1. **Tests :** Implémente les tests décrits dans `## Tests à écrire` et lance les commandes de validation.
 2. **Review :** Change le statut à `REVIEW` et déplace dans la colonne correspondante du kanban.
-3. **Finalisation :** Lance `finalise-story` pour valider la complétude, les tests et appliquer la clôture (DONE).
-4. **Notes :** `finalise-story` vérifie la présence de la section "Notes d'implémentation" à la fin du fichier story avec :
+3. **Validation :** Une fois les tests validés, change le statut à `DONE`.
+4. **Clôture Kanban :** Déplace la story dans "DONE" dans le kanban.
+5. **Notes :** Ajoute une section "Notes d'implémentation" à la fin du fichier story avec :
    - Fichiers modifiés/créés
    - Décisions techniques prises
    - Divergences par rapport à l'analyse (si applicable)
@@ -316,7 +221,6 @@ Quand `treat-story` est appelée sur une story qui a été découpée en sous-st
 ### Templates
 - **Epic** : `.backlog/epic.md`
 - **Story** : `.backlog/story.md`
-- **Sous-story** : `.backlog/sub-story.md`
 - **Bug** : `.backlog/bug.md`
 
 ### Sections obligatoires par type

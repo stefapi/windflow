@@ -35,16 +35,17 @@ Si aucun composant n'est précisé, la skill analyse **tous les composants prés
 
 ## Fichiers `.clinerules` concernés
 
-| Fichier | Contenu | Composants sources |
-|---------|---------|-------------------|
-| `05-tech-stack.md` | Stack technique, dépendances, gestionnaires de paquets | backend, frontend, cli |
-| `10-project-requirements.md` | Fonctionnalités implémentées (cases cochées) | backend, frontend |
-| `20-architecture-and-api.md` | Patterns d'architecture réellement utilisés | backend |
-| `30-code-standards.md` | Conventions de nommage, type safety, linting | backend, frontend, cli |
-| `35-testing-quality-gates.md` | Outils de test, seuils de couverture, commandes | backend, frontend |
-| `40-security.md` | Mécanismes de sécurité en place | backend, frontend |
-| `45-observability.md` | Outils de logging, métriques, tracing | backend |
+| Fichier | Contenu                                                              | Composants sources |
+|---------|----------------------------------------------------------------------|-------------------|
+| `05-tech-stack.md` | Stack technique, dépendances, gestionnaires de paquets               | backend, frontend, cli |
+| `10-project-requirements.md` | Fonctionnalités implémentées (cases cochées)                         | backend, frontend |
+| `20-architecture-and-api.md` | Patterns d'architecture réellement utilisés                          | backend |
+| `30-code-standards.md` | Conventions de nommage, type safety, linting                         | backend, frontend, cli |
+| `35-testing-quality-gates.md` | Outils de test, seuils de couverture, commandes                      | backend, frontend |
+| `40-security.md` | Mécanismes de sécurité en place                                      | backend, frontend |
+| `45-observability.md` | Outils de logging, métriques, tracing                                | backend |
 | `50-dev-workflow.md` | Makefile (cibles), `.env.sample`, CI pipeline, structure open-source | all |
+| `55-project-structure.md` | Organisation des répertoires cibles   | all |
 
 **Fichiers `.clinerules` NON modifiés par cette skill :**
 - `00-project-context.md` — contexte projet haut niveau, invariant
@@ -315,6 +316,7 @@ Pour chaque fichier `.clinerules/` ayant des divergences confirmées :
 2. `35-testing-quality-gates.md` — Outils et seuils de test
 3. `30-code-standards.md` — Conventions de code
 4. `50-dev-workflow.md` — Makefile et workflow
+5. `55-project-structure.md` — Répertoires cibles et contenus par périmètre
 5. `20-architecture-and-api.md` — Patterns d'architecture
 6. `45-observability.md` — Logging et métriques
 7. `40-security.md` — Sécurité
@@ -342,6 +344,13 @@ Pour chaque fichier `.clinerules/` ayant des divergences confirmées :
 #### `50-dev-workflow.md`
 - Mettre à jour le tableau des cibles Makefile (ajouter les nouvelles, retirer les obsolètes)
 - Mettre à jour les variables `.env.sample` (ajouter celles manquantes)
+- 
+#### `55-project-structure.md`
+- lister les modules logiciels (backend, frontend, documentation, data, dev, tests ...)
+- Mettre à jour la structure racine avec les éléments importants et répertoires (ajouter les nouvelles, retirer les obsolètes)
+- Mettre à jour chaque sous répertoire avec ses éléments importants et les sous-sous répertoires éventuellement (ajouter les nouvelles, retirer les obsolètes)
+- Indiquer les conventions de nommage et de mise à jour des éléments générés dans les répertoires en fonction de leur typologie
+- Indiquer les typologies de tests et les répertoires cibles pour chaque typologie dans les différents modules logiciels
 
 #### `20-architecture-and-api.md`
 - Mettre à jour les patterns réellement utilisés (si différents de la doc)
@@ -362,7 +371,7 @@ Pour chaque fichier `.clinerules/` ayant des divergences confirmées :
 
 ## Phase 7 : Récapitulatif post-mise à jour
 
-Après application des modifications, afficher un récapitulatif :
+Après application des modifications, afficher un récapitulatif (exemple):
 
 ```
 ## update-rules — Mise à jour terminée
@@ -453,33 +462,3 @@ Quel est le rôle de `nom-lib` dans le projet ?
 - [ ] Le récapitulatif final a été présenté
 
 ---
-
-## Fichiers concernés
-
-| Fichier | Action |
-|---------|--------|
-| `.agents/skills/update-rules/SKILL.md` | Référence (ce fichier) |
-| `backend/pyproject.toml` | Lecture |
-| `backend/src/` | Lecture (exploration structurelle) |
-| `backend/Dockerfile` | Lecture |
-| `backend/tests/` | Lecture |
-| `frontend/package.json` | Lecture |
-| `frontend/vite.config.ts` | Lecture |
-| `frontend/tsconfig.json` | Lecture |
-| `frontend/eslint.config.ts` | Lecture |
-| `frontend/vitest.config.ts` | Lecture |
-| `frontend/playwright.config.ts` | Lecture |
-| `frontend/Dockerfile` | Lecture |
-| `cli/` | Lecture (si présent) |
-| `Makefile` | Lecture |
-| `.env.sample` | Lecture |
-| `.gitea/workflows/ci.yml` | Lecture |
-| `.editorconfig` | Lecture |
-| `.clinerules/05-tech-stack.md` | Lecture + Mise à jour |
-| `.clinerules/10-project-requirements.md` | Lecture + Mise à jour |
-| `.clinerules/20-architecture-and-api.md` | Lecture + Mise à jour |
-| `.clinerules/30-code-standards.md` | Lecture + Mise à jour |
-| `.clinerules/35-testing-quality-gates.md` | Lecture + Mise à jour |
-| `.clinerules/40-security.md` | Lecture + Mise à jour |
-| `.clinerules/45-observability.md` | Lecture + Mise à jour |
-| `.clinerules/50-dev-workflow.md` | Lecture + Mise à jour |
