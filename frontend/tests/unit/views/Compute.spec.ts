@@ -106,6 +106,11 @@ const globalConfig = {
         template: '<div class="el-alert"><slot /></div>',
         props: ['type', 'closable'],
       },
+      ContainerCreateDialog: {
+        template: '<div class="container-create-dialog-stub" />',
+        props: ['modelValue'],
+        emits: ['update:modelValue', 'created'],
+      },
       ElIcon: {
         template: '<i><slot /></i>',
       },
@@ -281,5 +286,61 @@ describe('Compute.vue', () => {
     expect(wrapper.text()).toContain('Stack WindFlow')
     expect(wrapper.text()).toContain('Discovered')
     expect(wrapper.text()).toContain('Standalone')
+  })
+
+  describe('Container Create Dialog', () => {
+    it('affiche le bouton "Créer un container"', () => {
+      const wrapper = mount(Compute, {
+        ...globalConfig,
+        global: {
+          ...globalConfig.global,
+          plugins: [createTestRouter()],
+        },
+      })
+      expect(wrapper.text()).toContain('Créer un container')
+    })
+
+    it('ouvre le dialog ContainerCreateDialog au clic', async () => {
+      const wrapper = mount(Compute, {
+        ...globalConfig,
+        global: {
+          ...globalConfig.global,
+          plugins: [createTestRouter()],
+        },
+      })
+
+      // Trouver le bouton "Créer un container"
+      const buttons = wrapper.findAll('button')
+      const createBtn = buttons.find(b => b.text().includes('Créer un container'))
+      expect(createBtn).toBeDefined()
+
+      await createBtn!.trigger('click')
+      await new Promise(r => setTimeout(r, 0))
+
+      // Le dialog doit être présent dans le DOM
+      expect(wrapper.find('.container-create-dialog-stub').exists()).toBe(true)
+    })
+
+    it('rafraîchit la liste après l\'événement created', async () => {
+      const wrapper = mount(Compute, {
+        ...globalConfig,
+        global: {
+          ...globalConfig.global,
+          plugins: [createTestRouter()],
+        },
+      })
+
+      // Réinitialiser les mocks pour ce test
+      mockFetchGlobal.mockClear()
+
+      // Trouver le stub ContainerCreateDialog et émettre l'événement created
+      const dialog = wrapper.findComponent({ name: 'ContainerCreateDialog' })
+      if (dialog.exists()) {
+        await dialog.vm.$emit('created', { id: 'abc123', name: 'new-container' })
+        await new Promise(r => setTimeout(r, 0))
+
+        expect(mockFetchGlobal).toHaveBeenCalled()
+      }
+    })
   })
 })

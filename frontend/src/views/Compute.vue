@@ -27,6 +27,13 @@
           Par machine
         </el-button>
         <el-button
+          type="primary"
+          size="small"
+          @click="createDialogVisible = true"
+        >
+          + Créer un container
+        </el-button>
+        <el-button
           size="small"
           disabled
         >
@@ -135,6 +142,12 @@
       :loading="computeStore.loading"
     />
 
+    <!-- Container Create Dialog -->
+    <ContainerCreateDialog
+      v-model="createDialogVisible"
+      @created="handleContainerCreated"
+    />
+
     <!-- Adoption Wizard -->
     <AdoptionWizard
       v-model="adoptionWizardVisible"
@@ -175,6 +188,7 @@ import { ElMessage } from 'element-plus'
 import { useComputeStore, useTargetsStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 import ComputeStatsBanner from '@/components/ComputeStatsBanner.vue'
+import ContainerCreateDialog from '@/components/ContainerCreateDialog.vue'
 import {
   ManagedStacksSection,
   DiscoveredSection,
@@ -262,6 +276,14 @@ function toggleTarget(targetId: string): void {
   } else {
     activeTargets.value.splice(idx, 1)
   }
+}
+
+// ─── Container Create Dialog ─────────────────────────────────────────────────
+
+const createDialogVisible = ref(false)
+
+function handleContainerCreated(): void {
+  refreshGlobal()
 }
 
 // ─── Adoption Wizard ─────────────────────────────────────────────────────────

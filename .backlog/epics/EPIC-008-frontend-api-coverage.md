@@ -244,8 +244,8 @@ Fonctionnalités avancées :
 
 ### 🟢 Priorité Basse
 
-- [ ] STORY-019 : Création manuelle de containers Docker
-- [ ] STORY-020 : Page informations système Docker
+- [x] STORY-019 : Création manuelle de containers Docker
+- [x] STORY-020 : Page informations système Docker
 
 ---
 

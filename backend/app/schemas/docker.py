@@ -837,6 +837,38 @@ class ContainerPromoteResponse(BaseModel):
     stack_name: str = Field(..., description="Nom de la stack créée")
 
 
+class ContainerNetworkConnectRequest(BaseModel):
+    """Requête de connexion d'un container à un réseau."""
+
+    network_id: str = Field(
+        ...,
+        min_length=1,
+        description="ID ou nom du réseau",
+    )
+    aliases: Optional[list[str]] = Field(
+        None,
+        description="Alias réseau optionnels dans ce réseau",
+    )
+    ipv4_address: Optional[str] = Field(
+        None,
+        description="Adresse IPv4 fixe optionnelle",
+    )
+
+
+class ContainerNetworkDisconnectRequest(BaseModel):
+    """Requête de déconnexion d'un container d'un réseau."""
+
+    network_id: str = Field(
+        ...,
+        min_length=1,
+        description="ID ou nom du réseau",
+    )
+    force: bool = Field(
+        False,
+        description="Forcer la déconnexion même si le container est arrêté",
+    )
+
+
 # =============================================================================
 # Processes (container top)
 # =============================================================================

@@ -59,6 +59,7 @@ import type {
   ContainerRenameResponse,
   ContainerPromoteRequest,
   ContainerPromoteResponse,
+  ContainerCreateRequest,
   VolumeResponse,
   VolumeCreateRequest,
   ImageResponse,
@@ -68,6 +69,8 @@ import type {
   NetworkResponse,
   ContainerShell,
   SystemInfoResponse,
+  SystemVersionResponse,
+  PingResponse,
 } from '@/types/api'
 
 // Auth API
@@ -366,6 +369,9 @@ export const containersApi = {
 
   getShells: (id: string) =>
     http.get<ContainerShell[]>(`/docker/containers/${id}/shells`),
+
+  create: (data: ContainerCreateRequest) =>
+    http.post<ContainerDetail>('/docker/containers', data),
 }
 
 // Docker Images API
@@ -402,6 +408,10 @@ export const networksApi = {
 export const dockerSystemApi = {
   info: () =>
     http.get<SystemInfoResponse>('/docker/system/info'),
+  version: () =>
+    http.get<SystemVersionResponse>('/docker/system/version'),
+  ping: () =>
+    http.get<PingResponse>('/docker/system/ping'),
 }
 
 // Compute API

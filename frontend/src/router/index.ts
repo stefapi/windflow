@@ -125,6 +125,11 @@ const routes: RouteRecordRaw[] = [
         name: 'Audit',
         component: () => import('@/views/Audit.vue'),
       },
+      {
+        path: 'system-info',
+        name: 'SystemInfo',
+        component: () => import('@/views/SystemInfo.vue'),
+      },
     ],
   },
 ]

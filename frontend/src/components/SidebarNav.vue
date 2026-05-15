@@ -329,6 +329,7 @@ import {
   ArrowLeft,
   ArrowRight,
   DataAnalysis,
+  InfoFilled,
 } from '@element-plus/icons-vue'
 import type { NavItem, PluginNavItem } from '@/types/navigation'
 
@@ -376,6 +377,7 @@ const marketplaceItems: NavItem[] = [
 // Administration section items
 const administrationItems: NavItem[] = [
   { icon: Setting, label: 'Settings', path: '/settings' },
+  { icon: InfoFilled, label: 'System Info', path: '/system-info' },
   { icon: DocumentChecked, label: 'Audit', path: '/audit', badge: 'Bientôt' },
 ]
 

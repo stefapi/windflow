@@ -9,7 +9,7 @@ import logging
 from typing import Any, List, Optional
 
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_active_user
@@ -24,6 +24,8 @@ from ...schemas.docker import (
     ContainerDetailResponse,
     ContainerHostConfigInfo,
     ContainerLogsResponse,
+    ContainerNetworkConnectRequest,
+    ContainerNetworkDisconnectRequest,
     ContainerNetworkSettingsInfo,
     ContainerProcess,
     ContainerProcessListResponse,
@@ -884,6 +886,115 @@ async def rename_container(
 
 
 @router.post(
+    "/containers/{container_id}/networks/connect",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Connect container to network",
+    description="Connect a container to a Docker network at runtime.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(30, 60))],
+)
+async def connect_container_to_network(
+    request: Request,
+    container_id: str,
+    connect_data: ContainerNetworkConnectRequest,
+):
+    """Connecte un container à un réseau Docker."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Connecting container {container_id} to network {connect_data.network_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "container_id": container_id,
+            "network_id": connect_data.network_id,
+        },
+    )
+
+    try:
+        client = await get_docker_client()
+        await client.connect_container_to_network(
+            network_id=connect_data.network_id,
+            container_id=container_id,
+            aliases=connect_data.aliases,
+            ipv4_address=connect_data.ipv4_address,
+        )
+        await client.close()
+
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Container {container_id} ou réseau {connect_data.network_id} non trouvé",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error connecting container to network: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la connexion au réseau: {str(e)}",
+        )
+
+
+@router.post(
+    "/containers/{container_id}/networks/disconnect",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Disconnect container from network",
+    description="Disconnect a container from a Docker network at runtime.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(30, 60))],
+)
+async def disconnect_container_from_network(
+    request: Request,
+    container_id: str,
+    disconnect_data: ContainerNetworkDisconnectRequest,
+):
+    """Déconnecte un container d'un réseau Docker."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Disconnecting container {container_id} from network {disconnect_data.network_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "container_id": container_id,
+            "network_id": disconnect_data.network_id,
+        },
+    )
+
+    try:
+        client = await get_docker_client()
+        await client.disconnect_container_from_network(
+            network_id=disconnect_data.network_id,
+            container_id=container_id,
+            force=disconnect_data.force,
+        )
+        await client.close()
+
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Container {container_id} ou réseau {disconnect_data.network_id} non trouvé",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error disconnecting container from network: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la déconnexion du réseau: {str(e)}",
+        )
+
+
+@router.post(
     "/containers/{container_id}/promote",
     response_model=ContainerPromoteResponse,
     summary="Promote container to stack",
@@ -1718,7 +1829,7 @@ async def get_system_info(request: Request, current_user: User = Depends(get_cur
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(50, 60))],
 )
-async def get_version(request: Request):
+async def get_version(request: Request, current_user: User = Depends(get_current_active_user)):
     """Récupère la version Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info("Getting Docker version", extra={"correlation_id": correlation_id})
@@ -1756,7 +1867,7 @@ async def get_version(request: Request):
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
-async def ping(request: Request):
+async def ping(request: Request, current_user: User = Depends(get_current_active_user)):
     """Teste la connexion Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info("Pinging Docker", extra={"correlation_id": correlation_id})

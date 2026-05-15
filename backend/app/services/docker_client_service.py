@@ -1341,6 +1341,62 @@ class DockerClientService:
         response = await self._request("GET", f"/networks/{network_id}")
         return await response.json()
 
+    async def connect_container_to_network(
+        self,
+        network_id: str,
+        container_id: str,
+        aliases: Optional[list[str]] = None,
+        ipv4_address: Optional[str] = None,
+    ) -> None:
+        """
+        Connecte un container à un réseau.
+
+        POST /networks/{id}/connect
+
+        Args:
+            network_id: ID ou nom du réseau
+            container_id: ID ou nom du container
+            aliases: Alias réseau optionnels
+            ipv4_address: Adresse IPv4 fixe optionnelle
+        """
+        endpoint_config: dict[str, Any] = {}
+        if aliases:
+            endpoint_config["Aliases"] = aliases
+        if ipv4_address:
+            endpoint_config["IPAMConfig"] = {"IPv4Address": ipv4_address}
+
+        body: dict[str, Any] = {
+            "Container": container_id,
+            "EndpointConfig": endpoint_config,
+        }
+        await self._request(
+            "POST", f"/networks/{network_id}/connect", body=body
+        )
+
+    async def disconnect_container_from_network(
+        self,
+        network_id: str,
+        container_id: str,
+        force: bool = False,
+    ) -> None:
+        """
+        Déconnecte un container d'un réseau.
+
+        POST /networks/{id}/disconnect
+
+        Args:
+            network_id: ID ou nom du réseau
+            container_id: ID ou nom du container
+            force: Forcer la déconnexion même si le container est arrêté
+        """
+        body: dict[str, Any] = {
+            "Container": container_id,
+            "Force": force,
+        }
+        await self._request(
+            "POST", f"/networks/{network_id}/disconnect", body=body
+        )
+
     # =========================================================================
     # System
     # =========================================================================

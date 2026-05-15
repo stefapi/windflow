@@ -973,6 +973,20 @@ export interface ContainerRenameResponse {
   message: string
 }
 
+/** Requête POST create container — correspond à ContainerCreateRequest backend */
+export interface ContainerCreateRequest {
+  name: string              // pattern: ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$
+  image: string
+  command?: string[]
+  env?: string[]            // format KEY=VALUE
+  ports?: Record<string, Record<string, string>>
+  volumes?: Record<string, string>
+  labels?: Record<string, string>
+  restart_policy?: string   // 'no' | 'always' | 'on-failure' | 'unless-stopped'
+  network_mode?: string     // défaut 'bridge'
+  privileged?: boolean      // défaut false
+}
+
 /** Requête POST promote — correspond à ContainerPromoteRequest backend */
 export interface ContainerPromoteRequest {
   name: string
@@ -1076,4 +1090,23 @@ export interface SystemInfoResponse {
   architecture: string
   cpus: number
   memory: number
+}
+
+/** Version Docker — miroir du schéma Pydantic SystemVersionResponse backend */
+export interface SystemVersionResponse {
+  version: string
+  api_version: string
+  min_api_version: string
+  git_commit: string
+  go_version: string
+  os: string
+  arch: string
+  kernel_version: string
+  build_time: string
+}
+
+/** Réponse ping Docker — miroir du schéma Pydantic PingResponse backend */
+export interface PingResponse {
+  available: boolean
+  message: string | null
 }
