@@ -1110,3 +1110,28 @@ export interface PingResponse {
   available: boolean
   message: string | null
 }
+
+/** Requête POST /docker/containers/{id}/recreate — miroir du schéma Pydantic backend */
+export interface ContainerRecreateRequest {
+  image?: string
+  pull_image?: boolean
+  env?: string[]
+  labels?: Record<string, string>
+  port_bindings?: Record<string, Array<{ HostIp: string; HostPort: string }>>
+  mounts?: Array<Record<string, unknown>>
+  privileged?: boolean
+  readonly_rootfs?: boolean
+  cap_add?: string[]
+  cap_drop?: string[]
+  stop_timeout?: number
+}
+
+/** Réponse POST /docker/containers/{id}/recreate — miroir du schéma Pydantic backend */
+export interface ContainerRecreateResponse {
+  success: boolean
+  message: string
+  old_container_id: string
+  new_container_id: string
+  container: ContainerDetail
+  warnings: string[]
+}

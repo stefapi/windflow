@@ -169,7 +169,188 @@
       </div>
     </el-card>
 
-    <!-- Section 3 : Restart Policy (orange) -->
+    <!-- Section 3 : Image (violet) -->
+    <el-card
+      class="config-card card-config-image"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-purple">
+          <el-icon><Picture /></el-icon>
+          <span>Image</span>
+        </div>
+      </template>
+
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        class="section-alert"
+      >
+        ⚠️ Modifier l'image nécessite de recréer le container. Le layer writable sera perdu.
+      </el-alert>
+
+      <el-form label-position="top">
+        <el-form-item label="Image Docker">
+          <el-input
+            v-model="newImage"
+            placeholder="ex: nginx:latest"
+            size="small"
+            clearable
+          />
+          <div
+            v-if="detail?.image"
+            class="current-hint"
+          >
+            Image actuelle : {{ detail.image }}
+          </div>
+        </el-form-item>
+        <el-form-item>
+          <el-checkbox v-model="pullImage">
+            Puller la nouvelle image avant recréation
+          </el-checkbox>
+        </el-form-item>
+      </el-form>
+
+      <div class="section-actions">
+        <el-button
+          type="primary"
+          size="small"
+          :loading="loadingRecreate"
+          :disabled="loadingRecreate"
+          @click="updateImage"
+        >
+          Mettre à jour l'image
+        </el-button>
+      </div>
+    </el-card>
+
+    <!-- Section 4 : Ports (violet) -->
+    <el-card
+      class="config-card card-config-ports"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-purple">
+          <el-icon><MapLocation /></el-icon>
+          <span>Ports</span>
+        </div>
+      </template>
+
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        class="section-alert"
+      >
+        ⚠️ Modifier les ports nécessite de recréer le container.
+      </el-alert>
+
+      <el-table
+        :data="portBindings"
+        class="config-table"
+      >
+        <el-table-column
+          label="Host IP"
+          min-width="140"
+        >
+          <template #default="{ row }">
+            <el-input
+              v-model="row.hostIp"
+              placeholder="0.0.0.0"
+              size="small"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Host Port"
+          min-width="120"
+        >
+          <template #default="{ row }">
+            <el-input-number
+              v-model="row.hostPort"
+              :min="1"
+              :max="65535"
+              size="small"
+              controls-position="right"
+              style="width: 100px"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Container Port"
+          min-width="120"
+        >
+          <template #default="{ row }">
+            <el-input-number
+              v-model="row.containerPort"
+              :min="1"
+              :max="65535"
+              size="small"
+              controls-position="right"
+              style="width: 100px"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Protocole"
+          min-width="100"
+        >
+          <template #default="{ row }">
+            <el-select
+              v-model="row.protocol"
+              size="small"
+              style="width: 80px"
+            >
+              <el-option
+                label="TCP"
+                value="tcp"
+              />
+              <el-option
+                label="UDP"
+                value="udp"
+              />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Action"
+          width="80"
+          align="center"
+        >
+          <template #default="{ $index }">
+            <el-button
+              type="danger"
+              :icon="Delete"
+              size="small"
+              circle
+              @click="removePortBinding($index)"
+            />
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="section-actions">
+        <el-button
+          :icon="CirclePlus"
+          size="small"
+          @click="addPortBinding"
+        >
+          Ajouter un port
+        </el-button>
+        <el-button
+          type="primary"
+          size="small"
+          :loading="loadingRecreate"
+          :disabled="loadingRecreate"
+          @click="applyPortBindings"
+        >
+          Appliquer
+        </el-button>
+      </div>
+    </el-card>
+
+    <!-- Section 5 : Restart Policy (orange) -->
     <el-card
       class="config-card card-config-restart"
       shadow="hover"
@@ -234,7 +415,7 @@
       </div>
     </el-card>
 
-    <!-- Section 4 : Resource Limits (rouge) -->
+    <!-- Section 6 : Resource Limits (rouge) -->
     <el-card
       class="config-card card-config-resources"
       shadow="hover"
@@ -329,6 +510,8 @@ import {
   PriceTag,
   RefreshRight,
   Cpu,
+  Picture,
+  MapLocation,
 } from '@element-plus/icons-vue'
 import { containersApi } from '@/services/api'
 import { formatBytes } from '@/utils/format'
@@ -343,6 +526,10 @@ const props = defineProps<{
   detail: ContainerDetail | null
 }>()
 
+const emit = defineEmits<{
+  (e: 'recreate-success', newId: string): void
+}>()
+
 const masker = useSecretMasker()
 
 // ─── Env Vars ───
@@ -353,6 +540,21 @@ interface KeyValue {
 
 const envVars = ref<KeyValue[]>([])
 const labels = ref<KeyValue[]>([])
+
+// ─── Image ───
+const newImage = ref('')
+const pullImage = ref(false)
+const loadingRecreate = ref(false)
+
+// ─── Ports ───
+interface PortBindingRow {
+  hostIp: string
+  hostPort: number | ''
+  containerPort: string
+  protocol: 'tcp' | 'udp'
+}
+
+const portBindings = ref<PortBindingRow[]>([])
 
 // ─── Restart Policy ───
 const restartPolicyName = ref<string>('no')
@@ -395,6 +597,17 @@ watch(
       labels.value = []
     }
 
+    // Image
+    newImage.value = detail.image ?? ''
+
+    // Ports
+    const pb = detail.host_config?.port_bindings
+    if (pb) {
+      portBindings.value = parsePortBindings(pb)
+    } else {
+      portBindings.value = []
+    }
+
     // Restart policy
     const rp = detail.host_config?.restart_policy
     if (rp) {
@@ -425,6 +638,68 @@ watch(
   },
   { immediate: true },
 )
+
+// ─── Port bindings parsing ───
+function parsePortBindings(
+  pb: Record<string, Array<{ HostIp: string; HostPort: string }>>,
+): PortBindingRow[] {
+  const rows: PortBindingRow[] = []
+  for (const [key, bindings] of Object.entries(pb)) {
+    const [containerPort, protocol] = key.split('/') as [string, 'tcp' | 'udp']
+    for (const binding of bindings) {
+      const hostPortNum = binding.HostPort ? parseInt(binding.HostPort, 10) : ''
+      rows.push({
+        hostIp: binding.HostIp || '0.0.0.0',
+        hostPort: isNaN(hostPortNum as number) ? '' : hostPortNum,
+        containerPort: containerPort || '',
+        protocol: protocol || 'tcp',
+      })
+    }
+  }
+  return rows
+}
+
+function buildPortBindingsPayload(): Record<string, Array<{ HostIp: string; HostPort: string }>> {
+  const payload: Record<string, Array<{ HostIp: string; HostPort: string }>> = {}
+  for (const row of portBindings.value) {
+    if (!row.containerPort || !row.protocol) continue
+    const key = `${row.containerPort}/${row.protocol}`
+    if (!payload[key]) {
+      payload[key] = []
+    }
+    payload[key].push({
+      HostIp: row.hostIp || '0.0.0.0',
+      HostPort: String(row.hostPort || ''),
+    })
+  }
+  return payload
+}
+
+function validatePortBindings(): string | null {
+  const seen = new Set<string>()
+  for (const row of portBindings.value) {
+    if (row.hostPort !== '') {
+      const hp = Number(row.hostPort)
+      if (isNaN(hp) || hp < 1 || hp > 65535) {
+        return `Host port invalide : ${row.hostPort} (doit être entre 1 et 65535)`
+      }
+    }
+    if (row.containerPort !== '') {
+      const cp = Number(row.containerPort)
+      if (isNaN(cp) || cp < 1 || cp > 65535) {
+        return `Container port invalide : ${row.containerPort} (doit être entre 1 et 65535)`
+      }
+    }
+    if (row.hostPort !== '' && row.hostIp) {
+      const combo = `${row.hostIp}:${row.hostPort}`
+      if (seen.has(combo)) {
+        return `Doublon détecté : ${combo}`
+      }
+      seen.add(combo)
+    }
+  }
+  return null
+}
 
 // ─── Env Vars actions ───
 function addEnvVar(): void {
@@ -475,6 +750,100 @@ async function applyLabels(): Promise<void> {
     ElMessage.info('Fonctionnalité de recréation à venir')
   } catch {
     // cancelled — do nothing
+  }
+}
+
+// ─── Image actions ───
+async function updateImage(): Promise<void> {
+  if (!props.detail?.id) return
+  const image = newImage.value.trim()
+  if (!image) {
+    ElMessage.error('L\'image ne peut pas être vide')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      'Modifier l\'image nécessite de recréer le container. Le layer writable sera perdu. Continuer ?',
+      'Confirmation requise',
+      {
+        confirmButtonText: 'Confirmer',
+        cancelButtonText: 'Annuler',
+        type: 'warning',
+      },
+    )
+  } catch {
+    // cancelled
+    return
+  }
+
+  loadingRecreate.value = true
+  try {
+    const response = await containersApi.recreate(props.detail.id, {
+      image,
+      pull_image: pullImage.value,
+    })
+    ElMessage.success('Container recréé avec succès')
+    emit('recreate-success', response.data.new_container_id)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur lors de la recréation'
+    ElMessage.error(message)
+  } finally {
+    loadingRecreate.value = false
+  }
+}
+
+// ─── Ports actions ───
+function addPortBinding(): void {
+  portBindings.value.push({
+    hostIp: '0.0.0.0',
+    hostPort: '',
+    containerPort: '',
+    protocol: 'tcp',
+  })
+}
+
+function removePortBinding(index: number): void {
+  portBindings.value.splice(index, 1)
+}
+
+async function applyPortBindings(): Promise<void> {
+  if (!props.detail?.id) return
+
+  const error = validatePortBindings()
+  if (error) {
+    ElMessage.error(error)
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      'Modifier les ports nécessite de recréer le container. Le layer writable sera perdu. Continuer ?',
+      'Confirmation requise',
+      {
+        confirmButtonText: 'Confirmer',
+        cancelButtonText: 'Annuler',
+        type: 'warning',
+      },
+    )
+  } catch {
+    // cancelled
+    return
+  }
+
+  loadingRecreate.value = true
+  try {
+    const payload = buildPortBindingsPayload()
+    const response = await containersApi.recreate(props.detail.id, {
+      port_bindings: payload,
+    })
+    ElMessage.success('Container recréé avec succès')
+    emit('recreate-success', response.data.new_container_id)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Erreur lors de la recréation'
+    ElMessage.error(message)
+  } finally {
+    loadingRecreate.value = false
   }
 }
 
@@ -559,6 +928,10 @@ async function applyResources(): Promise<void> {
   color: var(--el-color-info);
 }
 
+.header-purple {
+  color: #9b59b6;
+}
+
 .header-orange {
   color: var(--el-color-warning);
 }
@@ -574,6 +947,14 @@ async function applyResources(): Promise<void> {
 
 .card-config-labels :deep(.el-card__header) {
   border-bottom: 3px solid var(--el-color-info);
+}
+
+.card-config-image :deep(.el-card__header) {
+  border-bottom: 3px solid #9b59b6;
+}
+
+.card-config-ports :deep(.el-card__header) {
+  border-bottom: 3px solid #9b59b6;
 }
 
 .card-config-restart :deep(.el-card__header) {

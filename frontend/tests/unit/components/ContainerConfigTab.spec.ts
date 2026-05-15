@@ -1,20 +1,25 @@
 /**
- * ContainerConfigTab.vue Unit Tests — STORY-024
+ * ContainerConfigTab.vue Unit Tests — STORY-024 + STORY-027
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessageBox } from 'element-plus'
 import ContainerConfigTab from '@/components/ContainerConfigTab.vue'
 import type { ContainerDetail } from '@/types/api'
+
+// Spy on ElMessageBox.confirm to avoid modal blocking in tests
+vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue(undefined)
 
 // Mock API methods
 const mockUpdateRestartPolicy = vi.fn()
 const mockUpdateResources = vi.fn()
+const mockRecreate = vi.fn()
 vi.mock('@/services/api', () => ({
   containersApi: {
     updateRestartPolicy: (...args: unknown[]) => mockUpdateRestartPolicy(...args),
     updateResources: (...args: unknown[]) => mockUpdateResources(...args),
+    recreate: (...args: unknown[]) => mockRecreate(...args),
   },
 }))
 
@@ -70,7 +75,10 @@ const baseDetail: ContainerDetail = {
     container_id_file: null,
     log_config: null,
     network_mode: null,
-    port_bindings: null,
+    port_bindings: {
+      '80/tcp': [{ HostIp: '0.0.0.0', HostPort: '8080' }],
+      '443/tcp': [{ HostIp: '', HostPort: '8443' }],
+    },
     restart_policy: { name: 'always', maximum_retry_count: null },
     auto_remove: null,
     volume_driver: null,
@@ -96,6 +104,16 @@ describe('ContainerConfigTab.vue', () => {
     vi.clearAllMocks()
     mockUpdateRestartPolicy.mockResolvedValue({ data: { warnings: [] } })
     mockUpdateResources.mockResolvedValue({ data: { warnings: [] } })
+    mockRecreate.mockResolvedValue({
+      data: {
+        success: true,
+        message: 'Container recréé',
+        old_container_id: 'abc123',
+        new_container_id: 'new456',
+        container: {},
+        warnings: [],
+      },
+    })
   })
 
   const mountComponent = async (overrides: Record<string, unknown> = {}) => {
@@ -112,7 +130,7 @@ describe('ContainerConfigTab.vue', () => {
           'el-table': { template: '<div class="el-table-stub"><slot /></div>', props: ['data'] },
           'el-table-column': { template: '<div class="el-table-column-stub" />', props: ['label', 'prop', 'width', 'minWidth'] },
           'el-input': { template: '<input class="el-input-stub" />', props: ['modelValue', 'type', 'placeholder', 'size'] },
-          'el-input-number': { template: '<input class="el-input-number-stub" type="number" />', props: ['modelValue', 'min', 'size'] },
+          'el-input-number': { template: '<input class="el-input-number-stub" type="number" />', props: ['modelValue', 'min', 'max', 'size'] },
           'el-select': { template: '<select class="el-select-stub"><slot /></select>', props: ['modelValue', 'size'] },
           'el-option': { template: '<option class="el-option-stub" />', props: ['label', 'value'] },
           'el-button': { template: '<button class="el-button-stub" @click="$emit(\'click\')"><slot /></button>', props: ['type', 'size', 'loading', 'disabled', 'icon', 'circle'] },
@@ -120,6 +138,9 @@ describe('ContainerConfigTab.vue', () => {
           'el-descriptions': { template: '<div class="el-descriptions-stub"><slot /></div>', props: ['column', 'border', 'size'] },
           'el-descriptions-item': { template: '<div class="el-descriptions-item-stub"><slot /></div>', props: ['label'] },
           'el-icon': { template: '<i class="el-icon-stub"><slot /></i>' },
+          'el-form': { template: '<form class="el-form-stub"><slot /></form>' },
+          'el-form-item': { template: '<div class="el-form-item-stub"><slot /></div>', props: ['label'] },
+          'el-checkbox': { template: '<input class="el-checkbox-stub" type="checkbox" />', props: ['modelValue'] },
         },
       },
       props,
@@ -129,7 +150,7 @@ describe('ContainerConfigTab.vue', () => {
     return wrapper
   }
 
-  describe('Rendering — 4 cards', () => {
+  describe('Rendering — 6 cards', () => {
     it('should mount successfully', async () => {
       const wrapper = await mountComponent()
       expect(wrapper.exists()).toBe(true)
@@ -140,10 +161,10 @@ describe('ContainerConfigTab.vue', () => {
       expect(wrapper.find('.config-tab').exists()).toBe(true)
     })
 
-    it('should render 4 config cards', async () => {
+    it('should render 6 config cards', async () => {
       const wrapper = await mountComponent()
       const cards = wrapper.findAll('.el-card-stub')
-      expect(cards.length).toBe(4)
+      expect(cards.length).toBe(6)
     })
 
     it('should render card headers with correct titles', async () => {
@@ -151,8 +172,32 @@ describe('ContainerConfigTab.vue', () => {
       const text = wrapper.text()
       expect(text).toContain('Variables d\'environnement')
       expect(text).toContain('Labels')
+      expect(text).toContain('Image')
+      expect(text).toContain('Ports')
       expect(text).toContain('Restart Policy')
       expect(text).toContain('Resource Limits')
+    })
+
+    it('should render Image card with correct header', async () => {
+      const wrapper = await mountComponent()
+      const text = wrapper.text()
+      expect(text).toContain('Image')
+    })
+
+    it('should render Ports card with correct header', async () => {
+      const wrapper = await mountComponent()
+      const text = wrapper.text()
+      expect(text).toContain('Ports')
+    })
+
+    it('should render warning alerts for image and ports sections', async () => {
+      const wrapper = await mountComponent()
+      const alerts = wrapper.findAll('.el-alert-stub')
+      // 4 alerts total: env, labels, image, ports
+      expect(alerts.length).toBe(4)
+      const allText = alerts.map((a) => a.text()).join(' ')
+      expect(allText).toContain('image')
+      expect(allText).toContain('ports')
     })
   })
 
@@ -172,6 +217,32 @@ describe('ContainerConfigTab.vue', () => {
       expect(vm.labels.length).toBe(2)
       expect(vm.labels).toContainEqual({ key: 'com.docker.compose.project', value: 'my-stack' })
       expect(vm.labels).toContainEqual({ key: 'version', value: '1.0' })
+    })
+
+    it('should pre-fill image input from detail.image', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { newImage: string }
+      expect(vm.newImage).toBe('nginx:latest')
+    })
+
+    it('should pre-fill port bindings from detail.host_config.port_bindings', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        portBindings: { hostIp: string; hostPort: number | ''; containerPort: string; protocol: string }[]
+      }
+      expect(vm.portBindings.length).toBe(2)
+      expect(vm.portBindings[0]).toMatchObject({ hostIp: '0.0.0.0', hostPort: 8080, containerPort: '80', protocol: 'tcp' })
+      expect(vm.portBindings[1]).toMatchObject({ hostIp: '0.0.0.0', hostPort: 8443, containerPort: '443', protocol: 'tcp' })
+    })
+
+    it('should handle empty port_bindings', async () => {
+      const detailNoPorts: ContainerDetail = {
+        ...baseDetail,
+        host_config: { ...baseDetail.host_config!, port_bindings: null },
+      }
+      const wrapper = await mountComponent({ detail: detailNoPorts })
+      const vm = wrapper.vm as unknown as { portBindings: unknown[] }
+      expect(vm.portBindings.length).toBe(0)
     })
 
     it('should pre-fill restart policy from detail', async () => {
@@ -246,13 +317,229 @@ describe('ContainerConfigTab.vue', () => {
     })
   })
 
+  describe('Ports — add/remove', () => {
+    it('should add a new port binding row', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { portBindings: PortBindingRow[]; addPortBinding: () => void }
+      const initialCount = vm.portBindings.length
+      vm.addPortBinding()
+      await flushPromises()
+      expect(vm.portBindings.length).toBe(initialCount + 1)
+      expect(vm.portBindings[vm.portBindings.length - 1]).toEqual({
+        hostIp: '0.0.0.0',
+        hostPort: '',
+        containerPort: '',
+        protocol: 'tcp',
+      })
+    })
+
+    it('should remove a port binding row', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { portBindings: PortBindingRow[]; removePortBinding: (i: number) => void }
+      const initialCount = vm.portBindings.length
+      vm.removePortBinding(0)
+      await flushPromises()
+      expect(vm.portBindings.length).toBe(initialCount - 1)
+    })
+  })
+
+  describe('Ports — validation', () => {
+    it('should reject host port below 1', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        portBindings: PortBindingRow[]
+        validatePortBindings: () => string | null
+      }
+      vm.portBindings[0].hostPort = 0
+      const error = vm.validatePortBindings()
+      expect(error).toContain('Host port invalide')
+    })
+
+    it('should reject host port above 65535', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        portBindings: PortBindingRow[]
+        validatePortBindings: () => string | null
+      }
+      vm.portBindings[0].hostPort = 70000
+      const error = vm.validatePortBindings()
+      expect(error).toContain('Host port invalide')
+    })
+
+    it('should reject container port below 1', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        portBindings: PortBindingRow[]
+        validatePortBindings: () => string | null
+      }
+      vm.portBindings[0].containerPort = 0
+      const error = vm.validatePortBindings()
+      expect(error).toContain('Container port invalide')
+    })
+
+    it('should reject container port above 65535', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        portBindings: PortBindingRow[]
+        validatePortBindings: () => string | null
+      }
+      vm.portBindings[0].containerPort = 70000
+      const error = vm.validatePortBindings()
+      expect(error).toContain('Container port invalide')
+    })
+
+    it('should reject duplicate hostIp:hostPort combinations', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        portBindings: PortBindingRow[]
+        validatePortBindings: () => string | null
+      }
+      vm.portBindings[1].hostIp = '0.0.0.0'
+      vm.portBindings[1].hostPort = 8080
+      const error = vm.validatePortBindings()
+      expect(error).toContain('Doublon')
+    })
+
+    it('should return null for valid port bindings', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { validatePortBindings: () => string | null }
+      const error = vm.validatePortBindings()
+      expect(error).toBeNull()
+    })
+  })
+
   describe('Warning alerts for recreation', () => {
     it('should render warning alerts for env vars and labels sections', async () => {
       const wrapper = await mountComponent()
       const alerts = wrapper.findAll('.el-alert-stub')
-      expect(alerts.length).toBe(2)
+      expect(alerts.length).toBe(4)
       expect(alerts[0].text()).toContain('variables d\'environnement')
       expect(alerts[1].text()).toContain('labels')
+    })
+  })
+
+  describe('Image — update', () => {
+    it('should call recreate API when updating image', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { newImage: string; updateImage: () => Promise<void> }
+      vm.newImage = 'nginx:alpine'
+      await vm.updateImage()
+      await flushPromises()
+
+      expect(mockRecreate).toHaveBeenCalledWith('abc123', {
+        image: 'nginx:alpine',
+        pull_image: false,
+      })
+    })
+
+    it('should include pull_image in recreate payload when checkbox is checked', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        newImage: string
+        pullImage: boolean
+        updateImage: () => Promise<void>
+      }
+      vm.newImage = 'nginx:alpine'
+      vm.pullImage = true
+      await vm.updateImage()
+      await flushPromises()
+
+      expect(mockRecreate).toHaveBeenCalledWith('abc123', {
+        image: 'nginx:alpine',
+        pull_image: true,
+      })
+    })
+
+    it('should emit recreate-success event with new container id', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        newImage: string
+        updateImage: () => Promise<void>
+      }
+      vm.newImage = 'nginx:alpine'
+      await vm.updateImage()
+      await flushPromises()
+
+      expect(wrapper.emitted('recreate-success')).toBeTruthy()
+      expect(wrapper.emitted('recreate-success')![0]).toEqual(['new456'])
+    })
+
+    it('should show error message on API failure', async () => {
+      mockRecreate.mockRejectedValue(new Error('Image not found'))
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { newImage: string; updateImage: () => Promise<void> }
+      vm.newImage = 'nginx:alpine'
+      await vm.updateImage()
+      await flushPromises()
+
+      expect(mockRecreate).toHaveBeenCalled()
+    })
+
+    it('should not call API when image is empty', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { newImage: string; updateImage: () => Promise<void> }
+      vm.newImage = '   '
+      await vm.updateImage()
+      await flushPromises()
+
+      expect(mockRecreate).not.toHaveBeenCalled()
+    })
+
+    it('should not call API when detail is null', async () => {
+      const wrapper = await mountComponent({ detail: null })
+      const vm = wrapper.vm as unknown as { updateImage: () => Promise<void> }
+      await vm.updateImage()
+      await flushPromises()
+
+      expect(mockRecreate).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Ports — apply', () => {
+    it('should call recreate API with correct port_bindings payload', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { applyPortBindings: () => Promise<void> }
+      await vm.applyPortBindings()
+      await flushPromises()
+
+      expect(mockRecreate).toHaveBeenCalledWith('abc123', {
+        port_bindings: {
+          '80/tcp': [{ HostIp: '0.0.0.0', HostPort: '8080' }],
+          '443/tcp': [{ HostIp: '0.0.0.0', HostPort: '8443' }],
+        },
+      })
+    })
+
+    it('should emit recreate-success event after applying ports', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { applyPortBindings: () => Promise<void> }
+      await vm.applyPortBindings()
+      await flushPromises()
+
+      expect(wrapper.emitted('recreate-success')).toBeTruthy()
+      expect(wrapper.emitted('recreate-success')![0]).toEqual(['new456'])
+    })
+
+    it('should show validation error for invalid port', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        portBindings: PortBindingRow[]
+        applyPortBindings: () => Promise<void>
+      }
+      vm.portBindings[0].hostPort = 70000
+      await vm.applyPortBindings()
+      await flushPromises()
+
+      expect(mockRecreate).not.toHaveBeenCalled()
+    })
+
+    it('should not call API when detail is null', async () => {
+      const wrapper = await mountComponent({ detail: null })
+      const vm = wrapper.vm as unknown as { applyPortBindings: () => Promise<void> }
+      await vm.applyPortBindings()
+      await flushPromises()
+
+      expect(mockRecreate).not.toHaveBeenCalled()
     })
   })
 
@@ -384,15 +671,22 @@ describe('ContainerConfigTab.vue', () => {
       const vm = wrapper.vm as unknown as { loadingResources: boolean }
       expect(vm.loadingResources).toBe(false)
     })
+
+    it('should have loadingRecreate ref', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { loadingRecreate: boolean }
+      expect(vm.loadingRecreate).toBe(false)
+    })
   })
 
   describe('Edge cases', () => {
     it('should handle null detail gracefully', async () => {
       const wrapper = await mountComponent({ detail: null })
       expect(wrapper.exists()).toBe(true)
-      const vm = wrapper.vm as unknown as { envVars: unknown[]; labels: unknown[] }
+      const vm = wrapper.vm as unknown as { envVars: unknown[]; labels: unknown[]; portBindings: unknown[] }
       expect(vm.envVars.length).toBe(0)
       expect(vm.labels.length).toBe(0)
+      expect(vm.portBindings.length).toBe(0)
     })
 
     it('should handle detail with missing config', async () => {
@@ -413,6 +707,17 @@ describe('ContainerConfigTab.vue', () => {
       }
       const wrapper = await mountComponent({ detail: minimalDetail })
       expect(wrapper.exists()).toBe(true)
+    })
+
+    it('should handle detail with no host_config', async () => {
+      const minimalDetail = {
+        ...baseDetail,
+        host_config: null,
+      }
+      const wrapper = await mountComponent({ detail: minimalDetail })
+      expect(wrapper.exists()).toBe(true)
+      const vm = wrapper.vm as unknown as { portBindings: unknown[] }
+      expect(vm.portBindings.length).toBe(0)
     })
 
     it('should handle env vars without equal sign', async () => {

@@ -377,7 +377,10 @@
           label="Config"
           name="config"
         >
-          <ContainerConfigTab :detail="containerDetail" />
+          <ContainerConfigTab
+            :detail="containerDetail"
+            @recreate-success="handleRecreateSuccess"
+          />
         </el-tab-pane>
 
         <el-tab-pane
@@ -925,6 +928,13 @@ async function handleAction(action: string): Promise<void> {
 
 function goBack(): void {
   router.back()
+}
+
+/** Handle recreate success — redirect to new container URL */
+function handleRecreateSuccess(newId: string): void {
+  router.push(`/containers/${newId}`)
+  // Recharger les détails du nouveau container après navigation
+  loadContainerDetail()
 }
 
 /** Open the rename dialog, pre-filled with the current name */

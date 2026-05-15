@@ -6,7 +6,6 @@
 - [ ] STORY-031 : Images Docker — Sélection, actions en lot, usage et détail
 
 ### EPIC-009 : Refonte ContainerDetail — Homogénéisation et édition complète
-- [ ] STORY-027 : Frontend Config — Édition des ports et image (recréation)
 - [ ] STORY-028 : Frontend Config — Gestion des réseaux à chaud
 - [ ] STORY-029 : Frontend Config — Édition volumes et sécurité (recréation)
 - [ ] STORY-030 : Frontend Config — Implémentation réelle env vars et labels (recréation)
@@ -21,7 +20,7 @@ _(vide)_
 
 ## 🚧 REVIEW
 
-
+### EPIC-009 : Refonte ContainerDetail — Homogénéisation et édition complète
 _(vide)_
 
 ## ✅ DONE
@@ -55,3 +54,4 @@ _(vide)_
 - [x] STORY-024 : Homogénéisation visuelle — onglet Infos au design d'Aperçu
 - [x] STORY-025 : Backend — Endpoint de recréation de container (`/recreate`)
 - [x] STORY-026 : Backend — Endpoints connect/disconnect réseau
+- [x] STORY-027 : Frontend Config — Édition des ports et image (recréation)

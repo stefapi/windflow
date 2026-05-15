@@ -60,6 +60,8 @@ import type {
   ContainerPromoteRequest,
   ContainerPromoteResponse,
   ContainerCreateRequest,
+  ContainerRecreateRequest,
+  ContainerRecreateResponse,
   VolumeResponse,
   VolumeCreateRequest,
   ImageResponse,
@@ -372,6 +374,9 @@ export const containersApi = {
 
   create: (data: ContainerCreateRequest) =>
     http.post<ContainerDetail>('/docker/containers', data),
+
+  recreate: (id: string, data: ContainerRecreateRequest) =>
+    http.post<ContainerRecreateResponse>(`/docker/containers/${id}/recreate`, data),
 }
 
 // Docker Images API
