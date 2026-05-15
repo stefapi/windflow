@@ -259,23 +259,23 @@ The complete documentation is in the `doc/` directory:
 
 ### Main Documentation
 
-* **[Overview](doc/general_specs/01-overview.md)** — Project vision and goals
-* **[Architecture](doc/general_specs/02-architecture.md)** — Design principles
-* **[Modular Architecture](doc/ARCHITECTURE-MODULAIRE.md)** — Plugin system and extensions
-* **[Technology Stack](doc/general_specs/03-technology-stack.md)** — Technologies used
-* **[Deployment Guide](doc/general_specs/15-deployment-guide.md)** — Installation and configuration
+* **[Overview](docs/general_specs/01-overview.md)** — Project vision and goals
+* **[Architecture](docs/general_specs/02-architecture.md)** — Design principles
+* **[Modular Architecture](docs/ARCHITECTURE-MODULAIRE.md)** — Plugin system and extensions
+* **[Technology Stack](docs/general_specs/03-technology-stack.md)** — Technologies used
+* **[Deployment Guide](docs/general_specs/15-deployment-guide.md)** — Installation and configuration
 
 ### User Guides
 
-* **[Core Features](doc/general_specs/10-core-features.md)** — Detailed features
-* **[CLI Interface](doc/general_specs/08-cli-interface.md)** — Using the CLI/TUI
-* **[Plugin Development](doc/general_specs/plugin-development.md)** — Creating plugins
+* **[Core Features](docs/general_specs/10-core-features.md)** — Detailed features
+* **[CLI Interface](docs/general_specs/08-cli-interface.md)** — Using the CLI/TUI
+* **[Plugin Development](docs/general_specs/plugin-development.md)** — Creating plugins
 
 ### Developer Resources
 
-* **[Data Model](doc/general_specs/04-data-model.md)** — Data structure
-* **[API Design](doc/general_specs/07-api-design.md)** — API documentation
-* **[Workflows](doc/workflows/README.md)** — Development processes
+* **[Data Model](docs/general_specs/04-data-model.md)** — Data structure
+* **[API Design](docs/general_specs/07-api-design.md)** — API documentation
+* **[Workflows](docs/workflows/README.md)** — Development processes
 * **[Development Rules](.clinerules/README.md)** — Standards and conventions
 
 ## 📊 Roadmap
@@ -335,7 +335,7 @@ The complete documentation is in the `doc/` directory:
 * [ ] Community plugin marketplace with reviews
 * [ ] Lightweight PaaS (git push → deploy)
 
-See the **[Full Roadmap](doc/general_specs/18-roadmap.md)** for detailed phases, priorities, and success criteria.
+See the **[Full Roadmap](docs/general_specs/18-roadmap.md)** for detailed phases, priorities, and success criteria.
 
 ## 🤝 Contributing
 
@@ -344,7 +344,7 @@ WindFlow is an open-source project and welcomes contributions!
 ### Contribution Guides
 
 * **[Contributing Guide](CONTRIBUTING.md)** — Contribution process
-* **[Development Workflows](doc/workflows/development-workflow.md)** — Technical processes
+* **[Development Workflows](docs/workflows/development-workflow.md)** — Technical processes
 * **[Code Rules](.clinerules/README.md)** — Standards and conventions
 * **[Code of Conduct](CODE_OF_CONDUCT.md)** — Community rules
 
@@ -358,7 +358,7 @@ WindFlow is an open-source project and welcomes contributions!
 
 ### Creating Plugins
 
-Plugins are the best way to contribute to WindFlow. Check the **[Plugin Development Guide](doc/general_specs/plugin-development.md)** to get started.
+Plugins are the best way to contribute to WindFlow. Check the **[Plugin Development Guide](docs/general_specs/plugin-development.md)** to get started.
 
 ### Local Development
 

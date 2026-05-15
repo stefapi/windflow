@@ -37,7 +37,7 @@ Contient **les conventions de code et bonnes pratiques** :
 
 
 ### 📚 Ressources Complémentaires
-- [Documentation Projet](../doc/general_specs/README.md) - Spécifications complètes
-- [Architecture](../doc/general_specs/02-architecture.md) - Principes architecturaux
-- [Stack Technologique](../doc/general_specs/03-technology-stack.md) - Technologies détaillées
-- [Guide de Déploiement](../doc/general_specs/15-deployment-guide.md) - Installation
+- [Documentation Projet](../docs/general_specs/README.md) - Spécifications complètes
+- [Architecture](../docs/general_specs/02-architecture.md) - Principes architecturaux
+- [Stack Technologique](../docs/general_specs/03-technology-stack.md) - Technologies détaillées
+- [Guide de Déploiement](../docs/general_specs/15-deployment-guide.md) - Installation
