@@ -1,6 +1,6 @@
 # STORY-031.2 : Frontend — Vue Images complète (sélection, usage, détail)
 
-**Statut :** TODO
+**Statut :** DONE
 **Story Parente :** STORY-031 — Images Docker — Sélection, actions en lot, usage et détail
 **Epic Parent :** EPIC-008 — Couverture Frontend des APIs Backend
 
@@ -8,11 +8,11 @@
 En tant qu'utilisateur DevOps, je veux interagir visuellement avec les images Docker : sélectionner des images via des cases à cocher, appliquer des actions en lot (remove, force_remove), importer/exporter des images depuis l'interface, voir si une image est utilisée par des containers avec un filtre dédié, et afficher un écran de détail complet en cliquant sur une image.
 
 ## Critères d'acceptation (AC)
-- [ ] AC 1 : Le tableau des images dispose d'une colonne de sélection par checkbox avec sélection globale en-tête, et une barre d'actions apparaît quand des images sont sélectionnées (Remove, Force Remove)
-- [ ] AC 3 : Chaque image affiche un indicateur d'utilisation (utilisée/non utilisée par des containers) et un filtre permet d'afficher uniquement les images utilisées ou non utilisées (fermeture frontend)
-- [ ] AC 4 : Cliquer sur une image navigue vers un écran de détail (vue `ImageDetail.vue` stub avec infos de base : ID, tags, size, created, labels, digests)
-- [ ] AC 5 : L'amélioration ne casse pas les fonctionnalités existantes (liste, recherche, affichage)
-- [ ] AC 6 : Build, lint et tests passent sans erreur
+- [x] AC 1 : Le tableau des images dispose d'une colonne de sélection par checkbox avec sélection globale en-tête, et une barre d'actions apparaît quand des images sont sélectionnées (Remove, Force Remove)
+- [x] AC 3 : Chaque image affiche un indicateur d'utilisation (utilisée/non utilisée par des containers) et un filtre permet d'afficher uniquement les images utilisées ou non utilisées (fermeture frontend)
+- [x] AC 4 : Cliquer sur une image navigue vers un écran de détail (vue `ImageDetail.vue` stub avec infos de base : ID, tags, size, created, labels, digests)
+- [x] AC 5 : L'amélioration ne casse pas les fonctionnalités existantes (liste, recherche, affichage)
+- [x] AC 6 : Build, lint et tests passent sans erreur
 
 ## Contexte technique
 
@@ -144,11 +144,35 @@ cd frontend && pnpm build && pnpm lint
 ```
 
 ## État d'avancement technique
-- [ ] Tâche 1 : Frontend — Types et API service
-- [ ] Tâche 2 : Frontend — Sélection, bulk actions et indicateur in_use dans Images.vue
-- [ ] Tâche 3 : Frontend — Vue ImageDetail.vue et route
-- [ ] Tâche 4 : Tests unitaires frontend
-- [ ] Build & lint OK
+- [x] Tâche 1 : Frontend — Types et API service
+- [x] Tâche 2 : Frontend — Sélection, bulk actions et indicateur in_use dans Images.vue
+- [x] Tâche 3 : Frontend — Vue ImageDetail.vue et route
+- [x] Tâche 4 : Tests unitaires frontend
+- [x] Build & lint OK
 
 ## Notes d'implémentation
-<!-- Ajoutées à la clôture par treat-story -->
+
+**Date :** 2026-05-17
+
+### Fichiers modifiés/créés
+- `frontend/src/types/api.ts` : Ajout `inUse`, `containersCount` à `ImageResponse` ; création `ImageDetailResponse`
+- `frontend/src/services/api.ts` : Ajout import `ImageDetailResponse` ; extension `imagesApi` avec `get`, `save`, `load`, `batchRemove`
+- `frontend/src/views/Images.vue` : Ajout sélection checkbox, barre bulk actions, colonne utilisation, filtre in_use, import/export, navigation détail
+- `frontend/src/views/ImageDetail.vue` : Création — vue détail image avec sections Identité, Configuration, Env, Ports, Labels
+- `frontend/src/router/index.ts` : Ajout route `images/:id` → `ImageDetail`
+
+### Fichiers de tests créés
+- `frontend/tests/unit/views/Images.spec.ts` : 25 tests (15 existants + 10 nouveaux : sélection, bulk, in_use, filtre, navigation, import)
+- `frontend/tests/unit/views/ImageDetail.spec.ts` : 8 tests (affichage détail, config, env, ports, labels, erreur 404, retour, loading)
+
+### Décisions techniques
+- `handleRowClick` utilise `@row-click` avec `.stop` sur le bouton delete pour éviter la navigation lors de la suppression
+- `handleBulkExport` télécharge un tar par image (pas d'archive zip côté client pour rester simple)
+- `load` utilise `FormData` avec `Content-Type: multipart/form-data` pour l'upload tar
+- `route.params['id']` (bracket notation) pour éviter le warning TS4111
+
+### Résultats des tests
+- Images : 25/25 ✅
+- ImageDetail : 8/8 ✅
+- Build : ✅ (erreurs TS pré-existantes dans ContainerCreateDialog, TargetWizard, ContainerTable)
+- Lint : 0 erreurs, 128 warnings (tous pré-existants)

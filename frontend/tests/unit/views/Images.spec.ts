@@ -18,6 +18,8 @@ const mockImages: ImageResponse[] = [
     size: 187600000,
     virtualSize: 187600000,
     labels: {},
+    inUse: true,
+    containersCount: 2,
   },
   {
     id: 'sha256:fed456cba789abc123def456789abc123def456789abc123def456789abcdef',
@@ -27,6 +29,8 @@ const mockImages: ImageResponse[] = [
     size: 432100000,
     virtualSize: 432100000,
     labels: { maintainer: 'PG Docker' },
+    inUse: false,
+    containersCount: 0,
   },
   {
     id: 'sha256:111222333444555666777888999000aaabbbcccdddeeefff000111222333444',
@@ -36,19 +40,37 @@ const mockImages: ImageResponse[] = [
     size: 50000000,
     virtualSize: 50000000,
     labels: {},
+    inUse: false,
+    containersCount: 0,
   },
 ]
 
-// Mock imagesApi.list, pull, remove
+// Mock imagesApi.list, pull, remove, get, save, load, batchRemove
 const mockList = vi.fn()
 const mockPull = vi.fn()
 const mockRemove = vi.fn()
+const mockGet = vi.fn()
+const mockSave = vi.fn()
+const mockLoad = vi.fn()
+const mockBatchRemove = vi.fn()
 vi.mock('@/services/api', () => ({
   imagesApi: {
     list: (...args: unknown[]) => mockList(...args),
     pull: (...args: unknown[]) => mockPull(...args),
     remove: (...args: unknown[]) => mockRemove(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    save: (...args: unknown[]) => mockSave(...args),
+    load: (...args: unknown[]) => mockLoad(...args),
+    batchRemove: (...args: unknown[]) => mockBatchRemove(...args),
   },
+}))
+
+// Mock vue-router
+const mockPush = vi.fn()
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
 }))
 
 // Mock ElMessage.error, ElMessage.success, ElMessage.warning + ElMessageBox.confirm
@@ -115,7 +137,7 @@ describe('Images.vue', () => {
     const wrapper = mountComponent()
     await flushPromises()
 
-    const input = wrapper.find('input')
+    const input = wrapper.find('.el-input__inner')
     await input.setValue('nginx')
     await flushPromises()
 
@@ -129,7 +151,7 @@ describe('Images.vue', () => {
     const wrapper = mountComponent()
     await flushPromises()
 
-    const input = wrapper.find('input')
+    const input = wrapper.find('.el-input__inner')
     await input.setValue('fed456')
     await flushPromises()
 
@@ -314,5 +336,138 @@ describe('Images.vue', () => {
     await flushPromises()
 
     expect(mockRemove).not.toHaveBeenCalled()
+  })
+
+  // === New tests for STORY-031.2 ===
+
+  it('displays selection checkboxes in the table', async () => {
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    // el-table-column type="selection" renders checkboxes
+    const checkboxes = wrapper.findAll('.el-checkbox')
+    expect(checkboxes.length).toBeGreaterThanOrEqual(1) // at least header checkbox
+  })
+
+  it('shows bulk actions bar when images are selected', async () => {
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    // Initially no bulk bar
+    expect(wrapper.find('.bulk-actions-bar').exists()).toBe(false)
+
+    // Simulate selection change via component's internal method
+    const vm = wrapper.vm as unknown as { handleSelectionChange: (val: ImageResponse[]) => void }
+    vm.handleSelectionChange([mockImages[0]])
+    await flushPromises()
+
+    expect(wrapper.find('.bulk-actions-bar').exists()).toBe(true)
+    expect(wrapper.text()).toContain('1 sélectionnée(s)')
+  })
+
+  it('calls batchRemove when Remove bulk button is clicked', async () => {
+    const { ElMessageBox } = await import('element-plus')
+    const { ElMessage } = await import('element-plus')
+    ;(ElMessageBox.confirm as ReturnType<typeof vi.fn>).mockResolvedValue('confirm')
+    mockBatchRemove.mockResolvedValue([{}, {}])
+
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    // Select images
+    const vm = wrapper.vm as unknown as { handleSelectionChange: (val: ImageResponse[]) => void }
+    vm.handleSelectionChange([mockImages[0], mockImages[1]])
+    await flushPromises()
+
+    // Click Remove button in bulk bar
+    const bulkButtons = wrapper.findAll('.bulk-actions-bar .el-button')
+    const removeBtn = bulkButtons.find(b => b.text().includes('Remove'))
+    expect(removeBtn).toBeDefined()
+    await removeBtn!.trigger('click')
+    await flushPromises()
+
+    expect(mockBatchRemove).toHaveBeenCalledWith(
+      [mockImages[0].id, mockImages[1].id],
+      false,
+    )
+    expect(ElMessage.success).toHaveBeenCalled()
+  })
+
+  it('displays green badge for in-use images', async () => {
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('Utilisée (2)')
+
+    // Check for success tag
+    const successTags = wrapper.findAll('.el-tag--success')
+    expect(successTags.length).toBe(1)
+  })
+
+  it('displays info badge for unused images', async () => {
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('Non utilisée')
+
+    // Check for info tags (2 unused images)
+    const infoTags = wrapper.findAll('.el-tag--info')
+    expect(infoTags.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('filters images by usage — used only', async () => {
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    // Find the usage filter select
+    // Change value to 'used' via component's internal state
+    const vm = wrapper.vm as unknown as { usageFilter: string }
+    vm.usageFilter = 'used'
+    await flushPromises()
+
+    const rows = wrapper.findAll('.el-table__body-wrapper tbody tr')
+    expect(rows.length).toBe(1)
+    expect(wrapper.text()).toContain('nginx:latest')
+    expect(wrapper.text()).not.toContain('postgres:16')
+  })
+
+  it('filters images by usage — unused only', async () => {
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as { usageFilter: string }
+    vm.usageFilter = 'unused'
+    await flushPromises()
+
+    const rows = wrapper.findAll('.el-table__body-wrapper tbody tr')
+    expect(rows.length).toBe(2)
+    expect(wrapper.text()).toContain('postgres:16')
+    expect(wrapper.text()).not.toContain('nginx:latest')
+  })
+
+  it('navigates to ImageDetail when a row is clicked', async () => {
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    // Click on first table row
+    const rows = wrapper.findAll('.el-table__body-wrapper tbody tr')
+    await rows[0].trigger('click')
+    await flushPromises()
+
+    expect(mockPush).toHaveBeenCalledWith({
+      name: 'ImageDetail',
+      params: { id: mockImages[0].id },
+    })
+  })
+
+  it('displays Import button in header', async () => {
+    const wrapper = mountComponent()
+    await flushPromises()
+
+    const buttons = wrapper.findAll('.card-header .el-button')
+    const importBtn = buttons.find(b => b.text().includes('Importer'))
+    expect(importBtn).toBeDefined()
   })
 })

@@ -1226,6 +1226,64 @@ class DockerClientService:
         response = await self._request("GET", f"/images/{image_id}/json")
         return await response.json()
 
+    async def save_image(self, image_id: str) -> bytes:
+        """
+        Exporte une image au format tar.
+
+        GET /images/{name}/get
+
+        Args:
+            image_id: ID ou nom de l'image
+
+        Returns:
+            Contenu binaire du tar de l'image
+        """
+        response = await self._request(
+            "GET",
+            f"/images/{image_id}/get",
+            timeout=300.0,
+        )
+        return await response.read()
+
+    async def load_image(self, tar_bytes: bytes) -> str:
+        """
+        Importe une image depuis un fichier tar.
+
+        POST /images/load
+
+        Args:
+            tar_bytes: Contenu binaire du tar de l'image
+
+        Returns:
+            Message de statut de l'import
+        """
+        url = "http://localhost/images/load"
+        req_timeout = aiohttp.ClientTimeout(total=300)
+
+        async with self.session.request(
+            method="POST",
+            url=url,
+            data=tar_bytes,
+            headers={"Content-Type": "application/x-tar"},
+            timeout=req_timeout,
+        ) as response:
+            response.raise_for_status()
+
+            # Docker renvoie du JSON ligne par ligne
+            full_status = "Load complete"
+            async for line in response.content:
+                if line:
+                    try:
+                        event = json.loads(line)
+                        if "status" in event:
+                            full_status = event["status"]
+                        if "error" in event:
+                            raise Exception(f"Load failed: {event['error']}")
+                    except json.JSONDecodeError:
+                        pass
+
+            return full_status
+
     # =========================================================================
     # Volumes
     # =========================================================================

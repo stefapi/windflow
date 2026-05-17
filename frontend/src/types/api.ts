@@ -1011,6 +1011,8 @@ export interface ImageResponse {
   size: number
   virtualSize: number
   labels: Record<string, string>
+  inUse: boolean
+  containersCount: number
 }
 
 /** Requête POST /docker/images/pull — miroir du schéma Pydantic ImagePullRequest backend */
@@ -1024,6 +1026,26 @@ export interface ImagePullResponse {
   status: string
   progress?: string | null
   id?: string | null
+}
+
+/** Détail image Docker — miroir du schéma Pydantic ImageDetailResponse backend */
+export interface ImageDetailResponse {
+  id: string
+  repoTags: string[]
+  repoDigests: string[]
+  created: string
+  size: number
+  virtualSize: number
+  labels: Record<string, string>
+  architecture: string
+  os: string
+  author: string
+  cmd: string[] | null
+  entrypoint: string[] | null
+  env: string[] | null
+  exposedPorts: Record<string, unknown> | null
+  dockerVersion: string
+  config: Record<string, unknown> | null
 }
 
 // Stack Import/Export

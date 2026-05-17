@@ -9,7 +9,7 @@ import logging
 from typing import Any, List, Optional
 
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_active_user
@@ -42,6 +42,7 @@ from ...schemas.docker import (
     ContainerUpdateResourcesRequest,
     ContainerUpdateRestartPolicyRequest,
     ContainerUpdateResponse,
+    ImageDetailResponse,
     ImagePullRequest,
     ImagePullResponse,
     ImageResponse,
@@ -1035,8 +1036,8 @@ async def promote_container(
             )
 
         # 3. Build Compose template from container config
-        container_config = container_info.get("Config", {})
         host_config = container_info.get("HostConfig", {})
+        container_config = container_info.get("Config", {})
 
         service_def: dict[str, Any] = {}
 
@@ -1458,7 +1459,7 @@ async def list_images(
     request: Request,
     all: bool = False,
 ):
-    """Liste toutes les images Docker."""
+    """Liste toutes les images Docker avec indicateur d'utilisation par containers."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Listing Docker images (all={all})", extra={"correlation_id": correlation_id}
@@ -1467,7 +1468,18 @@ async def list_images(
     try:
         client = await get_docker_client()
         images = await client.list_images(all=all)
+
+        # Récupérer les containers pour calculer l'utilisation des images
+        containers = await client.list_containers(all=True)
         await client.close()
+
+        # Construire un mapping image_id_short → count
+        # ContainerInfo.image_id est au format "sha256:abc123..." (complet)
+        # ImageInfo.id est tronqué à 12 chars sans prefix "sha256:"
+        image_usage: dict[str, int] = {}
+        for c in containers:
+            normalized_id = c.image_id.replace("sha256:", "")[:12]
+            image_usage[normalized_id] = image_usage.get(normalized_id, 0) + 1
 
         return [
             ImageResponse(
@@ -1478,6 +1490,8 @@ async def list_images(
                 size=img.size,
                 virtual_size=img.virtual_size,
                 labels=img.labels,
+                in_use=image_usage.get(img.id, 0) > 0,
+                containers_count=image_usage.get(img.id, 0),
             )
             for img in images
         ]
@@ -1487,6 +1501,79 @@ async def list_images(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la liste des images: {str(e)}",
+        )
+
+
+@router.get(
+    "/images/{image_id}",
+    response_model=ImageDetailResponse,
+    summary="Inspect image",
+    description="Get detailed information about a Docker image.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(100, 60))],
+)
+async def get_image(
+    request: Request,
+    image_id: str,
+):
+    """Inspecte une image Docker et retourne ses détails."""
+    from datetime import datetime, timezone
+
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        f"Inspecting image {image_id}",
+        extra={"correlation_id": correlation_id, "image_id": image_id},
+    )
+
+    try:
+        client = await get_docker_client()
+        data = await client.inspect_image(image_id)
+        await client.close()
+
+        # Parser le dict Docker pour peupler ImageDetailResponse
+        config = data.get("Config", {}) or {}
+
+        # Parser la date de création (format ISO 8601 Docker)
+        created_str = data.get("Created", "")
+        if created_str:
+            created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+        else:
+            created = datetime.now(timezone.utc)
+
+        return ImageDetailResponse(
+            id=data.get("Id", "").replace("sha256:", "")[:12],
+            repo_tags=data.get("RepoTags", []),
+            repo_digests=data.get("RepoDigests", []),
+            created=created,
+            size=data.get("Size", 0),
+            virtual_size=data.get("VirtualSize", 0),
+            labels=config.get("Labels", {}) or {},
+            architecture=data.get("Architecture", ""),
+            os=data.get("Os", ""),
+            author=data.get("Author", ""),
+            docker_version=data.get("DockerVersion", ""),
+            cmd=config.get("Cmd"),
+            entrypoint=config.get("Entrypoint"),
+            env=config.get("Env"),
+            exposed_ports=config.get("ExposedPorts"),
+            config=config if config else None,
+        )
+
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Image {image_id} non trouvée",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error inspecting image {image_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'inspection de l'image: {str(e)}",
         )
 
 
@@ -1580,6 +1667,116 @@ async def remove_image(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la suppression: {str(e)}",
+        )
+
+
+@router.post(
+    "/images/load",
+    summary="Load image",
+    description="Load a Docker image from a tar archive.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
+)
+async def load_image(
+    request: Request,
+    file: UploadFile = File(...),
+):
+    """Importe une image Docker depuis un fichier tar."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+
+    # Valider le type MIME
+    content_type = file.content_type or ""
+    if content_type not in (
+        "application/x-tar",
+        "application/octet-stream",
+        "application/gzip",
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Type de fichier non supporté: {content_type}. "
+            "Attendu: application/x-tar ou application/octet-stream",
+        )
+
+    try:
+        tar_bytes = await file.read()
+        logger.info(
+            "image_load",
+            extra={
+                "correlation_id": correlation_id,
+                "filename": file.filename,
+                "size": len(tar_bytes),
+            },
+        )
+
+        client = await get_docker_client()
+        status_msg = await client.load_image(tar_bytes)
+        await client.close()
+
+        return {"success": True, "message": status_msg}
+
+    except Exception as e:
+        logger.error(f"Error loading image: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors du chargement de l'image: {str(e)}",
+        )
+
+
+@router.get(
+    "/images/{image_id}/save",
+    summary="Save image",
+    description="Export a Docker image as a tar archive.",
+    tags=["docker"],
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
+)
+async def save_image(
+    request: Request,
+    image_id: str,
+):
+    """Exporte une image Docker au format tar."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+    logger.info(
+        "image_save",
+        extra={"correlation_id": correlation_id, "image_id": image_id},
+    )
+
+    try:
+        client = await get_docker_client()
+        tar_bytes = await client.save_image(image_id)
+        await client.close()
+
+        logger.info(
+            "image_save_complete",
+            extra={
+                "correlation_id": correlation_id,
+                "image_id": image_id,
+                "size": len(tar_bytes),
+            },
+        )
+
+        return Response(
+            content=tar_bytes,
+            media_type="application/x-tar",
+            headers={
+                "Content-Disposition": f"attachment; filename={image_id}.tar"
+            },
+        )
+
+    except aiohttp.ClientResponseError as e:
+        if e.status == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Image {image_id} non trouvée",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur Docker: {str(e)}",
+        )
+    except Exception as e:
+        logger.error(f"Error saving image {image_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'export de l'image: {str(e)}",
         )
 
 

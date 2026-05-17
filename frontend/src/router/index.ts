@@ -103,6 +103,11 @@ const routes: RouteRecordRaw[] = [
         name: 'Images',
         component: () => import('@/views/Images.vue'),
       },
+      {
+        path: 'images/:id',
+        name: 'ImageDetail',
+        component: () => import('@/views/ImageDetail.vue'),
+      },
       // Marketplace
       {
         path: 'marketplace',

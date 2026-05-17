@@ -592,6 +592,14 @@ class ImageResponse(BaseModel):
     size: int = Field(..., description="Taille en bytes")
     virtual_size: int = Field(0, alias="virtualSize", description="Taille virtuelle")
     labels: dict[str, str] = Field(default_factory=dict, description="Labels")
+    in_use: bool = Field(
+        False, alias="inUse", description="Image utilisée par au moins un container"
+    )
+    containers_count: int = Field(
+        0,
+        alias="containersCount",
+        description="Nombre de containers utilisant cette image",
+    )
 
     @field_validator("repo_tags", "repo_digests", mode="before")
     @classmethod
@@ -621,6 +629,57 @@ class ImagePullResponse(BaseModel):
     status: str = Field(..., description="Status de l'opération")
     progress: Optional[str] = Field(None, description="Progression texte")
     id: Optional[str] = Field(None, description="ID de l'image/layer")
+
+
+class ImageDetailResponse(BaseModel):
+    """Réponse API détaillée pour une image (inspect)."""
+
+    id: str = Field(..., description="Image ID")
+    repo_tags: list[str] = Field(
+        default_factory=list, alias="repoTags", description="Tags"
+    )
+    repo_digests: list[str] = Field(
+        default_factory=list, alias="repoDigests", description="Digests"
+    )
+    created: datetime = Field(..., description="Date de création")
+    size: int = Field(..., description="Taille en bytes")
+    virtual_size: int = Field(0, alias="virtualSize", description="Taille virtuelle")
+    labels: dict[str, str] = Field(default_factory=dict, description="Labels")
+    architecture: str = Field("", description="Architecture de l'image")
+    os: str = Field("", description="OS de l'image")
+    author: str = Field("", description="Auteur de l'image")
+    cmd: Optional[list[str]] = Field(
+        None, description="Commande par défaut (Config.Cmd)"
+    )
+    entrypoint: Optional[list[str]] = Field(
+        None, description="Point d'entrée (Config.Entrypoint)"
+    )
+    env: Optional[list[str]] = Field(
+        None, description="Variables d'environnement (Config.Env)"
+    )
+    exposed_ports: Optional[dict[str, Any]] = Field(
+        None, alias="exposedPorts", description="Ports exposés (Config.ExposedPorts)"
+    )
+    docker_version: str = Field(
+        "", alias="dockerVersion", description="Version Docker utilisée pour build"
+    )
+    config: Optional[dict[str, Any]] = Field(
+        None, description="Configuration complète de l'image (bloc Config)"
+    )
+
+    @field_validator("repo_tags", "repo_digests", mode="before")
+    @classmethod
+    def none_to_list(cls, v: Any) -> Any:
+        """Convert None to empty list."""
+        return v if v is not None else []
+
+    @field_validator("labels", mode="before")
+    @classmethod
+    def none_to_dict(cls, v: Any) -> Any:
+        """Convert None to empty dict."""
+        return v if v is not None else {}
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 # =============================================================================

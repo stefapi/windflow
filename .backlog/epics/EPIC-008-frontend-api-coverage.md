@@ -214,7 +214,7 @@ Fonctionnalités avancées :
 #### Images Docker
 - [x] STORY-005 : Gestion des images Docker - Liste et visualisation
 - [x] STORY-006 : Gestion des images Docker - Pull et suppression
-- [ ] STORY-031 : Images Docker — Sélection, actions en lot, usage et détail
+- [x] STORY-031 : Images Docker — Sélection, actions en lot, usage et détail
 
 #### Export/Import Stacks
 - [x] STORY-007 : Export de stacks au format JSON

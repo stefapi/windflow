@@ -67,6 +67,7 @@ import type {
   ImageResponse,
   ImagePullRequest,
   ImagePullResponse,
+  ImageDetailResponse,
   StackImportResponse,
   NetworkResponse,
   ContainerShell,
@@ -389,6 +390,23 @@ export const imagesApi = {
 
   remove: (imageId: string, force: boolean = false) =>
     http.delete<void>(`/docker/images/${imageId}`, { params: { force } }),
+
+  get: (imageId: string) =>
+    http.get<ImageDetailResponse>(`/docker/images/${imageId}`),
+
+  save: (imageId: string) =>
+    http.get<Blob>(`/docker/images/${imageId}/save`, { responseType: 'blob' }),
+
+  load: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return http.post<{ success: boolean; message: string }>('/docker/images/load', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+
+  batchRemove: (imageIds: string[], force: boolean = false) =>
+    Promise.all(imageIds.map((id) => http.delete<void>(`/docker/images/${id}`, { params: { force } }))),
 }
 
 // Docker Volumes API

@@ -3,9 +3,9 @@
 ## 📋 BACKLOG
 
 ### EPIC-008 : Couverture Frontend des APIs Backend
-- [~] STORY-031 : Images Docker — Sélection, actions en lot, usage et détail
-- [ ] [STORY-031.1](.backlog/stories/STORY-031.1-backend-api-images-enrichie-inspect-import-export.md) : Backend — API Images enrichie, inspect et import/export — Amélioration
-- [ ] [STORY-031.2](.backlog/stories/STORY-031.2-frontend-vue-images-detail.md) : Frontend — Vue Images complète (sélection, usage, détail) — Amélioration
+- [x] STORY-031 : Images Docker — Sélection, actions en lot, usage et détail
+- [x] [STORY-031.1](.backlog/stories/STORY-031.1-backend-api-images-enrichie-inspect-import-export.md) : Backend — API Images enrichie, inspect et import/export — Amélioration
+- [x] [STORY-031.2](.backlog/stories/STORY-031.2-frontend-vue-images-detail.md) : Frontend — Vue Images complète (sélection, usage, détail) — Amélioration
 
 ### EPIC-009 : Refonte ContainerDetail — Homogénéisation et édition complète
 - [ ] STORY-028 : Frontend Config — Gestion des réseaux à chaud

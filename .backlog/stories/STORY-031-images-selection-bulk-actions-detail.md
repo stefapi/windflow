@@ -1,6 +1,6 @@
 # STORY-031 : Images Docker — Sélection, actions en lot, usage et détail
 
-**Statut :** IN_PROGRESS
+**Statut :** DONE
 **Epic Parent :** EPIC-008 — Couverture Frontend des APIs Backend
 **Type :** Amélioration
 
@@ -58,8 +58,8 @@ En tant qu'utilisateur DevOps, je veux pouvoir sélectionner des images Docker v
 - [ ] AC 6 : Build, lint et tests passent sans erreur
 
 ## Sous-stories
-- [ ] STORY-031.1 : Backend — API Images enrichie, inspect et import/export — Couvre AC 2, AC 3
-- [ ] STORY-031.2 : Frontend — Vue Images complète (sélection, usage, détail) — Couvre AC 1, AC 3, AC 4, AC 5, AC 6
+- [x] STORY-031.1 : Backend — API Images enrichie, inspect et import/export — Couvre AC 2, AC 3
+- [x] STORY-031.2 : Frontend — Vue Images complète (sélection, usage, détail) — Couvre AC 1, AC 3, AC 4, AC 5, AC 6
 
 ## Dépendances
 - STORY-005 (Gestion des images Docker - Liste et visualisation — REVIEW)
@@ -69,9 +69,9 @@ En tant qu'utilisateur DevOps, je veux pouvoir sélectionner des images Docker v
 
 > ⚠️ L'avancement technique est désormais suivi dans les sous-stories individuelles.
 
-**Progression :** 0/2 sous-stories terminées
-- [ ] STORY-031.1 : Backend — API Images enrichie, inspect et import/export
-- [ ] STORY-031.2 : Frontend — Vue Images complète (sélection, usage, détail)
+**Progression :** 2/2 sous-stories terminées
+- [x] STORY-031.1 : Backend — API Images enrichie, inspect et import/export
+- [x] STORY-031.2 : Frontend — Vue Images complète (sélection, usage, détail)
 
 ## Tâches d'implémentation détaillées
 
