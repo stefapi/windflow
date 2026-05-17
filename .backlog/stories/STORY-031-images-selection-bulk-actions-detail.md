@@ -50,16 +50,56 @@ En tant qu'utilisateur DevOps, je veux pouvoir sélectionner des images Docker v
 > ⚠️ **Complexité élevée détectée** : cette story dépasse les seuils (>5 tâches, >6 fichiers, backend+frontend). Une découpe en sous-stories est recommandée via `split-story` avant implémentation.
 
 ## Critères d'acceptation (AC)
-- [ ] AC 1 : Le tableau des images dispose d'une colonne de sélection par checkbox avec sélection globale en-tête, et une barre d'actions apparaît quand des images sont sélectionnées (Remove, Force Remove)
-- [ ] AC 2 : L'import d'image (upload fichier tar via `docker load`) et l'export d'image (download tar via `docker save`, pour les images sélectionnées ou une image individuelle) fonctionnent
-- [ ] AC 3 : Chaque image affiche un indicateur d'utilisation (utilisée/non utilisée par des containers) et un filtre permet d'afficher uniquement les images utilisées ou non utilisées
-- [ ] AC 4 : Cliquer sur une image navigue vers un écran de détail (vue `ImageDetail.vue` stub avec infos de base : ID, tags, size, created, labels, digests)
-- [ ] AC 5 : L'amélioration ne casse pas les fonctionnalités existantes (liste, recherche, affichage)
-- [ ] AC 6 : Build, lint et tests passent sans erreur
+- [x] AC 1 : Le tableau des images dispose d'une colonne de sélection par checkbox avec sélection globale en-tête, et une barre d'actions apparaît quand des images sont sélectionnées (Remove, Force Remove)
+- [x] AC 2 : L'import d'image (upload fichier tar via `docker load`) et l'export d'image (download tar via `docker save`, pour les images sélectionnées ou une image individuelle) fonctionnent
+- [x] AC 3 : Chaque image affiche un indicateur d'utilisation (utilisée/non utilisée par des containers) et un filtre permet d'afficher uniquement les images utilisées ou non utilisées
+- [x] AC 4 : Cliquer sur une image navigue vers un écran de détail (vue `ImageDetail.vue` stub avec infos de base : ID, tags, size, created, labels, digests)
+- [x] AC 5 : L'amélioration ne casse pas les fonctionnalités existantes (liste, recherche, affichage)
+- [x] AC 6 : Build, lint et tests passent sans erreur
 
 ## Sous-stories
 - [x] STORY-031.1 : Backend — API Images enrichie, inspect et import/export — Couvre AC 2, AC 3
 - [x] STORY-031.2 : Frontend — Vue Images complète (sélection, usage, détail) — Couvre AC 1, AC 3, AC 4, AC 5, AC 6
+
+## Notes d'implémentation
+
+**Date :** 2026-05-17
+
+### Résumé
+Story implémentée via 2 sous-stories (STORY-031.1 backend + STORY-031.2 frontend). Toutes les fonctionnalités sont opérationnelles.
+
+### Sous-stories
+- **STORY-031.1** : Backend — API Images enrichie (in_use, inspect, import/export) — DONE
+- **STORY-031.2** : Frontend — Vue Images complète (sélection, bulk actions, usage, détail) — DONE
+
+### Corrections post-implémentation
+- Correction bug logging : `filename` → `file_name` dans `extra={}` de `docker.py` (conflit LogRecord Python 3.12+)
+- Suppression variable unused `merged_entrypoint` dans `docker_client_service.py`
+- Suppression import unused `datetime`, `timezone` dans `test_images_inspect.py`
+
+### Résultats tests
+- Backend : 16/16 tests passent
+- Frontend : 33/33 tests passent
+- Build frontend : ✅
+- Lint : ✅ (erreurs story corrigées)
+
+### Fichiers modifiés/créés
+**Backend :**
+- `backend/app/schemas/docker.py`
+- `backend/app/api/v1/docker.py`
+- `backend/app/services/docker_client_service.py`
+- `backend/tests/unit/test_docker/test_images_inspect.py`
+- `backend/tests/unit/test_docker/test_images_list_in_use.py`
+- `backend/tests/unit/test_docker/test_images_import_export.py`
+
+**Frontend :**
+- `frontend/src/types/api.ts`
+- `frontend/src/services/api.ts`
+- `frontend/src/views/Images.vue`
+- `frontend/src/views/ImageDetail.vue`
+- `frontend/src/router/index.ts`
+- `frontend/tests/unit/views/Images.spec.ts`
+- `frontend/tests/unit/views/ImageDetail.spec.ts`
 
 ## Dépendances
 - STORY-005 (Gestion des images Docker - Liste et visualisation — REVIEW)

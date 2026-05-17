@@ -706,7 +706,6 @@ class DockerClientService:
             else "no"
         )
         merged_command = detail.config.get("cmd")
-        merged_entrypoint = detail.config.get("entrypoint")
 
         # Conserver le nom du container (sans le / initial)
         container_name = detail.name.lstrip("/")

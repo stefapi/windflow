@@ -5,7 +5,6 @@ STORY-031.1 : Backend — API Images enrichie, inspect et import/export.
 Teste l'inspect d'image : cas nominal, 404, erreur Docker.
 """
 
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp

@@ -1703,7 +1703,7 @@ async def load_image(
             "image_load",
             extra={
                 "correlation_id": correlation_id,
-                "filename": file.filename,
+                "file_name": file.filename,
                 "size": len(tar_bytes),
             },
         )

@@ -1,6 +1,6 @@
  # EPIC-008 : Couverture Frontend des APIs Backend
 
-**Statut :** IN_PROGRESS
+**Statut :** DONE
 **Priorité :** Haute
 
 ## Vision
