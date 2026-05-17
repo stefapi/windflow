@@ -77,6 +77,7 @@ logger = logging.getLogger(__name__)
 async def list_containers(
     request: Request,
     all: bool = True,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Liste tous les containers Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -134,6 +135,7 @@ async def list_containers(
 async def get_container(
     request: Request,
     container_id: str,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Récupère les détails d'un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -192,6 +194,7 @@ async def get_container(
 async def create_container(
     request: Request,
     container_data: ContainerCreateRequest,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Crée un nouveau container Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -271,6 +274,7 @@ async def create_container(
 async def batch_start_containers(
     request: Request,
     batch_data: BatchContainerActionRequest,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Démarre un ensemble de containers en une seule requête."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -330,6 +334,7 @@ async def batch_start_containers(
 async def batch_stop_containers(
     request: Request,
     batch_data: BatchContainerActionRequest,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Arrête un ensemble de containers en une seule requête."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -389,6 +394,7 @@ async def batch_stop_containers(
 async def start_container(
     request: Request,
     container_id: str,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Démarre un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -435,6 +441,7 @@ async def stop_container(
     request: Request,
     container_id: str,
     timeout: int = 10,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Arrête un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -481,6 +488,7 @@ async def restart_container(
     request: Request,
     container_id: str,
     timeout: int = 10,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Redémarre un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -522,6 +530,7 @@ async def restart_container(
 async def pause_container(
     request: Request,
     container_id: str,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Met en pause un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -563,6 +572,7 @@ async def pause_container(
 async def unpause_container(
     request: Request,
     container_id: str,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Reprend un container en pause."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -605,6 +615,7 @@ async def remove_container(
     request: Request,
     container_id: str,
     force: bool = False,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Supprime un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -653,6 +664,7 @@ async def recreate_container(
     request: Request,
     container_id: str,
     recreate_data: ContainerRecreateRequest,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Recrée un container avec une nouvelle configuration."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -744,6 +756,7 @@ async def update_restart_policy(
     request: Request,
     container_id: str,
     update_data: ContainerUpdateRestartPolicyRequest,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Met à jour la politique de redémarrage d'un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -795,6 +808,7 @@ async def update_resources(
     request: Request,
     container_id: str,
     update_data: ContainerUpdateResourcesRequest,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Met à jour les limites de ressources d'un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -850,6 +864,7 @@ async def rename_container(
     request: Request,
     container_id: str,
     rename_data: ContainerRenameRequest,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Renomme un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -899,6 +914,7 @@ async def connect_container_to_network(
     request: Request,
     container_id: str,
     connect_data: ContainerNetworkConnectRequest,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Connecte un container à un réseau Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -954,6 +970,7 @@ async def disconnect_container_from_network(
     request: Request,
     container_id: str,
     disconnect_data: ContainerNetworkDisconnectRequest,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Déconnecte un container d'un réseau Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1242,6 +1259,7 @@ async def get_container_shells(
 async def get_container_stats(
     request: Request,
     container_id: str,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Récupère un snapshot des statistiques d'un container."""
     from ...websocket.container_stats import format_stats_response
@@ -1294,6 +1312,7 @@ async def get_container_processes(
     request: Request,
     container_id: str,
     ps_args: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Liste les processus d'un container."""
     from datetime import datetime, timezone
@@ -1395,6 +1414,7 @@ async def get_container_logs(
     container_id: str,
     tail: int = 100,
     timestamps: bool = False,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Récupère les logs d'un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1458,6 +1478,7 @@ async def get_container_logs(
 async def list_images(
     request: Request,
     all: bool = False,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Liste toutes les images Docker avec indicateur d'utilisation par containers."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1515,6 +1536,7 @@ async def list_images(
 async def get_image(
     request: Request,
     image_id: str,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Inspecte une image Docker et retourne ses détails."""
     from datetime import datetime, timezone
@@ -1588,6 +1610,7 @@ async def get_image(
 async def pull_image(
     request: Request,
     pull_data: ImagePullRequest,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Pull une image Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1637,6 +1660,7 @@ async def remove_image(
     request: Request,
     image_id: str,
     force: bool = False,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Supprime une image Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1680,6 +1704,7 @@ async def remove_image(
 async def load_image(
     request: Request,
     file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Importe une image Docker depuis un fichier tar."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1732,6 +1757,7 @@ async def load_image(
 async def save_image(
     request: Request,
     image_id: str,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Exporte une image Docker au format tar."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1793,7 +1819,9 @@ async def save_image(
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
-async def list_volumes(request: Request):
+async def list_volumes(request: Request,
+    current_user: User = Depends(get_current_active_user),
+):
     """Liste tous les volumes Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info("Listing Docker volumes", extra={"correlation_id": correlation_id})
@@ -1835,6 +1863,7 @@ async def list_volumes(request: Request):
 async def create_volume(
     request: Request,
     volume_data: VolumeCreateRequest,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Crée un nouveau volume Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1890,6 +1919,7 @@ async def remove_volume(
     request: Request,
     volume_name: str,
     force: bool = False,
+    current_user: User = Depends(get_current_active_user),
 ):
     """Supprime un volume Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1934,7 +1964,9 @@ async def remove_volume(
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
-async def list_networks(request: Request):
+async def list_networks(request: Request,
+    current_user: User = Depends(get_current_active_user),
+):
     """Liste tous les réseaux Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info("Listing Docker networks", extra={"correlation_id": correlation_id})

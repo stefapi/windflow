@@ -5,7 +5,7 @@ STORY-019 : Création manuelle de containers Docker.
 Teste la création réussie, la validation et les cas d'erreur.
 
 Notes :
-- L'endpoint n'a PAS de get_current_active_user (lacune pré-existante, hors scope).
+- L'endpoint est sécurisé avec get_current_active_user (STORY-032).
 - L'endpoint a un response_model=ContainerResponse mais retourne ContainerDetailResponse
   (bug pré-existant). Les tests contournent cette validation pour tester la logique métier.
 """
@@ -14,10 +14,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.docker import router
+from app.auth.dependencies import get_current_active_user
 
 
 def _make_mock_user():
@@ -160,6 +161,7 @@ class TestContainerCreateEndpoint:
 
         app = FastAPI()
         app.include_router(router, prefix="/api/v1/docker")
+        app.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
         return app
 
     @pytest.mark.asyncio
@@ -194,40 +196,34 @@ class TestContainerCreateEndpoint:
 
     @pytest.mark.asyncio
     async def test_create_container_returns_401_without_token(self, app):
-        """Sécurité : l'endpoint n'a PAS get_current_active_user (lacune pré-existante).
+        """Sécurité : l'endpoint exige get_current_active_user (STORY-032).
 
-        Ce test documente que l'endpoint est accessible sans authentification.
-        En mode production avec disable_auth=False, l'endpoint tente de se
-        connecter à Docker et échoue avec une 500 car le service Docker
-        n'est pas disponible dans l'environnement de test.
+        Sans token JWT valide, l'endpoint doit retourner 401.
         """
-        from app.config import settings
-        from app.database import get_db
 
-        async def fake_get_db():
-            yield MagicMock()
+        def _raise_401():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
-        app.dependency_overrides[get_db] = fake_get_db
+        # Override auth to raise 401 (simulating no token)
+        app.dependency_overrides[get_current_active_user] = lambda: _raise_401()
 
-        # En mode production, l'endpoint tente d'accéder à Docker
-        # et échoue car Docker n'est pas disponible
-        with patch.object(settings, "disable_auth", False):
-            async with AsyncClient(
-                transport=ASGITransport(app=app), base_url="http://test"
-            ) as client:
-                response = await client.post(
-                    "/api/v1/docker/containers",
-                    json={
-                        "name": "test-container",
-                        "image": "nginx:latest",
-                    },
-                )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/api/v1/docker/containers",
+                json={
+                    "name": "test-container",
+                    "image": "nginx:latest",
+                },
+            )
 
-        app.dependency_overrides.clear()
-
-        # L'endpoint retourne 500 car Docker est indisponible
-        # (pas de protection par authentification — lacune de sécurité connue)
-        assert response.status_code == 500
+        # L'endpoint retourne 401 car l'authentification est requise
+        assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_create_container_returns_422_missing_image(self, app):

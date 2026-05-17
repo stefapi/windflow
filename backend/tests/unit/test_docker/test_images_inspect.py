@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.docker import router
+from app.auth.dependencies import get_current_active_user
 
 
 def _make_mock_user():
@@ -78,6 +79,7 @@ def app():
     """Crée une application FastAPI de test."""
     application = FastAPI()
     application.include_router(router, prefix="/api/v1/docker")
+    application.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
     return application
 
 

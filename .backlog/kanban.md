@@ -2,12 +2,20 @@
 
 ## 📋 BACKLOG
 
+### EPIC-008 : Couverture Frontend des APIs Backend
+- [ ] STORY-033 : Correction des tests backend défaillants
+- [ ] STORY-034 : Nettoyage lint et type checking backend
+- [ ] STORY-035 : Pagination des listes Docker
+- [ ] STORY-036 : Tests manquants — STORY-004 StackActionsBar
+- [ ] STORY-037 : Couverture frontend — Installation et vérification
+- [ ] STORY-038 : Tests E2E — Flux critiques EPIC-008
+- [ ] STORY-039 : Documentation utilisateur — Nouvelles fonctionnalités
+
 ### EPIC-009 : Refonte ContainerDetail — Homogénéisation et édition complète
 - [ ] STORY-028 : Frontend Config — Gestion des réseaux à chaud
 - [ ] STORY-029 : Frontend Config — Édition volumes et sécurité (recréation)
 - [ ] STORY-030 : Frontend Config — Implémentation réelle env vars et labels (recréation)
 ## 🏗️ IN PROGRESS
-
 
 _(vide)_
 
@@ -17,12 +25,16 @@ _(vide)_
 
 ## 🚧 REVIEW
 
+### EPIC-008 : Couverture Frontend des APIs Backend
+_(vide)_
+
 ### EPIC-009 : Refonte ContainerDetail — Homogénéisation et édition complète
 _(vide)_
 
 ## ✅ DONE
 
 ### EPIC-008 : Couverture Frontend des APIs Backend
+- [x] STORY-032 : Sécurité — Authentification sur les endpoints Docker
 - [x] STORY-031 : Images Docker — Sélection, actions en lot, usage et détail
 - [x] [STORY-031.1](.backlog/stories/STORY-031.1-backend-api-images-enrichie-inspect-import-export.md) : Backend — API Images enrichie, inspect et import/export — Amélioration
 - [x] [STORY-031.2](.backlog/stories/STORY-031.2-frontend-vue-images-detail.md) : Frontend — Vue Images complète (sélection, usage, détail) — Amélioration

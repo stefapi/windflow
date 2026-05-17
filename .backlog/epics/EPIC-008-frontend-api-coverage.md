@@ -1,6 +1,6 @@
  # EPIC-008 : Couverture Frontend des APIs Backend
 
-**Statut :** DONE
+**Statut :** IN_PROGRESS
 **Priorité :** Haute
 
 ## Vision
@@ -246,6 +246,17 @@ Fonctionnalités avancées :
 
 - [x] STORY-019 : Création manuelle de containers Docker
 - [x] STORY-020 : Page informations système Docker
+
+### 🔧 Stories correctives (post-audit)
+
+- [x] STORY-032 : Sécurité — Authentification sur les endpoints Docker
+- [ ] STORY-033 : Correction des tests backend défaillants
+- [ ] STORY-034 : Nettoyage lint et type checking backend
+- [ ] STORY-035 : Pagination des listes Docker
+- [ ] STORY-036 : Tests manquants — STORY-004 StackActionsBar
+- [ ] STORY-037 : Couverture frontend — Installation et vérification
+- [ ] STORY-038 : Tests E2E — Flux critiques EPIC-008
+- [ ] STORY-039 : Documentation utilisateur — Nouvelles fonctionnalités
 
 ---
 
@@ -880,3 +891,133 @@ L'image montre la **"Containers — vue globale"** avec 3 sections (Stacks WindF
 | **+** `DiscoveredItem.services_total/running` | Compteur "2/2 running" dans le header de chaque card discovered |
 | **+** `StackWithServices.services[]` | Services expandés avec IMAGE, STATUT, CPU (barre), MÉMOIRE directement dans la liste |
 | **+** `TargetGroup` | Structure de réponse pour la vue "Par machine" (toggle en haut à droite) |
+
+---
+
+## Rapport de finalisation
+
+**Date :** 2026-05-17
+**Verdict :** ⚠️ CONFORME AVEC RÉSERVES
+**Score :** 78% (estimé — 68 vérifications passées / 87 total)
+
+### Résumé
+- Stories vérifiées : 26 (25 stories + 2 sous-stories)
+- Stories conformes : 24/26 (92%)
+- Anomalies critiques : 4
+- Anomalies mineures : 6
+- Critères epic validés : 2/6 (33%)
+- Code quality : ⚠️ PARTIEL
+
+### Détail par phase
+
+#### Phase 1 — Cohérence Backlog & Documentation : ✅ CONFORME
+- Epic DONE, 26 stories toutes DONE
+- Kanban cohérent (26 entrées en section DONE)
+- Tous les fichiers story existent sur disque
+- Tous les fichiers de code référencés existent sur disque
+
+#### Phase 2 — Rapport par story : ⚠️ 24/26 CONFORMES
+
+| Story | Statut | AC | Tâches | Fichiers | Tests | Conformité |
+|-------|--------|----|--------|----------|-------|------------|
+| STORY-001 | DONE | 7/7 | 5/5 | ✅ | ✅ 30 | ✅ CONFORME |
+| STORY-002 | DONE | 7/7 | 9/9 | ✅ | ✅ 98 | ✅ CONFORME |
+| STORY-003 | DONE | 5/5 | 8/8 | ✅ | ✅ | ✅ CONFORME |
+| STORY-004 | DONE | 4/5 | 14/16 | ✅ | ❌ Manquants | ⚠️ MINEUR |
+| STORY-005 | DONE | 5/5 | 5/5 | ✅ | ✅ 7 | ✅ CONFORME |
+| STORY-006 | DONE | 5/5 | 5/5 | ✅ | ✅ 16 | ✅ CONFORME |
+| STORY-007 | DONE | 4/4 | 5/5 | ✅ | ✅ 22 | ✅ CONFORME |
+| STORY-008 | DONE | 5/5 | 4/4 | ✅ | ✅ 16 | ✅ CONFORME |
+| STORY-009 | DONE | 7/8 | 3/3 | ✅ | ✅ 46 | ⚠️ MINEUR |
+| STORY-010 | DONE | 5/5 | 7/7 | ✅ | ✅ 44 | ✅ CONFORME |
+| STORY-011 | DONE | 4/4 | 7/7 | ✅ | ✅ 35 | ✅ CONFORME |
+| STORY-012 | DONE | 5/5 | 5/5 | ✅ | ✅ 59 | ✅ CONFORME |
+| STORY-013 | DONE | 4/4 | 4/4 | ✅ | ✅ 12 | ✅ CONFORME |
+| STORY-014 | DONE | 5/5 | 3/3 | ✅ | ✅ 20 | ✅ CONFORME |
+| STORY-015 | DONE | 4/4 | 4/4 | ✅ | ✅ 11 | ✅ CONFORME |
+| STORY-016 | DONE | 4/4 | 4/4 | ✅ | ✅ 33 | ✅ CONFORME |
+| STORY-017 | DONE | 5/5 | 6/6 | ✅ | ✅ 11 | ✅ CONFORME |
+| STORY-018 | DONE | 4/4 | 5/5 | ✅ | ✅ 13 | ✅ CONFORME |
+| STORY-019 | DONE | 5/5 | 7/7 | ✅ | ✅ 22 | ✅ CONFORME |
+| STORY-020 | DONE | 4/4 | 5/5 | ✅ | ✅ 17 | ✅ CONFORME |
+| STORY-021 | DONE | 6/6 | 6/6 | ✅ | ✅ 34 | ✅ CONFORME |
+| STORY-022 | DONE | 12/12 | 12/12 | ✅ | ✅ 56 | ✅ CONFORME |
+| STORY-023 | DONE | 13/13 | 4/4 | ✅ | ✅ 80 | ✅ CONFORME |
+| STORY-031 | DONE | 6/6 | 2/2 | ✅ | ✅ 49 | ✅ CONFORME |
+
+#### Phase 3 — Critères d'acceptation de l'epic : ⚠️ 2/6 validés
+
+- ✅ Critère 2 : Types TypeScript complets pour toutes les nouvelles entités
+- ✅ Critère 5 : Pas de régression sur les fonctionnalités existantes
+- ⚠️ Critère 1 : APIs backend accessibles via frontend — couverture quasi-totale mais quelques endpoints mineurs non couverts
+- ⚠️ Critère 6 : Couverture ≥ 80% — non mesurable (coverage-v8 non installé, 6 composants sans tests dédiés)
+- ❌ Critère 3 : Tests E2E — aucun test E2E créé
+- ❌ Critère 4 : Documentation utilisateur — aucune documentation créée
+
+#### Phase 4 — Code Quality : ⚠️ PARTIEL
+
+| Vérification | Backend | Frontend |
+|-------------|---------|----------|
+| Build | ⚠️ N/A (build Docker) | ✅ Succès |
+| Lint | ❌ 12 erreurs F401 (imports inutilisés) | ✅ 0 erreurs, 128 warnings |
+| Type Check | ❌ 270 erreurs mypy | ✅ tsc clean |
+| Tests | ❌ 629/630 + 1 erreur collection | ✅ 650/650 passants |
+| Couverture | ⚠️ 44% global | ❌ coverage-v8 non installé |
+
+#### Phase 5 — Architecture & Standards : ⚠️ PARTIEL
+
+| Catégorie | Statut | Détails |
+|-----------|--------|---------|
+| API-first | ⚠️ | Pagination absente sur listes Docker, logique inline dans stats.py |
+| Type safety | ✅ | Types complets, any justifiés |
+| Conventions nommage | ✅ | snake_case Python, PascalCase Vue |
+| Clean code | ⚠️ | Fonction 170+ lignes dans stats.py, duplication batch start/stop |
+| Sécurité | ❌ | 30/35 endpoints Docker sans authentification |
+| Observabilité | ⚠️ | Correlation IDs absents de compute/discovery/stats |
+
+### Anomalies critiques (bloquantes pour clôture complète)
+
+1. 🔴 **Sécurité — 30 endpoints Docker sans authentification** (`backend/app/api/v1/docker.py`)
+   → Action : Ajouter `Depends(get_current_active_user)` à tous les handlers
+   → Note : Problème pré-existant, partiellement adressé par les stories 016-020
+
+2. 🔴 **Tests E2E absents** — Critère epic non satisfait
+   → Action : Créer des tests E2E pour les flux critiques (adoption, stack actions, images)
+
+3. 🔴 **Documentation utilisateur absente** — Critère epic non satisfait
+   → Action : Rédiger la documentation utilisateur pour les nouvelles fonctionnalités
+
+4. 🔴 **Backend — 1 test échoué + 1 erreur collection**
+   → `test_compute_service.py` : ImportError sur `_classify_containers`
+   → `test_stacks_api_variables_rendering.py` : champs `archived_at`/`is_archived` manquants dans le set attendu
+
+### Anomalies mineures (non bloquantes)
+
+1. 🟡 STORY-004 — Tests backend et frontend manquants (`test_stack_actions.py`, `StackActionsBar.spec.ts`)
+2. 🟡 STORY-009 — AC 8 non cochée (probablement valide)
+3. 🟡 Backend — 12 imports inutilisés (F401 flake8)
+4. 🟡 Backend — 270 erreurs mypy (problème structurel camelCase vs PascalCase)
+5. 🟡 Frontend — Couverture non mesurable (`@vitest/coverage-v8` non installé)
+6. 🟡 Architecture — Pagination absente sur listes Docker
+
+### Points positifs
+
+- **Exhaustivité** : 26 stories couvrant 46 endpoints API, toutes terminées
+- **Qualité des types** : TypeScript strict sans `any` non justifié
+- **Schémas Pydantic** : Complets et documentés pour toutes les requêtes/réponses
+- **Cohérence backlog** : Parfaite alignment entre epic, stories et kanban
+- **Sécurité** : Plusieurs stories ont corrigé des endpoints sans authentification
+- **Architecture** : Refactoring STORY-002 et STORY-022 ont amélioré la maintenabilité
+- **Tests frontend** : 650/650 passants, 39 fichiers de test
+
+### Prochaine étape
+
+L'epic est **conforme avec réserves**. Les anomalies critiques de sécurité (endpoints sans auth) et les tests E2E sont des lacunes importantes mais pré-existantes en partie. Pour une clôture complète :
+
+1. **Priorité 1** : Corriger les 2 tests backend défaillants
+2. **Priorité 2** : Ajouter l'authentification sur les 30 endpoints Docker manquants
+3. **Priorité 3** : Installer `@vitest/coverage-v8` et vérifier la couverture frontend
+4. **Priorité 4** : Créer les tests E2E pour les flux critiques
+5. **Priorité 5** : Rédiger la documentation utilisateur
+
+Alternativement, si les anomalies de sécurité et E2E sont acceptées comme dette technique, lancer `close-epic` pour clôturer l'epic.

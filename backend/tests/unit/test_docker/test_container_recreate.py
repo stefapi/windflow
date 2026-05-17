@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.docker import router
+from app.auth.dependencies import get_current_active_user
 from app.services.docker_client_service import ContainerDetail
 
 
@@ -127,11 +128,21 @@ def mock_docker_client():
     return client
 
 
+def _make_mock_user():
+    """Crée un mock utilisateur authentifié."""
+    mock_user = MagicMock()
+    mock_user.id = "test-user-id"
+    mock_user.email = "test@example.com"
+    mock_user.is_active = True
+    return mock_user
+
+
 @pytest.fixture
 def app():
     """Crée une app FastAPI minimale avec le router Docker."""
     _app = FastAPI()
     _app.include_router(router, prefix="/api/v1/docker")
+    _app.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
     return _app
 
 
