@@ -251,7 +251,7 @@ Fonctionnalités avancées :
 
 - [x] STORY-032 : Sécurité — Authentification sur les endpoints Docker
 - [x] STORY-033 : Correction des tests backend défaillants
-- [ ] STORY-034 : Nettoyage lint et type checking backend
+- [x] STORY-034 : Nettoyage lint et type checking backend
 - [ ] STORY-035 : Pagination des listes Docker
 - [ ] STORY-036 : Tests manquants — STORY-004 StackActionsBar
 - [ ] STORY-037 : Couverture frontend — Installation et vérification

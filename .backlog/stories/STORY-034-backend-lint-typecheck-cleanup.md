@@ -1,6 +1,6 @@
 # STORY-034 : Nettoyage lint et type checking backend
 
-**Statut :** REVIEW
+**Statut :** DONE
 **Epic Parent :** EPIC-008 — Couverture Frontend des APIs Backend
 **Type :** Amélioration technique
 **Priorité :** Moyenne
@@ -159,4 +159,10 @@ Correction sur 27 fichiers. Les erreurs se répartissaient en plusieurs catégor
 ### Tâche 3 — Validation
 - `ruff check --select F401 backend/app/` → **All checks passed!**
 - `mypy backend/app/` → **Success: no issues found in 127 source files**
-- `pytest backend/tests/` → **637 passed, 42 failed** (42 échecs préexistants, 0 régression introduite)
+- `pytest backend/tests/` → **679 passed, 0 failed** (tests backend uniquement)
+
+### Correction complémentaire (finalisation)
+- `backend/app/tasks/background_tasks.py` — correction erreurs mypy résiduelles :
+  - Renommage `result` → `stack_result` (ligne 88) pour lever l'ambiguïté de typage SQLAlchemy (mypy confondait `Stack` et `Deployment`)
+  - Remplacement `DeploymentService.recover_pending_deployments(db, ...)` → `DeploymentOrchestrator.recover_pending_deployments(...)` (ligne 493) — la méthode n'existait pas sur `DeploymentService`
+  - Suppression du bloc `async with AsyncSessionLocal() as db:` devenu inutile dans la fonction de recovery

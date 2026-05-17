@@ -85,8 +85,8 @@ async def deploy_stack_async(
             logger.info(f"Deployment chargé: {deployment_name}")
 
             # 2. Charger le stack
-            result = await db.execute(select(Stack).where(Stack.id == stack_id))
-            stack = result.scalar_one_or_none()
+            stack_result = await db.execute(select(Stack).where(Stack.id == stack_id))
+            stack = stack_result.scalar_one_or_none()
 
             if not stack:
                 raise ValueError(f"Stack {stack_id} non trouvé")
@@ -480,8 +480,7 @@ async def retry_pending_deployments_async(
     """
     from datetime import datetime
 
-    from app.database import AsyncSessionLocal
-    from app.services.deployment_service import DeploymentService
+    from app.services.deployment_orchestrator import DeploymentOrchestrator
 
     logger.info(
         f"[FALLBACK-ASYNCIO] Exécution du recovery des déploiements PENDING "
@@ -489,28 +488,27 @@ async def retry_pending_deployments_async(
     )
 
     try:
-        async with AsyncSessionLocal() as db:
-            stats = await DeploymentService.recover_pending_deployments(
-                db, max_age_minutes=max_age_minutes, timeout_minutes=timeout_minutes
-            )
+        stats = await DeploymentOrchestrator.recover_pending_deployments(
+            max_age_minutes=max_age_minutes, timeout_minutes=timeout_minutes
+        )
 
-            result = {
-                "status": "completed",
-                "timestamp": datetime.utcnow().isoformat(),
-                "statistics": stats,
-                "execution_mode": "asyncio_fallback",
-                "message": (
-                    f"Recovery terminé (asyncio): {stats['retried']} réessayés, "
-                    f"{stats['failed']} marqués FAILED, {stats['errors']} erreurs"
-                ),
-            }
+        result = {
+            "status": "completed",
+            "timestamp": datetime.utcnow().isoformat(),
+            "statistics": stats,
+            "execution_mode": "asyncio_fallback",
+            "message": (
+                f"Recovery terminé (asyncio): {stats['retried']} réessayés, "
+                f"{stats['failed']} marqués FAILED, {stats['errors']} erreurs"
+            ),
+        }
 
-            logger.info(
-                f"[FALLBACK-ASYNCIO] Tâche de recovery terminée: {stats['retried']} retried, "
-                f"{stats['failed']} failed, {stats['errors']} errors"
-            )
+        logger.info(
+            f"[FALLBACK-ASYNCIO] Tâche de recovery terminée: {stats['retried']} retried, "
+            f"{stats['failed']} failed, {stats['errors']} errors"
+        )
 
-            return result
+        return result
 
     except Exception as e:
         logger.error(f"[FALLBACK-ASYNCIO] Erreur lors du recovery: {e}")

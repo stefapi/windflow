@@ -24,7 +24,7 @@ _(vide)_
 ## 🚧 REVIEW
 
 ### EPIC-008 : Couverture Frontend des APIs Backend
-- [?] STORY-034 : Nettoyage lint et type checking backend
+_(vide)_
 
 ### EPIC-009 : Refonte ContainerDetail — Homogénéisation et édition complète
 _(vide)_
@@ -32,6 +32,7 @@ _(vide)_
 ## ✅ DONE
 
 ### EPIC-008 : Couverture Frontend des APIs Backend
+- [x] STORY-034 : Nettoyage lint et type checking backend
 - [x] STORY-033 : Correction des tests backend défaillants
 - [x] STORY-032 : Sécurité — Authentification sur les endpoints Docker
 - [x] STORY-031 : Images Docker — Sélection, actions en lot, usage et détail
