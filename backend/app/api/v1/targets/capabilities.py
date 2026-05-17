@@ -15,7 +15,6 @@ from ....models.user import User
 from ....schemas.target import (
     HealthCheckResponse,
     TargetCapabilitiesResponse,
-    TargetResponse,
 )
 from ....schemas.target_capability import TargetCapabilityResponse
 from ....services.target_service import TargetService
@@ -123,7 +122,7 @@ async def health_check_target(
     return HealthCheckResponse(
         target_id=target.id,
         status=new_status,
-        last_check=target.last_check,
+        last_check=target.last_check,  # type: ignore[arg-type]
         message=messages.get(new_status, "Statut mis à jour"),
     )
 

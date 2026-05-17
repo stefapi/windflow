@@ -13,7 +13,6 @@ from typing import Any, Callable
 
 from ..enums.target import CapabilityType
 from ..schemas.target_scan import (
-    ContainerRuntimeInfo,
     PlatformArchitecture,
     ScanResult,
     ToolInfo,
@@ -234,14 +233,14 @@ def extract_tool_info(
         Tuple (available, version, details).
     """
     if isinstance(info, ToolInfo):
-        return info.available, info.version, info.details
+        return info.available, info.version, info.details  # type: ignore[return-value]
     if isinstance(info, dict):
         available = bool(info.get("available"))
         version = info.get("version")
         raw_details = info.get("details")
         details = raw_details if isinstance(raw_details, dict) else None
-        return available, version, details
-    return False, None, None
+        return available, version, details  # type: ignore[return-value]
+    return False, None, None  # type: ignore[return-value]
 
 
 # ─── Extraction de noms de capacités ──────────────────────────

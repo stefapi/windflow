@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 import asyncssh
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 
 from ....auth.dependencies import get_current_active_user
 from ....core.rate_limit import conditional_rate_limiter
@@ -401,18 +401,18 @@ async def _fetch_os_info(conn: asyncssh.SSHClientConnection) -> dict[str, str]:
             timeout=10,
         )
         if result.exit_status == 0:
-            os_info["uname"] = result.stdout.strip()
+            os_info["uname"] = str(result.stdout).strip()  # type: ignore[union-attr]
 
         result = await asyncio.wait_for(
             conn.run("cat /etc/os-release", check=False, encoding="utf-8"),
             timeout=10,
         )
         if result.exit_status == 0:
-            for line in result.stdout.splitlines():
+            for line in str(result.stdout).splitlines():  # type: ignore[union-attr]
                 if line.startswith("PRETTY_NAME="):
-                    os_info["distribution"] = line.split("=", 1)[1].strip('"')
+                    os_info["distribution"] = line.split("=", 1)[1].strip('"')  # type: ignore[arg-type]
                 elif line.startswith("VERSION="):
-                    os_info["version"] = line.split("=", 1)[1].strip('"')
+                    os_info["version"] = line.split("=", 1)[1].strip('"')  # type: ignore[arg-type]
     except (asyncio.TimeoutError, asyncssh.Error):
         pass  # Non-critical: OS info is optional
     return os_info

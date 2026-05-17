@@ -12,9 +12,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.schemas.compute import ComputeGlobalView, ComputeStatsResponse, TargetGroup
+from app.helper.compute_helpers import format_memory
 from app.services.compute_service import (
-    _classify_containers,
-    _format_memory,
+    classify_containers,
     get_compute_global,
     get_compute_stats,
 )
@@ -63,42 +63,42 @@ def _compose_labels(project: str, config_file: str | None = None) -> dict:
 
 
 # =============================================================================
-# Tests _format_memory
+# Tests format_memory
 # =============================================================================
 
 
 class TestFormatMemory:
     def test_zero_returns_zero_m(self) -> None:
-        assert _format_memory(0) == "0M"
+        assert format_memory(0) == "0M"
 
     def test_negative_returns_zero_m(self) -> None:
-        assert _format_memory(-100) == "0M"
+        assert format_memory(-100) == "0M"
 
     def test_kilobytes(self) -> None:
         # 512 KB
-        result = _format_memory(512 * 1024)
+        result = format_memory(512 * 1024)
         assert result.endswith("K")
 
     def test_megabytes(self) -> None:
         # 100 MB
-        result = _format_memory(100 * 1024 * 1024)
+        result = format_memory(100 * 1024 * 1024)
         assert result.endswith("M")
 
     def test_gigabytes(self) -> None:
         # 2 GB
-        result = _format_memory(2 * 1024 * 1024 * 1024)
+        result = format_memory(2 * 1024 * 1024 * 1024)
         assert result.endswith("G")
 
 
 # =============================================================================
-# Tests _classify_containers
+# Tests classify_containers
 # =============================================================================
 
 
 class TestClassifyContainers:
     def test_windflow_managed_goes_to_managed(self) -> None:
         c = _make_container(labels=_wf_labels("stack-001"))
-        managed, discovered, standalone = _classify_containers([c])
+        managed, discovered, standalone = classify_containers([c])
         assert "stack-001" in managed
         assert len(managed["stack-001"]) == 1
         assert discovered == {}
@@ -106,14 +106,14 @@ class TestClassifyContainers:
 
     def test_compose_project_goes_to_discovered(self) -> None:
         c = _make_container(labels=_compose_labels("myapp"))
-        managed, discovered, standalone = _classify_containers([c])
+        managed, discovered, standalone = classify_containers([c])
         assert managed == {}
         assert "myapp" in discovered
         assert standalone == []
 
     def test_no_labels_goes_to_standalone(self) -> None:
         c = _make_container(labels={})
-        managed, discovered, standalone = _classify_containers([c])
+        managed, discovered, standalone = classify_containers([c])
         assert managed == {}
         assert discovered == {}
         assert len(standalone) == 1
@@ -122,7 +122,7 @@ class TestClassifyContainers:
         """Un container avec les deux labels est classé dans managed (WindFlow prioritaire)."""
         labels = {**_wf_labels("stack-x"), **_compose_labels("myproject")}
         c = _make_container(labels=labels)
-        managed, discovered, standalone = _classify_containers([c])
+        managed, discovered, standalone = classify_containers([c])
         assert "stack-x" in managed
         assert discovered == {}
 
@@ -131,7 +131,7 @@ class TestClassifyContainers:
         c2 = _make_container("id2", labels=_compose_labels("proj-a"))
         c3 = _make_container("id3", labels={})
         c4 = _make_container("id4", labels=_compose_labels("proj-a"))
-        managed, discovered, standalone = _classify_containers([c1, c2, c3, c4])
+        managed, discovered, standalone = classify_containers([c1, c2, c3, c4])
         assert len(managed["stack-1"]) == 1
         assert len(discovered["proj-a"]) == 2
         assert len(standalone) == 1
@@ -141,7 +141,7 @@ class TestClassifyContainers:
         c1 = _make_container("id1", labels=_wf_labels("stack-A"))
         c2 = _make_container("id2", labels=_wf_labels("stack-A"))
         c3 = _make_container("id3", labels=_wf_labels("stack-B"))
-        managed, _, _ = _classify_containers([c1, c2, c3])
+        managed, _, _ = classify_containers([c1, c2, c3])
         assert len(managed["stack-A"]) == 2
         assert len(managed["stack-B"]) == 1
 

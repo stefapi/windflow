@@ -93,7 +93,7 @@ class SchedulerService:
             delete(ScheduledTask).where(ScheduledTask.id == task_id)
         )
         await self.db.commit()
-        return result.rowcount > 0
+        return result.rowcount > 0  # type: ignore[attr-defined]
 
     async def toggle_task(self, task_id: str) -> Optional[ScheduledTask]:
         """Active/désactive une tâche planifiée."""

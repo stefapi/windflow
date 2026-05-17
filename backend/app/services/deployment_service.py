@@ -40,7 +40,7 @@ class DeploymentService:
         Returns:
             Dict contenant les valeurs par défaut avec structure imbriquée
         """
-        group_values = {}
+        group_values: dict[str, Any] = {}
 
         if "variables" not in var_config:
             return group_values
@@ -656,8 +656,8 @@ class DeploymentService:
 
             await deployment_events.emit_status_change(
                 deployment_id=UUID(deployment_id),
-                new_status=status,
-                old_status=old_status,
+                new_status=status,  # type: ignore[arg-type]
+                old_status=old_status,  # type: ignore[arg-type]
                 user_id=UUID(user_id) if user_id else None,
                 additional_data={
                     "name": deployment.name,

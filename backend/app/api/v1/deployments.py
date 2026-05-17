@@ -4,7 +4,6 @@ Routes de gestion des déploiements.
 
 import logging
 from datetime import datetime
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status

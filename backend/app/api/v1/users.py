@@ -164,7 +164,7 @@ async def list_users(
     pages = math.ceil(total / limit) if limit > 0 else 1
 
     return UserListResponse(
-        items=users, total=total, page=page, size=limit, pages=pages
+        items=users, total=total, page=page, size=limit, pages=pages  # type: ignore[arg-type]
     )
 
 
@@ -317,7 +317,7 @@ async def get_user(
         extra={"correlation_id": correlation_id, "target_user_id": str(user_id)},
     )
 
-    user = await UserService.get_by_id(session, user_id)
+    user = await UserService.get_by_id(session, str(user_id))  # type: ignore[arg-type]
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -769,7 +769,7 @@ async def update_user(
         },
     )
     # Vérifier que l'utilisateur existe
-    existing_user = await UserService.get_by_id(session, user_id)
+    existing_user = await UserService.get_by_id(session, str(user_id))  # type: ignore[arg-type]
     if not existing_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -921,7 +921,7 @@ async def delete_user(
         )
 
     # Vérifier que l'utilisateur existe
-    user = await UserService.get_by_id(session, user_id)
+    user = await UserService.get_by_id(session, str(user_id))  # type: ignore[arg-type]
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

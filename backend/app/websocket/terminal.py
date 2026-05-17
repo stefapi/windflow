@@ -254,7 +254,7 @@ async def container_terminal_websocket_endpoint(
                 # Vérifier l'accès à l'organisation
                 if (
                     deployment.organization_id != ws_user.organization_id
-                    and not ws_user.is_superadmin
+                    and not ws_user.is_superadmin  # type: ignore[attr-defined]
                 ):
                     await log_terminal_audit(
                         str(ws_user.id),

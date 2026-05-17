@@ -57,7 +57,7 @@ async def _build_service_with_metrics(
         except Exception as e:
             logger.debug(f"Impossible d'inspecter le container {c.id}: {e}")
 
-    return ServiceWithMetrics(
+    return ServiceWithMetrics(  # type: ignore[call-arg]
         id=c.id,
         name=c.name,
         image=c.image,
@@ -348,7 +348,7 @@ def build_target_groups(
                 target_id=tid,
                 target_name=tname,
                 technology=tech,
-                metrics=TargetMetrics(),
+                metrics=TargetMetrics(),  # type: ignore[call-arg]
             )
         return groups[tid]
 

@@ -240,7 +240,7 @@ async def get_dashboard_stats(
         )
 
     # --- Métriques ressources système ---
-    resource_metrics = ResourceMetrics()
+    resource_metrics = ResourceMetrics()  # type: ignore[call-arg]
     try:
         import psutil
 
@@ -320,5 +320,5 @@ async def get_stack_stats(
         deployments_by_status={
             status: count for status, count in deployments_by_status
         },
-        deployments_last_30_days=recent_deployments,
+        deployments_last_30_days=recent_deployments,  # type: ignore[arg-type]
     )

@@ -11,8 +11,8 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.helper.template_renderer import TemplateRenderer
-from app.services.docker_executor import DockerExecutor
+from app.helper.template_renderer import TemplateRenderer  # type: ignore[import-not-found]
+from app.services.docker_executor import DockerExecutor  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
 

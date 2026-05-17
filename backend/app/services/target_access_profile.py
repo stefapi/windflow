@@ -202,7 +202,7 @@ class TargetAccessProfileDetector:
             )
             stdout = stdout_bytes.decode("utf-8", errors="ignore")
             stderr = stderr_bytes.decode("utf-8", errors="ignore")
-            return CommandResult(process.returncode, stdout, stderr)
+            return CommandResult(process.returncode, stdout, stderr)  # type: ignore[arg-type]
         except asyncio.TimeoutError:
             process.kill()
             return CommandResult(124, "", "Commande expirée")

@@ -297,7 +297,7 @@ class RetryPolicy:
                         f"All {self.max_retries + 1} attempts failed. Last error: {e}"
                     )
 
-        raise last_exception
+        raise last_exception  # type: ignore[misc]
 
 
 def retry(
@@ -488,7 +488,7 @@ class HealthCheckRegistry:
                     }
                 )
             else:
-                results.append(result)
+                results.append(result)  # type: ignore[arg-type]
 
         # Déterminer le statut global
         overall_status = self._determine_overall_status(results)

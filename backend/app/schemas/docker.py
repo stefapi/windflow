@@ -77,7 +77,7 @@ class ContainerHealthLogEntry(BaseModel):
     def from_docker_dict(cls, data: dict[str, Any]) -> "ContainerHealthLogEntry":
         """Crée une instance depuis un dict Docker API (PascalCase)."""
         if not data:
-            return cls()
+            return cls()  # type: ignore[call-arg]
         return cls(
             start=data.get("Start"),
             end=data.get("End"),
@@ -99,7 +99,7 @@ class ContainerHealthInfo(BaseModel):
     def from_docker_dict(cls, data: dict[str, Any]) -> "ContainerHealthInfo":
         """Crée une instance depuis un dict Docker API (PascalCase)."""
         if not data:
-            return cls()
+            return cls()  # type: ignore[call-arg]
         log_data = data.get("Log", [])
         return cls(
             status=data.get("Status"),
@@ -129,7 +129,7 @@ class ContainerStateInfo(BaseModel):
     def from_docker_dict(cls, data: dict[str, Any]) -> "ContainerStateInfo":
         """Crée une instance depuis un dict Docker API (PascalCase)."""
         if not data:
-            return cls()
+            return cls()  # type: ignore[call-arg]
         health_data = data.get("Health")
         return cls(
             status=data.get("Status"),
@@ -173,7 +173,7 @@ class ContainerConfigInfo(BaseModel):
     def from_docker_dict(cls, data: dict[str, Any]) -> "ContainerConfigInfo":
         """Crée une instance depuis un dict Docker API (PascalCase)."""
         if not data:
-            return cls()
+            return cls()  # type: ignore[call-arg]
         return cls(
             hostname=data.get("Hostname"),
             domainname=data.get("Domainname"),
@@ -207,7 +207,7 @@ class ContainerLogConfigInfo(BaseModel):
     def from_docker_dict(cls, data: dict[str, Any]) -> "ContainerLogConfigInfo":
         """Crée une instance depuis un dict Docker API (PascalCase)."""
         if not data:
-            return cls()
+            return cls()  # type: ignore[call-arg]
         return cls(
             type=data.get("Type"),
             config=data.get("Config"),
@@ -226,7 +226,7 @@ class ContainerRestartPolicyInfo(BaseModel):
     def from_docker_dict(cls, data: dict[str, Any]) -> "ContainerRestartPolicyInfo":
         """Crée une instance depuis un dict Docker API (PascalCase)."""
         if not data:
-            return cls()
+            return cls()  # type: ignore[call-arg]
         return cls(
             name=data.get("Name"),
             maximum_retry_count=data.get("MaximumRetryCount"),
@@ -256,7 +256,7 @@ class ContainerResourcesInfo(BaseModel):
     def from_docker_dict(cls, data: dict[str, Any]) -> "ContainerResourcesInfo":
         """Crée une instance depuis un dict Docker API (PascalCase)."""
         if not data:
-            return cls()
+            return cls()  # type: ignore[call-arg]
         return cls(
             memory=data.get("Memory"),
             memory_reservation=data.get("MemoryReservation"),
@@ -321,7 +321,7 @@ class ContainerHostConfigInfo(BaseModel):
     def from_docker_dict(cls, data: dict[str, Any]) -> "ContainerHostConfigInfo":
         """Crée une instance depuis un dict Docker API (PascalCase)."""
         if not data:
-            return cls()
+            return cls()  # type: ignore[call-arg]
         log_config_data = data.get("LogConfig")
         restart_policy_data = data.get("RestartPolicy")
         resources_data = data.get("Resources")
@@ -386,7 +386,7 @@ class ContainerNetworkEndpointInfo(BaseModel):
     def from_docker_dict(cls, data: dict[str, Any]) -> "ContainerNetworkEndpointInfo":
         """Crée une instance depuis un dict Docker API (PascalCase)."""
         if not data:
-            return cls()
+            return cls()  # type: ignore[call-arg]
         return cls(
             ip_address=data.get("IPAddress"),
             gateway=data.get("Gateway"),

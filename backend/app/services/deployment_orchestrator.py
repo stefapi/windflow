@@ -256,7 +256,7 @@ class DeploymentOrchestrator:
                     )
 
                 # Exécuter le déploiement
-                result = await deploy_stack_async(
+                result = await deploy_stack_async(  # type: ignore[assignment]
                     deployment_id=deployment_id,
                     stack_id=stack_id,
                     target_id=target_id,
@@ -268,7 +268,7 @@ class DeploymentOrchestrator:
                 logger.info(
                     f"Déploiement {deployment_id} réussi après {retry_count} retry(s)"
                 )
-                return result
+                return result  # type: ignore[return-value]
 
             except Exception as e:
                 last_error = e
@@ -309,7 +309,7 @@ class DeploymentOrchestrator:
                 await asyncio.sleep(delay)
 
         # Ne devrait jamais arriver ici
-        raise last_error
+        raise last_error  # type: ignore[misc]
 
     @classmethod
     async def recover_pending_deployments(

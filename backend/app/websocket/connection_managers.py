@@ -213,7 +213,7 @@ class UserConnectionManager:
         self,
         user_id: str,
         websocket: WebSocket,
-        context: Optional["PluginContext"] = None,  # noqa: F821
+        context: Optional["PluginContext"] = None,  # type: ignore[name-defined]  # noqa: F821
     ):
         """
         Ajoute une connexion utilisateur.
@@ -480,7 +480,7 @@ class UserConnectionManager:
 
             await asyncio.gather(
                 *[
-                    plugin_manager.dispatch(event_type, event_data, ctx)
+                    plugin_manager.dispatch(event_type, event_data, ctx)  # type: ignore[arg-type]
                     for ctx in contexts
                 ],
                 return_exceptions=True,

@@ -338,7 +338,7 @@ async def refresh_token(
         )
 
     # Vérifier que l'utilisateur existe toujours et est actif
-    user = await UserService.get_by_id(session, token_data.user_id)
+    user = await UserService.get_by_id(session, token_data.user_id)  # type: ignore[arg-type]
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

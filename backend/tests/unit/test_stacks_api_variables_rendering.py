@@ -27,6 +27,8 @@ class TestStacksAPIVariablesRendering:
             "author",
             "license",
             "downloads",
+            "is_archived",
+            "archived_at",
             "rating",
             "created_at",
             "updated_at",

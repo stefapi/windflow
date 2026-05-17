@@ -49,13 +49,13 @@ async def deploy_stack_async(
     """
     from sqlalchemy import select
 
-    from app.database import AsyncSessionLocal
-    from app.models.deployment import Deployment, DeploymentStatus
-    from app.models.stack import Stack
-    from app.enums.target import TargetType
-    from app.services.deployment_service import DeploymentService
-    from app.services.docker_compose_service import DockerComposeService
-    from app.services.docker_service import DockerService
+    from app.database import AsyncSessionLocal  # type: ignore[import-not-found]
+    from app.models.deployment import Deployment, DeploymentStatus  # type: ignore[import-not-found]
+    from app.models.stack import Stack  # type: ignore[import-not-found]
+    from app.enums.target import TargetType  # type: ignore[import-not-found]
+    from app.services.deployment_service import DeploymentService  # type: ignore[import-not-found]
+    from app.services.docker_compose_service import DockerComposeService  # type: ignore[import-not-found]
+    from app.services.docker_service import DockerService  # type: ignore[import-not-found]
 
     logger.info(
         f"[FALLBACK-ASYNCIO] Début du déploiement {deployment_id} "
@@ -536,7 +536,7 @@ async def health_check_targets_async() -> Dict[str, Any]:
     from datetime import datetime
 
     from app.database import AsyncSessionLocal
-    from app.services.target_service import TargetService
+    from app.services.target_service import TargetService  # type: ignore[import-not-found]
 
     logger.info("[FALLBACK-ASYNCIO] Exécution du health check périodique des targets")
 

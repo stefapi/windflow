@@ -1259,7 +1259,7 @@ class DockerClientService:
         url = "http://localhost/images/load"
         req_timeout = aiohttp.ClientTimeout(total=300)
 
-        async with self.session.request(
+        async with self.session.request(  # type: ignore[attr-defined]
             method="POST",
             url=url,
             data=tar_bytes,

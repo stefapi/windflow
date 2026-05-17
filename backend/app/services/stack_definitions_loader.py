@@ -142,7 +142,7 @@ class StackDefinitionsLoader:
 
         return created_count, updated_count, errors
 
-    async def _load_single_stack(
+    async def _load_single_stack(  # type: ignore[return]
         self,
         session: AsyncSession,
         definition: StackDefinition,
@@ -245,14 +245,14 @@ class StackDefinitionsLoader:
         stack.target_type = definition.metadata.target_type
         stack.template = definition.template
         stack.variables = self._convert_variables_to_db_format(definition.variables)
-        stack.target_parameters = definition.target_parameters
+        stack.target_parameters = definition.target_parameters  # type: ignore[assignment]
         stack.is_public = definition.metadata.is_public
-        stack.icon_url = definition.metadata.icon_url
+        stack.icon_url = definition.metadata.icon_url  # type: ignore[assignment]
         stack.screenshots = definition.metadata.screenshots
-        stack.documentation_url = definition.metadata.documentation_url
+        stack.documentation_url = definition.metadata.documentation_url  # type: ignore[assignment]
         stack.author = definition.metadata.author
         stack.license = definition.metadata.license
-        stack.deployment_name = definition.metadata.deployment_name
+        stack.deployment_name = definition.metadata.deployment_name  # type: ignore[assignment]
 
         await session.flush()
 

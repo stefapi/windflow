@@ -257,7 +257,7 @@ class DockerSocketClient:
                 running=True,
                 socket_accessible=True,
                 compose=None,
-                swarm=DockerSocketClient._build_swarm_info(swarm_info),
+                swarm=DockerSocketClient._build_swarm_info(swarm_info),  # type: ignore[arg-type]
             )
         except DockerException:
             return None

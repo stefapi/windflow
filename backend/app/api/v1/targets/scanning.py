@@ -295,7 +295,7 @@ async def discover_target(
     scan_result = await (
         scanner.scan_localhost()
         if is_localhost
-        else scanner.scan_remote(discovery_request)
+        else scanner.scan_remote(discovery_request)  # type: ignore[arg-type]
     )
 
     target_type = discovery_request.preferred_type or _infer_target_type(scan_result)
@@ -313,7 +313,7 @@ async def discover_target(
         description=discovery_request.description,
         host=discovery_request.host,
         port=discovery_request.port,
-        type=target_type,
+        type=target_type,  # type: ignore[arg-type]
         credentials=ssh_credentials,
         organization_id=organization_id,
         extra_metadata={
@@ -365,7 +365,7 @@ async def _detect_access_profile(
     try:
         if is_localhost:
             local_exec = LocalCommandExecutor()
-            access_profile = await scanner.detect_access_profile(
+            access_profile = await scanner.detect_access_profile(  # type: ignore[attr-defined]
                 executor=local_exec,
                 ssh_user=None,
                 sudo_user=discovery_request.sudo_user,
@@ -388,7 +388,7 @@ async def _detect_access_profile(
 
             async with asyncssh.connect(**ssh_kwargs_detect) as conn:
                 ssh_exec = SSHCommandExecutor(conn)
-                access_profile = await scanner.detect_access_profile(
+                access_profile = await scanner.detect_access_profile(  # type: ignore[attr-defined]
                     executor=ssh_exec,
                     ssh_user=discovery_request.username,
                     sudo_user=discovery_request.sudo_user,

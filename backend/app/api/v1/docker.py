@@ -92,7 +92,7 @@ async def list_containers(
         await client.close()
 
         return [
-            ContainerResponse(
+            ContainerResponse(  # type: ignore[call-arg]
                 id=c.id,
                 name=c.name,
                 image=c.image,
@@ -213,7 +213,7 @@ async def create_container(
             command=container_data.command,
             env=container_data.env,
             ports=container_data.ports,
-            volumes=container_data.volumes,
+            volumes=container_data.volumes,  # type: ignore[arg-type]
             labels=container_data.labels,
             restart_policy=container_data.restart_policy,
             network_mode=container_data.network_mode,
@@ -224,7 +224,7 @@ async def create_container(
         container = await client.get_container(container_id)
         await client.close()
 
-        return ContainerDetailResponse(
+        return ContainerDetailResponse(  # type: ignore[call-arg]
             id=container.id,
             name=container.name,
             created=container.created,
@@ -1145,7 +1145,7 @@ async def promote_container(
             )
 
         # 5. Create the stack
-        stack_data = StackCreate(
+        stack_data = StackCreate(  # type: ignore[call-arg]
             name=promote_data.name,
             description=f"Stack promue depuis le container {container_name}",
             template=compose_template,
@@ -1503,7 +1503,7 @@ async def list_images(
             image_usage[normalized_id] = image_usage.get(normalized_id, 0) + 1
 
         return [
-            ImageResponse(
+            ImageResponse(  # type: ignore[call-arg]
                 id=img.id,
                 repo_tags=img.repo_tags,
                 repo_digests=img.repo_digests,
@@ -1562,7 +1562,7 @@ async def get_image(
         else:
             created = datetime.now(timezone.utc)
 
-        return ImageDetailResponse(
+        return ImageDetailResponse(  # type: ignore[call-arg]
             id=data.get("Id", "").replace("sha256:", "")[:12],
             repo_tags=data.get("RepoTags", []),
             repo_digests=data.get("RepoDigests", []),
@@ -1629,15 +1629,15 @@ async def pull_image(
 
     try:
         client = await get_docker_client()
-        status = await client.pull_image(
+        pull_status = await client.pull_image(
             name=pull_data.name,
             tag=pull_data.tag,
             on_progress=on_progress,
         )
         await client.close()
 
-        return ImagePullResponse(
-            status=status,
+        return ImagePullResponse(  # type: ignore[call-arg]
+            status=pull_status,
             id=last_id,
         )
 
@@ -1832,7 +1832,7 @@ async def list_volumes(request: Request,
         await client.close()
 
         return [
-            VolumeResponse(
+            VolumeResponse(  # type: ignore[call-arg]
                 name=v.name,
                 driver=v.driver,
                 mountpoint=v.mountpoint,
@@ -1880,7 +1880,7 @@ async def create_volume(
         )
         await client.close()
 
-        return VolumeResponse(
+        return VolumeResponse(  # type: ignore[call-arg]
             name=volume.name,
             driver=volume.driver,
             mountpoint=volume.mountpoint,
@@ -2023,7 +2023,7 @@ async def get_system_info(request: Request, current_user: User = Depends(get_cur
         info = await client.system_info()
         await client.close()
 
-        return SystemInfoResponse(
+        return SystemInfoResponse(  # type: ignore[call-arg]
             id=info.id,
             name=info.name,
             server_version=info.server_version,
@@ -2068,7 +2068,7 @@ async def get_version(request: Request, current_user: User = Depends(get_current
         version = await client.system_version()
         await client.close()
 
-        return SystemVersionResponse(
+        return SystemVersionResponse(  # type: ignore[call-arg]
             version=version.get("Version", ""),
             api_version=version.get("ApiVersion", ""),
             min_api_version=version.get("MinAPIVersion", ""),

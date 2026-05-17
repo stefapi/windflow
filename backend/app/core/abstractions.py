@@ -7,7 +7,7 @@ et cache optionnel avec Redis.
 
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
-from typing import Any, AsyncContextManager, AsyncIterator, Optional
+from typing import Any, AsyncIterator, Optional
 
 
 class DatabaseManager(ABC):

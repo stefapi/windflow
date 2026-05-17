@@ -16,7 +16,7 @@ from typing import Any, Sequence
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..enums.target import CapabilityType, TargetStatus, TargetType
+from ..enums.target import CapabilityType, TargetStatus
 from ..models.target import Target
 from ..models.target_capability import TargetCapability
 from ..schemas.target import TargetCreate, TargetUpdate

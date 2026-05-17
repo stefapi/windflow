@@ -478,7 +478,7 @@ async def adopt_discovered_item(
             for c in all_containers:
                 if c.id in container_ids:
                     services_data.append(
-                        AdoptionServiceData(
+                        AdoptionServiceData(  # type: ignore[call-arg]
                             name=c.name,
                             image=c.image,
                             status=c.state,

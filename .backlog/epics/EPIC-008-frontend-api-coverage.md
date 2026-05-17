@@ -250,7 +250,7 @@ Fonctionnalités avancées :
 ### 🔧 Stories correctives (post-audit)
 
 - [x] STORY-032 : Sécurité — Authentification sur les endpoints Docker
-- [ ] STORY-033 : Correction des tests backend défaillants
+- [x] STORY-033 : Correction des tests backend défaillants
 - [ ] STORY-034 : Nettoyage lint et type checking backend
 - [ ] STORY-035 : Pagination des listes Docker
 - [ ] STORY-036 : Tests manquants — STORY-004 StackActionsBar

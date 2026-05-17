@@ -6,7 +6,7 @@ Implémente le pattern Repository avec SQLAlchemy 2.0 async.
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -186,7 +186,7 @@ class StackService:
         if existing:
             if force_update:
                 # Mettre à jour le stack existant
-                stack_update = StackUpdate(
+                stack_update = StackUpdate(  # type: ignore[call-arg]
                     description=stack_create.description,
                     template=stack_create.template,
                     variables=stack_create.variables,
@@ -196,7 +196,7 @@ class StackService:
                     is_public=stack_create.is_public,
                 )
                 updated_stack = await StackService.update(db, existing.id, stack_update)
-                return updated_stack, False
+                return updated_stack, False  # type: ignore[return-value]
             else:
                 # Ne rien faire si déjà existant
                 return existing, False
@@ -224,7 +224,7 @@ class StackService:
         Returns:
             dict: Statistiques d'import (created, updated, errors)
         """
-        stats = {"created": 0, "updated": 0, "skipped": 0, "errors": []}
+        stats: dict[str, Any] = {"created": 0, "updated": 0, "skipped": 0, "errors": []}
 
         # Charger tous les stacks du répertoire
         stack_creates = StackLoaderService.load_all_from_directory(
@@ -242,7 +242,7 @@ class StackService:
                 if existing:
                     if force_update:
                         # Mettre à jour
-                        stack_update = StackUpdate(
+                        stack_update = StackUpdate(  # type: ignore[call-arg]
                             description=stack_create.description,
                             template=stack_create.template,
                             variables=stack_create.variables,

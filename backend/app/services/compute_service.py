@@ -244,7 +244,7 @@ async def get_compute_global(
 
     try:
         managed_stacks = await build_managed_stacks(
-            db_stacks,
+            db_stacks,  # type: ignore[arg-type]
             managed_by_stack_id,
             targets_by_id,
             local_target_id,

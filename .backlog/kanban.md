@@ -3,8 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-008 : Couverture Frontend des APIs Backend
-- [ ] STORY-033 : Correction des tests backend défaillants
-- [ ] STORY-034 : Nettoyage lint et type checking backend
 - [ ] STORY-035 : Pagination des listes Docker
 - [ ] STORY-036 : Tests manquants — STORY-004 StackActionsBar
 - [ ] STORY-037 : Couverture frontend — Installation et vérification
@@ -26,7 +24,7 @@ _(vide)_
 ## 🚧 REVIEW
 
 ### EPIC-008 : Couverture Frontend des APIs Backend
-_(vide)_
+- [?] STORY-034 : Nettoyage lint et type checking backend
 
 ### EPIC-009 : Refonte ContainerDetail — Homogénéisation et édition complète
 _(vide)_
@@ -34,6 +32,7 @@ _(vide)_
 ## ✅ DONE
 
 ### EPIC-008 : Couverture Frontend des APIs Backend
+- [x] STORY-033 : Correction des tests backend défaillants
 - [x] STORY-032 : Sécurité — Authentification sur les endpoints Docker
 - [x] STORY-031 : Images Docker — Sélection, actions en lot, usage et détail
 - [x] [STORY-031.1](.backlog/stories/STORY-031.1-backend-api-images-enrichie-inspect-import-export.md) : Backend — API Images enrichie, inspect et import/export — Amélioration

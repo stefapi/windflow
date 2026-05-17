@@ -12,7 +12,7 @@ from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
-from ..enums.target import CapabilityType, TargetStatus, TargetType
+from ..enums.target import TargetStatus, TargetType
 
 if TYPE_CHECKING:
     from .deployment import Deployment

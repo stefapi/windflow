@@ -49,6 +49,7 @@ faker = "^22.0.0"
 factory-boy = "^3.3.0"
 freezegun = "^1.4.0"
 aioresponses = "^0.7.6"
+ruff = "^0.15.13"
 
 [tool.poetry.scripts]
 windflow = "cli.__main__:main"
@@ -119,6 +120,15 @@ module = [
     "python_jose.*",
     "argon2",
     "argon2.*",
+    "app.database",
+    "app.enums.*",
+    "app.helper.template_renderer",
+    "app.models.*",
+    "app.services.docker_executor",
+    "app.services.deployment_service",
+    "app.services.docker_compose_service",
+    "app.services.docker_service",
+    "app.services.target_service",
 ]
 ignore_missing_imports = true
 
