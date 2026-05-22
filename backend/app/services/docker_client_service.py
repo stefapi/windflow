@@ -678,34 +678,47 @@ class DockerClientService:
         detail = await self.get_container(container_id)
 
         # 2. Merge config : None = conserver la valeur existante
-        merged_image = image if image is not None else detail.config.get("image", "")
-        merged_env = env if env is not None else detail.config.get("env") or []
-        merged_labels = labels if labels is not None else detail.config.get("labels") or {}
+        merged_image = image if image is not None else detail.config.get("Image", "")
+        merged_env = env if env is not None else detail.config.get("Env") or []
+        merged_labels = labels if labels is not None else detail.config.get("Labels") or {}
         merged_port_bindings = (
             port_bindings if port_bindings is not None
-            else detail.host_config.get("port_bindings")
+            else detail.host_config.get("PortBindings")
         )
-        merged_mounts = mounts if mounts is not None else detail.mounts
+        if mounts is not None:
+            merged_mounts = mounts
+        else:
+            # Transformer le format Docker (PascalCase) en format abstrait (lowercase)
+            # car create_container() attend des clés lowercase
+            merged_mounts = [
+                {
+                    "type": m.get("Type", "bind"),
+                    "source": m.get("Source", ""),
+                    "destination": m.get("Destination", ""),
+                    "mode": m.get("Mode", "rw"),
+                }
+                for m in detail.mounts
+            ] if detail.mounts else None
         merged_privileged = (
             privileged if privileged is not None
-            else detail.host_config.get("privileged", False)
+            else detail.host_config.get("Privileged", False)
         )
         merged_readonly_rootfs = (
             readonly_rootfs if readonly_rootfs is not None
-            else detail.host_config.get("readonly_rootfs")
+            else detail.host_config.get("ReadonlyRootfs")
         )
-        merged_cap_add = cap_add if cap_add is not None else detail.host_config.get("cap_add")
-        merged_cap_drop = cap_drop if cap_drop is not None else detail.host_config.get("cap_drop")
+        merged_cap_add = cap_add if cap_add is not None else detail.host_config.get("CapAdd")
+        merged_cap_drop = cap_drop if cap_drop is not None else detail.host_config.get("CapDrop")
 
         # Conserver les paramètres non-overridable
-        merged_network_mode = detail.host_config.get("network_mode", "bridge")
-        merged_restart_policy = detail.host_config.get("restart_policy", {})
+        merged_network_mode = detail.host_config.get("NetworkMode", "bridge")
+        merged_restart_policy = detail.host_config.get("RestartPolicy", {})
         merged_restart_policy_name = (
-            merged_restart_policy.get("name", "no")
+            merged_restart_policy.get("Name", "no")
             if isinstance(merged_restart_policy, dict)
             else "no"
         )
-        merged_command = detail.config.get("cmd")
+        merged_command = detail.config.get("Cmd")
 
         # Conserver le nom du container (sans le / initial)
         container_name = detail.name.lstrip("/")
@@ -1256,32 +1269,32 @@ class DockerClientService:
         Returns:
             Message de statut de l'import
         """
-        url = "http://localhost/images/load"
+        session = await self._get_session()
         req_timeout = aiohttp.ClientTimeout(total=300)
 
-        async with self.session.request(  # type: ignore[attr-defined]
-            method="POST",
-            url=url,
+        response = await session.post(
+            url="http://localhost/images/load",
             data=tar_bytes,
             headers={"Content-Type": "application/x-tar"},
             timeout=req_timeout,
-        ) as response:
-            response.raise_for_status()
+        )
+        response.raise_for_status()
 
-            # Docker renvoie du JSON ligne par ligne
-            full_status = "Load complete"
-            async for line in response.content:
-                if line:
-                    try:
-                        event = json.loads(line)
-                        if "status" in event:
-                            full_status = event["status"]
-                        if "error" in event:
-                            raise Exception(f"Load failed: {event['error']}")
-                    except json.JSONDecodeError:
-                        pass
+        # Docker renvoie du JSON ligne par ligne
+        full_status = "Load complete"
+        async for line in response.content:
+            if line:
+                try:
+                    event = json.loads(line)
+                    if "status" in event:
+                        full_status = event["status"]
+                    if "error" in event:
+                        raise Exception(f"Load failed: {event['error']}")
+                except json.JSONDecodeError:
+                    pass
 
-            return full_status
+        await response.release()
+        return full_status
 
     # =========================================================================
     # Volumes

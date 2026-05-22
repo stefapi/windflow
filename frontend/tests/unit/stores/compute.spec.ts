@@ -255,6 +255,78 @@ describe('useComputeStore', () => {
       expect(store.discoveredItems).toEqual([])
       expect(store.standaloneContainers).toEqual([])
     })
+
+    it('managedStacks should include stacks with services_total=0 (stopped stacks)', async () => {
+      const { computeApi } = await import('@/services/api')
+      vi.mocked(computeApi.getGlobal).mockResolvedValueOnce({
+        data: {
+          managed_stacks: [
+            {
+              id: 'stack-stopped',
+              name: 'stopped-stack',
+              technology: 'compose',
+              target_id: 'target-1',
+              target_name: 'localhost',
+              services_total: 0,
+              services_running: 0,
+              status: 'stopped',
+              services: [],
+            },
+            {
+              id: 'stack-running',
+              name: 'running-stack',
+              technology: 'compose',
+              target_id: 'target-1',
+              target_name: 'localhost',
+              services_total: 2,
+              services_running: 2,
+              status: 'running',
+              services: [],
+            },
+          ],
+          discovered_items: [],
+          standalone_containers: [],
+        },
+      })
+
+      const store = useComputeStore()
+      await store.fetchGlobal()
+
+      expect(store.managedStacks).toHaveLength(2)
+      expect(store.managedStacks.map(s => s.name)).toContain('stopped-stack')
+      expect(store.managedStacks.map(s => s.name)).toContain('running-stack')
+    })
+
+    it('discoveredItems should include items with services_total=0', async () => {
+      const { computeApi } = await import('@/services/api')
+      vi.mocked(computeApi.getGlobal).mockResolvedValueOnce({
+        data: {
+          managed_stacks: [],
+          discovered_items: [
+            {
+              id: 'disc-stopped',
+              name: 'stopped-compose',
+              type: 'composition',
+              technology: 'compose',
+              target_id: 'target-1',
+              target_name: 'localhost',
+              services_total: 0,
+              services_running: 0,
+              detected_at: '2026-01-01T00:00:00Z',
+              adoptable: true,
+              services: [],
+            },
+          ],
+          standalone_containers: [],
+        },
+      })
+
+      const store = useComputeStore()
+      await store.fetchGlobal()
+
+      expect(store.discoveredItems).toHaveLength(1)
+      expect(store.discoveredItems[0].name).toBe('stopped-compose')
+    })
   })
 
   describe('$reset', () => {

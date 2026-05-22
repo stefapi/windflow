@@ -88,10 +88,9 @@ async def list_containers(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         containers = await client.list_containers(all=all)
-        await client.close()
 
         return [
             ContainerResponse(  # type: ignore[call-arg]
@@ -124,6 +123,8 @@ async def list_containers(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la liste des containers: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.get(
@@ -145,10 +146,9 @@ async def get_container(
         f"Getting container {container_id}", extra={"correlation_id": correlation_id}
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         container = await client.get_container(container_id)
-        await client.close()
 
         return ContainerDetailResponse(
             id=container.id,
@@ -182,6 +182,8 @@ async def get_container(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la récupération du container: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.post(
@@ -205,8 +207,8 @@ async def create_container(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
 
         # Créer le container
         container_id = await client.create_container(
@@ -224,7 +226,6 @@ async def create_container(
 
         # Récupérer les détails
         container = await client.get_container(container_id)
-        await client.close()
 
         return ContainerDetailResponse(  # type: ignore[call-arg]
             id=container.id,
@@ -256,6 +257,8 @@ async def create_container(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la création du container: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 # =============================================================================
@@ -404,10 +407,9 @@ async def start_container(
         f"Starting container {container_id}", extra={"correlation_id": correlation_id}
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         await client.start_container(container_id)
-        await client.close()
 
     except aiohttp.ClientResponseError as e:
         if e.status == 304:
@@ -429,6 +431,8 @@ async def start_container(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors du démarrage: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.post(
@@ -451,10 +455,9 @@ async def stop_container(
         f"Stopping container {container_id}", extra={"correlation_id": correlation_id}
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         await client.stop_container(container_id, timeout=timeout)
-        await client.close()
 
     except aiohttp.ClientResponseError as e:
         if e.status == 304:
@@ -476,6 +479,8 @@ async def stop_container(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de l'arrêt: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.post(
@@ -498,10 +503,9 @@ async def restart_container(
         f"Restarting container {container_id}", extra={"correlation_id": correlation_id}
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         await client.restart_container(container_id, timeout=timeout)
-        await client.close()
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
@@ -519,6 +523,8 @@ async def restart_container(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors du redémarrage: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.post(
@@ -540,10 +546,9 @@ async def pause_container(
         f"Pausing container {container_id}", extra={"correlation_id": correlation_id}
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         await client.pause_container(container_id)
-        await client.close()
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
@@ -561,6 +566,8 @@ async def pause_container(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la mise en pause: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.post(
@@ -582,10 +589,9 @@ async def unpause_container(
         f"Unpausing container {container_id}", extra={"correlation_id": correlation_id}
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         await client.unpause_container(container_id)
-        await client.close()
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
@@ -603,6 +609,8 @@ async def unpause_container(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la reprise: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.delete(
@@ -626,10 +634,9 @@ async def remove_container(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         await client.remove_container(container_id, force=force)
-        await client.close()
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
@@ -647,6 +654,8 @@ async def remove_container(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la suppression: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.post(
@@ -675,9 +684,8 @@ async def recreate_container(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
-
         new_id, new_detail = await client.recreate_container(
             container_id=container_id,
             image=recreate_data.image,
@@ -692,7 +700,6 @@ async def recreate_container(
             cap_drop=recreate_data.cap_drop,
             stop_timeout=recreate_data.stop_timeout,
         )
-        await client.close()
 
         container_response = ContainerDetailResponse(
             id=new_detail.id,
@@ -744,6 +751,8 @@ async def recreate_container(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la recréation du container: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.patch(
@@ -767,16 +776,14 @@ async def update_restart_policy(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
-
         restart_policy: dict[str, Any] = {"Name": update_data.name}
         if update_data.maximum_retry_count is not None:
             restart_policy["MaximumRetryCount"] = update_data.maximum_retry_count
 
         update_config = {"RestartPolicy": restart_policy}
         result = await client.update_container(container_id, update_config)
-        await client.close()
 
         return ContainerUpdateResponse(warnings=result.get("Warnings") or [])
 
@@ -796,6 +803,8 @@ async def update_restart_policy(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la mise à jour: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.patch(
@@ -819,9 +828,8 @@ async def update_resources(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
-
         resources: dict[str, Any] = {}
         if update_data.memory_limit is not None:
             resources["Memory"] = update_data.memory_limit
@@ -832,7 +840,6 @@ async def update_resources(
 
         update_config = {"Resources": resources}
         result = await client.update_container(container_id, update_config)
-        await client.close()
 
         return ContainerUpdateResponse(warnings=result.get("Warnings") or [])
 
@@ -852,6 +859,8 @@ async def update_resources(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la mise à jour: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.post(
@@ -875,10 +884,9 @@ async def rename_container(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         await client.rename_container(container_id, rename_data.new_name)
-        await client.close()
 
         return ContainerRenameResponse(
             success=True,
@@ -901,6 +909,8 @@ async def rename_container(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors du renommage: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.post(
@@ -929,15 +939,14 @@ async def connect_container_to_network(
         },
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         await client.connect_container_to_network(
             network_id=connect_data.network_id,
             container_id=container_id,
             aliases=connect_data.aliases,
             ipv4_address=connect_data.ipv4_address,
         )
-        await client.close()
 
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -957,6 +966,8 @@ async def connect_container_to_network(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la connexion au réseau: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.post(
@@ -985,14 +996,13 @@ async def disconnect_container_from_network(
         },
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         await client.disconnect_container_from_network(
             network_id=disconnect_data.network_id,
             container_id=container_id,
             force=disconnect_data.force,
         )
-        await client.close()
 
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -1012,6 +1022,8 @@ async def disconnect_container_from_network(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la déconnexion du réseau: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.post(
@@ -1040,11 +1052,10 @@ async def promote_container(
         },
     )
 
+    client = await get_docker_client()
     try:
         # 1. Inspect the container via Docker API
-        client = await get_docker_client()
         container_info = await client.inspect_container(container_id)
-        await client.close()
 
         # 2. Check if container is already managed
         labels = container_info.get("Config", {}).get("Labels") or {}
@@ -1120,9 +1131,9 @@ async def promote_container(
         # Container name as service key
         container_name = container_info.get("Name", "").lstrip("/") or "service"
         # Sanitize name for compose service key
+        import re
         service_key = container_name.replace("_", "-").replace(".", "-").lower()
         # Ensure it starts with alphanumeric
-        import re
         service_key = re.sub(r"[^a-z0-9-]", "", service_key)
         if not service_key or not service_key[0].isalnum():
             service_key = f"svc-{service_key}"
@@ -1191,6 +1202,8 @@ async def promote_container(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la promotion: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.get(
@@ -1272,14 +1285,13 @@ async def get_container_stats(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
 
         # Get single stats snapshot (stream=False)
         # container_stats() is an async generator — consume first item
         stats_gen = client.container_stats(container_id, stream=False)
         stats_data = await anext(stats_gen)
-        await client.close()
 
         # Format the response using existing helper
         return format_stats_response(container_id, stats_data)
@@ -1300,6 +1312,8 @@ async def get_container_stats(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la récupération des stats: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.get(
@@ -1325,10 +1339,9 @@ async def get_container_processes(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         data = await client.list_processes(container_id, ps_args=ps_args)
-        await client.close()
 
         # Parser la réponse Docker
         titles = data.get("Titles", [])
@@ -1402,6 +1415,8 @@ async def get_container_processes(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la récupération des processus: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.get(
@@ -1425,8 +1440,8 @@ async def get_container_logs(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
 
         # Collecter les logs
         logs_lines = []
@@ -1436,8 +1451,6 @@ async def get_container_logs(
             timestamps=timestamps,
         ):
             logs_lines.append(line)
-
-        await client.close()
 
         logs_text = "\n".join(logs_lines)
 
@@ -1462,6 +1475,8 @@ async def get_container_logs(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la récupération des logs: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 # =============================================================================
@@ -1491,13 +1506,12 @@ async def list_images(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         images = await client.list_images(all=all)
 
         # Récupérer les containers pour calculer l'utilisation des images
         containers = await client.list_containers(all=True)
-        await client.close()
 
         # Construire un mapping image_id_short → count
         # ContainerInfo.image_id est au format "sha256:abc123..." (complet)
@@ -1528,6 +1542,8 @@ async def list_images(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la liste des images: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.get(
@@ -1552,10 +1568,9 @@ async def get_image(
         extra={"correlation_id": correlation_id, "image_id": image_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         data = await client.inspect_image(image_id)
-        await client.close()
 
         # Parser le dict Docker pour peupler ImageDetailResponse
         config = data.get("Config", {}) or {}
@@ -1602,6 +1617,8 @@ async def get_image(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de l'inspection de l'image: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.post(
@@ -1632,14 +1649,13 @@ async def pull_image(
         last_status = event.status
         last_id = event.id
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         pull_status = await client.pull_image(
             name=pull_data.name,
             tag=pull_data.tag,
             on_progress=on_progress,
         )
-        await client.close()
 
         return ImagePullResponse(  # type: ignore[call-arg]
             status=pull_status,
@@ -1652,6 +1668,8 @@ async def pull_image(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors du pull: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.delete(
@@ -1674,10 +1692,9 @@ async def remove_image(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         result = await client.remove_image(image_id, force=force)
-        await client.close()
 
         return result
 
@@ -1697,6 +1714,8 @@ async def remove_image(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la suppression: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.post(
@@ -1739,8 +1758,10 @@ async def load_image(
         )
 
         client = await get_docker_client()
-        status_msg = await client.load_image(tar_bytes)
-        await client.close()
+        try:
+            status_msg = await client.load_image(tar_bytes)
+        finally:
+            await client.close()
 
         return {"success": True, "message": status_msg}
 
@@ -1771,10 +1792,9 @@ async def save_image(
         extra={"correlation_id": correlation_id, "image_id": image_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         tar_bytes = await client.save_image(image_id)
-        await client.close()
 
         logger.info(
             "image_save_complete",
@@ -1809,6 +1829,8 @@ async def save_image(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de l'export de l'image: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 # =============================================================================
@@ -1837,10 +1859,9 @@ async def list_volumes(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         volumes = await client.list_volumes()
-        await client.close()
 
         return [
             VolumeResponse(  # type: ignore[call-arg]
@@ -1860,6 +1881,8 @@ async def list_volumes(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la liste des volumes: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.post(
@@ -1882,14 +1905,13 @@ async def create_volume(
         f"Creating volume {volume_data.name}", extra={"correlation_id": correlation_id}
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         volume = await client.create_volume(
             name=volume_data.name,
             driver=volume_data.driver,
             labels=volume_data.labels,
         )
-        await client.close()
 
         return VolumeResponse(  # type: ignore[call-arg]
             name=volume.name,
@@ -1916,6 +1938,8 @@ async def create_volume(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la création: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.delete(
@@ -1939,10 +1963,9 @@ async def remove_volume(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         await client.remove_volume(volume_name, force=force)
-        await client.close()
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
@@ -1960,6 +1983,8 @@ async def remove_volume(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la suppression: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 # =============================================================================
@@ -1988,10 +2013,9 @@ async def list_networks(
         extra={"correlation_id": correlation_id},
     )
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         networks = await client.list_networks()
-        await client.close()
 
         return [
             NetworkResponse(
@@ -2015,6 +2039,8 @@ async def list_networks(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la liste des réseaux: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 # =============================================================================
@@ -2035,10 +2061,9 @@ async def get_system_info(request: Request, current_user: User = Depends(get_cur
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info("Getting Docker system info", extra={"correlation_id": correlation_id})
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         info = await client.system_info()
-        await client.close()
 
         return SystemInfoResponse(  # type: ignore[call-arg]
             id=info.id,
@@ -2065,6 +2090,8 @@ async def get_system_info(request: Request, current_user: User = Depends(get_cur
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la récupération des infos: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.get(
@@ -2080,10 +2107,9 @@ async def get_version(request: Request, current_user: User = Depends(get_current
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info("Getting Docker version", extra={"correlation_id": correlation_id})
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         version = await client.system_version()
-        await client.close()
 
         return SystemVersionResponse(  # type: ignore[call-arg]
             version=version.get("Version", ""),
@@ -2103,6 +2129,8 @@ async def get_version(request: Request, current_user: User = Depends(get_current
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la récupération de la version: {str(e)}",
         )
+    finally:
+        await client.close()
 
 
 @router.get(
@@ -2118,10 +2146,9 @@ async def ping(request: Request, current_user: User = Depends(get_current_active
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info("Pinging Docker", extra={"correlation_id": correlation_id})
 
+    client = await get_docker_client()
     try:
-        client = await get_docker_client()
         available = await client.ping()
-        await client.close()
 
         return PingResponse(
             available=available,
@@ -2139,3 +2166,5 @@ async def ping(request: Request, current_user: User = Depends(get_current_active
             available=False,
             message=f"Error: {str(e)}",
         )
+    finally:
+        await client.close()

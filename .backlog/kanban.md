@@ -25,8 +25,6 @@ _(vide)_
 
 ## ✅ DONE
 
-> **EPIC-008** : Couverture Frontend des APIs Backend — *Fermée le 2026-05-22 (38 stories supprimées)*
-
 ### EPIC-009 : Refonte ContainerDetail — Homogénéisation et édition complète
 - [x] STORY-024 : Homogénéisation visuelle — onglet Infos au design d'Aperçu
 - [x] STORY-025 : Backend — Endpoint de recréation de container (`/recreate`)

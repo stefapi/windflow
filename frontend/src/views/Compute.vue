@@ -234,18 +234,18 @@ const availableTechnologies = computed<string[]>(() => {
 const techCount = computed(() => availableTechnologies.value.length)
 
 const visibleManagedStacks = computed(() =>
-  computeStore.managedStacks.filter(stack => stack.services_total > 0),
+  computeStore.managedStacks,
 )
 
 const visibleDiscoveredItems = computed(() =>
-  computeStore.discoveredItems.filter(item => item.services_total > 0),
+  computeStore.discoveredItems,
 )
 
 const filteredTargetGroups = computed(() =>
   computeStore.targetGroups.map(group => ({
     ...group,
-    stacks: group.stacks.filter(stack => stack.services_total > 0),
-    discovered: group.discovered.filter(item => item.services_total > 0),
+    stacks: group.stacks,
+    discovered: group.discovered,
   })),
 )
 

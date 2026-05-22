@@ -99,6 +99,53 @@ test.describe('Vue Compute', () => {
     await expect(page.locator('.section-header', { hasText: 'DISCOVERED' })).not.toBeVisible()
   })
 
+  test('affiche les stacks avec services_total=0 (bug fix listes vides)', async ({ page }) => {
+    // Override du mock pour inclure une stack stopped avec services_total=0
+    const globalWithStoppedStack = {
+      ...DEFAULT_COMPUTE_GLOBAL,
+      managed_stacks: [
+        ...DEFAULT_COMPUTE_GLOBAL.managed_stacks,
+        {
+          id: 'stack-003',
+          name: 'empty-stack',
+          technology: 'compose',
+          target_id: 'target-001',
+          target_name: 'localhost',
+          services_total: 0,
+          services_running: 0,
+          status: 'stopped',
+          services: [],
+        },
+      ],
+    }
+    await page.route('**/api/v1/compute/global**', async (route) => {
+      const url = route.request().url()
+      if (!url.includes('group_by=target')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(globalWithStoppedStack),
+        })
+      } else {
+        await route.continue()
+      }
+    })
+
+    await page.goto('/compute')
+    await expect(page.locator('.compute-view')).toBeVisible({ timeout: 15000 })
+    await page.waitForTimeout(1000)
+
+    // La section STACKS WINDFLOW doit être visible
+    await expect(page.locator('.section-header', { hasText: 'STACKS WINDFLOW' })).toBeVisible()
+
+    // Le collapse doit contenir la stack "empty-stack" (services_total=0)
+    const collapseItems = page.locator('.el-collapse-item')
+    await expect(collapseItems.filter({ hasText: 'empty-stack' })).toBeVisible()
+
+    // Vérifier que "0/0 running" est affiché pour cette stack
+    await expect(page.locator('.el-collapse-item', { hasText: 'empty-stack' }).locator('span', { hasText: '0/0 running' })).toBeVisible()
+  })
+
   test('toggle Par machine regroupe par target', async ({ page }) => {
     await page.goto('/compute')
     await expect(page.locator('.compute-view')).toBeVisible({ timeout: 15000 })
