@@ -196,3 +196,4 @@ messages.mo
 # Projet exemple à ignorer
 /colibri/
 /frontend/test-results/
+/frontend/playwright-report/
