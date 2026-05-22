@@ -25,45 +25,7 @@ _(vide)_
 
 ## ✅ DONE
 
-### EPIC-008 : Couverture Frontend des APIs Backend
-- [x] [STORY-039.1](.backlog/stories/STORY-039.1-docs-user-guide-compute.md) : Documentation utilisateur — Vue Compute
-- [x] [STORY-039.2](.backlog/stories/STORY-039.2-docs-user-guide-docker-assets.md) : Documentation utilisateur — Images, Volumes, Réseaux et Système Docker
-- [x] [STORY-039.3](.backlog/stories/STORY-039.3-docs-user-guide-stacks.md) : Documentation utilisateur — Import/export et actions sur les stacks
-- [x] [STORY-039.4](.backlog/stories/STORY-039.4-docs-user-guide-adoption-containers.md) : Documentation utilisateur — Adoption, création et édition de containers
-- [x] [STORY-039](.backlog/stories/STORY-039-user-documentation.md) : Documentation utilisateur — Nouvelles fonctionnalités
-- [x] STORY-038 : Tests E2E — Flux critiques EPIC-008
-- [x] STORY-037 : Couverture frontend — Installation et vérification
-- [x] STORY-036 : Tests manquants — STORY-004 StackActionsBar
-- [x] STORY-035 : Pagination des listes Docker
-- [x] STORY-034 : Nettoyage lint et type checking backend
-- [x] STORY-033 : Correction des tests backend défaillants
-- [x] STORY-032 : Sécurité — Authentification sur les endpoints Docker
-- [x] STORY-031 : Images Docker — Sélection, actions en lot, usage et détail
-- [x] [STORY-031.1](.backlog/stories/STORY-031.1-backend-api-images-enrichie-inspect-import-export.md) : Backend — API Images enrichie, inspect et import/export — Amélioration
-- [x] [STORY-031.2](.backlog/stories/STORY-031.2-frontend-vue-images-detail.md) : Frontend — Vue Images complète (sélection, usage, détail) — Amélioration
-- [x] STORY-020 : Page informations système Docker
-- [x] STORY-019 : Création manuelle de containers Docker
-- [x] STORY-018 : Widget informations système Docker
-- [x] STORY-017 : Détection des shells disponibles dans le terminal
-- [x] STORY-016 : Statistiques détaillées par stack
-- [x] STORY-015 : Visualisation des réseaux Docker
-- [x] STORY-014 : Gestion des volumes Docker - Suppression
-- [x] STORY-013 : Gestion des volumes Docker - Liste et création
-- [x] STORY-012 : Promotion container standalone en stack
-- [x] STORY-001 : Backend — Endpoints Compute Stats et Global
-- [x] STORY-002 : Backend — Refactoring des services de listage Docker
-- [x] STORY-003 : Wizard d'adoption d'objets découverts
-- [x] STORY-004 : Actions globales de stack (Start/Stop/Redeploy)
-- [x] STORY-005 : Gestion des images Docker - Liste et visualisation
-- [x] STORY-006 : Gestion des images Docker - Pull et suppression
-- [x] STORY-007 : Export de stacks au format JSON
-- [x] STORY-008 : Import de stacks depuis fichier JSON
-- [x] STORY-009 : Édition à chaud des containers — Restart policy et limites ressources
-- [x] STORY-010 : Duplication de stack
-- [x] STORY-011 : Archivage de stack
-- [x] STORY-021 : Frontend — Vue globale Compute avec bandeau et 3 sections
-- [x] STORY-022 : Frontend — Refactoring de Compute.vue en sous-composants
-- [x] STORY-023 : Frontend — Harmonisation tables containers et actions en masse
+> **EPIC-008** : Couverture Frontend des APIs Backend — *Fermée le 2026-05-22 (38 stories supprimées)*
 
 ### EPIC-009 : Refonte ContainerDetail — Homogénéisation et édition complète
 - [x] STORY-024 : Homogénéisation visuelle — onglet Infos au design d'Aperçu

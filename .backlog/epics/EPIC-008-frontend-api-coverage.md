@@ -199,64 +199,15 @@ Fonctionnalités avancées :
 
 ## Liste des Stories liées
 
-### 🔴 Priorité Haute
+> ⚠️ Cette epic est fermée. Toutes les stories ont été supprimées le 2026-05-22.
+>
+> **Stories supprimées :** STORY-001, STORY-002, STORY-003, STORY-004, STORY-005, STORY-006, STORY-007, STORY-008, STORY-009, STORY-010, STORY-011, STORY-012, STORY-013, STORY-014, STORY-015, STORY-016, STORY-017, STORY-018, STORY-019, STORY-020, STORY-021, STORY-022, STORY-023, STORY-031, STORY-031.1, STORY-031.2, STORY-032, STORY-033, STORY-034, STORY-035, STORY-036, STORY-037, STORY-038, STORY-039, STORY-039.1, STORY-039.2, STORY-039.3, STORY-039.4
 
-#### Modèle Compute - Vue Globale
+## Historique de clôture
 
-- [x] STORY-001 : Backend — Endpoints Compute Stats et Global
-- [x] STORY-021 : Frontend — Vue globale Compute avec bandeau et 3 sections
-- [x] STORY-002 : Backend — Refactoring des services de listage Docker
-- [x] STORY-022 : Frontend — Refactoring de Compute.vue en sous-composants
-- [x] STORY-023 : Frontend — Harmonisation tables containers et actions en masse
-- [x] STORY-003 : Wizard d'adoption d'objets découverts
-- [x] STORY-004 : Actions globales de stack (Start/Stop/Redeploy)
-
-#### Images Docker
-- [x] STORY-005 : Gestion des images Docker - Liste et visualisation
-- [x] STORY-006 : Gestion des images Docker - Pull et suppression
-- [x] STORY-031 : Images Docker — Sélection, actions en lot, usage et détail
-
-#### Export/Import Stacks
-- [x] STORY-007 : Export de stacks au format JSON
-- [x] STORY-008 : Import de stacks depuis fichier JSON
-
-#### Compute - Containers
-- [x] STORY-009 : Édition à chaud des containers — Restart policy et limites ressources
-
-### 🟡 Priorité Moyenne
-
-#### Modèle Compute - Stack Management
-- [x] STORY-010 : Duplication de stack
-- [x] STORY-011 : Archivage de stack
-- [x] STORY-012 : Promotion container standalone en stack
-
-#### Volumes Docker
-- [x] STORY-013 : Gestion des volumes Docker - Liste et création
-- [x] STORY-014 : Gestion des volumes Docker - Suppression
-
-#### Networks Docker
-- [x] STORY-015 : Visualisation des réseaux Docker
-
-#### Stats & Terminal
-- [x] STORY-016 : Statistiques détaillées par stack
-- [x] STORY-017 : Détection des shells disponibles dans le terminal
-- [x] STORY-018 : Widget informations système Docker
-
-### 🟢 Priorité Basse
-
-- [x] STORY-019 : Création manuelle de containers Docker
-- [x] STORY-020 : Page informations système Docker
-
-### 🔧 Stories correctives (post-audit)
-
-- [x] STORY-032 : Sécurité — Authentification sur les endpoints Docker
-- [x] STORY-033 : Correction des tests backend défaillants
-- [x] STORY-034 : Nettoyage lint et type checking backend
-- [x] STORY-035 : Pagination des listes Docker
-- [x] STORY-036 : Tests manquants — STORY-004 StackActionsBar
-- [x] STORY-037 : Couverture frontend — Installation et vérification
-- [x] STORY-038 : Tests E2E — Flux critiques EPIC-008
-- [x] STORY-039 : Documentation utilisateur — Nouvelles fonctionnalités
+- **Date de fermeture :** 2026-05-22
+- **Stories supprimées :** 38 stories (26 principales + 2 sous-stories STORY-031.x + 4 sous-stories STORY-039.x + 6 stories correctives)
+- **Raison :** Epic terminée — rapport de finalisation score 93% ✅ CONFORME
 
 ---
 
