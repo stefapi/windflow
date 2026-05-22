@@ -3,11 +3,9 @@
 ## 📋 BACKLOG
 
 ### EPIC-008 : Couverture Frontend des APIs Backend
-- [ ] STORY-035 : Pagination des listes Docker
-- [ ] STORY-036 : Tests manquants — STORY-004 StackActionsBar
-- [ ] STORY-037 : Couverture frontend — Installation et vérification
-- [ ] STORY-038 : Tests E2E — Flux critiques EPIC-008
 - [ ] STORY-039 : Documentation utilisateur — Nouvelles fonctionnalités
+
+## 🏗️ IN PROGRESS
 
 ### EPIC-009 : Refonte ContainerDetail — Homogénéisation et édition complète
 - [ ] STORY-028 : Frontend Config — Gestion des réseaux à chaud
@@ -23,15 +21,15 @@ _(vide)_
 
 ## 🚧 REVIEW
 
-### EPIC-008 : Couverture Frontend des APIs Backend
-_(vide)_
-
-### EPIC-009 : Refonte ContainerDetail — Homogénéisation et édition complète
 _(vide)_
 
 ## ✅ DONE
 
 ### EPIC-008 : Couverture Frontend des APIs Backend
+- [x] STORY-038 : Tests E2E — Flux critiques EPIC-008
+- [x] STORY-037 : Couverture frontend — Installation et vérification
+- [x] STORY-036 : Tests manquants — STORY-004 StackActionsBar
+- [x] STORY-035 : Pagination des listes Docker
 - [x] STORY-034 : Nettoyage lint et type checking backend
 - [x] STORY-033 : Correction des tests backend défaillants
 - [x] STORY-032 : Sécurité — Authentification sur les endpoints Docker

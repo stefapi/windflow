@@ -9,7 +9,7 @@ import logging
 from typing import Any, List, Optional
 
 import aiohttp
-from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_active_user
@@ -70,19 +70,21 @@ logger = logging.getLogger(__name__)
     "/containers",
     response_model=List[ContainerResponse],
     summary="List containers",
-    description="List all Docker containers (running and stopped).",
+    description="List all Docker containers (running and stopped). Supports pagination with skip and limit parameters.",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
 async def list_containers(
     request: Request,
     all: bool = True,
+    skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
+    limit: int = Query(50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Liste tous les containers Docker."""
+    """Liste tous les containers Docker avec pagination."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
-        f"Listing Docker containers (all={all})",
+        f"Listing Docker containers (all={all}, skip={skip}, limit={limit})",
         extra={"correlation_id": correlation_id},
     )
 
@@ -108,7 +110,7 @@ async def list_containers(
                 restart_count=c.restart_count,
             )
             for c in containers
-        ]
+        ][skip : skip + limit]
 
     except ConnectionError as e:
         logger.error(f"Docker not available: {e}")
@@ -1471,19 +1473,22 @@ async def get_container_logs(
     "/images",
     response_model=List[ImageResponse],
     summary="List images",
-    description="List all Docker images.",
+    description="List all Docker images. Supports pagination with skip and limit parameters.",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
 async def list_images(
     request: Request,
     all: bool = False,
+    skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
+    limit: int = Query(50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Liste toutes les images Docker avec indicateur d'utilisation par containers."""
+    """Liste toutes les images Docker avec indicateur d'utilisation par containers et pagination."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
-        f"Listing Docker images (all={all})", extra={"correlation_id": correlation_id}
+        f"Listing Docker images (all={all}, skip={skip}, limit={limit})",
+        extra={"correlation_id": correlation_id},
     )
 
     try:
@@ -1515,7 +1520,7 @@ async def list_images(
                 containers_count=image_usage.get(img.id, 0),
             )
             for img in images
-        ]
+        ][skip : skip + limit]
 
     except Exception as e:
         logger.error(f"Error listing images: {e}")
@@ -1815,16 +1820,22 @@ async def save_image(
     "/volumes",
     response_model=List[VolumeResponse],
     summary="List volumes",
-    description="List all Docker volumes.",
+    description="List all Docker volumes. Supports pagination with skip and limit parameters.",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
-async def list_volumes(request: Request,
+async def list_volumes(
+    request: Request,
+    skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
+    limit: int = Query(50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Liste tous les volumes Docker."""
+    """Liste tous les volumes Docker avec pagination."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info("Listing Docker volumes", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Listing Docker volumes (skip={skip}, limit={limit})",
+        extra={"correlation_id": correlation_id},
+    )
 
     try:
         client = await get_docker_client()
@@ -1841,7 +1852,7 @@ async def list_volumes(request: Request,
                 scope=v.scope,
             )
             for v in volumes
-        ]
+        ][skip : skip + limit]
 
     except Exception as e:
         logger.error(f"Error listing volumes: {e}")
@@ -1960,16 +1971,22 @@ async def remove_volume(
     "/networks",
     response_model=List[NetworkResponse],
     summary="List networks",
-    description="List all Docker networks.",
+    description="List all Docker networks. Supports pagination with skip and limit parameters.",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
-async def list_networks(request: Request,
+async def list_networks(
+    request: Request,
+    skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
+    limit: int = Query(50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Liste tous les réseaux Docker."""
+    """Liste tous les réseaux Docker avec pagination."""
     correlation_id = getattr(request.state, "correlation_id", None)
-    logger.info("Listing Docker networks", extra={"correlation_id": correlation_id})
+    logger.info(
+        f"Listing Docker networks (skip={skip}, limit={limit})",
+        extra={"correlation_id": correlation_id},
+    )
 
     try:
         client = await get_docker_client()
@@ -1990,7 +2007,7 @@ async def list_networks(request: Request,
                 gateway=n.gateway,
             )
             for n in networks
-        ]
+        ][skip : skip + limit]
 
     except Exception as e:
         logger.error(f"Error listing networks: {e}")
