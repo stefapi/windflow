@@ -3,7 +3,11 @@
 ## 📋 BACKLOG
 
 ### EPIC-008 : Couverture Frontend des APIs Backend
-- [ ] STORY-039 : Documentation utilisateur — Nouvelles fonctionnalités
+- [~] STORY-039 : Documentation utilisateur — Nouvelles fonctionnalités
+- [ ] [STORY-039.1](.backlog/stories/STORY-039.1-docs-user-guide-compute.md) : Documentation utilisateur — Vue Compute
+- [ ] [STORY-039.2](.backlog/stories/STORY-039.2-docs-user-guide-docker-assets.md) : Documentation utilisateur — Images, Volumes, Réseaux et Système Docker
+- [ ] [STORY-039.3](.backlog/stories/STORY-039.3-docs-user-guide-stacks.md) : Documentation utilisateur — Import/export et actions sur les stacks
+- [ ] [STORY-039.4](.backlog/stories/STORY-039.4-docs-user-guide-adoption-containers.md) : Documentation utilisateur — Adoption, création et édition de containers
 
 ## 🏗️ IN PROGRESS
 

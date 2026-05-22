@@ -1,6 +1,6 @@
 # STORY-039 : Documentation utilisateur — Nouvelles fonctionnalités
 
-**Statut :** TODO
+**Statut :** IN_PROGRESS
 **Epic Parent :** EPIC-008 — Couverture Frontend des APIs Backend
 **Type :** Documentation
 **Priorité :** Basse (mais critère epic)
@@ -46,12 +46,24 @@ Rédiger la documentation utilisateur pour toutes les nouvelles fonctionnalités
 - [ ] AC 9 : Documentation pour la création manuelle de containers
 - [ ] AC 10 : Documentation pour l'édition à chaud (restart policy, ressources)
 
-## Tâches d'implémentation
-- [ ] Créer ou mettre à jour `docs/user-guide/compute.md` — Vue Compute
-- [ ] Créer ou mettre à jour `docs/user-guide/docker-images.md` — Gestion des images
-- [ ] Créer ou mettre à jour `docs/user-guide/docker-volumes.md` — Gestion des volumes
-- [ ] Créer ou mettre à jour `docs/user-guide/docker-networks.md` — Réseaux Docker
-- [ ] Créer ou mettre à jour `docs/user-guide/system-info.md` — Informations système
-- [ ] Créer ou mettre à jour `docs/user-guide/stacks.md` — Actions de stack, import/export
-- [ ] Créer ou mettre à jour `docs/user-guide/adoption.md` — Adoption d'objets
-- [ ] Créer ou mettre à jour `docs/user-guide/containers.md` — Création et édition
+## Sous-stories
+- [ ] [STORY-039.1](.backlog/stories/STORY-039.1-docs-user-guide-compute.md) : Documentation utilisateur — Vue Compute — Couvre AC 1
+- [ ] [STORY-039.2](.backlog/stories/STORY-039.2-docs-user-guide-docker-assets.md) : Documentation utilisateur — Images, Volumes, Réseaux et Système Docker — Couvre AC 2–5
+- [ ] [STORY-039.3](.backlog/stories/STORY-039.3-docs-user-guide-stacks.md) : Documentation utilisateur — Import/export et actions sur les stacks — Couvre AC 6–7
+- [ ] [STORY-039.4](.backlog/stories/STORY-039.4-docs-user-guide-adoption-containers.md) : Documentation utilisateur — Adoption, création et édition de containers — Couvre AC 8–10
+
+## Tâches d'implémentation détaillées
+
+> ⚠️ Cette story a été découpée en sous-stories avant implémentation (complexité détectée par analyse-story).
+> Toutes les tâches ont été redistribuées dans les sous-stories listées ci-dessus.
+> Consulter chaque sous-story pour les tâches détaillées.
+
+## État d'avancement technique
+
+> ⚠️ L'avancement technique est désormais suivi dans les sous-stories individuelles.
+
+**Progression :** 0/4 sous-stories terminées
+- [ ] STORY-039.1 : Documentation utilisateur — Vue Compute
+- [ ] STORY-039.2 : Documentation utilisateur — Images, Volumes, Réseaux et Système Docker
+- [ ] STORY-039.3 : Documentation utilisateur — Import/export et actions sur les stacks
+- [ ] STORY-039.4 : Documentation utilisateur — Adoption, création et édition de containers
