@@ -1,6 +1,6 @@
  # EPIC-008 : Couverture Frontend des APIs Backend
 
-**Statut :** IN_PROGRESS
+**Statut :** DONE
 **Priorité :** Haute
 
 ## Vision
@@ -256,7 +256,7 @@ Fonctionnalités avancées :
 - [x] STORY-036 : Tests manquants — STORY-004 StackActionsBar
 - [x] STORY-037 : Couverture frontend — Installation et vérification
 - [x] STORY-038 : Tests E2E — Flux critiques EPIC-008
-- [ ] STORY-039 : Documentation utilisateur — Nouvelles fonctionnalités
+- [x] STORY-039 : Documentation utilisateur — Nouvelles fonctionnalités
 
 ---
 

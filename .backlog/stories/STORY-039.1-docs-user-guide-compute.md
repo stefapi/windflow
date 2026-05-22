@@ -1,6 +1,6 @@
 # STORY-039.1 : Documentation utilisateur — Vue Compute
 
-**Statut :** TODO
+**Statut :** DONE
 **Story Parente :** STORY-039 — Documentation utilisateur — Nouvelles fonctionnalités
 **Epic Parent :** EPIC-008 — Couverture Frontend des APIs Backend
 
@@ -8,7 +8,7 @@
 Rédiger le guide utilisateur pour la vue Compute globale de WindFlow. Cette vue est le centre de gestion des ressources compute et présente un bandeau de statistiques en temps réel, trois sections distinctes (Stacks WindFlow managés, objets découverts, containers standalone) et des filtres combinables avec un toggle « Par machine ».
 
 ## Critères d'acceptation (AC)
-- [ ] AC 1 : Documentation pour la vue Compute (bandeau stats, 3 sections, filtres)
+- [x] AC 1 : Documentation pour la vue Compute (bandeau stats, 3 sections, filtres)
 
 ## Contexte technique
 
@@ -158,13 +158,50 @@ grep -n "](frontend/" docs/user-guide/compute.md || true
 ---
 
 ## État d'avancement technique
-- [ ] Tâche 1 : Créer la structure et l'introduction du guide
-- [ ] Tâche 2 : Documenter le bandeau de statistiques
-- [ ] Tâche 3 : Documenter la section Stacks WindFlow (managées)
-- [ ] Tâche 4 : Documenter la section Discovered et Standalone
-- [ ] Tâche 5 : Documenter les filtres combinables et le toggle « Par machine »
-- [ ] Validation documentation (liens, termes, composants, endpoints)
-- [ ] Syntaxe Markdown OK (markdownlint)
+- [x] Tâche 1 : Créer la structure et l'introduction du guide
+- [x] Tâche 2 : Documenter le bandeau de statistiques
+- [x] Tâche 3 : Documenter la section Stacks WindFlow (managées)
+- [x] Tâche 4 : Documenter la section Discovered et Standalone
+- [x] Tâche 5 : Documenter les filtres combinables et le toggle « Par machine »
+- [x] Validation documentation (liens, termes, composants, endpoints)
+- [x] Syntaxe Markdown OK (markdownlint)
 
 ## Notes d'implémentation
-<!-- Ajoutées à la clôture par treat-story -->
+
+**Date :** 2026-05-22
+
+### Fichiers créés
+- `docs/user-guide/compute.md` — Guide utilisateur complet pour la vue Compute (261 lignes)
+
+### Fichiers de référence lus (validation des termes)
+- `frontend/src/views/Compute.vue` — orchestrateur, toggle, filtres
+- `frontend/src/components/ComputeStatsBanner.vue` — 5 métriques du bandeau
+- `frontend/src/components/compute/ManagedStacksSection.vue` — stacks, expansion, bulk
+- `frontend/src/components/compute/StackActionsBar.vue` — actions globales stack
+- `frontend/src/components/compute/DiscoveredSection.vue` — discovered, adoption
+- `frontend/src/components/compute/StandaloneSection.vue` — standalone, bulk delete
+- `frontend/src/components/compute/TargetGroupView.vue` — vue par machine
+- `frontend/src/components/compute/BulkActionBar.vue` — actions en masse
+- `frontend/src/types/api.ts` — types ComputeStatsResponse, ComputeGlobalView, TargetGroup, etc.
+- `backend/app/api/v1/compute.py` — endpoints GET /compute/stats et GET /compute/global
+
+### Validation documentation (checklist)
+| # | Validation | Résultat |
+|---|------------|----------|
+| 1 | Noms de composants Vue exacts | ✅ Vérifiés contre le code source |
+| 2 | Endpoints API exacts | ✅ `GET /compute/stats`, `GET /compute/global` confirmés |
+| 3 | Types TypeScript exacts | ✅ Vérifiés dans `frontend/src/types/api.ts` |
+| 4 | Termes UI correspondants | ✅ managed/discovered/standalone, Stacks WindFlow, Par machine, Adopter, Promouvoir en stack |
+| 5 | Lien `docs/general_specs/12-compute-model.md` | ✅ Fichier existe |
+| 6 | Cohérence avec EPIC-008 | ✅ Fonctionnalités documentées issues de STORY-001 à STORY-004 |
+| 7 | Syntaxe Markdown | ✅ Aucune erreur structurelle détectée (markdownlint non installé) |
+
+### Divergences par rapport à l'analyse
+- **Tâche 3** : La story mentionnait les actions `duplicate`, `export`, `archive` dans `StackActionsBar`. En réalité, le composant `StackActionsBar.vue` ne contient que **Démarrer, Arrêter, Redéployer**. Les actions duplicate/export/archive existent dans l'API (`stacksApi`) mais ne sont pas intégrées dans la barre d'actions de la vue Compute. La documentation a été ajustée pour refléter l'UI réelle.
+
+### Décisions techniques
+- Pas de décision technique particulière (story de documentation pure)
+- Les liens vers les guides futurs (`STORY-039.3` et `STORY-039.4`) sont laissés comme références ; ils seront résolus lors de la création de ces fichiers
+
+### Tests ajoutés
+- Aucun (documentation statique sans tests automatisés applicables)

@@ -2,12 +2,11 @@
 
 ## 📋 BACKLOG
 
-### EPIC-008 : Couverture Frontend des APIs Backend
-- [~] STORY-039 : Documentation utilisateur — Nouvelles fonctionnalités
-- [ ] [STORY-039.1](.backlog/stories/STORY-039.1-docs-user-guide-compute.md) : Documentation utilisateur — Vue Compute
-- [ ] [STORY-039.2](.backlog/stories/STORY-039.2-docs-user-guide-docker-assets.md) : Documentation utilisateur — Images, Volumes, Réseaux et Système Docker
-- [ ] [STORY-039.3](.backlog/stories/STORY-039.3-docs-user-guide-stacks.md) : Documentation utilisateur — Import/export et actions sur les stacks
-- [ ] [STORY-039.4](.backlog/stories/STORY-039.4-docs-user-guide-adoption-containers.md) : Documentation utilisateur — Adoption, création et édition de containers
+_(vide)_
+
+## 🏗️ IN PROGRESS
+
+_(vide)_
 
 ## 🏗️ IN PROGRESS
 
@@ -15,9 +14,6 @@
 - [ ] STORY-028 : Frontend Config — Gestion des réseaux à chaud
 - [ ] STORY-029 : Frontend Config — Édition volumes et sécurité (recréation)
 - [ ] STORY-030 : Frontend Config — Implémentation réelle env vars et labels (recréation)
-## 🏗️ IN PROGRESS
-
-_(vide)_
 
 ## 🚫 BLOCKED
 
@@ -30,6 +26,11 @@ _(vide)_
 ## ✅ DONE
 
 ### EPIC-008 : Couverture Frontend des APIs Backend
+- [x] [STORY-039.1](.backlog/stories/STORY-039.1-docs-user-guide-compute.md) : Documentation utilisateur — Vue Compute
+- [x] [STORY-039.2](.backlog/stories/STORY-039.2-docs-user-guide-docker-assets.md) : Documentation utilisateur — Images, Volumes, Réseaux et Système Docker
+- [x] [STORY-039.3](.backlog/stories/STORY-039.3-docs-user-guide-stacks.md) : Documentation utilisateur — Import/export et actions sur les stacks
+- [x] [STORY-039.4](.backlog/stories/STORY-039.4-docs-user-guide-adoption-containers.md) : Documentation utilisateur — Adoption, création et édition de containers
+- [x] [STORY-039](.backlog/stories/STORY-039-user-documentation.md) : Documentation utilisateur — Nouvelles fonctionnalités
 - [x] STORY-038 : Tests E2E — Flux critiques EPIC-008
 - [x] STORY-037 : Couverture frontend — Installation et vérification
 - [x] STORY-036 : Tests manquants — STORY-004 StackActionsBar
