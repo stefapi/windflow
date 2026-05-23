@@ -1,5 +1,5 @@
 /**
- * ContainerConfigTab.vue Unit Tests — STORY-024 + STORY-027
+ * ContainerConfigTab.vue Unit Tests — STORY-024 + STORY-027 + STORY-028
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -15,11 +15,20 @@ vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue(undefined)
 const mockUpdateRestartPolicy = vi.fn()
 const mockUpdateResources = vi.fn()
 const mockRecreate = vi.fn()
+const mockConnectNetwork = vi.fn()
+const mockDisconnectNetwork = vi.fn()
+const mockNetworksList = vi.fn()
+
 vi.mock('@/services/api', () => ({
   containersApi: {
     updateRestartPolicy: (...args: unknown[]) => mockUpdateRestartPolicy(...args),
     updateResources: (...args: unknown[]) => mockUpdateResources(...args),
     recreate: (...args: unknown[]) => mockRecreate(...args),
+    connectNetwork: (...args: unknown[]) => mockConnectNetwork(...args),
+    disconnectNetwork: (...args: unknown[]) => mockDisconnectNetwork(...args),
+  },
+  networksApi: {
+    list: (...args: unknown[]) => mockNetworksList(...args),
   },
 }))
 
@@ -93,7 +102,12 @@ const baseDetail: ContainerDetail = {
     runtime: null,
     resources: { memory: 536870912, memory_reservation: null, memory_swap: null, cpu_shares: 1024, cpu_period: null, cpu_quota: null, cpus: null, cpuset_cpus: null, pids_limit: 100 },
   },
-  network_settings: { networks: {} },
+  network_settings: {
+    networks: {
+      bridge: { ip_address: '172.17.0.2', gateway: '172.17.0.1', mac_address: '02:42:ac:11:00:02', network_id: 'net1', endpoint_id: 'ep1', ipv6_gateway: null, global_ipv6_address: null, ip_prefix_len: 16, driver: 'bridge' },
+      'my-custom-network': { ip_address: '192.168.1.10', gateway: '192.168.1.1', mac_address: '02:42:c0:a8:01:0a', network_id: 'net2', endpoint_id: 'ep2', ipv6_gateway: null, global_ipv6_address: null, ip_prefix_len: 24, driver: 'bridge' },
+    },
+  },
   mounts: [],
   size_rw: null,
   size_root_fs: null,
@@ -113,6 +127,15 @@ describe('ContainerConfigTab.vue', () => {
         container: {},
         warnings: [],
       },
+    })
+    mockConnectNetwork.mockResolvedValue({ data: undefined })
+    mockDisconnectNetwork.mockResolvedValue({ data: undefined })
+    mockNetworksList.mockResolvedValue({
+      data: [
+        { id: 'net1', name: 'bridge', driver: 'bridge', scope: 'local', internal: false, attachable: false, ingress: false, created: '2025-01-01', subnet: '172.17.0.0/16', gateway: '172.17.0.1' },
+        { id: 'net2', name: 'my-custom-network', driver: 'bridge', scope: 'local', internal: false, attachable: false, ingress: false, created: '2025-01-01', subnet: '192.168.1.0/24', gateway: '192.168.1.1' },
+        { id: 'net3', name: 'other-network', driver: 'bridge', scope: 'local', internal: false, attachable: false, ingress: false, created: '2025-01-01', subnet: '10.0.0.0/24', gateway: '10.0.0.1' },
+      ],
     })
   })
 
@@ -161,10 +184,10 @@ describe('ContainerConfigTab.vue', () => {
       expect(wrapper.find('.config-tab').exists()).toBe(true)
     })
 
-    it('should render 6 config cards', async () => {
+    it('should render 7 config cards', async () => {
       const wrapper = await mountComponent()
       const cards = wrapper.findAll('.el-card-stub')
-      expect(cards.length).toBe(6)
+      expect(cards.length).toBe(7)
     })
 
     it('should render card headers with correct titles', async () => {
@@ -176,6 +199,7 @@ describe('ContainerConfigTab.vue', () => {
       expect(text).toContain('Ports')
       expect(text).toContain('Restart Policy')
       expect(text).toContain('Resource Limits')
+      expect(text).toContain('Réseaux')
     })
 
     it('should render Image card with correct header', async () => {
@@ -193,11 +217,12 @@ describe('ContainerConfigTab.vue', () => {
     it('should render warning alerts for image and ports sections', async () => {
       const wrapper = await mountComponent()
       const alerts = wrapper.findAll('.el-alert-stub')
-      // 4 alerts total: env, labels, image, ports
-      expect(alerts.length).toBe(4)
+      // 5 alerts total: env, labels, image, ports, networks (info)
+      expect(alerts.length).toBe(5)
       const allText = alerts.map((a) => a.text()).join(' ')
       expect(allText).toContain('image')
       expect(allText).toContain('ports')
+      expect(allText).toContain('redémarrage')
     })
   })
 
@@ -412,7 +437,7 @@ describe('ContainerConfigTab.vue', () => {
     it('should render warning alerts for env vars and labels sections', async () => {
       const wrapper = await mountComponent()
       const alerts = wrapper.findAll('.el-alert-stub')
-      expect(alerts.length).toBe(4)
+      expect(alerts.length).toBe(5)
       expect(alerts[0].text()).toContain('variables d\'environnement')
       expect(alerts[1].text()).toContain('labels')
     })
@@ -753,6 +778,178 @@ describe('ContainerConfigTab.vue', () => {
       const vm = wrapper.vm as unknown as { memoryValue: number; memoryUnit: string }
       expect(vm.memoryValue).toBe(0)
       expect(vm.memoryUnit).toBe('MB')
+    })
+  })
+
+  describe('Networks — rendering', () => {
+    it('should render Networks card with correct header', async () => {
+      const wrapper = await mountComponent()
+      const text = wrapper.text()
+      expect(text).toContain('Réseaux')
+    })
+
+    it('should render info alert for networks section', async () => {
+      const wrapper = await mountComponent()
+      const alerts = wrapper.findAll('.el-alert-stub')
+      const infoAlert = alerts.find((a) => a.text().includes('redémarrage'))
+      expect(infoAlert).toBeTruthy()
+    })
+
+    it('should display connected networks in table', async () => {
+      const wrapper = await mountComponent()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { connectedNetworks: { name: string; ip_address: string }[] }
+      expect(vm.connectedNetworks.length).toBe(2)
+      expect(vm.connectedNetworks[0].name).toBe('bridge')
+      expect(vm.connectedNetworks[1].name).toBe('my-custom-network')
+    })
+  })
+
+  describe('Networks — loading available networks', () => {
+    it('should load available networks on mount', async () => {
+      await mountComponent()
+      await flushPromises()
+      expect(mockNetworksList).toHaveBeenCalled()
+    })
+
+    it('should filter out already connected networks from select', async () => {
+      const wrapper = await mountComponent()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { filteredAvailableNetworks: { name: string }[] }
+      // bridge and my-custom-network are connected, so only other-network should be available
+      expect(vm.filteredAvailableNetworks.length).toBe(1)
+      expect(vm.filteredAvailableNetworks[0].name).toBe('other-network')
+    })
+
+    it('should handle empty available networks list', async () => {
+      mockNetworksList.mockResolvedValue({ data: [] })
+      const wrapper = await mountComponent()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { filteredAvailableNetworks: unknown[] }
+      expect(vm.filteredAvailableNetworks.length).toBe(0)
+    })
+
+    it('should handle networks API failure gracefully', async () => {
+      mockNetworksList.mockRejectedValue(new Error('Network error'))
+      const wrapper = await mountComponent()
+      await flushPromises()
+      expect(wrapper.exists()).toBe(true)
+    })
+  })
+
+  describe('Networks — connect', () => {
+    it('should call connectNetwork API when Connect button is clicked', async () => {
+      const wrapper = await mountComponent()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { selectedNetwork: string; connectNetwork: () => Promise<void> }
+      vm.selectedNetwork = 'net3'
+      await vm.connectNetwork()
+      await flushPromises()
+
+      expect(mockConnectNetwork).toHaveBeenCalledWith('abc123', { network_id: 'net3' })
+    })
+
+    it('should emit network-changed after successful connect', async () => {
+      const wrapper = await mountComponent()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { selectedNetwork: string; connectNetwork: () => Promise<void> }
+      vm.selectedNetwork = 'net3'
+      await vm.connectNetwork()
+      await flushPromises()
+
+      expect(wrapper.emitted('network-changed')).toBeTruthy()
+    })
+
+    it('should not call API when no network is selected', async () => {
+      const wrapper = await mountComponent()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { selectedNetwork: string; connectNetwork: () => Promise<void> }
+      vm.selectedNetwork = ''
+      await vm.connectNetwork()
+      await flushPromises()
+
+      expect(mockConnectNetwork).not.toHaveBeenCalled()
+    })
+
+    it('should show error message on connect API failure', async () => {
+      mockConnectNetwork.mockRejectedValue(new Error('Network not found'))
+      const wrapper = await mountComponent()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { selectedNetwork: string; connectNetwork: () => Promise<void> }
+      vm.selectedNetwork = 'net3'
+      await vm.connectNetwork()
+      await flushPromises()
+
+      expect(mockConnectNetwork).toHaveBeenCalled()
+    })
+  })
+
+  describe('Networks — disconnect', () => {
+    it('should call disconnectNetwork API when Disconnect button is clicked', async () => {
+      const wrapper = await mountComponent()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { disconnectNetwork: (name: string) => Promise<void> }
+      await vm.disconnectNetwork('bridge')
+      await flushPromises()
+
+      expect(mockDisconnectNetwork).toHaveBeenCalledWith('abc123', { network_id: 'bridge' })
+    })
+
+    it('should emit network-changed after successful disconnect', async () => {
+      const wrapper = await mountComponent()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { disconnectNetwork: (name: string) => Promise<void> }
+      await vm.disconnectNetwork('bridge')
+      await flushPromises()
+
+      expect(wrapper.emitted('network-changed')).toBeTruthy()
+    })
+
+    it('should show error message on disconnect API failure', async () => {
+      mockDisconnectNetwork.mockRejectedValue(new Error('Cannot disconnect'))
+      const wrapper = await mountComponent()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { disconnectNetwork: (name: string) => Promise<void> }
+      await vm.disconnectNetwork('bridge')
+      await flushPromises()
+
+      expect(mockDisconnectNetwork).toHaveBeenCalled()
+    })
+  })
+
+  describe('Networks — loading states', () => {
+    it('should disable connect button while loading', async () => {
+      const wrapper = await mountComponent()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { loadingConnect: boolean }
+      expect(vm.loadingConnect).toBe(false)
+    })
+
+    it('should disable disconnect button while loading', async () => {
+      const wrapper = await mountComponent()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { loadingDisconnect: Record<string, boolean> }
+      expect(vm.loadingDisconnect['bridge']).toBeFalsy()
+    })
+  })
+
+  describe('Networks — edge cases', () => {
+    it('should handle detail null without error', async () => {
+      const wrapper = await mountComponent({ detail: null })
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { connectedNetworks: unknown[] }
+      expect(vm.connectedNetworks.length).toBe(0)
+    })
+
+    it('should handle empty network_settings', async () => {
+      const detailNoNetworks = {
+        ...baseDetail,
+        network_settings: { networks: {} },
+      }
+      const wrapper = await mountComponent({ detail: detailNoNetworks })
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { connectedNetworks: unknown[] }
+      expect(vm.connectedNetworks.length).toBe(0)
     })
   })
 })

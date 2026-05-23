@@ -497,11 +497,99 @@
         </el-button>
       </div>
     </el-card>
+
+    <!-- Section 7 : Réseaux (vert) -->
+    <el-card
+      class="config-card card-config-networks"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-green">
+          <el-icon><Connection /></el-icon>
+          <span>Réseaux</span>
+        </div>
+      </template>
+
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        class="section-alert"
+      >
+        ℹ️ Les connexions/déconnexions se font sans redémarrage
+      </el-alert>
+
+      <el-table
+        :data="connectedNetworks"
+        class="config-table"
+        empty-text="Aucun réseau connecté"
+      >
+        <el-table-column
+          label="Réseau"
+          min-width="200"
+        >
+          <template #default="{ row }">
+            <span>{{ row.name }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="IP Address"
+          min-width="150"
+        >
+          <template #default="{ row }">
+            <span>{{ row.ip_address }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Actions"
+          width="120"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-button
+              type="danger"
+              size="small"
+              :loading="loadingDisconnect[row.name]"
+              :disabled="loadingDisconnect[row.name]"
+              @click="disconnectNetwork(row.name)"
+            >
+              Déconnecter
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="section-actions">
+        <el-select
+          v-model="selectedNetwork"
+          placeholder="Sélectionner un réseau..."
+          size="small"
+          style="width: 240px"
+          :loading="loadingNetworks"
+        >
+          <el-option
+            v-for="net in filteredAvailableNetworks"
+            :key="net.id"
+            :label="net.name"
+            :value="net.id"
+          />
+        </el-select>
+        <el-button
+          type="primary"
+          size="small"
+          :loading="loadingConnect"
+          :disabled="loadingConnect || !selectedNetwork"
+          @click="connectNetwork"
+        >
+          Connecter
+        </el-button>
+      </div>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   CirclePlus,
@@ -512,14 +600,18 @@ import {
   Cpu,
   Picture,
   MapLocation,
+  Connection,
 } from '@element-plus/icons-vue'
-import { containersApi } from '@/services/api'
+import { containersApi, networksApi } from '@/services/api'
 import { formatBytes } from '@/utils/format'
 import { isSecretKey, useSecretMasker } from '@/composables/useSecretMasker'
 import type {
   ContainerDetail,
   ContainerUpdateRestartPolicyRequest,
   ContainerUpdateResourcesRequest,
+  NetworkResponse,
+  ContainerNetworkConnectRequest,
+  ContainerNetworkDisconnectRequest,
 } from '@/types/api'
 
 const props = defineProps<{
@@ -528,6 +620,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'recreate-success', newId: string): void
+  (e: 'network-changed'): void
 }>()
 
 const masker = useSecretMasker()
@@ -567,6 +660,86 @@ const memoryUnit = ref<'MB' | 'GB'>('MB')
 const cpuShares = ref<number>(0)
 const pidsLimit = ref<number>(-1)
 const loadingResources = ref(false)
+
+// ─── Networks ───
+const availableNetworks = ref<NetworkResponse[]>([])
+const selectedNetwork = ref('')
+const loadingNetworks = ref(false)
+const loadingConnect = ref(false)
+const loadingDisconnect = ref<Record<string, boolean>>({})
+
+const connectedNetworks = computed(() => {
+  const networks = props.detail?.network_settings?.networks
+  if (!networks) return []
+  return Object.entries(networks).map(([name, info]) => ({
+    name,
+    ip_address: info.ip_address ?? '-',
+    network_id: info.network_id ?? name,
+  }))
+})
+
+const filteredAvailableNetworks = computed(() => {
+  const connectedNames = new Set(connectedNetworks.value.map((n) => n.name))
+  return availableNetworks.value.filter((n) => !connectedNames.has(n.name))
+})
+
+async function loadAvailableNetworks(): Promise<void> {
+  loadingNetworks.value = true
+  try {
+    const response = await networksApi.list()
+    availableNetworks.value = response.data
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur lors du chargement des réseaux'
+    ElMessage.error(message)
+  } finally {
+    loadingNetworks.value = false
+  }
+}
+
+async function connectNetwork(): Promise<void> {
+  if (!props.detail?.id || !selectedNetwork.value) return
+
+  const data: ContainerNetworkConnectRequest = {
+    network_id: selectedNetwork.value,
+  }
+
+  loadingConnect.value = true
+  try {
+    await containersApi.connectNetwork(props.detail.id, data)
+    ElMessage.success('Réseau connecté avec succès')
+    selectedNetwork.value = ''
+    emit('network-changed')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur lors de la connexion au réseau'
+    ElMessage.error(message)
+  } finally {
+    loadingConnect.value = false
+  }
+}
+
+async function disconnectNetwork(networkName: string): Promise<void> {
+  if (!props.detail?.id) return
+
+  const data: ContainerNetworkDisconnectRequest = {
+    network_id: networkName,
+  }
+
+  loadingDisconnect.value = { ...loadingDisconnect.value, [networkName]: true }
+  try {
+    await containersApi.disconnectNetwork(props.detail.id, data)
+    ElMessage.success('Réseau déconnecté avec succès')
+    emit('network-changed')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur lors de la déconnexion du réseau'
+    ElMessage.error(message)
+  } finally {
+    loadingDisconnect.value = { ...loadingDisconnect.value, [networkName]: false }
+  }
+}
+
+onMounted(() => {
+  loadAvailableNetworks()
+})
 
 // ─── Watch detail changes to populate fields ───
 watch(
@@ -940,6 +1113,10 @@ async function applyResources(): Promise<void> {
   color: var(--el-color-danger);
 }
 
+.header-green {
+  color: var(--el-color-success);
+}
+
 /* ─── Card border-bottom colors ─── */
 .card-config-env :deep(.el-card__header) {
   border-bottom: 3px solid var(--el-color-info);
@@ -963,6 +1140,10 @@ async function applyResources(): Promise<void> {
 
 .card-config-resources :deep(.el-card__header) {
   border-bottom: 3px solid var(--el-color-danger);
+}
+
+.card-config-networks :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-success);
 }
 
 /* ─── Section content styles ─── */

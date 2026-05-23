@@ -62,6 +62,8 @@ import type {
   ContainerCreateRequest,
   ContainerRecreateRequest,
   ContainerRecreateResponse,
+  ContainerNetworkConnectRequest,
+  ContainerNetworkDisconnectRequest,
   VolumeResponse,
   VolumeCreateRequest,
   ImageResponse,
@@ -378,6 +380,12 @@ export const containersApi = {
 
   recreate: (id: string, data: ContainerRecreateRequest) =>
     http.post<ContainerRecreateResponse>(`/docker/containers/${id}/recreate`, data),
+
+  connectNetwork: (id: string, data: ContainerNetworkConnectRequest) =>
+    http.post<void>(`/docker/containers/${id}/networks/connect`, data),
+
+  disconnectNetwork: (id: string, data: ContainerNetworkDisconnectRequest) =>
+    http.post<void>(`/docker/containers/${id}/networks/disconnect`, data),
 }
 
 // Docker Images API

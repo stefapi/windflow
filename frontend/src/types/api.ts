@@ -1157,3 +1157,16 @@ export interface ContainerRecreateResponse {
   container: ContainerDetail
   warnings: string[]
 }
+
+/** Requête POST /docker/containers/{id}/networks/connect */
+export interface ContainerNetworkConnectRequest {
+  network_id: string
+  aliases?: string[]
+  ipv4_address?: string
+}
+
+/** Requête POST /docker/containers/{id}/networks/disconnect */
+export interface ContainerNetworkDisconnectRequest {
+  network_id: string
+  force?: boolean
+}
