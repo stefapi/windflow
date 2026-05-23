@@ -1236,6 +1236,667 @@ Inspiré de Proxmox (arbre Datacenter → Node → VM/CT) et Incus (`incus list`
 
 ---
 
+## Écran 13 : Liste Machines (famille Machines)
+
+Inspiré de **Proxmox VE** (liste de VMs avec status) et **Incus/LXD** (`incus list`) et **Scaleway Console** (cards moderne pour les instances). Famille Machines uniquement — pour les Apps, voir Écran 2 ; pour les Hosts, voir Écran 17.
+
+```
+┌─ Machines ────────────────────────────[🏪 Templates] [+ Nouvelle Machine]─┐
+│                                                                            │
+│  Filtres : [▼ Tout statut] [▼ Tout Host] [▼ Tout OS] [🔍 Rechercher]      │
+│  Mes Machines (4)                                                          │
+│                                                                            │
+│  ┌─ 🖥️ ubuntu-dev ──────────────────────────── 🟢 Running ───────────┐ │
+│  │  Ubuntu 22.04 LTS · KVM · 2 vCPU · 2 GB RAM · 20 GB                  │ │
+│  │  Sur : nas-server  ·  IP : 192.168.1.55                               │ │
+│  │  CPU 12% · RAM 1.8/2 GB · 📸 2 snapshots                              │ │
+│  │  💡 Cette Machine héberge 3 Apps Docker  [→ Gérer comme Host]         │ │
+│  │                                                                       │ │
+│  │  [🔗 SSH] [⏵ Power ▾] [📸 Snapshot] [🖥 VNC] [⚙ Hardware]        [⋯] │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+│  ┌─ 🖥️ pfsense-router ──────────────────────── 🟢 Running ───────────┐ │
+│  │  pfSense 2.7 · KVM · 1 vCPU · 512 MB RAM · 4 GB                       │ │
+│  │  Sur : nas-server  ·  IP : 192.168.1.1 (gateway)                      │ │
+│  │  CPU 8% · RAM 384/512 MB · pas de snapshots                           │ │
+│  │  💡 Console graphique requise (pas de SSH par défaut)                  │ │
+│  │                                                                       │ │
+│  │  [🔗 Web UI] [⏵ Power ▾] [📸 Snapshot] [🖥 VNC] [⚙ Hardware]     [⋯] │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+│  ┌─ 🖥️ k3s-node-1 ──────────────────────────── 🟢 Running ───────────┐ │
+│  │  Alpine 3.19 · LXC system container · 2 vCPU · 4 GB · 20 GB         │ │
+│  │  Sur : nas-server  ·  IP : 192.168.1.61                               │ │
+│  │  CPU 35% · RAM 2.8/4 GB · 📸 1 snapshot                               │ │
+│  │  💡 Membre du cluster k3s-cluster  [→ Voir le cluster]                │ │
+│  │                                                                       │ │
+│  │  [🔗 SSH] [⏵ Power ▾] [📸 Snapshot] [🖥 Console] [⚙ Config]       [⋯] │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+│  ┌─ 🖥️ windows-legacy ────────────────────────── ⚪ Stopped ──────────┐ │
+│  │  Windows Server 2019 · KVM · 4 vCPU · 8 GB · 80 GB                   │ │
+│  │  Sur : nas-server  ·  Arrêtée depuis 12 jours                         │ │
+│  │  📸 3 snapshots dont "before-patch-tuesday"                            │ │
+│  │                                                                       │ │
+│  │  [▶ Power on] [📸 Snapshots] [⚙ Hardware] [🗑]                    [⋯] │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Points clés de la famille Machines :**
+
+- **Barre d'action canonique** : `[🔗 Ouvrir/SSH]` `[⏵ Power ▾]` `[📸 Snapshot]` `[🖥 VNC/Console]` `[⚙ Hardware]` `[⋯]`. Différente de la barre d'Apps : on parle "Power" (matériel) et non "Lifecycle" (service), `Snapshot` est canonique au lieu d'être dans le menu Plus, et `Hardware` remplace `Config`.
+- **Status pill** : `🟢 Running` / `⚪ Stopped` / `🟡 Paused` / `🟡 Suspended` / `🔴 Crashed`. Vocabulaire matériel.
+- **Le split-button `[⏵ Power ▾]`** propose : Power on / Power off (ACPI shutdown) / Reboot / Reset (hard reboot) / Pause / Suspend (hibernation).
+- **Notes contextuelles `💡`** : signalent les cas particuliers (machine qui héberge des Apps, membre d'un cluster, console requise). Évitent de surcharger les cards tout en donnant le contexte clé.
+- **Cas récursif** : `ubuntu-dev` est une Machine **et** un Host pour ses 3 Apps Docker internes. Le bouton `[→ Gérer comme Host]` bascule vers la vue Host (Écran 19) de la même entité.
+- **Cas particulier LXC** : `k3s-node-1` est un system container LXC, traité comme une Machine (OS complet, SSH possible) mais avec quelques actions limitées.
+- **Stopped machines** affichent une barre d'action réduite (pas de console, pas de snapshot d'état mémoire — seulement les actions applicables hors-tension).
+
+---
+
+## Écran 14 : Détail Machine
+
+Inspiré de **Proxmox** (onglets identiques VM/CT) et **Incus** (même grammaire UI pour tous les types). Squelette identique au détail App (Écran 3) — c'est ce qui crée la cohérence inter-familles — mais vocabulaire matériel.
+
+```
+┌─ Détail Machine : ubuntu-dev ────────────────────────────────────────────┐
+│                                                                          │
+│  🖥️ ubuntu-dev                  🟢 Running (3 jours)         [🔗 SSH]   │
+│  Ubuntu 22.04 LTS · KVM · IP : 192.168.1.55                              │
+│  Sur : nas-server  ·  CPU 12% · 1.8 / 2 GB RAM · 8.2 / 20 GB disque     │
+│  💡 Cette Machine héberge 3 Apps  [→ Gérer comme Host]                  │
+│                                                                          │
+│  [🔗 SSH] [⏵ Power ▾] [📸 Snapshot] [🖥 VNC] [⚙ Hardware]            [⋯]│
+│                                                                          │
+│  ┌Aperçu┬Console VNC┬Métriques┬Disques┬Réseau┬Snapshots┬Apps hébergées┐│
+│  │       ┴Hardware┬Config                                              │ │
+│  │                                                                     │ │
+│  │  ── Aperçu (actif) ──                                              │ │
+│  │                                                                     │ │
+│  │  ┌─ Système ─────────────────────────────────────────────────┐    │ │
+│  │  │  Type       KVM/QEMU via libvirt                          │    │ │
+│  │  │  OS         Ubuntu 22.04.3 LTS (cloud-init initialisé)    │    │ │
+│  │  │  Kernel     5.15.0-91-generic                              │    │ │
+│  │  │  Firmware   EFI · Secure Boot désactivé                    │    │ │
+│  │  │  Hostname   ubuntu-dev                                     │    │ │
+│  │  │  Utilisateurs (cloud-init)   ubuntu (clé SSH)              │    │ │
+│  │  └────────────────────────────────────────────────────────────┘    │ │
+│  │                                                                     │ │
+│  │  ┌─ Ressources allouées ─────────────────────────────────────┐    │ │
+│  │  │  CPU       2 vCPU (host-passthrough)                       │    │ │
+│  │  │  ├ Charge  ██░░░░░░░░ 12%                                  │    │ │
+│  │  │  RAM       2 GB (ballooning activé)                         │    │ │
+│  │  │  ├ Utilisé █████████░ 1.8 / 2 GB                            │    │ │
+│  │  │  Disque    20 GB qcow2 (thin provisioning)                  │    │ │
+│  │  │  ├ Utilisé ████░░░░░░ 8.2 / 20 GB                           │    │ │
+│  │  │  Réseau    eth0 (virtio) · bridge vmbr0                     │    │ │
+│  │  │  ├ I/O     ↑ 2.4 MB/s   ↓ 890 KB/s                          │    │ │
+│  │  └────────────────────────────────────────────────────────────┘    │ │
+│  │                                                                     │ │
+│  │  ┌─ Apps hébergées dans cette Machine (3) ────────────────────┐   │ │
+│  │  │  ☁️ dev-postgres   🟢 PostgreSQL 15 (docker)  · 89 MB        │   │ │
+│  │  │  🔴 dev-redis      🟢 Redis 7 (docker)        · 12 MB        │   │ │
+│  │  │  📊 dev-monitoring 🟢 prom + grafana (compose) · 145 MB     │   │ │
+│  │  │                                          [→ Voir toutes]      │   │ │
+│  │  │  ──────────────────────────────────────────────────────       │   │ │
+│  │  │  💡 Pour piloter ces Apps (start/stop/update/sauvegarder),    │   │ │
+│  │  │     basculer sur la vue Host de cette même Machine.           │   │ │
+│  │  │  [→ Gérer comme Host]                                          │   │ │
+│  │  └─────────────────────────────────────────────────────────────┘  │ │
+│  │                                                                     │ │
+│  │  ┌─ Snapshots récents (2) ────────────────────────────────────┐   │ │
+│  │  │  📸 clean-install   2026-03-28 10:00 · 1.2 GB     [⟲]      │   │ │
+│  │  │  📸 before-update   2026-04-29 15:30 · 0.8 GB     [⟲]      │   │ │
+│  │  │                                          [+ Nouveau snapshot]│   │ │
+│  │  └────────────────────────────────────────────────────────────┘  │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Convergence avec les autres familles :**
+
+| Élément | Détail App (Écran 3) | Détail Machine (ici) | Détail Host (Écran 18) |
+|---------|----------------------|------------------------|-------------------------|
+| Squelette | Header + Action bar + Tabs | Identique | Identique |
+| Barre d'action | 5 verbes + `[⋯]` | 5 verbes + `[⋯]` | 5 verbes + `[⋯]` |
+| Onglet 1 | Aperçu | Aperçu | Aperçu |
+| Onglet 2+ | Logs, Console, Métriques, Sauvegardes | Console VNC, Métriques, Disques, Réseau, Snapshots, Hardware | Apps déployées, Machines hébergées, Services système, Métriques |
+| Dernier onglet | Config | Config | Config |
+
+L'utilisateur reconnaît la grammaire visuelle. Les onglets et leur contenu reflètent la nature de la famille — mais leur position et leur ordre suivent le même schéma (Aperçu en premier, Config en dernier).
+
+**L'onglet "Apps hébergées"** est conditionnel : il n'apparaît que si la Machine a un moteur container détecté (Docker, Podman, k8s). Sans moteur, l'onglet n'est pas montré.
+
+**Menu contextuel `[⋯ Plus]` pour cette Machine (extrait section "Avancé (KVM)") :**
+
+```
+── Avancé (KVM) ──
+📋  Cloner cette Machine
+📦  Convertir en template
+📈  Redimensionner un disque…           (submenu)
+🖥  Console VNC plein écran
+🔁  Migrer vers un autre Host           (live migration si possible)
+📥  Importer/exporter qcow2
+</> Éditer la définition libvirt (XML)   (advanced)
+```
+
+---
+
+## Écran 15 : Snapshots VM (arbre)
+
+Inspiré de **Proxmox** (arbre de snapshots) et **VMware vSphere** (gestion graphique des snapshots). Spécifique famille Machines.
+
+```
+┌─ Snapshots : ubuntu-dev ─────────────────────────────────────────────────┐
+│                                                                          │
+│  🖥️ ubuntu-dev                                       [+ Nouveau snapshot]│
+│                                                                          │
+│  Mode : [⊞ Arbre]  [☰ Liste plate]   Vue : [Tous] [Adopté] [Cassé]      │
+│                                                                          │
+│  ── Arbre de snapshots ────────────────────────────────────────────     │
+│                                                                          │
+│  📌  État actuel (running)                                               │
+│  │                                                                       │
+│  ├─ 📸  clean-install                              2026-03-28 10:00     │
+│  │      Snapshot froid · 1.2 GB · Description : "Capture après          │
+│  │      installation initiale, cloud-init terminé"                       │
+│  │      [⟲ Restaurer]  [📋 Cloner machine depuis]  [📦 → Template]  [🗑]│
+│  │                                                                       │
+│  └─ 📸  before-update                              2026-04-29 15:30     │
+│         Snapshot chaud (RAM incluse) · 0.8 GB                            │
+│         Description : "Avant mise à jour kernel 5.15 → 6.1"             │
+│         [⟲ Restaurer]  [📋 Cloner machine depuis]  [🗑]                  │
+│         │                                                                │
+│         └─ 📸  after-broken-kernel-update          2026-04-30 09:15     │
+│                Snapshot froid · 0.3 GB · État cassé                      │
+│                Description : "Test reverted — kernel 6.1 ne boote pas"  │
+│                [⟲ Restaurer]  [🗑]                                       │
+│                                                                          │
+│  ⚠ La chaîne `before-update → after-broken-kernel-update` dépasse 2     │
+│    niveaux. Pour la performance I/O, considérer la consolidation avec   │
+│    un backup complet (plugin Restic) puis la suppression de la chaîne.  │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Nouveau snapshot — modal :**
+
+```
+┌─ Nouveau snapshot : ubuntu-dev ──────────────────────────────────────────┐
+│                                                                          │
+│  Nom *           [_______________________]                              │
+│  Description     [_______________________]                              │
+│                  [_______________________]                              │
+│                                                                          │
+│  Type            ● Chaud (avec mémoire)  · 1-2 minutes · ~RAM Go        │
+│                  ◯ Froid (disques seuls) · 30s · plus léger             │
+│                                                                          │
+│  Compression     [▼ zstd (recommandé)  ]                                │
+│                                                                          │
+│  💡 Un snapshot chaud capture l'état exact (processus en cours, RAM).   │
+│     Un snapshot froid n'a que les disques — utile pour une sauvegarde   │
+│     rapide.                                                              │
+│                                                                          │
+│                                       [Annuler]  [Créer le snapshot]   │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Écran 16 : Hardware Editor (Machine)
+
+Spécifique famille Machines. Inspiré de **Proxmox** (édition hardware par sections) et **VirtualBox** (panneaux).
+
+```
+┌─ Hardware : ubuntu-dev ──────────────────────────────────────────────────┐
+│                                                                          │
+│  ⚠ Cette Machine est en cours d'exécution. La plupart des changements   │
+│    nécessitent un redémarrage pour être appliqués (indiqué par ↻).      │
+│                                                                          │
+│  ┌─ CPU & Mémoire ─────────────────────────────────────────────────┐   │
+│  │  vCPU       [ - ] 2 [ + ] cores                          ↻       │   │
+│  │  Modèle CPU [▼ host-passthrough              ]           ↻       │   │
+│  │  RAM        [ - ] 2048 [ + ] MB                                   │   │
+│  │  Ballooning  ✓ activé (alloué dynamiquement)                      │   │
+│  │  NUMA        ✗ désactivé                                ↻ avancé │   │
+│  └───────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  ┌─ Disques (1) ──────────────────────────────────────────────────────┐ │
+│  │  vda · qcow2 · 20 GB · monté sur /                                 │ │
+│  │   ├ Bus       virtio       Cache  writeback                         │ │
+│  │   ├ Discard   ✓ (TRIM)     SSD emulation  ✓                         │ │
+│  │   └ [📈 Resize] [💾 Sauvegarder] [📂 Parcourir] [🗑 Détacher]       │ │
+│  │                                                                     │ │
+│  │  [+ Ajouter un disque]   [+ Monter une ISO]                         │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                          │
+│  ┌─ Interfaces réseau (1) ────────────────────────────────────────────┐ │
+│  │  eth0 · virtio · MAC 52:54:00:af:12:38 · IP 192.168.1.55           │ │
+│  │   ├ Bridge   [▼ vmbr0 (LAN principal)  ]                ↻          │ │
+│  │   ├ Modèle   [▼ virtio                  ]                ↻          │ │
+│  │   ├ Firewall ✓ règles libvirt actives                              │ │
+│  │   └ [🗑 Retirer]                                                    │ │
+│  │                                                                     │ │
+│  │  [+ Ajouter une interface]                                          │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                          │
+│  ┌─ Périphériques (avancé) ───────────────────────────────────────────┐ │
+│  │  ◯ Aucun  ● Sélectionner                                            │ │
+│  │  USB         pas de pass-through configuré       [+ Ajouter]         │ │
+│  │  PCI         pas de pass-through configuré       [+ Ajouter]         │ │
+│  │  GPU         pas de pass-through configuré       [+ Ajouter]         │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                          │
+│  ┌─ Firmware ─────────────────────────────────────────────────────────┐ │
+│  │  Type         ◯ BIOS (SeaBIOS)   ● EFI (OVMF)            ↻         │ │
+│  │  Secure Boot  ✗ désactivé                                ↻          │ │
+│  │  TPM 2.0      ✗ désactivé                                ↻          │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                          │
+│  Légende : ↻ nécessite un redémarrage                                   │
+│                                                                          │
+│       [Annuler]  [Sauvegarder]  [Sauvegarder + Redémarrer maintenant]   │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Mode Infra ciblé** : un toggle `[</> Vue native (XML libvirt)]` en haut bascule l'écran sur l'éditeur XML direct (Monaco editor avec coloration syntaxique).
+
+---
+
+## Écran 17 : Liste Hosts (famille Hosts)
+
+Inspiré de **Coolify** (cards de serveurs avec métriques) et **Proxmox** (cluster view avec nodes). Détaille les 5 types de Hosts possibles.
+
+```
+┌─ Hosts ───────────────────────────────────────[+ Ajouter un Host]───────┐
+│                                                                          │
+│  Mes Hosts (5)              [▼ Tous types] [▼ Tous statuts]              │
+│                                                                          │
+│  ┌─ 🖧 local (RPi 4) ───────────────────────── 🟢 Online · 15j ───────┐│
+│  │  Type : Baremetal SSH · arm64 · Ubuntu 22.04                         ││
+│  │  CPU 38% · RAM 1.2/4 GB · Disque 28/64 GB · 🌡 52°C                  ││
+│  │  Moteurs : 🐳 Docker ✓  ✗ libvirt  ✗ k8s                              ││
+│  │  Héberge : 3 Apps · 0 Machines · 5 services système (1 adopté)      ││
+│  │                                                                       ││
+│  │  [📊 Détails] [🖥 SSH] [📋 journalctl]                            [⋯]││
+│  └──────────────────────────────────────────────────────────────────────┘│
+│                                                                          │
+│  ┌─ 🖧 nas-server ─────────────────────────── 🟢 Online · 47j ───────┐│
+│  │  Type : Baremetal SSH · x86_64 · Ubuntu 22.04                       ││
+│  │  CPU 12% · RAM 4.8/16 GB · Disque 1.2/4 TB · 🌡 38°C                ││
+│  │  Moteurs : 🐳 Docker ✓  ✅ libvirt ✓  ✗ k8s                          ││
+│  │  Héberge : 5 Apps · 3 Machines · 8 services système (2 adoptés)     ││
+│  │                                                                       ││
+│  │  [📊 Détails] [🖥 SSH] [📋 journalctl]                            [⋯]││
+│  └──────────────────────────────────────────────────────────────────────┘│
+│                                                                          │
+│  ┌─ 🖧 ubuntu-dev ──────────────────────────── 🟢 Online · 3j ─────────┐│
+│  │  Type : Baremetal (Machine sur nas-server)                          ││
+│  │  💡 Aussi une Machine [→ Voir comme Machine]                         ││
+│  │  Ubuntu 22.04 · 2 vCPU · 1.8/2 GB RAM                                ││
+│  │  Moteurs : 🐳 Docker ✓  ✗ libvirt  ✗ k8s                              ││
+│  │  Héberge : 3 Apps · 0 sous-Machines                                   ││
+│  │                                                                       ││
+│  │  [📊 Détails] [🖥 SSH] [→ Voir comme Machine]                    [⋯] ││
+│  └──────────────────────────────────────────────────────────────────────┘│
+│                                                                          │
+│  ┌─ 🖧 k3s-cluster ───────────────────────── 🟢 Online · 3 nodes ─────┐│
+│  │  Type : Kubernetes (k3s v1.28.5) · 3 nodes amd64                   ││
+│  │  Total : CPU 22% · RAM 8.4/24 GB · 23 pods · 4 namespaces           ││
+│  │  Moteurs : ✗ Docker (containerd interne)  ✗ libvirt  ✅ k3s + helm  ││
+│  │  Héberge : 2 Apps (helm releases) · 0 Machines                       ││
+│  │                                                                       ││
+│  │  [📊 Détails] [🖥 kubectl] [📋 events]                            [⋯]││
+│  └──────────────────────────────────────────────────────────────────────┘│
+│                                                                          │
+│  ┌─ 🖧 prox-home ──────────────────────────── 🔴 Unreachable ─────────┐│
+│  │  Type : Proxmox VE 8.1 · cluster 2 nodes                            ││
+│  │  Pas de connexion depuis 2h17min · Dernière erreur : timeout API    ││
+│  │  Dernière vue : CPU 8% · 22/64 GB RAM · 15 VMs · 4 LXC              ││
+│  │                                                                       ││
+│  │  [🔄 Réessayer] [📊 Détails (dernière vue)]                       [⋯]││
+│  └──────────────────────────────────────────────────────────────────────┘│
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Points clés de la famille Hosts :**
+
+- **Barre d'action canonique** : `[📊 Détails]` `[🖥 SSH/kubectl]` `[📋 journalctl/events]` `[⋯]`. Pas de Lifecycle (un Host n'a pas d'état "off" géré par WindFlow), pas de Snapshot, pas de Hardware. Les actions ont une sémantique d'**administration**, pas de gestion.
+- **Status pill** : `🟢 Online` / `🟠 Degraded` / `🔴 Unreachable` / `🔵 Scanning` / `⚪ Offline (planifié)`.
+- **5 types de Hosts visuellement distinguables** :
+  - **Baremetal SSH** — machine physique ou VM directement accessible
+  - **Baremetal (Machine sur ...)** — cas récursif : une Machine qui est aussi Host
+  - **Kubernetes** — cluster k8s/k3s/microk8s
+  - **Proxmox VE** — serveur ou cluster Proxmox accessible via API
+  - **Docker distant** — daemon Docker accessible SSH/TCP (non illustré, similaire au baremetal)
+- **Affichage des moteurs détectés** : `🐳 Docker` / `✅ libvirt` / `✅ k3s + helm` / etc. avec ✓ ou ✗ pour montrer ce qui est installé. Détermine ce qui peut être déployé.
+- **Compteurs `Héberge : X Apps · Y Machines · Z services système`** : donne immédiatement la richesse de chaque Host.
+- **Cas récursif** : `ubuntu-dev` apparaît dans la liste Hosts avec une note `💡 Aussi une Machine`. Le bouton `[→ Voir comme Machine]` bascule vers la vue Machine (Écran 14) du même objet.
+- **Host unreachable** : actions réduites (Réessayer + Détails sur dernière vue). Pas d'actions destructives possibles.
+
+---
+
+## Écran 18 : Détail Host (baremetal)
+
+Cas standard : un host baremetal SSH qui héberge à la fois des Apps et des Machines.
+
+```
+┌─ Détail Host : nas-server ───────────────────────────────────────────────┐
+│                                                                          │
+│  🖧 nas-server                🟢 Online (uptime 47j)        [🖥 SSH]    │
+│  Mini PC x86_64 · Ubuntu 22.04 · 16 GB RAM · 4 TB stockage              │
+│  Moteurs : 🐳 Docker 24.0.7 ✓  ✅ libvirt 9.0 ✓  ✗ Kubernetes           │
+│                                                                          │
+│  [🖥 SSH] [📊 Métriques] [📋 journalctl] [📦 Packages] [⚙ Config]    [⋯]│
+│                                                                          │
+│  ┌Aperçu┬Apps déployées┬Machines hébergées┬Services système┬Métriques─┐ │
+│  │       ┴Stockage┬Réseau┬Config                                      │ │
+│  │                                                                     │ │
+│  │  ── Aperçu (actif) ──                                              │ │
+│  │                                                                     │ │
+│  │  ┌─ Hardware ──────────────────────────────────────────────────┐ │ │
+│  │  │  CPU           Intel N100 (4 cores @ 3.4 GHz) · x86_64       │ │ │
+│  │  │  RAM           16 GB DDR4-3200                               │ │ │
+│  │  │  Stockage      4 TB NVMe Samsung 980 Pro                     │ │ │
+│  │  │  Réseau        1 Gb ethernet enp1s0                           │ │ │
+│  │  │  Accélération  Intel QSV ✓ (transcoding)  ·  vt-x ✓          │ │ │
+│  │  └─────────────────────────────────────────────────────────────┘ │ │
+│  │                                                                     │ │
+│  │  ┌─ Ressources live ───────────────────────────────────────────┐ │ │
+│  │  │  CPU           ██░░░░░░░░ 12%   (charge 1m : 0.48)          │ │ │
+│  │  │  RAM           ███░░░░░░░ 4.8 / 16 GB                       │ │ │
+│  │  │  Disque /      ███░░░░░░░ 1.2 / 4 TB                         │ │ │
+│  │  │  Température   🌡 38°C   ·   Conso ⚡ 12W                   │ │ │
+│  │  └─────────────────────────────────────────────────────────────┘ │ │
+│  │                                                                     │ │
+│  │  ┌─ Apps déployées sur ce Host (5) ────────────────────────────┐ │ │
+│  │  │  ☁️ Nextcloud     🟢 docker_compose · 342 MB                  │ │ │
+│  │  │  🐙 Gitea          🟢 docker_compose · 189 MB                  │ │ │
+│  │  │  🎬 Jellyfin       🟢 docker_container · 456 MB · GPU passthrough│ │ │
+│  │  │  🔀 Traefik        🟢 docker_container · 142 MB                │ │ │
+│  │  │  📊 Uptime Kuma    🟢 docker_container · 98 MB                 │ │ │
+│  │  │                                          [→ Voir toutes (5)]   │ │ │
+│  │  │  [+ Déployer une nouvelle App ici]                              │ │ │
+│  │  └─────────────────────────────────────────────────────────────┘ │ │
+│  │                                                                     │ │
+│  │  ┌─ Machines hébergées (3) ────────────────────────────────────┐ │ │
+│  │  │  🖥️ ubuntu-dev      🟢 KVM · Ubuntu 22.04 · 2 GB              │ │ │
+│  │  │     └─ aussi Host pour 3 Apps internes  [→ Voir comme Host]   │ │ │
+│  │  │  🖥️ pfsense-router 🟢 KVM · pfSense 2.7 · 512 MB              │ │ │
+│  │  │  🖥️ windows-legacy  ⚪ KVM · Windows Server 2019 · 8 GB        │ │ │
+│  │  │                                          [→ Voir toutes (3)]   │ │ │
+│  │  │  [+ Créer une nouvelle Machine ici]                             │ │ │
+│  │  └─────────────────────────────────────────────────────────────┘ │ │
+│  │                                                                     │ │
+│  │  ┌─ Services système (12 dont 2 adoptés) ─────────────────────┐ │ │
+│  │  │  🟢 nginx.service       Adopté → "Nginx Web" (App)           │ │ │
+│  │  │  🟢 postgresql.service  Adopté → "PG Direct" (App)           │ │ │
+│  │  │  🟢 ssh.service                                              │ │ │
+│  │  │  🟢 docker.service                                           │ │ │
+│  │  │  🟢 libvirtd.service                                          │ │ │
+│  │  │                                          [→ Voir tous (12)]   │ │ │
+│  │  └─────────────────────────────────────────────────────────────┘ │ │
+│  │                                                                     │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Convergence et originalités :**
+
+- **Squelette identique** : header, action bar, onglets canoniques (Aperçu en premier, Config en dernier).
+- **Onglets conditionnels** : "Machines hébergées" n'apparaît que si `libvirt` ou un autre moteur de virtualisation est détecté. "Apps déployées" n'apparaît que si Docker/Podman ou un client k8s est détecté.
+- **Boutons de création contextuels** `[+ Déployer une App ici]` et `[+ Créer une Machine ici]` : lancent les wizards correspondants en pré-sélectionnant ce Host comme cible. Évite à l'utilisateur de devoir naviguer ailleurs.
+- **Services système avec statut d'adoption** : on voit quels services sont gérés par WindFlow comme App (`adopté → "X" (App)`) vs simplement observés.
+
+---
+
+## Écran 19 : Détail Host (cas récursif : Machine-as-Host)
+
+Une Machine virtuelle qui possède Docker installé devient aussi un Host. La même entité a deux projections : Machine (Écran 14) et Host (ici). Le contexte de la page indique clairement que c'est un cas particulier.
+
+```
+┌─ Détail Host : ubuntu-dev ───────────────────────────────────────────────┐
+│                                                                          │
+│  🖧 ubuntu-dev (Host)         🟢 Online (3 jours)            [🖥 SSH]   │
+│  Sur : nas-server  ·  IP : 192.168.1.55  ·  Ubuntu 22.04 · 2 vCPU · 2 GB│
+│  💡 Aussi une Machine [→ Gérer comme Machine]                            │
+│  Moteurs : 🐳 Docker 24.0.7 ✓  ✗ libvirt  ✗ k8s                          │
+│                                                                          │
+│  [🖥 SSH] [📊 Métriques] [📋 journalctl] [📦 Packages] [⚙ Config]    [⋯]│
+│                                                                          │
+│  ┌Aperçu┬Apps déployées┬Services système┬Métriques┬Stockage┬Config ──┐  │
+│  │      (pas d'onglet "Machines hébergées" : pas de moteur VM)        │ │
+│  │                                                                     │ │
+│  │  ── Aperçu (actif) ──                                              │ │
+│  │                                                                     │ │
+│  │  ┌─ Substrat de cette instance ───────────────────────────────┐  │ │
+│  │  │  Cette entité est une Machine virtuelle KVM hébergée sur   │  │ │
+│  │  │  le Host `nas-server`. Elle a Docker installé dedans, ce   │  │ │
+│  │  │  qui permet à WindFlow de la gérer aussi comme un Host.    │  │ │
+│  │  │                                                             │  │ │
+│  │  │  Pour modifier le matériel (CPU, RAM, snapshots, hardware) │  │ │
+│  │  │  ou le cycle de vie matériel (power on/off) :              │  │ │
+│  │  │  [→ Gérer comme Machine]                                    │  │ │
+│  │  └─────────────────────────────────────────────────────────────┘ │ │
+│  │                                                                     │ │
+│  │  ┌─ Ressources live (vues de l'intérieur) ─────────────────────┐ │ │
+│  │  │  CPU       █░░░░░░░░░ 8%   (charge 1m : 0.15)              │ │ │
+│  │  │  RAM       █████████░ 1.8 / 2 GB                            │ │ │
+│  │  │  Disque /  ████░░░░░░ 8.2 / 20 GB                           │ │ │
+│  │  └─────────────────────────────────────────────────────────────┘ │ │
+│  │                                                                     │ │
+│  │  ┌─ Apps déployées dans ce Host (3) ──────────────────────────┐ │ │
+│  │  │  ☁️ dev-postgres    🟢 docker_container · 89 MB              │ │ │
+│  │  │  🔴 dev-redis       🟢 docker_container · 12 MB              │ │ │
+│  │  │  📊 dev-monitoring  🟢 docker_compose · 145 MB              │ │ │
+│  │  │                                                              │ │ │
+│  │  │  [+ Déployer une nouvelle App ici]                           │ │ │
+│  │  └─────────────────────────────────────────────────────────────┘ │ │
+│  │                                                                     │ │
+│  │  ┌─ Services système (5) ──────────────────────────────────────┐ │ │
+│  │  │  🟢 ssh.service                                              │ │ │
+│  │  │  🟢 docker.service                                           │ │ │
+│  │  │  🟢 systemd-resolved.service                                 │ │ │
+│  │  │  🟢 cron.service                                             │ │ │
+│  │  │  🟢 systemd-timesyncd.service                                │ │ │
+│  │  └─────────────────────────────────────────────────────────────┘ │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Points clés du cas récursif :**
+
+- **Identité dual** : la même entité apparaît dans la liste Machines (focus matériel) ET dans la liste Hosts (focus déploiements). Les deux pages partagent l'identité mais ont des onglets et un focus différents.
+- **Navigation croisée** : le bouton `[→ Gérer comme Machine]` dans le header bascule vers l'autre projection. Réciproquement, le détail Machine a `[→ Gérer comme Host]`.
+- **Carte "Substrat de cette instance"** : remplace la card "Hardware" de l'écran Host baremetal. Indique clairement que c'est une VM et où elle vit physiquement.
+- **Pas d'onglet "Machines hébergées"** : une VM peut techniquement nested-virtualiser, mais sans libvirt détecté, l'onglet est absent. Si l'utilisateur active la virtualisation imbriquée, l'onglet apparaîtrait automatiquement.
+- **Sémantique cohérente** : "Apps déployées dans ce Host" — du point de vue de l'utilisateur, les Apps sont déployées dans `ubuntu-dev`, peu importe que celui-ci soit lui-même une VM sur `nas-server`. L'oignon des couches reste navigable.
+
+---
+
+## Écran 20 : Wizard "Ajouter un Host"
+
+Inspiré de **Coolify** (wizard d'ajout de serveur SSH) et **Proxmox** (datacenter join wizard).
+
+### Étape 1 — Choix du type
+
+```
+┌─ Ajouter un Host ────────────────────────────────────────────────────────┐
+│                                                                          │
+│  ○────●────○────○                                                       │
+│  Type Connexion Tester Confirmer                                        │
+│                                                                          │
+│  Étape 1 — Quel type de Host souhaitez-vous ajouter ?                   │
+│                                                                          │
+│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐         │
+│  │ 🖧 Baremetal SSH │ │ 🖥️ Proxmox VE    │ │ ⎈ Kubernetes     │         │
+│  │                  │ │                  │ │                  │         │
+│  │ Machine          │ │ Serveur ou       │ │ Cluster k8s,     │         │
+│  │ physique ou VM   │ │ cluster Proxmox  │ │ k3s ou microk8s  │         │
+│  │ accessible SSH   │ │ VE accessible    │ │ accessible via   │         │
+│  │                  │ │ via son API      │ │ kubeconfig       │         │
+│  │ Pour : NAS, RPi, │ │                  │ │                  │         │
+│  │ VPS, mini-PC...  │ │ Pour : homelab   │ │ Pour : cluster   │         │
+│  │                  │ │ multi-VMs, edge  │ │ géré ou cloud    │         │
+│  │ [Choisir]        │ │ [Choisir]        │ │ [Choisir]        │         │
+│  └──────────────────┘ └──────────────────┘ └──────────────────┘         │
+│                                                                          │
+│  ┌──────────────────┐                                                   │
+│  │ 🐳 Docker        │                                                   │
+│  │    distant       │                                                   │
+│  │                  │                                                   │
+│  │ Daemon Docker    │                                                   │
+│  │ accessible par   │                                                   │
+│  │ SSH ou TCP TLS   │                                                   │
+│  │                  │                                                   │
+│  │ Pour : Docker    │                                                   │
+│  │ Engine seul      │                                                   │
+│  │ [Choisir]        │                                                   │
+│  └──────────────────┘                                                   │
+│                                                                          │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Étape 2 — Configuration (cas baremetal SSH)
+
+```
+┌─ Ajouter un Host (baremetal SSH) ────────────────────────────────────────┐
+│                                                                          │
+│  ●────●────○────○                                                       │
+│  Type Connexion Tester Confirmer                                        │
+│                                                                          │
+│  Étape 2 — Connexion SSH                                                │
+│                                                                          │
+│  ┌─ Identification ──────────────────────────────────────────────┐     │
+│  │  Nom *           [nas-server-2                  ]              │     │
+│  │  Description     [NAS de backup                  ]              │     │
+│  └────────────────────────────────────────────────────────────────┘     │
+│                                                                          │
+│  ┌─ Connexion ───────────────────────────────────────────────────┐     │
+│  │  Hôte / IP   *   [192.168.1.51                  ]              │     │
+│  │  Port SSH        [22         ]                                  │     │
+│  │  Utilisateur *   [deploy                        ]              │     │
+│  │                                                                  │     │
+│  │  Authentification  ● Clé SSH    ◯ Mot de passe                  │     │
+│  │                                                                  │     │
+│  │  Clé privée      [▼ ~/.ssh/windflow_id_ed25519  ]              │     │
+│  │                  ou [📋 Coller une clé privée…]                  │     │
+│  │                                                                  │     │
+│  │  ✓ Vérifier que l'utilisateur peut sudo sans mot de passe       │     │
+│  └────────────────────────────────────────────────────────────────┘     │
+│                                                                          │
+│  ┌─ Options de scan ─────────────────────────────────────────────┐     │
+│  │  ✓ Détecter automatiquement les moteurs installés              │     │
+│  │  ✓ Découvrir les containers/VMs non gérés (pour adoption)      │     │
+│  │  ✓ Scanner périodiquement (toutes les 5 minutes)               │     │
+│  └────────────────────────────────────────────────────────────────┘     │
+│                                                                          │
+│                       [← Retour]      [Tester la connexion →]          │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Étape 3 — Tester et détecter
+
+```
+┌─ Ajouter un Host — Test & détection ─────────────────────────────────────┐
+│                                                                          │
+│  ●────●────●────○                                                       │
+│  Type Connexion Tester Confirmer                                        │
+│                                                                          │
+│  Étape 3 — Test et détection des moteurs                                │
+│                                                                          │
+│  ✓ Connexion SSH établie (1.2s)                                          │
+│  ✓ Authentification réussie (clé Ed25519)                                │
+│  ✓ Sudo sans mot de passe vérifié                                        │
+│                                                                          │
+│  ── Hardware détecté ───────────────────────────────────────────────    │
+│  CPU         AMD Ryzen 5 5500U (6 cores @ 2.1 GHz) · x86_64              │
+│  RAM         32 GB DDR4                                                  │
+│  Stockage    8 TB (1× NVMe 2 TB + 1× HDD 6 TB) · 2.4 TB utilisés        │
+│  OS          Debian 12 (bookworm) · kernel 6.1.0-17                     │
+│                                                                          │
+│  ── Moteurs détectés ───────────────────────────────────────────────    │
+│  🐳 Docker            ✓ détecté (version 24.0.7)                        │
+│  ✅ libvirt/KVM       ✓ détecté (version 9.0.0, 8 VMs définies)         │
+│  ✗ LXD                non installé                                       │
+│  ✗ Incus              non installé                                       │
+│  ✗ Kubernetes         non installé                                       │
+│                                                                          │
+│  ── Objets découverts (non gérés par WindFlow) ─────────────────────    │
+│  📦  5 containers Docker en cours d'exécution                            │
+│  📚  2 fichiers compose détectés (dans /opt/stacks/)                    │
+│  🖥️  1 VM libvirt en cours d'exécution                                  │
+│  ⚙  12 services systemd actifs (hors WindFlow-related)                  │
+│                                                                          │
+│  💡 Après l'ajout du Host, un wizard d'adoption vous proposera          │
+│     d'importer les objets découverts dans WindFlow.                      │
+│                                                                          │
+│                       [← Retour]      [Ajouter le Host →]              │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Écran 21 : Adoption d'objets découverts
+
+Apparaît automatiquement après l'ajout d'un Host (Écran 20), ou peut être déclenché manuellement depuis le détail Host onglet "Découverts".
+
+```
+┌─ Adopter des objets découverts sur nas-server-2 ─────────────────────────┐
+│                                                                          │
+│  WindFlow a détecté 8 objets non gérés sur ce Host.                     │
+│  Vous pouvez les adopter pour les piloter depuis WindFlow.              │
+│                                                                          │
+│  Filtrer : [Tous] [Apps] [Machines] [Services]                          │
+│  [Tout sélectionner] [Tout désélectionner]                              │
+│                                                                          │
+│  ── Apps : containers Docker (3) ──────────────────────────────────     │
+│  ☐ 📦 plex            plex/plex:latest          running   1.2 GB         │
+│       → Profil : docker_container · Adapter : DockerContainerAdapter    │
+│       → Affecter à : [▼ Aucune stack (standalone)  ]                     │
+│  ☐ 📦 sonarr          linuxserver/sonarr       running   245 MB          │
+│  ☐ 📦 radarr          linuxserver/radarr       running   189 MB          │
+│                                                                          │
+│  ── Apps : stacks Compose (2) ────────────────────────────────────      │
+│  ☐ 📚 immich          (3 services : server, db, redis)   running         │
+│       → Path : /opt/stacks/immich/docker-compose.yml                    │
+│       → Profil : docker_compose · Adapter : ComposeStackAdapter          │
+│  ☐ 📚 vaultwarden     (1 service)              running   89 MB           │
+│                                                                          │
+│  ── Machines : VMs libvirt (1) ────────────────────────────────────     │
+│  ☐ 🖥️ windows-vm     Windows 10 · 4 vCPU · 8 GB · 80 GB    running     │
+│       → Profil : vm_kvm · Adapter : KVMAdapter                          │
+│       → ⚠ Les snapshots existants seront importés                       │
+│                                                                          │
+│  ── Services système (à adopter comme Apps) (2) ────────────────────    │
+│  ☐ ⚙ nginx.service                                                       │
+│       → Nom proposé : "Nginx Web Server"  [Modifier]                     │
+│       → Profil : app_native_service · Pas d'URL détectée [Configurer]   │
+│  ☐ ⚙ samba.service                                                       │
+│       → Nom proposé : "Samba Shares"      [Modifier]                     │
+│                                                                          │
+│  💡 Les objets non adoptés resteront visibles en lecture seule dans      │
+│     l'onglet "Découverts" du détail Host. Vous pourrez les adopter       │
+│     plus tard sans perte.                                                │
+│                                                                          │
+│                       [Plus tard]      [Adopter la sélection (0)]      │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Points clés :**
+
+- **Sélection granulaire** : l'utilisateur choisit exactement ce qu'il veut adopter, item par item.
+- **Catégorisation par famille de cible** : Apps containers / Apps compose / Machines / Services système — chaque ligne indique le profil WindFlow qui sera utilisé.
+- **Métadonnées d'adoption éditables** : nom proposé, stack d'affectation, URL d'ouverture (pour les services système qui n'ont pas d'URL détectable, il faut la configurer manuellement).
+- **Avertissements explicites** : "Les snapshots existants seront importés", "Cette opération ne casse pas le service existant", etc.
+- **Non-destructif** : l'adoption est purement ajoutative. WindFlow prend connaissance de l'objet existant et l'enrichit avec ses métadonnées, sans rien modifier dans la réalité technique.
+- **Adoption différable** : on peut sauter cette étape et adopter plus tard depuis l'onglet "Découverts" du Host.
+
+---
+
 ## Direction Esthétique Révisée
 
 ### Inspiration Visuelle
@@ -1296,10 +1957,10 @@ Accent bleu        #3b82f6
 | 1 | Dashboard | toutes | App | Umbrel + Runtipi | Grille icônes Apps + Machines épinglées + widgets plugins + agrégat Hosts |
 | 2 | Liste Apps | Apps | App | Cloudron + Runtipi + Umbrel | Liste Apps quel que soit le profil, actions universelles |
 | 3 | Détail App (générique) | Apps | App | Proxmox + Cosmos + Cloudron | Squelette commun à tous profils App, menu `[⋯ Plus]` peuplé par adapter |
-| 3b | Détail App Mode Infra ciblé | Apps | Infra | Proxmox + Incus | Onglets `Composants techniques` + `Manifest` ajoutés |
+| 3b | Détail Instance VM (convergent) | Machines | App | Proxmox + Incus | Vue d'origine, complétée et détaillée par les Écrans 13-16 |
 | 4 | Marketplace | toutes | App | Umbrel + Runtipi | 3 onglets : Apps multi-backend, Machine Templates, Plugins |
 | 5 | Wizard Installation App | Apps | App | Scaleway + Cloudron | Mini-wizard 2-3 questions, sélecteur d'adapter en "Options avancées" |
-| 6 | Détail Host | Hosts | App/Infra | Coolify + Proxmox | Onglets Apps déployées + Machines hébergées + Services système + Métriques |
+| 6 | Targets/Hosts (vue d'origine) | Hosts | App/Infra | Coolify + Proxmox | Vue d'origine, complétée et détaillée par les Écrans 17-21 |
 | 7 | Volume Browser | Apps/Machines | App/Infra | CasaOS + Nextcloud | Preview inline, breadcrumbs, drag & drop |
 | 8 | Console Unifiée | toutes | App | Proxmox + Incus | `[🖥 Console]` ouvre Terminal (App), VNC (Machine), SSH (Host) — même chrome UI |
 | 9 | Plugins | — | App | Runtipi + Cosmos | Résumé d'activité par plugin, RAM totale |
@@ -1307,10 +1968,18 @@ Accent bleu        #3b82f6
 | 11 | Onboarding | — | App | Umbrel + Cosmos | Détection auto du hardware, recommandation de profil |
 | 11b | Wizard Création Manuelle | Apps/Machines | Infra | Proxmox + Incus | Wizard de création directe (sans marketplace) — Mode Infra |
 | 12 | Vue Compute | toutes | Infra | Proxmox + Incus | Table par technologie : containers + VMs + snapshots agrégés multi-hosts |
-| — | Liste Machines | Machines | App | Proxmox | Liste de VMs avec power state, snapshots inline, console VNC |
-| — | Détail Machine | Machines | App | Proxmox + Incus | Onglets Hardware + Snapshots + Console VNC + Disques + Réseau |
-| — | Liste Hosts | Hosts | App | Coolify + Proxmox | Cards avec métriques, moteurs installés, compte Apps + Machines |
+| **13** | **Liste Machines** | **Machines** | **App** | **Proxmox + Incus** | **Cards de VMs avec power state, snapshots inline, note récursive pour les Machines-as-Host** |
+| **14** | **Détail Machine** | **Machines** | **App** | **Proxmox + Incus** | **Squelette identique App ; onglets Aperçu/VNC/Disques/Réseau/Snapshots/Hardware ; onglet "Apps hébergées" conditionnel si Docker détecté** |
+| **15** | **Snapshots VM (arbre)** | **Machines** | **App/Infra** | **Proxmox + VMware** | **Arbre interactif des snapshots avec descriptions, restauration en un clic, alerte sur chaînes longues** |
+| **16** | **Hardware Editor** | **Machines** | **App/Infra** | **Proxmox + VirtualBox** | **Édition CPU/RAM/Disques/NIC/Firmware par sections, indicateur ↻ pour les changements nécessitant reboot, toggle vers XML libvirt** |
+| **17** | **Liste Hosts** | **Hosts** | **App** | **Coolify + Proxmox** | **Cards avec hardware, moteurs détectés, compte Apps + Machines + services ; cas récursif explicite pour Machine-as-Host** |
+| **18** | **Détail Host (baremetal)** | **Hosts** | **App** | **Coolify + Proxmox** | **Onglets Apps déployées + Machines hébergées + Services système ; boutons contextuels de création (Apps/Machines) pré-ciblés sur ce Host** |
+| **19** | **Détail Host (récursif : Machine-as-Host)** | **Hosts** | **App** | **(spécifique WindFlow)** | **Vue Host d'une Machine qui contient Docker ; navigation croisée [→ Gérer comme Machine] ; onglets adaptés aux moteurs effectivement détectés** |
+| **20** | **Wizard "Ajouter un Host"** | **Hosts** | **App** | **Coolify + Proxmox** | **Sélection type (Baremetal SSH / Proxmox / k8s / Docker remote) ; détection auto des moteurs et des objets adoptables ; preview avant validation** |
+| **21** | **Adoption d'objets découverts** | **toutes** | **App** | **Proxmox (import VM) + Portainer** | **Adoption granulaire item-par-item ; édition des métadonnées (nom, URL, stack) ; non-destructif et différable** |
 | — | Mobile | Apps | App | Umbrel (dock) | Dock fixe en bas, cards simplifiées |
+
+**Note sur la cohabitation des écrans :** Les Écrans 3b et 6 (versions d'origine) restent dans le document à titre historique et de référence. Les Écrans 13-21 les complètent avec un niveau de détail aligné sur le modèle à trois familles. Lors de l'implémentation, les Écrans 13-16 remplacent fonctionnellement l'Écran 3b ; les Écrans 17-21 remplacent fonctionnellement l'Écran 6.
 
 ### Principes de convergence appliqués
 
