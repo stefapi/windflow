@@ -78,6 +78,8 @@
         <el-button
           type="primary"
           size="small"
+          :loading="loadingRecreate"
+          :disabled="loadingRecreate"
           @click="applyEnvVars"
         >
           Appliquer
@@ -162,6 +164,8 @@
         <el-button
           type="primary"
           size="small"
+          :loading="loadingRecreate"
+          :disabled="loadingRecreate"
           @click="applyLabels"
         >
           Appliquer
@@ -1166,6 +1170,36 @@ function validatePortBindings(): string | null {
   return null
 }
 
+function validateEnvVars(): string | null {
+  const seen = new Set<string>()
+  for (const row of envVars.value) {
+    if (!row.key.trim()) {
+      return 'Une variable d\'environnement a une clé vide'
+    }
+    const normalizedKey = row.key.trim()
+    if (seen.has(normalizedKey)) {
+      return `Doublon détecté pour la variable d'environnement : ${normalizedKey}`
+    }
+    seen.add(normalizedKey)
+  }
+  return null
+}
+
+function validateLabels(): string | null {
+  const seen = new Set<string>()
+  for (const row of labels.value) {
+    if (!row.key.trim()) {
+      return 'Un label a une clé vide'
+    }
+    const normalizedKey = row.key.trim()
+    if (seen.has(normalizedKey)) {
+      return `Doublon détecté pour le label : ${normalizedKey}`
+    }
+    seen.add(normalizedKey)
+  }
+  return null
+}
+
 // ─── Env Vars actions ───
 function addEnvVar(): void {
   envVars.value.push({ key: '', value: '' })
@@ -1176,6 +1210,14 @@ function removeEnvVar(index: number): void {
 }
 
 async function applyEnvVars(): Promise<void> {
+  if (!props.detail?.id) return
+
+  const validationError = validateEnvVars()
+  if (validationError) {
+    ElMessage.error(validationError)
+    return
+  }
+
   try {
     await ElMessageBox.confirm(
       'Modifier les variables d\'environnement nécessite de recréer le container. Un arrêt de quelques secondes est à prévoir. Continuer ?',
@@ -1186,9 +1228,23 @@ async function applyEnvVars(): Promise<void> {
         type: 'warning',
       },
     )
-    ElMessage.info('Fonctionnalité de recréation à venir')
   } catch {
-    // cancelled — do nothing
+    // cancelled
+    return
+  }
+
+  loadingRecreate.value = true
+  try {
+    const response = await containersApi.recreate(props.detail.id, {
+      env: envVars.value.map(e => `${e.key}=${e.value}`),
+    })
+    ElMessage.success('Container recréé avec succès')
+    emit('recreate-success', response.data.new_container_id)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur lors de la recréation'
+    ElMessage.error(message)
+  } finally {
+    loadingRecreate.value = false
   }
 }
 
@@ -1202,6 +1258,14 @@ function removeLabel(index: number): void {
 }
 
 async function applyLabels(): Promise<void> {
+  if (!props.detail?.id) return
+
+  const validationError = validateLabels()
+  if (validationError) {
+    ElMessage.error(validationError)
+    return
+  }
+
   try {
     await ElMessageBox.confirm(
       'Modifier les labels nécessite de recréer le container. Un arrêt de quelques secondes est à prévoir. Continuer ?',
@@ -1212,9 +1276,23 @@ async function applyLabels(): Promise<void> {
         type: 'warning',
       },
     )
-    ElMessage.info('Fonctionnalité de recréation à venir')
   } catch {
-    // cancelled — do nothing
+    // cancelled
+    return
+  }
+
+  loadingRecreate.value = true
+  try {
+    const response = await containersApi.recreate(props.detail.id, {
+      labels: Object.fromEntries(labels.value.map(l => [l.key, l.value])),
+    })
+    ElMessage.success('Container recréé avec succès')
+    emit('recreate-success', response.data.new_container_id)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur lors de la recréation'
+    ElMessage.error(message)
+  } finally {
+    loadingRecreate.value = false
   }
 }
 

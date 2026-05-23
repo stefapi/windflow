@@ -8,11 +8,6 @@ _(vide)_
 
 _(vide)_
 
-## 🏗️ IN PROGRESS
-
-### EPIC-009 : Refonte ContainerDetail — Homogénéisation et édition complète
-- [ ] STORY-030 : Frontend Config — Implémentation réelle env vars et labels (recréation)
-
 ## 🚫 BLOCKED
 
 _(vide)_
@@ -30,3 +25,4 @@ _(vide)_
 - [x] STORY-027 : Frontend Config — Édition des ports et image (recréation)
 - [x] STORY-028 : Frontend Config — Gestion des réseaux à chaud
 - [x] STORY-029 : Frontend Config — Édition volumes et sécurité (recréation)
+- [x] STORY-030 : Frontend Config — Implémentation réelle env vars et labels (recréation)

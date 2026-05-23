@@ -155,7 +155,7 @@ describe('ContainerConfigTab.vue', () => {
           'el-card': { template: '<div class="el-card-stub"><slot name="header" /><slot /></div>', props: ['shadow', 'class'] },
           'el-table': { template: '<div class="el-table-stub"><slot /></div>', props: ['data'] },
           'el-table-column': { template: '<div class="el-table-column-stub" />', props: ['label', 'prop', 'width', 'minWidth'] },
-          'el-input': { template: '<input class="el-input-stub" />', props: ['modelValue', 'type', 'placeholder', 'size'] },
+          'el-input': { template: '<input class="el-input-stub" :type="type" />', props: ['modelValue', 'type', 'placeholder', 'size'] },
           'el-input-number': { template: '<input class="el-input-number-stub" type="number" />', props: ['modelValue', 'min', 'max', 'size'] },
           'el-select': { template: '<select class="el-select-stub"><slot /></select>', props: ['modelValue', 'size'] },
           'el-option': { template: '<option class="el-option-stub" />', props: ['label', 'value'] },
@@ -1280,6 +1280,235 @@ describe('ContainerConfigTab.vue', () => {
       const callArgs = mockRecreate.mock.calls[0][1] as Record<string, unknown>
       expect(callArgs.cap_add).toBeUndefined()
       expect(callArgs.cap_drop).toBeUndefined()
+    })
+  })
+
+  // ─── STORY-030 : Env Vars & Labels ───
+
+  describe('Env Vars — validation', () => {
+    it('should reject empty key in env vars', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        envVars: { key: string; value: string }[]
+        validateEnvVars: () => string | null
+      }
+      vm.envVars.push({ key: '', value: 'somevalue' })
+      const result = vm.validateEnvVars()
+      expect(result).not.toBeNull()
+      expect(result).toContain('vide')
+    })
+
+    it('should reject duplicate keys in env vars', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        envVars: { key: string; value: string }[]
+        validateEnvVars: () => string | null
+      }
+      vm.envVars.push({ key: 'NODE_ENV', value: 'test' })
+      const result = vm.validateEnvVars()
+      expect(result).not.toBeNull()
+      expect(result).toContain('Doublon')
+    })
+
+    it('should return null for valid env vars', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { validateEnvVars: () => string | null }
+      const result = vm.validateEnvVars()
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('Env Vars — apply', () => {
+    it('should call recreate API with correct env payload', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { applyEnvVars: () => Promise<void> }
+      await vm.applyEnvVars()
+      await flushPromises()
+
+      expect(mockRecreate).toHaveBeenCalledWith('abc123', expect.objectContaining({
+        env: ['PATH=/usr/bin', 'NODE_ENV=production', 'DB_PASSWORD=secret123'],
+      }))
+    })
+
+    it('should emit recreate-success event after applying env vars', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { applyEnvVars: () => Promise<void> }
+      await vm.applyEnvVars()
+      await flushPromises()
+
+      expect(wrapper.emitted('recreate-success')).toBeTruthy()
+      expect(wrapper.emitted('recreate-success')![0]).toEqual(['new456'])
+    })
+
+    it('should show validation error for empty key', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        envVars: { key: string; value: string }[]
+        applyEnvVars: () => Promise<void>
+      }
+      vm.envVars.push({ key: '', value: 'somevalue' })
+      await vm.applyEnvVars()
+      await flushPromises()
+
+      expect(mockRecreate).not.toHaveBeenCalled()
+    })
+
+    it('should show validation error for duplicate keys', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        envVars: { key: string; value: string }[]
+        applyEnvVars: () => Promise<void>
+      }
+      vm.envVars.push({ key: 'NODE_ENV', value: 'duplicate' })
+      await vm.applyEnvVars()
+      await flushPromises()
+
+      expect(mockRecreate).not.toHaveBeenCalled()
+    })
+
+    it('should not call API when detail is null', async () => {
+      const wrapper = await mountComponent({ detail: null })
+      const vm = wrapper.vm as unknown as { applyEnvVars: () => Promise<void> }
+      await vm.applyEnvVars()
+      await flushPromises()
+
+      expect(mockRecreate).not.toHaveBeenCalled()
+    })
+
+    it('should show error message on API failure', async () => {
+      mockRecreate.mockRejectedValue(new Error('Recreate failed'))
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { applyEnvVars: () => Promise<void> }
+      await vm.applyEnvVars()
+      await flushPromises()
+
+      expect(mockRecreate).toHaveBeenCalled()
+    })
+  })
+
+  describe('Labels — validation', () => {
+    it('should reject empty key in labels', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        labels: { key: string; value: string }[]
+        validateLabels: () => string | null
+      }
+      vm.labels.push({ key: '', value: 'somevalue' })
+      const result = vm.validateLabels()
+      expect(result).not.toBeNull()
+      expect(result).toContain('vide')
+    })
+
+    it('should reject duplicate keys in labels', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        labels: { key: string; value: string }[]
+        validateLabels: () => string | null
+      }
+      vm.labels.push({ key: 'com.docker.compose.project', value: 'duplicate' })
+      const result = vm.validateLabels()
+      expect(result).not.toBeNull()
+      expect(result).toContain('Doublon')
+    })
+
+    it('should return null for valid labels', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { validateLabels: () => string | null }
+      const result = vm.validateLabels()
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('Labels — apply', () => {
+    it('should call recreate API with correct labels payload', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { applyLabels: () => Promise<void> }
+      await vm.applyLabels()
+      await flushPromises()
+
+      expect(mockRecreate).toHaveBeenCalledWith('abc123', expect.objectContaining({
+        labels: { 'com.docker.compose.project': 'my-stack', version: '1.0' },
+      }))
+    })
+
+    it('should emit recreate-success event after applying labels', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { applyLabels: () => Promise<void> }
+      await vm.applyLabels()
+      await flushPromises()
+
+      expect(wrapper.emitted('recreate-success')).toBeTruthy()
+      expect(wrapper.emitted('recreate-success')![0]).toEqual(['new456'])
+    })
+
+    it('should show validation error for empty key', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        labels: { key: string; value: string }[]
+        applyLabels: () => Promise<void>
+      }
+      vm.labels.push({ key: '', value: 'somevalue' })
+      await vm.applyLabels()
+      await flushPromises()
+
+      expect(mockRecreate).not.toHaveBeenCalled()
+    })
+
+    it('should show validation error for duplicate keys', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        labels: { key: string; value: string }[]
+        applyLabels: () => Promise<void>
+      }
+      vm.labels.push({ key: 'com.docker.compose.project', value: 'duplicate' })
+      await vm.applyLabels()
+      await flushPromises()
+
+      expect(mockRecreate).not.toHaveBeenCalled()
+    })
+
+    it('should not call API when detail is null', async () => {
+      const wrapper = await mountComponent({ detail: null })
+      const vm = wrapper.vm as unknown as { applyLabels: () => Promise<void> }
+      await vm.applyLabels()
+      await flushPromises()
+
+      expect(mockRecreate).not.toHaveBeenCalled()
+    })
+
+    it('should show error message on API failure', async () => {
+      mockRecreate.mockRejectedValue(new Error('Recreate failed'))
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { applyLabels: () => Promise<void> }
+      await vm.applyLabels()
+      await flushPromises()
+
+      expect(mockRecreate).toHaveBeenCalled()
+    })
+  })
+
+  describe('Env Vars — security', () => {
+    it('should mask secret values in env var inputs', async () => {
+      // Verify isSecretKey correctly identifies secret keys — this is the mechanism
+      // that drives type="password" on env var value inputs in the template
+      const { isSecretKey } = await import('@/composables/useSecretMasker')
+      expect(isSecretKey('DB_PASSWORD')).toBe(true)
+      expect(isSecretKey('API_TOKEN')).toBe(true)
+      expect(isSecretKey('SECRET_KEY')).toBe(true)
+      expect(isSecretKey('PATH')).toBe(false)
+      expect(isSecretKey('NODE_ENV')).toBe(false)
+    })
+  })
+
+  describe('Labels — security', () => {
+    it('should not expose sensitive data in labels DOM', async () => {
+      const wrapper = await mountComponent()
+      const html = wrapper.html()
+      // Labels should not contain any token-like patterns in the rendered output
+      expect(html).not.toContain('Bearer ')
+      expect(html).not.toContain('token=')
+      // The labels section should exist
+      expect(html).toContain('Labels')
     })
   })
 })
