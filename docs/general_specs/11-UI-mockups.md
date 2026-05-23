@@ -1,5 +1,17 @@
 # Propositions de Maquettes d'Écran - WindFlow
 
+> **À lire en premier** : [`11b-workload-families-and-adapters.md`](11b-workload-families-and-adapters.md)
+> pose le modèle directeur de l'UI : **trois familles distinctes — Apps, Machines, Hosts —
+> partageant une grammaire UI commune**. Les Apps regroupent les workloads container-based
+> (Docker, Compose, Helm, K8s manifests). Les Machines regroupent les workloads VM-based
+> (KVM, LXD, Incus, LXC, VirtualBox). Les Hosts sont le substrat (machines physiques/virtuelles
+> et clusters) qui hébergent Apps et Machines.
+>
+> Les mockups ci-dessous se concentrent principalement sur la famille Apps (cas le plus
+> représentatif), mais le même squelette UI s'applique aux Machines et aux Hosts avec leur
+> vocabulaire propre. Les termes "Mode Standard" et "Mode Avancé" employés dans ce document
+> correspondent à **Mode App** et **Mode Infra**.
+
 ## Analyse Approfondie de l'Existant
 
 ### Panorama des Interfaces Étudiées
@@ -168,16 +180,47 @@ Harvester est un hyperviseur open-source construit sur Kubernetes qui gère VMs 
 
 ## Principes UX Révisés
 
-### 1. Convergence Container / VM — Le Principe Fondateur
+### 1. Trois Familles, Une Grammaire UI — Le Principe Fondateur
 
-Inspiré d'Incus/LXD (unification totale) et Proxmox VE (convergence VMs + LXC) :
+Inspiré d'**Umbrel** (ergonomie centrée App pour la famille Apps), de **Proxmox VE** (séparation
+nette VMs / containers / hosts avec UX cohérente) et de **Harvester/Incus** (convergence
+applicable au sein d'une famille). Détaillé dans
+[`11b-workload-families-and-adapters.md`](11b-workload-families-and-adapters.md).
 
-**Le type (container, VM, pod K8s) est un attribut, pas un paradigme.** Tout objet Compute est une **"Instance"** dans l'interface, avec les mêmes actions de base (Start, Stop, Restart, Console, Snapshot, Metrics) quelle que soit la technologie sous-jacente.
+WindFlow distingue **trois familles de workloads** au niveau du modèle mental, mais leur
+applique une **grammaire UI commune** au niveau de la présentation :
 
-**Règle de convergence :**
-- Si une action a du sens pour les containers ET les VMs → **même bouton, même emplacement, même comportement**
-- Si une action est spécifique à un type → **elle apparaît en plus**, jamais à la place d'une action commune
-- La barre d'actions d'une card Instance est la même pour tous les types : seules les icônes spécifiques changent (Terminal pour container, VNC pour VM)
+| Famille | Workloads inclus | Mental model |
+|---------|--------------------|---------------|
+| **Apps** | Docker container, Compose, Helm release, K8s manifest, service systemd adopté | "je déploie un service" |
+| **Machines** | VM KVM, LXD, Incus, LXC, VirtualBox | "je crée et je gère une machine" |
+| **Hosts** | Machine physique (SSH), serveur Proxmox, cluster k8s, daemon Docker distant | "j'administre un serveur" |
+
+**Pourquoi trois familles plutôt qu'une seule abstraction "App" ?** Les modèles mentaux sont
+trop différents pour être unifiés sans mensonge. Le user qui crée une VM Ubuntu pense en
+termes de machine (CPU, RAM, disque, console VNC, snapshot, longue durée de vie). Le user
+qui installe Nextcloud pense en termes de service (URL, configuration, redéploiement
+facile). Forcer les deux dans le même bucket les oblige à apprendre une abstraction inverse.
+
+**Pourquoi grouper Kubes avec Docker/Compose ?** Du point de vue user, "Nextcloud installé
+via Compose" et "Nextcloud installé via Helm" produisent le même résultat : un service qui
+tourne. La différence opérationnelle (values vs env, history Helm, scale workload) est
+absorbée par le menu contextuel `[⋯ Plus]` section "Avancé (Helm)".
+
+**Règles de convergence (au sein d'une famille) :**
+- Le vocabulaire UI est universel pour la famille ; les implémentations natives sont
+  déléguées à un **WorkloadAdapter** par profil.
+- Une action universelle est **toujours présente** dans la barre d'action, même si l'adapter
+  retourne `NotApplicable` (auquel cas le bouton est grisé avec un tooltip explicatif).
+- Les actions spécifiques à un profil vivent dans le **menu contextuel `[⋯ Plus ▾]`**, peuplé
+  par l'adapter. C'est là — et là seulement en Mode App — que le profil technique fuit.
+
+**Règles de grammaire commune (entre familles) :**
+- Squelette de page identique : header + barre d'action + onglets canoniques + tab content
+- Pattern d'inner hierarchy identique (colonne gauche = inventaire, colonne droite = détail)
+- Système de status et métriques uniforme (mêmes couleurs, mêmes formats)
+- Marketplace structurée en trois sections (Apps / Machine Templates / Plugins)
+- Mode App / Mode Infra appliqué identiquement aux trois familles
 
 **Matrice de convergence des actions :**
 
@@ -192,32 +235,70 @@ Inspiré d'Incus/LXD (unification totale) et Proxmox VE (convergence VMs + LXC) 
 | Réseau | ✅ Docker network | ✅ Bridge/VLAN | ✅ Service | Onglet Network |
 | Configuration | ✅ Env vars + Labels | ✅ Hardware (CPU/RAM) | ✅ ConfigMap | `[⚙ Config]` |
 
-### 2. Deux Modes d'Interface
+### 2. Deux Modes d'Interface : Mode App et Mode Infra
 
-Inspiré de Cosmos Server (mode simple vs admin) et Proxmox (vue simple vs vue complète) :
+Inspiré de Cosmos Server (mode simple vs admin) et Proxmox (vue simple vs vue complète),
+mais formalisé comme deux **niveaux de vocabulaire**, pas seulement de densité :
 
-**Mode Standard** : Dashboard, Apps installées, Marketplace, Volumes, Settings. Suffisant pour 80% des utilisateurs.
+**Mode App** (Umbrel-style, par défaut) : aucune apparition des mots "container", "compose",
+"helm", "VM", "namespace", "pod" en dehors du menu contextuel `[⋯ Plus]` section "Avancé".
+Écrans : Dashboard, Apps, Marketplace, Backups, Settings. Suffisant pour 80% des
+utilisateurs.
 
-**Mode Avancé** : Ajoute la vue Compute détaillée (instances individuelles, stacks, images), Targets, Réseaux, Audit. Pour les admins et les power users.
+**Mode Infra** (Harvester-light, opt-in) : la même expérience App, **augmentée**. Le profil
+de chaque App est révélé dans son header, deux onglets supplémentaires apparaissent
+(`Composants techniques`, `Manifest`), et la vue Compute détaillée devient accessible dans
+la sidebar (cf. `12-compute-model.md`).
 
-Le toggle est dans la sidebar (un bouton discret en bas). Le mode est mémorisé par utilisateur. Les Viewers voient toujours le mode Standard.
+Le toggle est dans la sidebar (bouton discret en bas). Le mode est mémorisé par utilisateur.
+Les Viewers sont forcés en Mode App. Un **Mode Infra ciblé** existe aussi : depuis le menu
+`[⋯ Plus]` d'une App, l'action `[🔧 Voir les composants techniques]` bascule cette **page
+seulement** en Mode Infra sans activer le toggle global.
 
-### 3. "Instance" comme Concept Central (Mode Standard : "Apps")
+### 3. "Workload" (App / Machine / Host) comme Vocabulaire Central
 
-Inspiré de Cosmos, Cloudron et Incus : en mode Standard, tout ce qui est déployé (stack, container, VM) apparaît comme une **"App"** avec son icône, son domaine, son statut, et des actions convergentes. En mode Avancé, on voit la réalité technique : des **Instances** (containers, VMs, pods) regroupées en Stacks.
+Tout ce qui est déployé ou administré apparaît comme un **Workload** appartenant à l'une des
+trois familles. Le vocabulaire user adopté :
+- **App** : pour les workloads container-based (cf. famille Apps)
+- **Machine** : pour les workloads VM-based (cf. famille Machines)
+- **Host** : pour le substrat (cf. famille Hosts)
 
-Les actions convergentes s'appliquent à tous les types :
-- `[🖥 Console]` → Terminal xterm.js pour containers, VNC/noVNC pour VMs
-- `[📋 Logs]` → Docker logs pour containers, serial console pour VMs
-- `[📸 Snapshot]` → Docker commit pour containers, qcow2 snapshot pour VMs
+Le terme "Workload" est interne (modèle de données, doc d'architecture) ; l'utilisateur en
+Mode App ne le voit jamais — il manipule directement des Apps, des Machines, ou des Hosts.
+
+En Mode Infra uniquement, la section Compute (cf. `12-compute-model.md`) offre une vue
+complémentaire **par technologie** (containers individuels, instances VM, snapshots) destinée
+aux opérations de bas niveau. Cette vue agrège les Workloads transversalement à leur famille.
+
+Les actions convergent **au sein d'une famille** mais peuvent différer entre familles :
+- Famille Apps : `[🖥 Console]` → Terminal xterm.js (container, pod, sub-shell compose)
+- Famille Machines : `[🖥 Console VNC]` → graphique noVNC, ou série pour serveurs sans GPU
+- Famille Hosts : `[🖥 SSH]` → session SSH directe vers le host
+
+Le bouton est positionné au même endroit dans la barre d'action des trois familles, ce qui
+crée la cohérence visuelle. Mais sa nature s'adapte au contexte — c'est exactement le compromis
+qui permet aux modèles mentaux de cohabiter sans se contredire.
 
 ### 4. Dashboard Type "Homepage"
 
 Inspiré d'Umbrel (wallpaper + widgets) mais avec la densité d'information de Runtipi (métriques système + instances running). Le dashboard est le point d'entrée unique, personnalisable avec des widgets ajoutés par les plugins.
 
-### 5. Wizard Everywhere
+### 5. Marketplace-First par Famille, puis Wizard
 
-Inspiré de Scaleway et Cloudron : chaque action complexe (installer un plugin, déployer une stack, ajouter un target, créer une instance) passe par un **wizard par étapes** au lieu d'un formulaire monolithique. Le wizard de création d'Instance est unifié : le choix du type (Container / Stack / VM) est la première étape, les étapes suivantes s'adaptent.
+Inspiré de Cloudron, Umbrel et Runtipi : le point d'entrée naturel pour créer une App est la
+**Marketplace** (onglet Apps), pour une Machine la **Marketplace** (onglet Machine Templates),
+pour un Host le bouton dédié `[+ Ajouter un Host]` (pas de marketplace, on adopte un substrat
+existant). Détaillé dans
+[`11b-workload-families-and-adapters.md`](11b-workload-families-and-adapters.md) §8.
+
+L'entrée marketplace d'une App déclare un ou plusieurs **backends** (compose, helm, container
+standalone) ; WindFlow choisit le backend recommandé selon les Hosts disponibles et propose
+un mini-wizard de 2-3 questions (Host cible, domaine, config minimale).
+
+Pour les besoins explicites — déployer un compose à soi, importer un chart, créer une VM
+nue — un bouton `[+ Importer]` ou `[+ Créer manuellement]` complète la marketplace et passe
+par un wizard plus complet. Le wizard de création manuelle (Écran 11b) reste disponible en
+Mode Infra pour les power-users qui savent exactement ce qu'ils veulent.
 
 ### 6. Actions sans Navigation
 
@@ -227,16 +308,21 @@ Inspiré de Portainer, Runtipi et Proxmox : les actions courantes (start, stop, 
 
 ## Navigation Révisée
 
-### Sidebar — Mode Standard
+### Sidebar — Mode App (par défaut)
 
 ```
 ┌──────────────────────────┐
 │  🌀 WindFlow              │
 │                          │
 │  🏠  Dashboard           │  ← Homepage personnalisable
-│  📱  Apps                │  ← Tout ce qui est déployé (stacks, containers nommés)
-│  🏪  Marketplace         │  ← Plugins + Stacks one-click
-│  🔌  Plugins             │  ← Plugins installés + config
+│                          │
+│  ── Workloads ──         │
+│  📱  Apps                │  ← Famille container-based (Docker, Compose, Helm, K8s)
+│  🖥️  Machines           │  ← Famille VM-based (KVM, LXD, Incus, LXC, VirtualBox)
+│  🖧  Hosts               │  ← Substrat : machines physiques, Proxmox, k8s
+│                          │
+│  🏪  Marketplace         │  ← Apps + Templates Machines + Plugins
+│  🔌  Plugins             │
 │                          │
 │  ── Plugins ──           │  ← Ajouté dynamiquement par les plugins
 │  🌍  Domaines            │  ← (Plugin Traefik)
@@ -247,31 +333,35 @@ Inspiré de Portainer, Runtipi et Proxmox : les actions courantes (start, stop, 
 │  ⚙️  Settings            │
 │                          │
 │  ─────────────────────── │
-│  [🔧 Mode Avancé]       │  ← Toggle
+│  [🔧 Mode Infra]         │  ← Toggle pour basculer en Mode Infra
 │  🟢 local (arm64)        │
 │  👤 admin                │
 └──────────────────────────┘
 ```
 
-### Sidebar — Mode Avancé (toggle activé)
+### Sidebar — Mode Infra (toggle activé)
 
 ```
 ┌──────────────────────────┐
 │  🌀 WindFlow              │
 │                          │
 │  🏠  Dashboard           │
-│  📱  Apps                │
+│                          │
+│  ── Workloads ──         │
+│  📱  Apps                │  ← profil révélé dans le header de chaque App
+│  🖥️  Machines           │
+│  🖧  Hosts               │
+│                          │
 │  🏪  Marketplace         │
 │  🔌  Plugins             │
 │                          │
-│  COMPUTE                 │  ← Visible en mode avancé uniquement (cf. 12-compute-model.md)
-│  ⚡  Compute             │  ← Vue unifiée : instances containers + VMs, par stack/standalone
+│  ── Compute (technique) ─│  ← Visible en Mode Infra uniquement (cf. 12-compute-model.md)
+│  ⚡  Compute             │  ← Vue par technologie : containers + VMs agrégés multi-hosts
 │  📚  Stacks              │  ← Stacks WindFlow (compose, helm, mixtes)
-│  🎯  Targets             │  ← Machines cibles (local, SSH, Proxmox)
 │  💾  Stockage            │  ← Volumes Docker + disques VM + file browser
 │  🌐  Réseaux             │  ← Networks Docker + bridges VM
 │  🖼️  Images              │  ← Images Docker + ISOs / templates VM
-│  📸  Snapshots           │  ← Snapshots VM (vue centralisée multi-machines)
+│  📸  Snapshots           │  ← Snapshots VM (vue centralisée multi-hosts)
 │                          │
 │  ── Plugins ──           │
 │  🌍  Domaines            │
@@ -284,13 +374,13 @@ Inspiré de Portainer, Runtipi et Proxmox : les actions courantes (start, stop, 
 │  📋  Audit               │
 │                          │
 │  ─────────────────────── │
-│  [📱 Mode Standard]     │  ← Toggle retour
+│  [📱 Mode App]           │  ← Toggle retour
 │  🟢 local (arm64)        │
 │  👤 admin                │
 └──────────────────────────┘
 ```
 
-**Rationale** : Un self-hoster débutant qui veut juste installer Nextcloud et Jellyfin ne devrait jamais voir "Containers", "Networks", ou "Images". Un admin qui veut debug un container qui crashe a besoin de tout.
+**Rationale** : Un self-hoster débutant qui veut juste installer Nextcloud et Jellyfin ne devrait jamais voir "Containers", "Networks", ou "Images". Un admin qui veut debug un container qui crashe a besoin de tout. Le Mode App reste honnête sur les problèmes (statut `degraded`, badge `⚠`) sans forcer la connaissance technique ; le passage en Mode Infra (global ou ciblé) ouvre l'accès au détail.
 
 ---
 
@@ -1201,39 +1291,49 @@ Accent bleu        #3b82f6
 
 ## Récapitulatif des Écrans
 
-| # | Écran | Inspiré de | Innovation WindFlow |
-|---|-------|------------|---------------------|
-| 1 | Dashboard | Umbrel + Runtipi | Compteurs unifiés (instances containers + VMs), widgets plugins |
-| 2 | Apps (vue unifiée) | Cloudron + Runtipi + Incus | Containers + Stacks + VMs dans la même liste, actions convergentes |
-| 3 | Détail App / Container | Proxmox + Cosmos + Cloudron | Onglets dynamiques (plugins), backup inline, métriques live |
-| 3b | Détail VM (convergent) | Proxmox + Incus | **Même structure d'onglets** que Container, Hardware + Snapshots |
-| 4 | Marketplace | Umbrel + Runtipi | Recommandations contextuelles, ratings, séparation plugins/stacks |
-| 5 | Wizard Installation | Scaleway + Cloudron | Résumé d'impact, options avancées cachées |
-| 6 | Targets | Coolify + Proxmox | Cards métriques, température, bouton SSH |
-| 7 | Volume Browser | CasaOS + Nextcloud | Preview inline, breadcrumbs, drag & drop |
-| 8 | Console Unifiée | Proxmox + Incus | **Même page** pour Terminal (container) et VNC (VM), même chrome UI |
-| 9 | Plugins | Runtipi + Cosmos | Résumé d'activité par plugin, RAM totale |
-| 10 | Activité | Cloudron + Umbrel | Journal chronologique avec actions directes |
-| 11 | Onboarding | Umbrel + Cosmos | Détection auto du hardware, recommandation de profil |
-| 11b | Wizard Création Instance | Proxmox + Incus | **Wizard unifié** : choix Container/Stack/VM → config adaptée → déployer |
-| 12 | Vue Compute (avancé) | Proxmox + Incus | **Table unifiée** TYPE/NOM/STATUS/CPU/RAM, stacks mixtes, vue par stack/machine |
-| — | Mobile | Umbrel (dock) | Dock fixe en bas, cards simplifiées |
+| # | Écran | Famille | Mode | Inspiré de | Innovation WindFlow |
+|---|-------|---------|------|------------|---------------------|
+| 1 | Dashboard | toutes | App | Umbrel + Runtipi | Grille icônes Apps + Machines épinglées + widgets plugins + agrégat Hosts |
+| 2 | Liste Apps | Apps | App | Cloudron + Runtipi + Umbrel | Liste Apps quel que soit le profil, actions universelles |
+| 3 | Détail App (générique) | Apps | App | Proxmox + Cosmos + Cloudron | Squelette commun à tous profils App, menu `[⋯ Plus]` peuplé par adapter |
+| 3b | Détail App Mode Infra ciblé | Apps | Infra | Proxmox + Incus | Onglets `Composants techniques` + `Manifest` ajoutés |
+| 4 | Marketplace | toutes | App | Umbrel + Runtipi | 3 onglets : Apps multi-backend, Machine Templates, Plugins |
+| 5 | Wizard Installation App | Apps | App | Scaleway + Cloudron | Mini-wizard 2-3 questions, sélecteur d'adapter en "Options avancées" |
+| 6 | Détail Host | Hosts | App/Infra | Coolify + Proxmox | Onglets Apps déployées + Machines hébergées + Services système + Métriques |
+| 7 | Volume Browser | Apps/Machines | App/Infra | CasaOS + Nextcloud | Preview inline, breadcrumbs, drag & drop |
+| 8 | Console Unifiée | toutes | App | Proxmox + Incus | `[🖥 Console]` ouvre Terminal (App), VNC (Machine), SSH (Host) — même chrome UI |
+| 9 | Plugins | — | App | Runtipi + Cosmos | Résumé d'activité par plugin, RAM totale |
+| 10 | Activité | toutes | App | Cloudron + Umbrel | Journal chronologique avec actions directes |
+| 11 | Onboarding | — | App | Umbrel + Cosmos | Détection auto du hardware, recommandation de profil |
+| 11b | Wizard Création Manuelle | Apps/Machines | Infra | Proxmox + Incus | Wizard de création directe (sans marketplace) — Mode Infra |
+| 12 | Vue Compute | toutes | Infra | Proxmox + Incus | Table par technologie : containers + VMs + snapshots agrégés multi-hosts |
+| — | Liste Machines | Machines | App | Proxmox | Liste de VMs avec power state, snapshots inline, console VNC |
+| — | Détail Machine | Machines | App | Proxmox + Incus | Onglets Hardware + Snapshots + Console VNC + Disques + Réseau |
+| — | Liste Hosts | Hosts | App | Coolify + Proxmox | Cards avec métriques, moteurs installés, compte Apps + Machines |
+| — | Mobile | Apps | App | Umbrel (dock) | Dock fixe en bas, cards simplifiées |
 
 ### Principes de convergence appliqués
 
 | Principe | Outils de référence | Application WindFlow |
 |----------|-------------------|---------------------|
-| Instance = concept unique | Incus, Harvester | Container, VM et Pod K8s sont des "Instances" avec mêmes actions de base |
-| Type = colonne, pas paradigme | Incus (`incus list`) | La colonne TYPE différencie, les actions sont convergentes |
-| Mêmes onglets par instance | Proxmox (VM/CT) | Aperçu, Console, Métriques, Stockage, Réseau, Config — communs à tous |
-| Même barre d'actions | Proxmox + Incus | `[Console] [Logs] [Stop] [Restart] [Snapshot] [Config]` — adaptés au type |
-| Même wizard de création | Proxmox (Create VM/CT) | Étape 1 : choisir le type → étapes suivantes adaptées |
-| Métriques même format | Harvester | CPU/RAM/Net/I/O identiques pour containers et VMs |
+| Trois familles distinctes | Proxmox VE (VMs/CTs/Nodes) | Apps, Machines, Hosts — chacune avec son mental model et vocabulaire |
+| Grammaire UI partagée | Umbrel + Cloudron | Squelette de page, action bar, onglets, menus contextuels identiques entre familles |
+| Convergence forte intra-famille | Harvester, Incus | Au sein d'Apps : Compose et Helm convergent ; au sein de Machines : KVM et LXD convergent |
+| Profil = métadonnée invisible | Harvester (K8s sous le capot) | Le profil technique est caché en Mode App, révélé en Mode Infra ou via menu contextuel |
+| WorkloadAdapter par profil | (Architecture WindFlow) | Un adapter traduit verbes universels → opérations natives. L'UI ne dépend d'aucun moteur |
+| Menus contextuels peuplés par adapter | iOS, macOS (clic-droit app) | `[⋯ Plus ▾]` expose les actions spécifiques au profil sans casser l'abstraction de la famille |
+| Hiérarchie Host → Apps + Machines | Proxmox (Datacenter → Node → VM/CT) | Chaque App et chaque Machine est hébergée par un Host. Le Host expose les Apps/Machines qu'il porte |
+| Mêmes onglets canoniques par famille | Proxmox (VM/CT) | Apps : Aperçu/Logs/Console/Métriques/Sauvegardes/Config. Machines : Aperçu/VNC/Snapshots/Hardware. Hosts : Aperçu/Apps/Machines/Services |
+| Marketplace par famille | Umbrel | 3 onglets : Apps (multi-backend), Machine Templates, Plugins |
+| Métriques même format | Harvester | CPU/RAM/Net/I/O identiques toutes familles (issus de `adapter.get_metrics()`) |
 
 ---
 
 **Références :**
+- [Familles de Workloads et Adapters](11b-workload-families-and-adapters.md) — **Modèle directeur** : Apps, Machines, Hosts, WorkloadAdapter, ContextualActions, Mode App / Mode Infra
 - [Fonctionnalités Principales](general_specs/10-core-features.md) — Features core derrière chaque écran
+- [Modèle Compute](general_specs/12-compute-model.md) — Vue Compute par technologie (Mode Infra)
 - [Architecture Modulaire](ARCHITECTURE-MODULAIRE.md) — Comment les plugins injectent pages et widgets
-- [API Design](general_specs/07-api-design.md) — Endpoints consommés par chaque écran
+- [API Design](general_specs/07-api-design.md) — Endpoints REST par famille (`/apps`, `/machines`, `/hosts`)
 - [Catalogue des Plugins](general_specs/09-plugins.md) — Plugins disponibles dans la marketplace
+- [Systèmes de Virtualisation](../VIRTUALIZATION-SYSTEMS.md) — Couche Engine sur laquelle s'appuient les adapters

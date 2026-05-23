@@ -2,6 +2,22 @@
 
 Ce document décrit en détail le modèle de gestion des objets Compute dans WindFlow : containers, machines virtuelles, compositions, et leur articulation dans l'interface.
 
+> **Positionnement** : Le modèle Compute décrit ici est exposé à l'utilisateur **en Mode Infra
+> uniquement** (cf. [`11b-workload-families-and-adapters.md`](11b-workload-families-and-adapters.md)).
+> En Mode App — l'expérience par défaut — l'utilisateur manipule trois familles distinctes :
+> **Apps** (workloads container-based), **Machines** (workloads VM-based) et **Hosts**
+> (substrat). La technologie sous-jacente d'un workload est une métadonnée invisible par
+> défaut. La vue Compute détaillée décrite ici est destinée aux power-users qui ont besoin de
+> voir leur infrastructure **par technologie** (inventaire de containers, arbre de snapshots,
+> stacks mixtes) **agrégé multi-Hosts**, typiquement pour le troubleshooting et la maintenance
+> avancée.
+>
+> Les couches **WorkloadAdapter** (qui réalisent les verbes universels des trois familles)
+> s'appuient sur les services Engine décrits dans
+> [`VIRTUALIZATION-SYSTEMS.md`](../VIRTUALIZATION-SYSTEMS.md) et manipulent les mêmes objets
+> Compute que cette vue détaillée. Les deux modes voient donc la même réalité technique
+> sous-jacente, présentée à des niveaux d'abstraction différents.
+
 ---
 
 ## 1. Taxonomie des Objets Compute
@@ -369,5 +385,8 @@ La section "INFRASTRUCTURE" de la sidebar actuelle est remplacée par **COMPUTE*
 **Références :**
 - [Vue d'Ensemble](01-overview.md) — présentation générale de WindFlow
 - [Architecture Générale](03-architecture.md) — principes de conception
+- [Familles de Workloads et Adapters](11b-workload-families-and-adapters.md) — couche d'abstraction Apps/Machines/Hosts qui s'appuie sur ce modèle Compute
+- [UI Mockups](11-UI-mockups.md) — Écran 12 "Vue Compute" (Mode Infra)
 - [Fonctionnalités Principales](10-core-features.md) — fonctionnalités détaillées
+- [Systèmes de Virtualisation](../VIRTUALIZATION-SYSTEMS.md) — services Engine par moteur
 - [Roadmap](18-roadmap.md) — plan de développement
