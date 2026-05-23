@@ -316,7 +316,7 @@ Méthodes à ajouter :
 - [x] STORY-026 : Backend — Endpoints connect/disconnect réseau
 - [x] STORY-027 : Frontend Config — Édition des ports et image (recréation)
 - [x] STORY-028 : Frontend Config — Gestion des réseaux à chaud
-- [ ] STORY-029 : Frontend Config — Édition volumes et sécurité (recréation)
+- [x] STORY-029 : Frontend Config — Édition volumes et sécurité (recréation)
 - [ ] STORY-030 : Frontend Config — Implémentation réelle env vars et labels (recréation)
 
 ---

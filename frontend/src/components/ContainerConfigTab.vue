@@ -498,7 +498,251 @@
       </div>
     </el-card>
 
-    <!-- Section 7 : Réseaux (vert) -->
+    <!-- Section 7 : Volumes (vert) -->
+    <el-card
+      class="config-card card-config-volumes"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-green">
+          <el-icon><Coin /></el-icon>
+          <span>Volumes</span>
+        </div>
+      </template>
+
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        class="section-alert"
+      >
+        ⚠️ Modifier les volumes nécessite de recréer le container.
+      </el-alert>
+
+      <el-table
+        :data="volumeEntries"
+        class="config-table"
+      >
+        <el-table-column
+          label="Type"
+          width="120"
+        >
+          <template #default="{ row }">
+            <el-select
+              v-model="row.type"
+              size="small"
+            >
+              <el-option
+                label="bind"
+                value="bind"
+              />
+              <el-option
+                label="volume"
+                value="volume"
+              />
+              <el-option
+                label="tmpfs"
+                value="tmpfs"
+              />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Source"
+          min-width="200"
+        >
+          <template #default="{ row }">
+            <el-input
+              v-model="row.source"
+              placeholder="Chemin hôte ou nom du volume"
+              size="small"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Destination"
+          min-width="200"
+        >
+          <template #default="{ row }">
+            <el-input
+              v-model="row.destination"
+              placeholder="Point de montage dans le container"
+              size="small"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Mode"
+          width="100"
+        >
+          <template #default="{ row }">
+            <el-select
+              v-model="row.mode"
+              size="small"
+            >
+              <el-option
+                label="rw"
+                value="rw"
+              />
+              <el-option
+                label="ro"
+                value="ro"
+              />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Action"
+          width="80"
+          align="center"
+        >
+          <template #default="{ $index }">
+            <el-button
+              type="danger"
+              :icon="Delete"
+              size="small"
+              circle
+              @click="removeVolumeEntry($index)"
+            />
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="section-actions">
+        <el-button
+          :icon="CirclePlus"
+          size="small"
+          @click="addVolumeEntry"
+        >
+          Ajouter un volume
+        </el-button>
+        <el-button
+          type="primary"
+          size="small"
+          :loading="loadingRecreate"
+          :disabled="loadingRecreate"
+          @click="applyVolumesAndSecurity"
+        >
+          Appliquer
+        </el-button>
+      </div>
+    </el-card>
+
+    <!-- Section 8 : Sécurité (rouge) -->
+    <el-card
+      class="config-card card-config-security"
+      shadow="hover"
+    >
+      <template #header>
+        <div class="card-header header-red">
+          <el-icon><Lock /></el-icon>
+          <span>Sécurité</span>
+        </div>
+      </template>
+
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        class="section-alert"
+      >
+        ⚠️ Ces modifications nécessitent de recréer le container.
+      </el-alert>
+
+      <el-descriptions
+        :column="1"
+        border
+        size="small"
+      >
+        <el-descriptions-item label="Mode privilégié">
+          <el-switch v-model="privileged" />
+        </el-descriptions-item>
+        <el-descriptions-item label="Read-only rootfs">
+          <el-switch v-model="readonlyRootfs" />
+        </el-descriptions-item>
+      </el-descriptions>
+
+      <div class="cap-section">
+        <div class="cap-label">
+          Capabilities ajoutées (cap_add) :
+        </div>
+        <div class="cap-tags">
+          <el-tag
+            v-for="(cap, index) in capAdd"
+            :key="'add-' + index"
+            closable
+            size="small"
+            @close="removeCapAdd(index)"
+          >
+            {{ cap }}
+          </el-tag>
+        </div>
+        <div class="cap-input-row">
+          <el-input
+            v-model="newCapAdd"
+            placeholder="ex: NET_ADMIN"
+            size="small"
+            style="width: 180px"
+            @keyup.enter="addCapAdd"
+          />
+          <el-button
+            size="small"
+            :disabled="!newCapAdd.trim()"
+            @click="addCapAdd"
+          >
+            Ajouter
+          </el-button>
+        </div>
+      </div>
+
+      <div class="cap-section">
+        <div class="cap-label">
+          Capabilities retirées (cap_drop) :
+        </div>
+        <div class="cap-tags">
+          <el-tag
+            v-for="(cap, index) in capDrop"
+            :key="'drop-' + index"
+            closable
+            type="danger"
+            size="small"
+            @close="removeCapDrop(index)"
+          >
+            {{ cap }}
+          </el-tag>
+        </div>
+        <div class="cap-input-row">
+          <el-input
+            v-model="newCapDrop"
+            placeholder="ex: SETUID"
+            size="small"
+            style="width: 180px"
+            @keyup.enter="addCapDrop"
+          />
+          <el-button
+            size="small"
+            :disabled="!newCapDrop.trim()"
+            @click="addCapDrop"
+          >
+            Ajouter
+          </el-button>
+        </div>
+      </div>
+
+      <div class="section-actions">
+        <el-button
+          type="primary"
+          size="small"
+          :loading="loadingRecreate"
+          :disabled="loadingRecreate"
+          @click="applyVolumesAndSecurity"
+        >
+          Appliquer les modifications (recréation)
+        </el-button>
+      </div>
+    </el-card>
+
+    <!-- Section 9 : Réseaux (vert) -->
     <el-card
       class="config-card card-config-networks"
       shadow="hover"
@@ -601,6 +845,8 @@ import {
   Picture,
   MapLocation,
   Connection,
+  Lock,
+  Coin,
 } from '@element-plus/icons-vue'
 import { containersApi, networksApi } from '@/services/api'
 import { formatBytes } from '@/utils/format'
@@ -660,6 +906,24 @@ const memoryUnit = ref<'MB' | 'GB'>('MB')
 const cpuShares = ref<number>(0)
 const pidsLimit = ref<number>(-1)
 const loadingResources = ref(false)
+
+// ─── Volumes ───
+interface VolumeEntry {
+  type: 'bind' | 'volume' | 'tmpfs'
+  source: string
+  destination: string
+  mode: 'ro' | 'rw'
+}
+
+const volumeEntries = ref<VolumeEntry[]>([])
+
+// ─── Security ───
+const privileged = ref(false)
+const readonlyRootfs = ref(false)
+const capAdd = ref<string[]>([])
+const capDrop = ref<string[]>([])
+const newCapAdd = ref('')
+const newCapDrop = ref('')
 
 // ─── Networks ───
 const availableNetworks = ref<NetworkResponse[]>([])
@@ -808,6 +1072,34 @@ watch(
       cpuShares.value = res.cpu_shares ?? 0
       pidsLimit.value = res.pids_limit ?? -1
     }
+
+    // Volumes
+    if (detail.mounts && Array.isArray(detail.mounts) && detail.mounts.length > 0) {
+      volumeEntries.value = detail.mounts.map((m: Record<string, unknown>) => ({
+        type: (String(m['Type'] || 'bind')) as VolumeEntry['type'],
+        source: String(m['Source'] || ''),
+        destination: String(m['Destination'] || ''),
+        mode: String(m['RW']) === 'false' ? 'ro' as const : 'rw' as const,
+      }))
+    } else if (detail.host_config?.binds) {
+      volumeEntries.value = detail.host_config.binds.map((bind: string) => {
+        const parts = bind.split(':')
+        return {
+          type: 'bind' as const,
+          source: parts[0] || '',
+          destination: parts[1] || '',
+          mode: (parts[2] || 'rw') as 'ro' | 'rw',
+        }
+      })
+    } else {
+      volumeEntries.value = []
+    }
+
+    // Security
+    privileged.value = detail.host_config?.privileged ?? false
+    readonlyRootfs.value = detail.host_config?.readonly_rootfs ?? false
+    capAdd.value = detail.host_config?.cap_add ? [...detail.host_config.cap_add] : []
+    capDrop.value = detail.host_config?.cap_drop ? [...detail.host_config.cap_drop] : []
   },
   { immediate: true },
 )
@@ -1073,6 +1365,107 @@ async function applyResources(): Promise<void> {
     loadingResources.value = false
   }
 }
+// ─── Volume actions ───
+function addVolumeEntry(): void {
+  volumeEntries.value.push({ type: 'bind', source: '', destination: '', mode: 'rw' })
+}
+
+function removeVolumeEntry(index: number): void {
+  volumeEntries.value.splice(index, 1)
+}
+
+function buildMountsPayload(): Array<Record<string, unknown>> {
+  return volumeEntries.value.map((entry) => ({
+    Type: entry.type,
+    Source: entry.source,
+    Target: entry.destination,
+    ReadOnly: entry.mode === 'ro',
+  }))
+}
+
+function validateVolumes(): string | null {
+  const destinations = new Set<string>()
+  for (const entry of volumeEntries.value) {
+    if (!entry.destination.trim()) {
+      return 'La destination du volume ne peut pas être vide'
+    }
+    if (destinations.has(entry.destination)) {
+      return `Doublon de destination détecté : ${entry.destination}`
+    }
+    destinations.add(entry.destination)
+  }
+  return null
+}
+
+// ─── Capabilities actions ───
+function addCapAdd(): void {
+  const cap = newCapAdd.value.trim().toUpperCase()
+  if (cap && !capAdd.value.includes(cap)) {
+    capAdd.value.push(cap)
+  }
+  newCapAdd.value = ''
+}
+
+function removeCapAdd(index: number): void {
+  capAdd.value.splice(index, 1)
+}
+
+function addCapDrop(): void {
+  const cap = newCapDrop.value.trim().toUpperCase()
+  if (cap && !capDrop.value.includes(cap)) {
+    capDrop.value.push(cap)
+  }
+  newCapDrop.value = ''
+}
+
+function removeCapDrop(index: number): void {
+  capDrop.value.splice(index, 1)
+}
+
+// ─── Volumes & Security recreate ───
+async function applyVolumesAndSecurity(): Promise<void> {
+  if (!props.detail?.id) return
+
+  const volError = validateVolumes()
+  if (volError) {
+    ElMessage.error(volError)
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      'Modifier les volumes et/ou la sécurité nécessite de recréer le container. Le layer writable sera perdu. Continuer ?',
+      'Confirmation requise',
+      {
+        confirmButtonText: 'Confirmer',
+        cancelButtonText: 'Annuler',
+        type: 'warning',
+      },
+    )
+  } catch {
+    // cancelled
+    return
+  }
+
+  loadingRecreate.value = true
+  try {
+    const payload: Record<string, unknown> = {}
+    payload['mounts'] = buildMountsPayload()
+    payload['privileged'] = privileged.value
+    payload['readonly_rootfs'] = readonlyRootfs.value
+    payload['cap_add'] = capAdd.value.length > 0 ? [...capAdd.value] : undefined
+    payload['cap_drop'] = capDrop.value.length > 0 ? [...capDrop.value] : undefined
+
+    const response = await containersApi.recreate(props.detail.id, payload)
+    ElMessage.success('Container recréé avec succès')
+    emit('recreate-success', response.data.new_container_id)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Erreur lors de la recréation'
+    ElMessage.error(message)
+  } finally {
+    loadingRecreate.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -1146,6 +1539,14 @@ async function applyResources(): Promise<void> {
   border-bottom: 3px solid var(--el-color-success);
 }
 
+.card-config-volumes :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-success);
+}
+
+.card-config-security :deep(.el-card__header) {
+  border-bottom: 3px solid var(--el-color-danger);
+}
+
 /* ─── Section content styles ─── */
 .section-alert {
   margin-bottom: 12px;
@@ -1171,5 +1572,31 @@ async function applyResources(): Promise<void> {
 .current-hint {
   font-size: 12px;
   color: var(--color-text-secondary, #909399);
+}
+
+/* ─── Capabilities styles ─── */
+.cap-section {
+  margin-top: 16px;
+}
+
+.cap-label {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--el-text-color-primary);
+}
+
+.cap-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.cap-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 </style>

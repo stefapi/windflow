@@ -92,11 +92,11 @@ const baseDetail: ContainerDetail = {
     auto_remove: null,
     volume_driver: null,
     volumes_from: null,
-    cap_add: null,
-    cap_drop: null,
+    cap_add: ['NET_ADMIN', 'SYS_PTRACE'],
+    cap_drop: ['SETUID'],
     dns: null,
-    privileged: null,
-    readonly_rootfs: null,
+    privileged: true,
+    readonly_rootfs: false,
     security_opt: null,
     shm_size: null,
     runtime: null,
@@ -108,7 +108,10 @@ const baseDetail: ContainerDetail = {
       'my-custom-network': { ip_address: '192.168.1.10', gateway: '192.168.1.1', mac_address: '02:42:c0:a8:01:0a', network_id: 'net2', endpoint_id: 'ep2', ipv6_gateway: null, global_ipv6_address: null, ip_prefix_len: 24, driver: 'bridge' },
     },
   },
-  mounts: [],
+  mounts: [
+    { Type: 'volume', Source: 'my-vol', Destination: '/app/data', RW: true },
+    { Type: 'bind', Source: '/host/path', Destination: '/container/path', RW: false },
+  ],
   size_rw: null,
   size_root_fs: null,
 }
@@ -164,6 +167,8 @@ describe('ContainerConfigTab.vue', () => {
           'el-form': { template: '<form class="el-form-stub"><slot /></form>' },
           'el-form-item': { template: '<div class="el-form-item-stub"><slot /></div>', props: ['label'] },
           'el-checkbox': { template: '<input class="el-checkbox-stub" type="checkbox" />', props: ['modelValue'] },
+          'el-switch': { template: '<input class="el-switch-stub" type="checkbox" />', props: ['modelValue'] },
+          'el-tag': { template: '<span class="el-tag-stub"><slot /></span>', props: ['closable', 'size', 'type'] },
         },
       },
       props,
@@ -184,10 +189,10 @@ describe('ContainerConfigTab.vue', () => {
       expect(wrapper.find('.config-tab').exists()).toBe(true)
     })
 
-    it('should render 7 config cards', async () => {
+    it('should render 9 config cards', async () => {
       const wrapper = await mountComponent()
       const cards = wrapper.findAll('.el-card-stub')
-      expect(cards.length).toBe(7)
+      expect(cards.length).toBe(9)
     })
 
     it('should render card headers with correct titles', async () => {
@@ -199,6 +204,8 @@ describe('ContainerConfigTab.vue', () => {
       expect(text).toContain('Ports')
       expect(text).toContain('Restart Policy')
       expect(text).toContain('Resource Limits')
+      expect(text).toContain('Volumes')
+      expect(text).toContain('Sécurité')
       expect(text).toContain('Réseaux')
     })
 
@@ -217,8 +224,8 @@ describe('ContainerConfigTab.vue', () => {
     it('should render warning alerts for image and ports sections', async () => {
       const wrapper = await mountComponent()
       const alerts = wrapper.findAll('.el-alert-stub')
-      // 5 alerts total: env, labels, image, ports, networks (info)
-      expect(alerts.length).toBe(5)
+      // 7 alerts total: env, labels, image, ports, volumes, security, networks (info)
+      expect(alerts.length).toBe(7)
       const allText = alerts.map((a) => a.text()).join(' ')
       expect(allText).toContain('image')
       expect(allText).toContain('ports')
@@ -437,7 +444,7 @@ describe('ContainerConfigTab.vue', () => {
     it('should render warning alerts for env vars and labels sections', async () => {
       const wrapper = await mountComponent()
       const alerts = wrapper.findAll('.el-alert-stub')
-      expect(alerts.length).toBe(5)
+      expect(alerts.length).toBe(7)
       expect(alerts[0].text()).toContain('variables d\'environnement')
       expect(alerts[1].text()).toContain('labels')
     })
@@ -950,6 +957,329 @@ describe('ContainerConfigTab.vue', () => {
       await flushPromises()
       const vm = wrapper.vm as unknown as { connectedNetworks: unknown[] }
       expect(vm.connectedNetworks.length).toBe(0)
+    })
+  })
+
+  describe('Volumes — rendering', () => {
+    it('should render Volumes card with correct header', async () => {
+      const wrapper = await mountComponent()
+      const text = wrapper.text()
+      expect(text).toContain('Volumes')
+    })
+
+    it('should render warning alert for volumes section', async () => {
+      const wrapper = await mountComponent()
+      const alerts = wrapper.findAll('.el-alert-stub')
+      const volAlert = alerts.find((a) => a.text().includes('volumes'))
+      expect(volAlert).toBeTruthy()
+    })
+  })
+
+  describe('Volumes — pre-fill from detail', () => {
+    it('should populate volume entries from detail.mounts', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        volumeEntries: { type: string; source: string; destination: string; mode: string }[]
+      }
+      expect(vm.volumeEntries.length).toBe(2)
+      expect(vm.volumeEntries[0]).toEqual({ type: 'volume', source: 'my-vol', destination: '/app/data', mode: 'rw' })
+      expect(vm.volumeEntries[1]).toEqual({ type: 'bind', source: '/host/path', destination: '/container/path', mode: 'ro' })
+    })
+
+    it('should handle null mounts gracefully', async () => {
+      const detailNoMounts = { ...baseDetail, mounts: [] }
+      const wrapper = await mountComponent({ detail: detailNoMounts })
+      const vm = wrapper.vm as unknown as { volumeEntries: unknown[] }
+      expect(vm.volumeEntries.length).toBe(0)
+    })
+
+    it('should parse binds when mounts is empty', async () => {
+      const detailWithBinds: ContainerDetail = {
+        ...baseDetail,
+        mounts: [],
+        host_config: {
+          ...baseDetail.host_config!,
+          binds: ['/host/data:/container/data:ro', '/host/logs:/container/logs:rw'],
+        },
+      }
+      const wrapper = await mountComponent({ detail: detailWithBinds })
+      const vm = wrapper.vm as unknown as {
+        volumeEntries: { type: string; source: string; destination: string; mode: string }[]
+      }
+      expect(vm.volumeEntries.length).toBe(2)
+      expect(vm.volumeEntries[0]).toEqual({ type: 'bind', source: '/host/data', destination: '/container/data', mode: 'ro' })
+      expect(vm.volumeEntries[1]).toEqual({ type: 'bind', source: '/host/logs', destination: '/container/logs', mode: 'rw' })
+    })
+  })
+
+  describe('Volumes — add/remove', () => {
+    it('should add a new volume entry', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        volumeEntries: { type: string; source: string; destination: string; mode: string }[]
+        addVolumeEntry: () => void
+      }
+      const initialCount = vm.volumeEntries.length
+      vm.addVolumeEntry()
+      await flushPromises()
+      expect(vm.volumeEntries.length).toBe(initialCount + 1)
+      expect(vm.volumeEntries[vm.volumeEntries.length - 1]).toEqual({ type: 'bind', source: '', destination: '', mode: 'rw' })
+    })
+
+    it('should remove a volume entry', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        volumeEntries: unknown[]
+        removeVolumeEntry: (i: number) => void
+      }
+      const initialCount = vm.volumeEntries.length
+      vm.removeVolumeEntry(0)
+      await flushPromises()
+      expect(vm.volumeEntries.length).toBe(initialCount - 1)
+    })
+  })
+
+  describe('Volumes — validation', () => {
+    it('should reject empty volume destination', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        volumeEntries: { type: string; source: string; destination: string; mode: string }[]
+        validateVolumes: () => string | null
+      }
+      vm.volumeEntries[0].destination = '   '
+      const error = vm.validateVolumes()
+      expect(error).toContain('destination')
+    })
+
+    it('should reject duplicate volume destinations', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        volumeEntries: { type: string; source: string; destination: string; mode: string }[]
+        validateVolumes: () => string | null
+      }
+      vm.volumeEntries[1].destination = '/app/data'
+      const error = vm.validateVolumes()
+      expect(error).toContain('Doublon')
+    })
+
+    it('should return null for valid volumes', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { validateVolumes: () => string | null }
+      const error = vm.validateVolumes()
+      expect(error).toBeNull()
+    })
+  })
+
+  describe('Security — rendering', () => {
+    it('should render Security card with correct header', async () => {
+      const wrapper = await mountComponent()
+      const text = wrapper.text()
+      expect(text).toContain('Sécurité')
+    })
+
+    it('should render warning alert for security section', async () => {
+      const wrapper = await mountComponent()
+      const alerts = wrapper.findAll('.el-alert-stub')
+      const secAlert = alerts.find((a) => a.text().includes('nécessitent de recréer'))
+      expect(secAlert).toBeTruthy()
+    })
+  })
+
+  describe('Security — pre-fill from detail', () => {
+    it('should populate security fields from host_config', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        privileged: boolean
+        readonlyRootfs: boolean
+        capAdd: string[]
+        capDrop: string[]
+      }
+      expect(vm.privileged).toBe(true)
+      expect(vm.readonlyRootfs).toBe(false)
+      expect(vm.capAdd).toEqual(['NET_ADMIN', 'SYS_PTRACE'])
+      expect(vm.capDrop).toEqual(['SETUID'])
+    })
+
+    it('should handle null security fields gracefully', async () => {
+      const detailNoSec: ContainerDetail = {
+        ...baseDetail,
+        host_config: {
+          ...baseDetail.host_config!,
+          cap_add: null,
+          cap_drop: null,
+          privileged: null,
+          readonly_rootfs: null,
+        },
+      }
+      const wrapper = await mountComponent({ detail: detailNoSec })
+      const vm = wrapper.vm as unknown as {
+        privileged: boolean
+        readonlyRootfs: boolean
+        capAdd: string[]
+        capDrop: string[]
+      }
+      expect(vm.privileged).toBe(false)
+      expect(vm.readonlyRootfs).toBe(false)
+      expect(vm.capAdd).toEqual([])
+      expect(vm.capDrop).toEqual([])
+    })
+  })
+
+  describe('Security — capabilities add/remove', () => {
+    it('should add a cap_add tag', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        capAdd: string[]
+        newCapAdd: string
+        addCapAdd: () => void
+      }
+      vm.newCapAdd = 'NET_RAW'
+      vm.addCapAdd()
+      await flushPromises()
+      expect(vm.capAdd).toContain('NET_RAW')
+      expect(vm.newCapAdd).toBe('')
+    })
+
+    it('should not add duplicate cap_add', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        capAdd: string[]
+        newCapAdd: string
+        addCapAdd: () => void
+      }
+      const initialLength = vm.capAdd.length
+      vm.newCapAdd = 'NET_ADMIN'
+      vm.addCapAdd()
+      await flushPromises()
+      expect(vm.capAdd.length).toBe(initialLength)
+    })
+
+    it('should remove a cap_add tag', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        capAdd: string[]
+        removeCapAdd: (i: number) => void
+      }
+      const initialLength = vm.capAdd.length
+      vm.removeCapAdd(0)
+      await flushPromises()
+      expect(vm.capAdd.length).toBe(initialLength - 1)
+    })
+
+    it('should add a cap_drop tag', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        capDrop: string[]
+        newCapDrop: string
+        addCapDrop: () => void
+      }
+      vm.newCapDrop = 'SETGID'
+      vm.addCapDrop()
+      await flushPromises()
+      expect(vm.capDrop).toContain('SETGID')
+      expect(vm.newCapDrop).toBe('')
+    })
+
+    it('should remove a cap_drop tag', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        capDrop: string[]
+        removeCapDrop: (i: number) => void
+      }
+      const initialLength = vm.capDrop.length
+      vm.removeCapDrop(0)
+      await flushPromises()
+      expect(vm.capDrop.length).toBe(initialLength - 1)
+    })
+  })
+
+  describe('Volumes & Security — apply (recreate)', () => {
+    it('should call recreate API with mounts and security payload', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { applyVolumesAndSecurity: () => Promise<void> }
+      await vm.applyVolumesAndSecurity()
+      await flushPromises()
+
+      expect(mockRecreate).toHaveBeenCalledWith('abc123', expect.objectContaining({
+        mounts: [
+          { Type: 'volume', Source: 'my-vol', Target: '/app/data', ReadOnly: false },
+          { Type: 'bind', Source: '/host/path', Target: '/container/path', ReadOnly: true },
+        ],
+        privileged: true,
+        readonly_rootfs: false,
+        cap_add: ['NET_ADMIN', 'SYS_PTRACE'],
+        cap_drop: ['SETUID'],
+      }))
+    })
+
+    it('should emit recreate-success with new container ID', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { applyVolumesAndSecurity: () => Promise<void> }
+      await vm.applyVolumesAndSecurity()
+      await flushPromises()
+
+      expect(wrapper.emitted('recreate-success')).toBeTruthy()
+      expect(wrapper.emitted('recreate-success')![0]).toEqual(['new456'])
+    })
+
+    it('should show error message on recreate failure', async () => {
+      mockRecreate.mockRejectedValue(new Error('Recreate failed'))
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { applyVolumesAndSecurity: () => Promise<void> }
+      await vm.applyVolumesAndSecurity()
+      await flushPromises()
+
+      expect(mockRecreate).toHaveBeenCalled()
+    })
+
+    it('should not call API when detail is null', async () => {
+      const wrapper = await mountComponent({ detail: null })
+      const vm = wrapper.vm as unknown as { applyVolumesAndSecurity: () => Promise<void> }
+      await vm.applyVolumesAndSecurity()
+      await flushPromises()
+
+      expect(mockRecreate).not.toHaveBeenCalled()
+    })
+
+    it('should not call API when validation fails (empty destination)', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        volumeEntries: { type: string; source: string; destination: string; mode: string }[]
+        applyVolumesAndSecurity: () => Promise<void>
+      }
+      vm.volumeEntries[0].destination = ''
+      await vm.applyVolumesAndSecurity()
+      await flushPromises()
+
+      expect(mockRecreate).not.toHaveBeenCalled()
+    })
+
+    it('should not call API when user cancels confirmation', async () => {
+      const confirmMock = ElMessageBox.confirm as ReturnType<typeof vi.fn>
+      confirmMock.mockRejectedValueOnce(new Error('cancel'))
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as { applyVolumesAndSecurity: () => Promise<void> }
+      await vm.applyVolumesAndSecurity()
+      await flushPromises()
+
+      expect(mockRecreate).not.toHaveBeenCalled()
+    })
+
+    it('should not include cap_add/cap_drop in payload when empty', async () => {
+      const wrapper = await mountComponent()
+      const vm = wrapper.vm as unknown as {
+        capAdd: string[]
+        capDrop: string[]
+        applyVolumesAndSecurity: () => Promise<void>
+      }
+      vm.capAdd = []
+      vm.capDrop = []
+      await vm.applyVolumesAndSecurity()
+      await flushPromises()
+
+      const callArgs = mockRecreate.mock.calls[0][1] as Record<string, unknown>
+      expect(callArgs.cap_add).toBeUndefined()
+      expect(callArgs.cap_drop).toBeUndefined()
     })
   })
 })
