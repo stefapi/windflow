@@ -203,6 +203,16 @@ C'est la fondation de tout ce qui suit. Sans un système de plugins solide, Wind
 - [ ] Network drivers (bridge, overlay, macvlan)
 - [ ] Isolation réseau par environnement
 
+#### Mode App — Navigation & UX Simplifiée (EPIC-010)
+
+Couche frontend uniquement (style Umbrel) qui masque le vocabulaire technique derrière des termes simples. L'utilisateur manipule des "Apps" au lieu de containers, "Mes Apps" au lieu de "Managed Stacks". Aucune modification backend nécessaire — les APIs existantes sont réutilisées telles quelles.
+
+- [ ] **Sidebar Mode App** : navigation simplifiée (Dashboard, Apps, Marketplace, Plugins, Settings) avec toggle Mode Infra désactivé (grisé, "Bientôt disponible")
+- [ ] **Vue Liste Apps** : refonte de Compute.vue en vocabulaire non-technique — "Mes Apps", "Apps autonomes", "Apps détectées" ; cards avec icône, nom, version, domaine, statut, RAM ; actions inline (Ouvrir, Logs, Terminal, Stop)
+- [ ] **Détail App simplifié** : adaptation de ContainerDetail.vue — header App (nom, version, statut, domaine), action bar simplifiée, onglets limités (Aperçu, Logs, Console, Métriques, Config) ; onglets techniques masqués
+- [ ] **Dashboard avec grille Apps** : grille d'icônes Apps sur le dashboard principal, statut visuel par app, accès direct en un clic
+- [ ] **Menu contextuel canonique `[⋯ Plus]`** : actions avancées accessibles via menu contextuel uniformisé (Supprimer, Renommer, Détails techniques)
+
 #### Premiers Plugins
 
 **Plugin Traefik (accès & routage) :**
