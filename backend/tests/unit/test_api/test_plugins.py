@@ -417,3 +417,242 @@ class TestPluginSecurity:
         data = response.json()
         assert data["config_values"]["api_key"] == "********"
         assert data["config_values"]["host"] == "localhost"
+
+
+# ── Manifest avec dépendances pour les tests ─────────────────────────────────
+
+
+MANIFEST_WITH_DEPENDENCIES = """
+name: plugin-with-deps
+version: 1.0.0
+display_name: "Plugin With Dependencies"
+description: "A plugin that requires docker"
+category: other
+author: "Test Author"
+license: MIT
+type: extension
+architectures:
+  - linux/amd64
+extensions:
+  api_module: extensions/api.py
+dependencies:
+  requires:
+    - docker>=1.0.0
+  conflicts:
+    - nginx-proxy-manager
+"""
+
+MANIFEST_WITH_CONFLICT = """
+name: conflicting-plugin
+version: 1.0.0
+display_name: "Conflicting Plugin"
+description: "A plugin that conflicts with existing"
+category: other
+author: "Test Author"
+license: MIT
+type: extension
+architectures:
+  - linux/amd64
+extensions:
+  api_module: extensions/api.py
+dependencies:
+  conflicts:
+    - test-plugin
+"""
+
+
+# ── Tests install avec dépendances ───────────────────────────────────────────
+
+
+class TestInstallPluginDependencies:
+    """Tests d'installation avec vérification des dépendances."""
+
+    @pytest.mark.asyncio
+    async def test_install_plugin_returns_409_on_missing_dependency(
+        self, admin_client: AsyncClient
+    ) -> None:
+        """Dépendance requise absente → 409 avec détail des manquantes."""
+        response = await admin_client.post(
+            "/api/v1/plugins/install",
+            json={"manifest_yaml": MANIFEST_WITH_DEPENDENCIES},
+        )
+        assert response.status_code == 409
+        assert "docker" in response.json()["detail"].lower() or "dépendance" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_install_plugin_returns_409_on_conflict(
+        self, admin_client: AsyncClient
+    ) -> None:
+        """Plugin en conflit déjà installé → 409."""
+        # Installer le plugin de base d'abord
+        await admin_client.post(
+            "/api/v1/plugins/install",
+            json={"manifest_yaml": VALID_MANIFEST_YAML},
+        )
+
+        # Tenter d'installer le plugin en conflit
+        response = await admin_client.post(
+            "/api/v1/plugins/install",
+            json={"manifest_yaml": MANIFEST_WITH_CONFLICT},
+        )
+        assert response.status_code == 409
+
+    @pytest.mark.asyncio
+    async def test_install_plugin_succeeds_with_satisfied_dependencies(
+        self, admin_client: AsyncClient
+    ) -> None:
+        """Cas nominal : toutes dépendances satisfaites."""
+        # Installer docker d'abord
+        docker_manifest = """
+name: docker
+version: 1.2.0
+display_name: "Docker"
+description: "Docker dependency"
+category: other
+author: "Test"
+license: MIT
+type: extension
+architectures:
+  - linux/amd64
+extensions:
+  api_module: api.py
+"""
+        await admin_client.post(
+            "/api/v1/plugins/install",
+            json={"manifest_yaml": docker_manifest},
+        )
+
+        # Installer le plugin qui dépend de docker
+        response = await admin_client.post(
+            "/api/v1/plugins/install",
+            json={"manifest_yaml": MANIFEST_WITH_DEPENDENCIES},
+        )
+        assert response.status_code == 202
+        data = response.json()
+        assert data["status"] == "installed"
+
+
+# ── Tests uninstall avec dépendants ──────────────────────────────────────────
+
+
+class TestUninstallPluginDependencies:
+    """Tests de désinstallation avec vérification des dépendants."""
+
+    @pytest.mark.asyncio
+    async def test_uninstall_plugin_returns_409_on_dependents(
+        self, admin_client: AsyncClient
+    ) -> None:
+        """Plugins dépendants présents → 409 avec liste des dépendants."""
+        # Installer docker
+        docker_manifest = """
+name: docker
+version: 1.2.0
+display_name: "Docker"
+description: "Docker dependency"
+category: other
+author: "Test"
+license: MIT
+type: extension
+architectures:
+  - linux/amd64
+extensions:
+  api_module: api.py
+"""
+        docker_resp = await admin_client.post(
+            "/api/v1/plugins/install",
+            json={"manifest_yaml": docker_manifest},
+        )
+        docker_id = docker_resp.json()["id"]
+
+        # Installer le plugin qui dépend de docker
+        await admin_client.post(
+            "/api/v1/plugins/install",
+            json={"manifest_yaml": MANIFEST_WITH_DEPENDENCIES},
+        )
+
+        # Tenter de désinstaller docker → 409 car plugin-with-deps en dépend
+        response = await admin_client.delete(f"/api/v1/plugins/{docker_id}/uninstall")
+        assert response.status_code == 409
+
+    @pytest.mark.asyncio
+    async def test_uninstall_plugin_succeeds_when_no_dependents(
+        self, admin_client: AsyncClient
+    ) -> None:
+        """Cas nominal : aucun dépendant."""
+        # Installer un plugin simple
+        install_resp = await admin_client.post(
+            "/api/v1/plugins/install",
+            json={"manifest_yaml": VALID_MANIFEST_YAML},
+        )
+        plugin_id = install_resp.json()["id"]
+
+        # Désinstaller → 204
+        response = await admin_client.delete(f"/api/v1/plugins/{plugin_id}/uninstall")
+        assert response.status_code == 204
+
+
+# ── Tests GET /plugins/{plugin_id}/dependencies ──────────────────────────────
+
+
+class TestGetPluginDependencies:
+    """Tests de l'endpoint GET /plugins/{plugin_id}/dependencies."""
+
+    @pytest.mark.asyncio
+    async def test_get_dependencies_returns_200_authenticated(
+        self, admin_client: AsyncClient
+    ) -> None:
+        """Cas nominal : arbre de dépendances retourné."""
+        # Installer un plugin avec dépendances
+        docker_manifest = """
+name: docker
+version: 1.2.0
+display_name: "Docker"
+description: "Docker dependency"
+category: other
+author: "Test"
+license: MIT
+type: extension
+architectures:
+  - linux/amd64
+extensions:
+  api_module: api.py
+"""
+        await admin_client.post(
+            "/api/v1/plugins/install",
+            json={"manifest_yaml": docker_manifest},
+        )
+
+        resp = await admin_client.post(
+            "/api/v1/plugins/install",
+            json={"manifest_yaml": MANIFEST_WITH_DEPENDENCIES},
+        )
+        plugin_id = resp.json()["id"]
+
+        response = await admin_client.get(f"/api/v1/plugins/{plugin_id}/dependencies")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["plugin_id"] == plugin_id
+        assert data["plugin_name"] == "plugin-with-deps"
+        assert len(data["requires"]) >= 1
+        assert data["requires"][0]["name"] == "docker"
+        assert data["requires"][0]["installed"] is True
+        assert data["requires"][0]["installed_version"] == "1.2.0"
+        assert "nginx-proxy-manager" in data["conflicts"]
+
+    @pytest.mark.asyncio
+    async def test_get_dependencies_returns_401_without_token(
+        self, client: AsyncClient, auth_enabled
+    ) -> None:
+        """Sécurité : accès sans token → 401."""
+        response = await client.get("/api/v1/plugins/some-id/dependencies")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_get_dependencies_returns_404_when_not_found(
+        self, admin_client: AsyncClient
+    ) -> None:
+        """Plugin inexistant → 404."""
+        response = await admin_client.get(
+            "/api/v1/plugins/nonexistent-id/dependencies"
+        )
+        assert response.status_code == 404

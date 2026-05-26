@@ -19,11 +19,15 @@ from ...models.user import User
 from ...schemas.plugin import (
     PluginActionResponse,
     PluginConfigureRequest,
+    PluginDependencyRefResponse,
+    PluginDependencyTreeResponse,
     PluginInstallRequest,
     PluginResponse,
     PluginSummaryResponse,
     PluginUpdateRequest,
 )
+from ...schemas.plugin_manifest import parse_dependency_string
+from ...services.plugin_dependency_service import PluginDependencyService
 from ...services.plugin_manager_service import PluginManagerService
 
 router = APIRouter()
@@ -32,6 +36,7 @@ logger = logging.getLogger(__name__)
 # Instance du service — les méthodes de lecture sont statiques,
 # les méthodes d'écriture utilisent l'instance (pour le manifest_service)
 _plugin_service = PluginManagerService()
+_dependency_service = PluginDependencyService()
 
 
 @router.get(
@@ -149,6 +154,11 @@ async def install_plugin(
         )
     except WindFlowException as exc:
         if exc.details.get("error_type") == "duplicate":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.message,
+            ) from exc
+        if exc.details.get("error_type") == "dependency_unsatisfied":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=exc.message,
@@ -304,7 +314,123 @@ async def uninstall_plugin(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=exc.message,
             ) from exc
+        if exc.details.get("error_type") == "has_dependents":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.message,
+            ) from exc
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=exc.message,
         ) from exc
+
+
+# ── GET /plugins/{plugin_id}/dependencies ────────────────────────────────────
+
+
+@router.get(
+    "/{plugin_id}/dependencies",
+    response_model=PluginDependencyTreeResponse,
+    summary="Arbre de dépendances d'un plugin",
+    description="Retourne l'arbre de dépendances complet d'un plugin installé : requires, optional, conflicts, dependents.",
+    responses={
+        200: {"description": "Arbre de dépendances"},
+        401: {"description": "Authentification requise"},
+        404: {"description": "Plugin non trouvé"},
+    },
+)
+async def get_plugin_dependencies(
+    plugin_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+    _rate_limit=Depends(conditional_rate_limiter(100, 60)),
+) -> PluginDependencyTreeResponse:
+    """Retourne l'arbre de dépendances complet d'un plugin installé."""
+    logger.info(
+        "get_plugin_dependencies",
+        extra={
+            "plugin_id": plugin_id,
+            "user_id": current_user.id,
+        },
+    )
+    plugin = await PluginManagerService.get_plugin(db, plugin_id)
+    if not plugin:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plugin non trouvé : {plugin_id}",
+        )
+
+    # Extraire les dépendances du manifest_data
+    manifest_data = plugin.manifest_data or {}
+    deps_data = manifest_data.get("dependencies") or {}
+    requires_raw: list[str] = deps_data.get("requires", [])
+    optional_raw: list[str] = deps_data.get("optional", [])
+    conflicts_raw: list[str] = deps_data.get("conflicts", [])
+
+    # Récupérer les plugins installés pour vérifier le statut
+    from sqlalchemy import select as sql_select
+    from ...models.plugin import Plugin as PluginModel
+
+    result = await db.execute(
+        sql_select(PluginModel).where(
+            PluginModel.organization_id == current_user.organization_id
+        )
+    )
+    installed_plugins = {p.name: p for p in result.scalars().all()}
+
+    # Construire les réponses pour requires
+    requires_refs: list[PluginDependencyRefResponse] = []
+    for req_str in requires_raw:
+        try:
+            dep_ref = parse_dependency_string(req_str)
+            installed_plugin = installed_plugins.get(dep_ref.name)
+            requires_refs.append(
+                PluginDependencyRefResponse(
+                    name=dep_ref.name,
+                    version_constraint=dep_ref.version_constraint,
+                    installed=installed_plugin is not None,
+                    installed_version=installed_plugin.version if installed_plugin else None,
+                )
+            )
+        except ValueError:
+            continue
+
+    # Construire les réponses pour optional
+    optional_refs: list[PluginDependencyRefResponse] = []
+    for opt_str in optional_raw:
+        try:
+            dep_ref = parse_dependency_string(opt_str)
+            installed_plugin = installed_plugins.get(dep_ref.name)
+            optional_refs.append(
+                PluginDependencyRefResponse(
+                    name=dep_ref.name,
+                    version_constraint=dep_ref.version_constraint,
+                    installed=installed_plugin is not None,
+                    installed_version=installed_plugin.version if installed_plugin else None,
+                )
+            )
+        except ValueError:
+            continue
+
+    # Construire la liste des conflits (noms simples)
+    conflicts_names: list[str] = []
+    for conf_str in conflicts_raw:
+        try:
+            dep_ref = parse_dependency_string(conf_str)
+            conflicts_names.append(dep_ref.name)
+        except ValueError:
+            conflicts_names.append(conf_str)
+
+    # Récupérer les dépendants (plugins qui dépendent de celui-ci)
+    dependents = await _dependency_service.check_uninstall_dependents(
+        db, plugin.name, current_user.organization_id
+    )
+
+    return PluginDependencyTreeResponse(
+        plugin_id=plugin.id,
+        plugin_name=plugin.name,
+        requires=requires_refs,
+        optional=optional_refs,
+        conflicts=conflicts_names,
+        dependents=dependents,
+    )

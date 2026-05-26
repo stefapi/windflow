@@ -132,6 +132,79 @@ class PluginConfigField(BaseModel):
         return self
 
 
+class PluginDependencyRef(BaseModel):
+    """Référence de dépendance avec nom + contrainte de version optionnelle."""
+
+    name: str = Field(..., description="Nom du plugin dépendance (kebab-case)")
+    version_constraint: Optional[str] = Field(
+        None, description="Contrainte de version (ex: >=1.0.0)"
+    )
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Valide que le nom est en kebab-case (sécurité : anti path traversal)."""
+        if not _NAME_PATTERN.match(v):
+            raise ValueError(
+                "Le nom de dépendance doit être en kebab-case : "
+                "lettres minuscules, chiffres et tirets, "
+                "commençant par une lettre minuscule ou un chiffre"
+            )
+        return v
+
+    @field_validator("version_constraint")
+    @classmethod
+    def validate_version_constraint(cls, v: Optional[str]) -> Optional[str]:
+        """Valide le format de contrainte de version."""
+        if v is None:
+            return v
+        if not _VERSION_CONSTRAINT_PATTERN.match(v):
+            raise ValueError(
+                "La contrainte de version doit être valide "
+                "(ex: >=1.0.0, ==2.0.0, ~=1.1.0)"
+            )
+        return v
+
+
+def parse_dependency_string(dep: str) -> PluginDependencyRef:
+    """Parse une chaîne de dépendance en PluginDependencyRef.
+
+    Supporte les formats :
+    - ``"plugin-name"`` → PluginDependencyRef(name="plugin-name", version_constraint=None)
+    - ``"plugin-name>=1.0.0"`` → PluginDependencyRef(name="plugin-name", version_constraint=">=1.0.0")
+
+    Args:
+        dep: Chaîne de dépendance à parser.
+
+    Returns:
+        PluginDependencyRef parsé et validé.
+
+    Raises:
+        ValueError: Si le nom ou la contrainte de version est invalide.
+    """
+    # Séparer le nom de la contrainte de version
+    # Les opérateurs possibles : >=, <=, >, <, ==, !=, ~=
+    match = re.match(
+        r"^([a-z0-9][a-z0-9-]*)(?:(>=|<=|>|<|==|!=|~=)\s*(\d+(?:\.\d+){0,2}.*))?$",
+        dep,
+    )
+    if not match:
+        raise ValueError(
+            f"Format de dépendance invalide : '{dep}'. "
+            "Attendu : 'plugin-name' ou 'plugin-name>=1.0.0'"
+        )
+
+    name = match.group(1)
+    operator = match.group(2)
+    version_part = match.group(3)
+
+    version_constraint: Optional[str] = None
+    if operator and version_part:
+        version_constraint = f"{operator}{version_part}"
+
+    return PluginDependencyRef(name=name, version_constraint=version_constraint)
+
+
 class PluginDependency(BaseModel):
     """Dépendances entre plugins."""
 
@@ -140,6 +213,18 @@ class PluginDependency(BaseModel):
     conflicts: List[str] = Field(
         default_factory=list, description="Plugins incompatibles"
     )
+
+    def get_resolved_requires(self) -> List[PluginDependencyRef]:
+        """Parse chaque élément de requires en PluginDependencyRef."""
+        return [parse_dependency_string(dep) for dep in self.requires]
+
+    def get_resolved_optional(self) -> List[PluginDependencyRef]:
+        """Parse chaque élément de optional en PluginDependencyRef."""
+        return [parse_dependency_string(dep) for dep in self.optional]
+
+    def get_resolved_conflicts(self) -> List[PluginDependencyRef]:
+        """Parse chaque élément de conflicts en PluginDependencyRef."""
+        return [parse_dependency_string(dep) for dep in self.conflicts]
 
 
 class PluginExtension(BaseModel):

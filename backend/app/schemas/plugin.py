@@ -8,7 +8,7 @@ Masquage des champs password dans les réponses.
 
 import re
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -200,4 +200,76 @@ class PluginActionResponse(BaseModel):
                 }
             ]
         },
+    )
+
+
+# ── Dependency response schemas ──────────────────────────────────────────────
+
+
+class PluginDependencyRefResponse(BaseModel):
+    """Réponse pour une référence de dépendance de plugin."""
+
+    name: str = Field(..., description="Nom du plugin dépendance")
+    version_constraint: Optional[str] = Field(
+        None, description="Contrainte de version (ex: >=1.0.0)"
+    )
+    installed: bool = Field(
+        False, description="Si la dépendance est installée"
+    )
+    installed_version: Optional[str] = Field(
+        None, description="Version installée (si installée)"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "name": "docker",
+                    "version_constraint": ">=1.0.0",
+                    "installed": True,
+                    "installed_version": "1.2.0",
+                }
+            ]
+        }
+    )
+
+
+class PluginDependencyTreeResponse(BaseModel):
+    """Réponse pour l'arbre de dépendances complet d'un plugin."""
+
+    plugin_id: str = Field(..., description="ID du plugin")
+    plugin_name: str = Field(..., description="Nom du plugin")
+    requires: List[PluginDependencyRefResponse] = Field(
+        default_factory=list, description="Dépendances requises"
+    )
+    optional: List[PluginDependencyRefResponse] = Field(
+        default_factory=list, description="Dépendances optionnelles"
+    )
+    conflicts: List[str] = Field(
+        default_factory=list, description="Plugins en conflit"
+    )
+    dependents: List[str] = Field(
+        default_factory=list, description="Plugins qui dépendent de celui-ci"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "plugin_id": "a1b2c3d4",
+                    "plugin_name": "traefik",
+                    "requires": [
+                        {
+                            "name": "docker",
+                            "version_constraint": ">=1.0.0",
+                            "installed": True,
+                            "installed_version": "1.2.0",
+                        }
+                    ],
+                    "optional": [],
+                    "conflicts": ["nginx-proxy-manager"],
+                    "dependents": ["my-app-plugin"],
+                }
+            ]
+        }
     )

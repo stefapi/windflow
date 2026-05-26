@@ -18,6 +18,7 @@ from app.schemas.plugin_manifest import (
     PluginCategory,
     PluginConfigField,
     PluginDependency,
+    PluginDependencyRef,
     PluginExtension,
     PluginHook,
     PluginManifest,
@@ -25,6 +26,7 @@ from app.schemas.plugin_manifest import (
     PluginResourceRequirements,
     PluginType,
     PortProtocol,
+    parse_dependency_string,
 )
 
 
@@ -438,3 +440,92 @@ __import__('os').system('echo hacked')
         valid_minimal_manifest_data["unknown_field"] = "should be ignored"
         manifest = PluginManifest(**valid_minimal_manifest_data)
         assert not hasattr(manifest, "unknown_field")
+
+
+# ── Tests PluginDependencyRef & parse_dependency_string ──────────────────────
+
+
+class TestPluginDependencyRef:
+    """Tests du modèle PluginDependencyRef et de parse_dependency_string."""
+
+    def test_parse_simple_name(self) -> None:
+        """Parse un nom simple sans contrainte de version."""
+        ref = parse_dependency_string("docker")
+        assert ref.name == "docker"
+        assert ref.version_constraint is None
+
+    def test_parse_name_with_version(self) -> None:
+        """Parse un nom avec contrainte de version >=."""
+        ref = parse_dependency_string("docker>=1.0.0")
+        assert ref.name == "docker"
+        assert ref.version_constraint == ">=1.0.0"
+
+    def test_parse_name_with_eq_constraint(self) -> None:
+        """Parse un nom avec contrainte d'égalité."""
+        ref = parse_dependency_string("my-plugin==2.0.0")
+        assert ref.name == "my-plugin"
+        assert ref.version_constraint == "==2.0.0"
+
+    def test_parse_name_with_tilde_constraint(self) -> None:
+        """Parse un nom avec contrainte compatible (~=)."""
+        ref = parse_dependency_string("my-plugin~=1.1.0")
+        assert ref.name == "my-plugin"
+        assert ref.version_constraint == "~=1.1.0"
+
+    def test_parse_invalid_name_raises(self) -> None:
+        """Sécurité : nom invalide (non kebab-case) lève ValueError."""
+        with pytest.raises(ValueError, match="Format de dépendance invalide"):
+            parse_dependency_string("INVALID!")
+
+    def test_parse_invalid_version_raises(self) -> None:
+        """Version mal formatée lève ValueError."""
+        with pytest.raises(ValueError, match="Format de dépendance invalide"):
+            parse_dependency_string("docker=bad")
+
+    def test_get_resolved_requires_returns_refs(self) -> None:
+        """PluginDependency.get_resolved_requires() retourne les bons PluginDependencyRef."""
+        dep = PluginDependency(requires=["docker>=1.0.0", "redis"])
+        refs = dep.get_resolved_requires()
+        assert len(refs) == 2
+        assert refs[0].name == "docker"
+        assert refs[0].version_constraint == ">=1.0.0"
+        assert refs[1].name == "redis"
+        assert refs[1].version_constraint is None
+
+    def test_get_resolved_optional_returns_refs(self) -> None:
+        """PluginDependency.get_resolved_optional() retourne les bons PluginDependencyRef."""
+        dep = PluginDependency(optional=["cloudflare-dns>=2.0.0"])
+        refs = dep.get_resolved_optional()
+        assert len(refs) == 1
+        assert refs[0].name == "cloudflare-dns"
+        assert refs[0].version_constraint == ">=2.0.0"
+
+    def test_get_resolved_conflicts_returns_refs(self) -> None:
+        """PluginDependency.get_resolved_conflicts() retourne les bons PluginDependencyRef."""
+        dep = PluginDependency(conflicts=["nginx-proxy-manager"])
+        refs = dep.get_resolved_conflicts()
+        assert len(refs) == 1
+        assert refs[0].name == "nginx-proxy-manager"
+        assert refs[0].version_constraint is None
+
+    def test_dependency_ref_validates_kebab_case_name(self) -> None:
+        """Sécurité : PluginDependencyRef rejette les noms non kebab-case."""
+        with pytest.raises(ValidationError):
+            PluginDependencyRef(name="INVALID!", version_constraint=None)
+
+    def test_dependency_ref_validates_bad_version_constraint(self) -> None:
+        """Sécurité : PluginDependencyRef rejette les contraintes de version invalides."""
+        with pytest.raises(ValidationError):
+            PluginDependencyRef(name="docker", version_constraint="=bad")
+
+    def test_dependency_ref_accepts_valid_data(self) -> None:
+        """Cas nominal : PluginDependencyRef accepte des données valides."""
+        ref = PluginDependencyRef(name="my-plugin", version_constraint=">=1.0.0")
+        assert ref.name == "my-plugin"
+        assert ref.version_constraint == ">=1.0.0"
+
+    def test_dependency_ref_accepts_no_version_constraint(self) -> None:
+        """Cas nominal : PluginDependencyRef sans contrainte de version."""
+        ref = PluginDependencyRef(name="my-plugin")
+        assert ref.name == "my-plugin"
+        assert ref.version_constraint is None

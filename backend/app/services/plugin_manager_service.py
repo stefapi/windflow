@@ -17,6 +17,7 @@ from ..core.events import EventType
 from ..core.exceptions import WindFlowException
 from ..models.plugin import Plugin, PluginStatus
 from ..schemas.plugin import PluginConfigureRequest, PluginInstallRequest, PluginUpdateRequest
+from .plugin_dependency_service import PluginDependencyService
 from .plugin_manifest_service import PluginManifestService
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ class PluginManagerService:
 
     def __init__(self) -> None:
         self._manifest_service = PluginManifestService()
+        self._dependency_service = PluginDependencyService()
 
     # ── Lecture ─────────────────────────────────────────────────────────────
 
@@ -126,6 +128,104 @@ class PluginManagerService:
                 f"Le plugin '{manifest.name}' est déjà installé",
                 details={"error_type": "duplicate", "plugin_name": manifest.name},
             )
+
+        # Vérifier les dépendances à l'installation
+        dep_result = await self._dependency_service.check_install_dependencies(
+            db, manifest, organization_id
+        )
+
+        if not dep_result.can_proceed:
+            # Tenter la résolution transitive des dépendances manquantes
+            if dep_result.missing:
+                try:
+                    resolved = await self._dependency_service.resolve_transitive_dependencies(
+                        db, manifest, organization_id
+                    )
+                    # Installer chaque dépendance résolue avant le plugin principal
+                    for dep_manifest in resolved:
+                        dep_existing = await self.get_plugin_by_name(db, dep_manifest.name)
+                        if dep_existing:
+                            continue
+                        dep_plugin = Plugin(
+                            name=dep_manifest.name,
+                            version=dep_manifest.version,
+                            display_name=dep_manifest.display_name,
+                            description=dep_manifest.description,
+                            category=dep_manifest.category.value,
+                            type=dep_manifest.type.value,
+                            status=PluginStatus.INSTALLED.value,
+                            manifest_data=dep_manifest.model_dump(mode="json"),
+                            config_values={},
+                            organization_id=organization_id,
+                            installed_by=user_id,
+                        )
+                        db.add(dep_plugin)
+                        await db.flush()
+
+                        logger.info(
+                            "dependency_auto_installed",
+                            extra={
+                                "plugin_name": dep_manifest.name,
+                                "required_by": manifest.name,
+                                "user_id": user_id,
+                                "organization_id": organization_id,
+                            },
+                        )
+                    await db.commit()
+                except WindFlowException:
+                    logger.warning(
+                        "dependency_check_failed",
+                        extra={
+                            "plugin_name": manifest.name,
+                            "missing": [r.name for r in dep_result.missing],
+                            "organization_id": organization_id,
+                        },
+                    )
+                    raise WindFlowException(
+                        f"Dépendances non satisfaites pour '{manifest.name}' : "
+                        f"manquantes={', '.join(r.name for r in dep_result.missing)}, "
+                        f"conflits={', '.join(dep_result.conflicts)}",
+                        details={
+                            "error_type": "dependency_unsatisfied",
+                            "missing": [r.name for r in dep_result.missing],
+                            "version_mismatches": [
+                                m.model_dump() for m in dep_result.version_mismatches
+                            ],
+                            "conflicts": dep_result.conflicts,
+                        },
+                    )
+            else:
+                # Conflits ou version mismatches sans résolution possible
+                logger.warning(
+                    "dependency_check_failed",
+                    extra={
+                        "plugin_name": manifest.name,
+                        "version_mismatches": len(dep_result.version_mismatches),
+                        "conflicts": dep_result.conflicts,
+                        "organization_id": organization_id,
+                    },
+                )
+                raise WindFlowException(
+                    f"Dépendances non satisfaites pour '{manifest.name}' : "
+                    f"conflits={', '.join(dep_result.conflicts)}, "
+                    f"versions incompatibles={len(dep_result.version_mismatches)}",
+                    details={
+                        "error_type": "dependency_unsatisfied",
+                        "missing": [r.name for r in dep_result.missing],
+                        "version_mismatches": [
+                            m.model_dump() for m in dep_result.version_mismatches
+                        ],
+                        "conflicts": dep_result.conflicts,
+                    },
+                )
+
+        logger.info(
+            "dependency_check_passed",
+            extra={
+                "plugin_name": manifest.name,
+                "organization_id": organization_id,
+            },
+        )
 
         # Créer le plugin en DB avec status INSTALLING
         plugin = Plugin(
@@ -282,6 +382,36 @@ class PluginManagerService:
 
         plugin_name = plugin.name
         organization_id = plugin.organization_id
+
+        # Vérifier les dépendants avant suppression
+        dependents = await self._dependency_service.check_uninstall_dependents(
+            db, plugin_name, organization_id
+        )
+        if dependents:
+            logger.warning(
+                "dependency_check_failed",
+                extra={
+                    "plugin_name": plugin_name,
+                    "dependents": dependents,
+                    "organization_id": organization_id,
+                },
+            )
+            raise WindFlowException(
+                f"Impossible de désinstaller '{plugin_name}' : "
+                f"les plugins suivants en dépendent : {', '.join(dependents)}",
+                details={
+                    "error_type": "has_dependents",
+                    "dependents": dependents,
+                },
+            )
+
+        logger.info(
+            "dependency_check_passed",
+            extra={
+                "plugin_name": plugin_name,
+                "organization_id": organization_id,
+            },
+        )
 
         await db.delete(plugin)
         await db.commit()

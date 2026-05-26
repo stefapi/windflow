@@ -126,7 +126,7 @@ Vague 6 (Marketplace avancée)  → STORY-010 + STORY-011 + STORY-012
 ### Plugin Manager (core)
 - [x] STORY-001 : Format manifest YAML (spécification + validation Pydantic)
 - [x] STORY-002 : API REST Plugin Manager — CRUD plugins (install/update/uninstall)
-- [ ] STORY-003 : Gestion des dépendances entre plugins
+- [x] STORY-003 : Gestion des dépendances entre plugins
 - [ ] STORY-004 : Vérification compatibilité architecture (arm64/amd64) et ressources
 - [ ] STORY-005 : Configuration plugin depuis l'UI (formulaires dynamiques générés depuis manifest)
 - [ ] STORY-006 : Hooks lifecycle plugins (on_install, on_configure, on_start, on_stop, on_uninstall)

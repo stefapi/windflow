@@ -3,7 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-001 : Système de Plugins & Marketplace
-- [ ] STORY-003 : Gestion des dépendances entre plugins
 - [ ] STORY-004 : Vérification compatibilité architecture (arm64/amd64) et ressources
 - [ ] STORY-005 : Configuration plugin depuis l'UI (formulaires dynamiques générés depuis manifest)
 - [ ] STORY-006 : Hooks lifecycle plugins (on_install, on_configure, on_start, on_stop, on_uninstall)
@@ -37,3 +36,4 @@ _(vide)_
 
 - [x] STORY-001 : Format manifest YAML (spécification + validation Pydantic)
 - [x] STORY-002 : API REST Plugin Manager — CRUD plugins (install/update/uninstall)
+- [x] STORY-003 : Gestion des dépendances entre plugins
