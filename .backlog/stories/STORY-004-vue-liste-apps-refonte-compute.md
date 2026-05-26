@@ -1,6 +1,6 @@
 # STORY-004 : Vue Liste Apps — Refonte Compute
 
-**Statut :** IN_PROGRESS
+**Statut :** DONE
 **Epic Parent :** EPIC-010 — Mode App — Navigation & UX Simplifiée
 
 ## Description
@@ -33,24 +33,24 @@ Spécification de référence : [`docs/general_specs/11-UI-mockups.md`](docs/gen
 - Audit : non requis
 
 ## Critères d'acceptation (AC)
-- [ ] AC 1 : Les sections affichent "Mes Apps", "Apps autonomes", "Apps détectées" au lieu des termes techniques "Managed Stacks", "Standalone", "Discovered"
-- [ ] AC 2 : Chaque app est présentée en card avec icône, nom, version, domaine, statut et RAM
-- [ ] AC 3 : Les actions inline (Ouvrir, Logs, Terminal, Stop, menu contextuel `[⋯ Plus]`) fonctionnent sur chaque card
-- [ ] AC 4 : La recherche et le filtre par nom/statut fonctionnent ; les filtres avancés (type, technologie, target) et ComputeStatsBanner sont masqués en Mode App
-- [ ] AC 5 : Build, lint et tests passent
+- [x] AC 1 : Les sections affichent "Mes Apps", "Apps autonomes", "Apps détectées" au lieu des termes techniques "Managed Stacks", "Standalone", "Discovered"
+- [x] AC 2 : Chaque app est présentée en card avec icône, nom, version, domaine, statut et RAM
+- [x] AC 3 : Les actions inline (Ouvrir, Logs, Terminal, Stop, menu contextuel `[⋯ Plus]`) fonctionnent sur chaque card
+- [x] AC 4 : La recherche et le filtre par nom/statut fonctionnent ; les filtres avancés (type, technologie, target) et ComputeStatsBanner sont masqués en Mode App
+- [x] AC 5 : Build, lint et tests passent
 
 ## Dépendances
 - STORY-001 (Composable de Vocabulaire Mode App)
 - STORY-003 (Menu Contextuel Canonique)
 
 ## État d'avancement technique
-- [ ] Tâche 1 : Type `AppCardData` et helper `toAppCardData()` dans `helpers.ts`
-- [ ] Tâche 2 : Composant `AppCard.vue` avec actions inline et menu contextuel
-- [ ] Tâche 3 : Refonte conditionnelle de `Compute.vue` pour le Mode App
-- [ ] Tâche 4 : Export `AppCard` depuis `index.ts`
-- [ ] Tests unitaires `AppCard.spec.ts`
-- [ ] Tests unitaires `Compute.spec.ts` (Mode App)
-- [ ] Build & lint OK
+- [x] Tâche 1 : Type `AppCardData` et helper `toAppCardData()` dans `helpers.ts`
+- [x] Tâche 2 : Composant `AppCard.vue` avec actions inline et menu contextuel
+- [x] Tâche 3 : Refonte conditionnelle de `Compute.vue` pour le Mode App
+- [x] Tâche 4 : Export `AppCard` depuis `index.ts`
+- [x] Tests unitaires `AppCard.spec.ts`
+- [x] Tests unitaires `Compute.spec.ts` (Mode App)
+- [x] Build & lint OK
 
 ## Tâches d'implémentation détaillées
 
@@ -171,3 +171,28 @@ cd frontend && pnpm test -- tests/unit/views/Compute
 cd frontend && pnpm test -- tests/unit/components/compute/helpers
 cd frontend && pnpm build && pnpm lint
 ```
+
+## Notes d'implémentation
+
+### Fichiers créés
+- `frontend/src/components/compute/AppCard.vue` — Composant card Mode App avec actions inline (Ouvrir, Logs, Terminal, Stop/Start) et menu contextuel `[⋯ Plus]`
+- `frontend/tests/unit/components/compute/AppCard.spec.ts` — 12 tests unitaires
+
+### Fichiers modifiés
+- `frontend/src/components/compute/helpers.ts` — Ajout de `AppCardData`, `AppCardCategory`, `extractVersion()`, `getAppIcon()`, `deduceDomain()`, `stackToAppCards()`, `discoveredToAppCards()`, `standaloneToAppCard()`
+- `frontend/src/components/compute/index.ts` — Export de `AppCard` et des nouveaux helpers/types
+- `frontend/src/views/Compute.vue` — Rendu conditionnel Mode App (cards) / Mode Infra (tables existantes)
+- `frontend/tests/unit/components/compute/helpers.spec.ts` — 20 tests ajoutés (total : 48)
+- `frontend/tests/unit/views/Compute.spec.ts` — 9 tests Mode App ajoutés (total : 23)
+
+### Décisions techniques
+- `extractVersion()` gère le format digest `@sha256:...` en retournant `''` (pas de version exploitable)
+- `deduceDomain()` retourne une URL HTTPS pour le port 443, HTTP pour tout autre port public, `null` pour les ports loopback uniquement
+- `getAppIcon()` utilise un mapping d'icônes emoji par nom d'app avec fallback `📦`
+- Les tests utilisent `vi.hoisted()` pour les mocks mutables (pattern pour basculer entre Mode App/Infra dans les tests)
+- Aucun TODO/FIXME/console.log/debugger laissé dans le code
+
+### Résultat de validation
+- Tests : 83/83 passants (48 helpers + 12 AppCard + 23 Compute)
+- Build : ✅ passe
+- Lint : 0 erreurs, 140 warnings (tous pré-existants `@typescript-eslint/no-explicit-any`)

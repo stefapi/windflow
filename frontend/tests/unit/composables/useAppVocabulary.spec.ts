@@ -94,13 +94,16 @@ describe('useAppVocabulary', () => {
   describe('getAppActions', () => {
     it('returns the list of canonical App actions', () => {
       const actions = getAppActions()
-      expect(actions).toHaveLength(5)
+      expect(actions).toHaveLength(8)
       const technicalNames = actions.map((a) => a.technical)
       expect(technicalNames).toContain('open')
       expect(technicalNames).toContain('lifecycle')
       expect(technicalNames).toContain('logs')
       expect(technicalNames).toContain('console')
       expect(technicalNames).toContain('config')
+      expect(technicalNames).toContain('restart')
+      expect(technicalNames).toContain('delete')
+      expect(technicalNames).toContain('details')
     })
   })
 

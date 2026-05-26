@@ -319,7 +319,7 @@
           show-icon
         >
           <template #title>
-            Non disponible — container arrêté
+            {{ isAppMode ? 'Non disponible — app arrêtée' : 'Non disponible — container arrêté' }}
           </template>
         </el-alert>
       </div>
@@ -393,6 +393,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useModeStore } from '@/stores/mode'
 import {
   Monitor,
   FolderOpened,
@@ -418,6 +419,9 @@ const props = defineProps<{
   containerId: string
   containerState: string
 }>()
+
+const modeStore = useModeStore()
+const isAppMode = computed(() => modeStore.isAppMode)
 
 // ─── Services Card ──────────────────────────────────────────────────────────
 

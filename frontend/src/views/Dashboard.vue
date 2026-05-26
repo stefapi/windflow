@@ -1,6 +1,12 @@
 <template>
   <div class="dashboard">
-    <h1>Dashboard</h1>
+    <!-- Salutation personnalisée (AC 4) -->
+    <h2
+      class="dashboard-greeting"
+      data-testid="dashboard-greeting"
+    >
+      Bonjour, {{ username }}
+    </h2>
 
     <el-alert
       v-if="dashboardStore.error"
@@ -10,6 +16,56 @@
       closable
       style="margin-bottom: 20px"
     />
+
+    <!-- Section "Mes Apps" (AC 1, AC 2) -->
+    <section class="app-grid-section">
+      <h3 class="app-grid-section__title">
+        Mes Apps
+      </h3>
+
+      <!-- Loading state -->
+      <div
+        v-if="appsLoading"
+        class="app-grid"
+        data-testid="app-grid-loading"
+      >
+        <el-skeleton
+          v-for="i in 6"
+          :key="i"
+          animated
+          class="app-grid-skeleton"
+        />
+      </div>
+
+      <!-- Empty state -->
+      <div
+        v-else-if="apps.length === 0"
+        class="app-grid-empty"
+        data-testid="app-grid-empty"
+      >
+        <p>Aucune app installée</p>
+        <el-button
+          type="primary"
+          size="small"
+          @click="$router.push('/compute')"
+        >
+          Découvrir les apps
+        </el-button>
+      </div>
+
+      <!-- App grid -->
+      <div
+        v-else
+        class="app-grid"
+        data-testid="app-grid"
+      >
+        <AppGridTile
+          v-for="app in apps"
+          :key="app.id"
+          :app="app"
+        />
+      </div>
+    </section>
 
     <!-- Statistiques globales (STORY-432) -->
     <el-row
@@ -148,11 +204,12 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { Monitor, Files, Box } from '@element-plus/icons-vue'
 import { useDashboardStore, usePluginWidgetStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 import { useTargetsStore } from '@/stores/targets'
+import { useDashboardApps } from '@/composables/useDashboardApps'
 import CounterCard from '@/components/ui/CounterCard.vue'
 import TargetHealthWidget from '@/components/dashboard/TargetHealthWidget.vue'
 import ActivityFeedWidget from '@/components/dashboard/ActivityFeedWidget.vue'
@@ -162,6 +219,7 @@ import ResourceMetricsWidget from '@/components/dashboard/ResourceMetricsWidget.
 import RecentDeploymentsWidget from '@/components/dashboard/RecentDeploymentsWidget.vue'
 import PluginWidgetZone from '@/components/dashboard/PluginWidgetZone.vue'
 import DockerInfoWidget from '@/components/dashboard/DockerInfoWidget.vue'
+import AppGridTile from '@/components/dashboard/AppGridTile.vue'
 
 // Dev-only: import placeholder widget
 const PlaceholderWidget = import.meta.env.DEV
@@ -172,6 +230,15 @@ const authStore = useAuthStore()
 const dashboardStore = useDashboardStore()
 const targetsStore = useTargetsStore()
 const pluginWidgetStore = usePluginWidgetStore()
+
+// Dashboard apps composable
+const { apps, loading: appsLoading, fetchApps } = useDashboardApps()
+
+// Username for greeting (AC 4)
+const username = computed(() => {
+  const user = authStore.user
+  return user?.full_name || user?.username || ''
+})
 
 // Polling pour les métriques système (toutes les 30s)
 let metricsInterval: number | null = null
@@ -205,7 +272,10 @@ async function refreshDashboard(): Promise<void> {
   const orgId = authStore.organizationId || undefined
   try {
     metricsError.value = null
-    await dashboardStore.fetchDashboardStats(orgId)
+    await Promise.all([
+      dashboardStore.fetchDashboardStats(orgId),
+      fetchApps(orgId),
+    ])
   } catch {
     metricsError.value = 'Unable to retrieve system metrics'
   }
@@ -234,6 +304,45 @@ onUnmounted(() => {
 <style scoped>
 .dashboard {
   padding: 20px;
+}
+
+.dashboard-greeting {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: var(--el-text-color-primary);
+}
+
+.app-grid-section {
+  margin-bottom: 24px;
+}
+
+.app-grid-section__title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--el-text-color-primary);
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 16px;
+}
+
+.app-grid-skeleton {
+  min-height: 120px;
+  border-radius: 12px;
+}
+
+.app-grid-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--el-text-color-secondary);
+}
+
+.app-grid-empty p {
+  margin-bottom: 12px;
 }
 
 .clickable-card {

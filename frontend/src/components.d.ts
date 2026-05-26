@@ -14,6 +14,7 @@ declare module 'vue' {
     AlertsNotificationsWidget: typeof import('./components/dashboard/AlertsNotificationsWidget.vue')['default']
     AppCard: typeof import('./components/compute/AppCard.vue')['default']
     AppContextMenu: typeof import('./components/ui/AppContextMenu.vue')['default']
+    AppGridTile: typeof import('./components/dashboard/AppGridTile.vue')['default']
     BaseWizard: typeof import('./components/BaseWizard.vue')['default']
     Breadcrumb: typeof import('./components/Breadcrumb.vue')['default']
     BulkActionBar: typeof import('./components/compute/BulkActionBar.vue')['default']

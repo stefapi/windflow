@@ -19,10 +19,10 @@
 
           <div class="header-identity">
             <h2 class="container-name">
-              {{ containerDetail?.name || 'Container' }}
+              {{ appDisplayName }}
             </h2>
             <el-button
-              v-if="containerDetail"
+              v-if="containerDetail && !isAppMode"
               link
               type="primary"
               :icon="Edit"
@@ -31,7 +31,7 @@
               Renommer
             </el-button>
             <code
-              v-if="containerDetail?.image"
+              v-if="containerDetail?.image && !isAppMode"
               class="container-image"
             >{{ containerDetail.image }}</code>
             <el-tag
@@ -39,7 +39,7 @@
               size="large"
               effect="dark"
             >
-              {{ statusLabel }}
+              {{ isAppMode ? appStatusLabel : statusLabel }}
             </el-tag>
             <span
               v-if="containerUptime"
@@ -50,7 +50,14 @@
           <!-- Ligne 2 : Métadonnées inline -->
           <div class="header-meta">
             <span
-              v-if="targetName"
+              v-if="appDomain && isAppMode"
+              class="meta-item"
+            >
+              <el-icon><Link /></el-icon>
+              {{ appDomain }}
+            </span>
+            <span
+              v-if="targetName && !isAppMode"
               class="meta-item"
             >
               <el-icon><Monitor /></el-icon>
@@ -70,7 +77,10 @@
               <el-icon><Memo /></el-icon>
               RAM : {{ headerStats.memoryUsage }}
             </span>
-            <span class="meta-item">
+            <span
+              v-if="!isAppMode"
+              class="meta-item"
+            >
               <el-icon><RefreshRight /></el-icon>
               Restart :
               <el-tag
@@ -88,7 +98,10 @@
                 Modifier
               </el-button>
             </span>
-            <span class="meta-item">
+            <span
+              v-if="!isAppMode"
+              class="meta-item"
+            >
               <el-icon><Setting /></el-icon>
               Ressources : {{ resourcesSummary }}
               <el-button
@@ -102,8 +115,99 @@
             </span>
           </div>
 
-          <!-- Ligne 3 : Barre d'actions -->
-          <div class="header-actions">
+          <!-- Ligne 3 : Barre d'actions Mode App -->
+          <div
+            v-if="isAppMode"
+            class="header-actions"
+          >
+            <el-button
+              v-if="appDomain"
+              type="primary"
+              plain
+              @click="openAppDomain"
+            >
+              <el-icon class="el-icon--left">
+                <Link />
+              </el-icon>
+              Ouvrir
+            </el-button>
+
+            <el-button
+              v-if="isRunning"
+              type="danger"
+              @click="handleAction('stop')"
+            >
+              <el-icon class="el-icon--left">
+                <SwitchButton />
+              </el-icon>
+              Arrêter
+            </el-button>
+            <el-button
+              v-else
+              type="success"
+              @click="handleAction('start')"
+            >
+              <el-icon class="el-icon--left">
+                <VideoPlay />
+              </el-icon>
+              Démarrer
+            </el-button>
+
+            <el-button
+              v-if="isRunning"
+              type="primary"
+              @click="handleAction('restart')"
+            >
+              <el-icon class="el-icon--left">
+                <RefreshRight />
+              </el-icon>
+              Redémarrer
+            </el-button>
+
+            <el-button
+              type="default"
+              @click="activeTab = 'logs'"
+            >
+              <el-icon class="el-icon--left">
+                <Document />
+              </el-icon>
+              Logs
+            </el-button>
+
+            <el-button
+              type="default"
+              @click="activeTab = 'terminal'"
+            >
+              <el-icon class="el-icon--left">
+                <Monitor />
+              </el-icon>
+              Console
+            </el-button>
+
+            <el-button
+              type="default"
+              @click="activeTab = 'config'"
+            >
+              <el-icon class="el-icon--left">
+                <Setting />
+              </el-icon>
+              Config
+            </el-button>
+
+            <AppContextMenu
+              :container-id="containerId!"
+              :container-name="appDisplayName"
+              :container-status="containerState"
+              :domain="appDomain"
+              @action="handleContextMenuAction"
+            />
+          </div>
+
+          <!-- Ligne 3 : Barre d'actions Mode Infra -->
+          <div
+            v-else
+            class="header-actions"
+          >
             <el-tooltip
               v-if="!['exited', 'dead', 'created'].includes(containerState)"
               content="Container déjà en cours d'exécution"
@@ -318,6 +422,7 @@
         </el-tab-pane>
 
         <el-tab-pane
+          v-if="!isAppMode"
           label="Infos"
           name="infos"
         >
@@ -336,9 +441,9 @@
           />
         </el-tab-pane>
 
-        <!-- Terminal Tab -->
+        <!-- Terminal / Console Tab -->
         <el-tab-pane
-          label="Terminal"
+          :label="isAppMode ? 'Console' : 'Terminal'"
           name="terminal"
           :disabled="containerState !== 'running'"
         >
@@ -351,12 +456,12 @@
             v-else
             class="placeholder-content"
           >
-            <el-empty description="Le terminal n'est disponible que lorsque le container est en cours d'exécution (running)" />
+            <el-empty :description="isAppMode ? 'La console n\'est disponible que lorsque l\'app est en cours d\'exécution' : 'Le terminal n\'est disponible que lorsque le container est en cours d\'exécution (running)'" />
           </div>
         </el-tab-pane>
 
         <el-tab-pane
-          label="Stats"
+          :label="isAppMode ? 'Métriques' : 'Stats'"
           name="stats"
           :disabled="containerState !== 'running'"
         >
@@ -369,7 +474,7 @@
             v-else
             class="placeholder-content"
           >
-            <el-empty description="L'onglet Stats n'est disponible que lorsque le container est en cours d'exécution (running)" />
+            <el-empty :description="isAppMode ? 'Les métriques ne sont disponibles que lorsque l\'app est en cours d\'exécution' : 'L\'onglet Stats n\'est disponible que lorsque le container est en cours d\'exécution (running)'" />
           </div>
         </el-tab-pane>
 
@@ -384,6 +489,7 @@
         </el-tab-pane>
 
         <el-tab-pane
+          v-if="!isAppMode"
           label="Processus"
           name="processes"
           :disabled="containerState !== 'running'"
@@ -638,10 +744,15 @@ import {
   Edit,
   Setting,
   Upload,
+  Link,
+  Document,
 } from '@element-plus/icons-vue'
 import { useContainersStore } from '@/stores'
+import { useModeStore } from '@/stores/mode'
 import { containersApi } from '@/services/api'
 import { getContainerStatusType, getContainerStatusLabel } from '@/components/compute/helpers'
+import { useAppVocabulary, getAppDisplayName } from '@/composables/useAppVocabulary'
+import AppContextMenu from '@/components/ui/AppContextMenu.vue'
 import ContainerOverviewTab from '@/components/ContainerOverviewTab.vue'
 import ContainerInfoTab from '@/components/ContainerInfoTab.vue'
 import ContainerLogs from '@/components/ContainerLogs.vue'
@@ -654,6 +765,35 @@ import type { ContainerDetail, ContainerUpdateRestartPolicyRequest, ContainerUpd
 const route = useRoute()
 const router = useRouter()
 const containersStore = useContainersStore()
+const modeStore = useModeStore()
+const { getAppStatus } = useAppVocabulary()
+
+/** Whether the current UI mode is App (simplified) */
+const isAppMode = computed(() => modeStore.isAppMode)
+
+/** Whether the container is in a running state */
+const isRunning = computed(() => ['running', 'restarting'].includes(containerState.value))
+
+/** The display name for the app in Mode App, or raw container name in Mode Infra */
+const appDisplayName = computed(() => {
+  if (!containerDetail.value) return 'Container'
+  return isAppMode.value ? getAppDisplayName(containerDetail.value) : containerDetail.value.name
+})
+
+/** The Mode App status label */
+const appStatusLabel = computed(() => {
+  return getAppStatus(containerState.value).app
+})
+
+/** Extract domain from container labels (Mode App) */
+const appDomain = computed(() => {
+  const labels = containerDetail.value?.config?.labels
+  if (!labels) return undefined
+  // Try common domain labels
+  return labels['org.windflow.app.domain']
+    || labels['traefik.http.routers.' + Object.keys(labels).find(k => k.startsWith('traefik.http.routers.'))?.split('.')[2] + '.rule']?.match(/Host\(`([^`]+)`\)/)?.[1]
+    || undefined
+})
 
 // State
 const containerDetail = ref<ContainerDetail | null>(null)
@@ -842,6 +982,12 @@ async function fetchHeaderStats(): Promise<void> {
   }
 }
 
+/** Get the entity label (App or Container) based on current mode */
+function entityLabel(lowerCase = false): string {
+  const label = isAppMode.value ? 'App' : 'Container'
+  return lowerCase ? label.toLowerCase() : label
+}
+
 /** Delete with ElMessageBox confirmation */
 async function handleDelete(): Promise<void> {
   const id = containerId.value
@@ -849,7 +995,7 @@ async function handleDelete(): Promise<void> {
 
   try {
     await ElMessageBox.confirm(
-      `Voulez-vous vraiment supprimer le container "${containerDetail.value?.name || id}" ? Cette action est irréversible.`,
+      `Voulez-vous vraiment supprimer ${isAppMode.value ? 'l\'' : 'le '}${entityLabel(true)} "${appDisplayName.value || id}" ? Cette action est irréversible.`,
       'Confirmer la suppression',
       {
         confirmButtonText: 'Supprimer',
@@ -858,7 +1004,7 @@ async function handleDelete(): Promise<void> {
       },
     )
     await containersStore.removeContainer(id, true)
-    ElMessage.success('Container supprimé')
+    ElMessage.success(`${entityLabel()} supprimé${isAppMode.value ? 'e' : ''}`)
     router.push('/compute')
   } catch (error) {
     if (error !== 'cancel' && error instanceof Error) {
@@ -891,32 +1037,32 @@ async function handleAction(action: string): Promise<void> {
     switch (action) {
       case 'start':
         await containersStore.startContainer(id)
-        ElMessage.success('Container démarré')
+        ElMessage.success(`${entityLabel()} démarré${isAppMode.value ? 'e' : ''}`)
         await loadContainerDetail()
         break
       case 'pause':
         await containersStore.pauseContainer(id)
-        ElMessage.success('Container mis en pause')
+        ElMessage.success(`${entityLabel()} mis en pause`)
         await loadContainerDetail()
         break
       case 'unpause':
         await containersStore.unpauseContainer(id)
-        ElMessage.success('Container repris')
+        ElMessage.success(`${entityLabel()} repris`)
         await loadContainerDetail()
         break
       case 'stop':
         await containersStore.stopContainer(id)
-        ElMessage.success('Container arrêté')
+        ElMessage.success(`${entityLabel()} arrêté${isAppMode.value ? 'e' : ''}`)
         await loadContainerDetail()
         break
       case 'restart':
         await containersStore.restartContainer(id)
-        ElMessage.success('Container redémarré')
+        ElMessage.success(`${entityLabel()} redémarré${isAppMode.value ? 'e' : ''}`)
         await loadContainerDetail()
         break
       case 'remove':
         await containersStore.removeContainer(id, true)
-        ElMessage.success('Container supprimé')
+        ElMessage.success(`${entityLabel()} supprimé${isAppMode.value ? 'e' : ''}`)
         router.push('/compute')
         break
     }
@@ -935,6 +1081,48 @@ function handleRecreateSuccess(newId: string): void {
   router.push(`/containers/${newId}`)
   // Recharger les détails du nouveau container après navigation
   loadContainerDetail()
+}
+
+/** Open the app domain in a new tab */
+function openAppDomain(): void {
+  const domain = appDomain.value
+  if (domain) {
+    window.open(`https://${domain}`, '_blank')
+  }
+}
+
+/** Handle context menu actions from AppContextMenu */
+function handleContextMenuAction(action: string, _containerId: string): void {
+  switch (action) {
+    case 'open':
+      openAppDomain()
+      break
+    case 'start':
+      handleAction('start')
+      break
+    case 'stop':
+      handleAction('stop')
+      break
+    case 'restart':
+      handleAction('restart')
+      break
+    case 'logs':
+      activeTab.value = 'logs'
+      break
+    case 'console':
+      activeTab.value = 'terminal'
+      break
+    case 'config':
+      activeTab.value = 'config'
+      break
+    case 'delete':
+      handleDelete()
+      break
+    case 'details':
+      // Désactivé pour l'instant — Mode Infra ciblé bientôt disponible
+      ElMessage.info('Détails techniques — bientôt disponible')
+      break
+  }
 }
 
 /** Open the rename dialog, pre-filled with the current name */

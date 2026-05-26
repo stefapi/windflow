@@ -28,6 +28,15 @@ vi.mock('@/composables/useContainerStats', () => ({
   }),
 }))
 
+// Mock mode store
+vi.mock('@/stores/mode', () => ({
+  useModeStore: () => ({
+    mode: 'infra',
+    isAppMode: false,
+    isInfraMode: true,
+  }),
+}))
+
 // Mock helpers
 vi.mock('@/components/compute/helpers', () => ({
   getContainerStatusType: (state: string) => {
