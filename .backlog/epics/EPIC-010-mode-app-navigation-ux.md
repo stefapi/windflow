@@ -52,7 +52,7 @@ Aucune modification backend nécessaire — toutes les APIs existantes (`/contai
 
 ## Liste des Stories liées
 
-### STORY-A : Refonte Sidebar — Navigation Mode App
+### STORY-002 : Refonte Sidebar — Navigation Mode App
 
 **Description :** Transformer la sidebar actuelle (Infrastructure, Stockage & Réseau, Marketplace, Administration) en sidebar Mode App documentée dans 11b.
 
@@ -74,7 +74,7 @@ Aucune modification backend nécessaire — toutes les APIs existantes (`/contai
 - Conserver le composant [`SidebarNav.vue`](frontend/src/components/SidebarNav.vue) existant et le rendre conditionnel au mode
 - Ajouter un store Pinia `modeStore` (ou `uiModeStore`) pour gérer l'état du mode (App/Infra)
 
-### STORY-B : Vue Liste Apps (refonte Compute.vue)
+### STORY-004 : Vue Liste Apps — Refonte Compute
 
 **Description :** Transformer [`Compute.vue`](frontend/src/views/Compute.vue) en vue "Apps" avec vocabulaire non-technique.
 
@@ -88,7 +88,7 @@ Aucune modification backend nécessaire — toutes les APIs existantes (`/contai
 - Les sections ComputeStatsBanner et filtres avancés (type, technologie, target) sont masquées en Mode App
 - Conserver les composants existants ([`ManagedStacksSection`](frontend/src/components/compute/ManagedStacksSection.vue), [`DiscoveredSection`](frontend/src/components/compute/DiscoveredSection.vue), [`StandaloneSection`](frontend/src/components/compute/StandaloneSection.vue)) mais adapter leur vocabulaire via des props ou un composable de traduction
 
-### STORY-C : Détail App — Vocabulaire Mode App
+### STORY-005 : Détail App — Vocabulaire Mode App
 
 **Description :** Adapter [`ContainerDetail.vue`](frontend/src/views/ContainerDetail.vue) pour le Mode App.
 
@@ -100,7 +100,7 @@ Aucune modification backend nécessaire — toutes les APIs existantes (`/contai
 - Le menu `[⋯ Plus]` contient les actions avancées : Supprimer, Renommer, Voir les détails techniques (ouvre en Mode Infra ciblé — désactivé pour l'instant)
 - Adapter [`ContainerOverviewTab`](frontend/src/components/ContainerOverviewTab.vue) : vocabulaire "App" au lieu de "Container"
 
-### STORY-D : Dashboard Mode App — Grille Apps
+### STORY-006 : Dashboard Mode App — Grille Apps
 
 **Description :** Enrichir [`Dashboard.vue`](frontend/src/views/Dashboard.vue) avec la grille d'icônes Apps documentée dans l'Écran 1.
 
@@ -110,7 +110,7 @@ Aucune modification backend nécessaire — toutes les APIs existantes (`/contai
 - Conserver les widgets existants (métriques, activité, alertes) mais les repositionner sous la grille Apps
 - Salutation personnalisée ("Bonjour, {username}") en haut du dashboard
 
-### STORY-E : Menu Contextuel `[⋯ Plus]` Canonique
+### STORY-003 : Menu Contextuel `[⋯ Plus]` Canonique
 
 **Description :** Créer un composant réutilisable `AppContextMenu` pour le menu contextuel documenté dans 11b.
 
@@ -123,7 +123,7 @@ Aucune modification backend nécessaire — toutes les APIs existantes (`/contai
 - Utilisable depuis la liste Apps, le dashboard, et le détail App
 - Remplace les boutons d'action actuels dispersés
 
-### STORY-F : Composable de Vocabulaire Mode App
+### STORY-001 : Composable de Vocabulaire Mode App
 
 **Description :** Créer un composable `useAppVocabulary` qui centralise la traduction des termes techniques en termes Mode App.
 
