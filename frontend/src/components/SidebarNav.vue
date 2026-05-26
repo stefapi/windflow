@@ -26,44 +26,22 @@
 
     <!-- Navigation Sections -->
     <div class="sidebar-content">
-      <!-- Dashboard (no section title) -->
-      <div class="nav-section">
-        <ul class="nav-list">
-          <li
-            v-for="item in dashboardItems"
-            :key="item.path"
-            class="nav-item"
-            :class="{ active: isActive(item.path) }"
-            @click="navigate(item.path)"
-          >
-            <el-tooltip
-              :content="item.label"
-              placement="right"
-              :disabled="!isCollapsed"
-              :show-after="300"
-            >
-              <div class="nav-item-content">
-                <el-icon class="nav-icon">
-                  <component :is="item.icon" />
-                </el-icon>
-                <span class="nav-label">{{ item.label }}</span>
-              </div>
-            </el-tooltip>
-          </li>
-        </ul>
-      </div>
-
-      <!-- Infrastructure Section -->
-      <div class="nav-section">
+      <!-- Dynamic sections from useSidebarNav composable -->
+      <div
+        v-for="(section, sectionIndex) in navSections"
+        :key="sectionIndex"
+        class="nav-section"
+      >
         <div
+          v-if="section.title"
           v-show="!isCollapsed"
           class="section-title"
         >
-          INFRASTRUCTURE
+          {{ section.title }}
         </div>
         <ul class="nav-list">
           <li
-            v-for="item in infrastructureItems"
+            v-for="item in section.items"
             :key="item.path"
             class="nav-item"
             :class="{ active: isActive(item.path) }"
@@ -90,81 +68,7 @@
         </ul>
       </div>
 
-      <!-- Storage & Network Section -->
-      <div class="nav-section">
-        <div
-          v-show="!isCollapsed"
-          class="section-title"
-        >
-          STOCKAGE & RÉSEAU
-        </div>
-        <ul class="nav-list">
-          <li
-            v-for="item in storageNetworkItems"
-            :key="item.path"
-            class="nav-item"
-            :class="{ active: isActive(item.path) }"
-            @click="navigate(item.path)"
-          >
-            <el-tooltip
-              :content="item.label"
-              placement="right"
-              :disabled="!isCollapsed"
-              :show-after="300"
-            >
-              <div class="nav-item-content">
-                <el-icon class="nav-icon">
-                  <component :is="item.icon" />
-                </el-icon>
-                <span class="nav-label">{{ item.label }}</span>
-                <span
-                  v-if="item.badge"
-                  class="bg-[var(--color-accent)] text-white text-[11px] px-1.5 py-0.5 rounded-xl"
-                >{{ item.badge }}</span>
-              </div>
-            </el-tooltip>
-          </li>
-        </ul>
-      </div>
-
-      <!-- Marketplace Section -->
-      <div class="nav-section">
-        <div
-          v-show="!isCollapsed"
-          class="section-title"
-        >
-          MARKETPLACE
-        </div>
-        <ul class="nav-list">
-          <li
-            v-for="item in marketplaceItems"
-            :key="item.path"
-            class="nav-item"
-            :class="{ active: isActive(item.path) }"
-            @click="navigate(item.path)"
-          >
-            <el-tooltip
-              :content="item.label"
-              placement="right"
-              :disabled="!isCollapsed"
-              :show-after="300"
-            >
-              <div class="nav-item-content">
-                <el-icon class="nav-icon">
-                  <component :is="item.icon" />
-                </el-icon>
-                <span class="nav-label">{{ item.label }}</span>
-                <span
-                  v-if="item.badge"
-                  class="bg-[var(--color-accent)] text-white text-[11px] px-1.5 py-0.5 rounded-xl"
-                >{{ item.badge }}</span>
-              </div>
-            </el-tooltip>
-          </li>
-        </ul>
-      </div>
-
-      <!-- Dynamic Plugin Sections -->
+      <!-- Dynamic Plugin Sections (visible in both modes) -->
       <div
         v-if="pluginNavStore.hasPluginPages"
         class="nav-section plugin-section"
@@ -208,47 +112,32 @@
           </li>
         </ul>
       </div>
-
-      <!-- Administration Section -->
-      <div class="nav-section">
-        <div
-          v-show="!isCollapsed"
-          class="section-title"
-        >
-          ADMINISTRATION
-        </div>
-        <ul class="nav-list">
-          <li
-            v-for="item in administrationItems"
-            :key="item.path"
-            class="nav-item"
-            :class="{ active: isActive(item.path) }"
-            @click="navigate(item.path)"
-          >
-            <el-tooltip
-              :content="item.label"
-              placement="right"
-              :disabled="!isCollapsed"
-              :show-after="300"
-            >
-              <div class="nav-item-content">
-                <el-icon class="nav-icon">
-                  <component :is="item.icon" />
-                </el-icon>
-                <span class="nav-label">{{ item.label }}</span>
-                <span
-                  v-if="item.badge"
-                  class="bg-[var(--color-accent)] text-white text-[11px] px-1.5 py-0.5 rounded-xl"
-                >{{ item.badge }}</span>
-              </div>
-            </el-tooltip>
-          </li>
-        </ul>
-      </div>
     </div>
 
-    <!-- Footer: Target Selector & User -->
+    <!-- Footer: Mode Toggle, Target Selector & User -->
     <div class="sidebar-footer">
+      <!-- Mode Infra Toggle (disabled with tooltip) -->
+      <el-tooltip
+        content="Bientôt disponible"
+        placement="right"
+        :disabled="!isCollapsed"
+        :show-after="300"
+      >
+        <div
+          v-show="!isCollapsed"
+          class="mode-toggle"
+        >
+          <button
+            class="mode-toggle-btn"
+            disabled
+          >
+            <span class="mode-toggle-icon">🔧</span>
+            <span class="mode-toggle-label">Mode Infra</span>
+            <span class="mode-toggle-lock">🔒</span>
+          </button>
+        </div>
+      </el-tooltip>
+
       <!-- Active Target Selector -->
       <el-tooltip
         :content="activeTargetName"
@@ -311,27 +200,15 @@ import { useAuthStore } from '@/stores/auth'
 import { useTargetsStore } from '@/stores/targets'
 import { usePluginNavStore } from '@/stores/pluginNav'
 import { useSidebar } from '@/composables/useSidebar'
+import { useSidebarNav } from '@/composables/useSidebarNav'
 import WindFlowLogo from '@/components/WindFlowLogo.vue'
 import {
-  Odometer,
-  Monitor,
-  Upload,
-  Connection,
-  FolderOpened,
-  Link,
-  PictureFilled,
-  ShoppingCart,
-  Grid,
-  Setting,
-  DocumentChecked,
   User,
   MoreFilled,
   ArrowLeft,
   ArrowRight,
-  DataAnalysis,
-  InfoFilled,
 } from '@element-plus/icons-vue'
-import type { NavItem, PluginNavItem } from '@/types/navigation'
+import type { PluginNavItem } from '@/types/navigation'
 
 const route = useRoute()
 const router = useRouter()
@@ -348,38 +225,8 @@ const isCollapsed = computed(() => {
   return sidebar.isCollapsed.value
 })
 
-// Dashboard items (no section title)
-const dashboardItems: NavItem[] = [
-  { icon: Odometer, label: 'Dashboard', path: '/' },
-]
-
-// Infrastructure section items
-const infrastructureItems: NavItem[] = [
-  { icon: Monitor, label: 'VMs', path: '/vms', badge: 'Bientôt' },
-  { icon: Connection, label: 'Stacks', path: '/stacks' },
-  { icon: DataAnalysis, label: 'Compute', path: '/compute' },
-  { icon: Upload, label: 'Targets', path: '/targets' },
-]
-
-// Storage & Network section items
-const storageNetworkItems: NavItem[] = [
-  { icon: FolderOpened, label: 'Volumes', path: '/volumes', badge: 'Bientôt' },
-  { icon: Link, label: 'Networks', path: '/networks', badge: 'Bientôt' },
-  { icon: PictureFilled, label: 'Images', path: '/images', badge: 'Bientôt' },
-]
-
-// Marketplace section items
-const marketplaceItems: NavItem[] = [
-  { icon: ShoppingCart, label: 'Marketplace', path: '/marketplace', badge: 'Bientôt' },
-  { icon: Grid, label: 'Plugins', path: '/plugins', badge: 'Bientôt' },
-]
-
-// Administration section items
-const administrationItems: NavItem[] = [
-  { icon: Setting, label: 'Settings', path: '/settings' },
-  { icon: InfoFilled, label: 'System Info', path: '/system-info' },
-  { icon: DocumentChecked, label: 'Audit', path: '/audit', badge: 'Bientôt' },
-]
+// Navigation sections based on current mode (App/Infra)
+const { navSections } = useSidebarNav()
 
 // Plugin items from dynamic store
 const pluginItems = computed<PluginNavItem[]>(() => {
@@ -582,6 +429,47 @@ function handleUserCommand(command: string): void {
   padding: 12px 16px;
   border-top: 1px solid var(--color-border);
   background-color: var(--color-bg-primary);
+}
+
+/* Mode Infra Toggle */
+.mode-toggle {
+  margin-bottom: 8px;
+}
+
+.mode-toggle-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  background-color: var(--color-bg-secondary);
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  opacity: 0.5;
+  cursor: not-allowed;
+  font-size: 13px;
+  transition: opacity 0.2s;
+}
+
+.mode-toggle-btn:hover {
+  opacity: 0.6;
+}
+
+.mode-toggle-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.mode-toggle-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.mode-toggle-lock {
+  flex-shrink: 0;
+  font-size: 12px;
 }
 
 .target-selector {

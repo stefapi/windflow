@@ -3,11 +3,18 @@ import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 
+// Mutable mode state — tests can change this before mounting
+const { modeState } = vi.hoisted(() => ({
+  modeState: { mode: 'infra' as 'app' | 'infra', isAppMode: false, isInfraMode: true },
+}))
+
 // Mocks stores
-const mockFetchStats = vi.fn()
-const mockFetchGlobal = vi.fn()
-const mockFetchGlobalByTarget = vi.fn()
-const mockFetchTargets = vi.fn()
+const { mockFetchStats, mockFetchGlobal, mockFetchGlobalByTarget, mockFetchTargets } = vi.hoisted(() => ({
+  mockFetchStats: vi.fn(),
+  mockFetchGlobal: vi.fn(),
+  mockFetchGlobalByTarget: vi.fn(),
+  mockFetchTargets: vi.fn(),
+}))
 
 vi.mock('@/stores', () => ({
   useComputeStore: () => ({
@@ -42,6 +49,14 @@ vi.mock('@/stores', () => ({
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ organizationId: 'test-org' }),
+}))
+
+vi.mock('@/stores/mode', () => ({
+  useModeStore: () => ({
+    get mode() { return modeState.mode },
+    get isAppMode() { return modeState.mode === 'app' },
+    get isInfraMode() { return modeState.mode === 'infra' },
+  }),
 }))
 
 vi.mock('@/services/api', () => ({
@@ -111,6 +126,11 @@ const globalConfig = {
         props: ['modelValue'],
         emits: ['update:modelValue', 'created'],
       },
+      AppCard: {
+        template: '<div class="app-card-stub" />',
+        props: ['app'],
+        emits: ['refresh', 'action'],
+      },
       ElIcon: {
         template: '<i><slot /></i>',
       },
@@ -163,6 +183,10 @@ describe('Compute.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    // Reset mode to infra by default
+    modeState.mode = 'infra'
+    modeState.isAppMode = false
+    modeState.isInfraMode = true
   })
 
   it('should render the page title "vue globale"', () => {
@@ -373,6 +397,123 @@ describe('Compute.vue', () => {
 
         expect(mockFetchGlobal).toHaveBeenCalled()
       }
+    })
+  })
+
+  // ─── Mode App Tests ──────────────────────────────────────────────────────
+
+  describe('Mode App', () => {
+    it('affiche le titre "Mes Apps" en Mode App', () => {
+      modeState.mode = 'app'
+      const wrapper = mount(Compute, {
+        ...globalConfig,
+        global: {
+          ...globalConfig.global,
+          plugins: [createTestRouter()],
+        },
+      })
+      expect(wrapper.text()).toContain('Mes Apps')
+    })
+
+    it('affiche "Containers — vue globale" en Mode Infra', () => {
+      modeState.mode = 'infra'
+      const wrapper = mount(Compute, {
+        ...globalConfig,
+        global: {
+          ...globalConfig.global,
+          plugins: [createTestRouter()],
+        },
+      })
+      expect(wrapper.text()).toContain('vue globale')
+    })
+
+    it('masque ComputeStatsBanner en Mode App', () => {
+      modeState.mode = 'app'
+      const wrapper = mount(Compute, {
+        ...globalConfig,
+        global: {
+          ...globalConfig.global,
+          plugins: [createTestRouter()],
+        },
+      })
+      expect(wrapper.find('.compute-stats-banner').exists()).toBe(false)
+    })
+
+    it('affiche ComputeStatsBanner en Mode Infra', () => {
+      modeState.mode = 'infra'
+      const wrapper = mount(Compute, {
+        ...globalConfig,
+        global: {
+          ...globalConfig.global,
+          plugins: [createTestRouter()],
+        },
+      })
+      expect(wrapper.find('.compute-stats-banner').exists()).toBe(true)
+    })
+
+    it('masque la légende technique en Mode App', () => {
+      modeState.mode = 'app'
+      const wrapper = mount(Compute, {
+        ...globalConfig,
+        global: {
+          ...globalConfig.global,
+          plugins: [createTestRouter()],
+        },
+      })
+      expect(wrapper.text()).not.toContain('Stack WindFlow — géré')
+    })
+
+    it('masque le bouton "Par machine" en Mode App', () => {
+      modeState.mode = 'app'
+      const wrapper = mount(Compute, {
+        ...globalConfig,
+        global: {
+          ...globalConfig.global,
+          plugins: [createTestRouter()],
+        },
+      })
+      expect(wrapper.text()).not.toContain('Par machine')
+    })
+
+    it('affiche les labels Mode App dans les filtres de type', () => {
+      modeState.mode = 'app'
+      const wrapper = mount(Compute, {
+        ...globalConfig,
+        global: {
+          ...globalConfig.global,
+          plugins: [createTestRouter()],
+        },
+      })
+      expect(wrapper.text()).toContain('Mes Apps')
+      expect(wrapper.text()).toContain('Apps autonomes')
+      expect(wrapper.text()).toContain('Apps détectées')
+    })
+
+    it('affiche "+ Nouvelle App" en Mode App au lieu de "+ Créer un container"', () => {
+      modeState.mode = 'app'
+      const wrapper = mount(Compute, {
+        ...globalConfig,
+        global: {
+          ...globalConfig.global,
+          plugins: [createTestRouter()],
+        },
+      })
+      expect(wrapper.text()).toContain('Nouvelle App')
+    })
+
+    it('affiche les sections cards en Mode App', () => {
+      modeState.mode = 'app'
+      const wrapper = mount(Compute, {
+        ...globalConfig,
+        global: {
+          ...globalConfig.global,
+          plugins: [createTestRouter()],
+        },
+      })
+      // Should show section headers with Mode App vocabulary
+      expect(wrapper.text()).toContain('Mes Apps')
+      expect(wrapper.text()).toContain('Apps autonomes')
+      expect(wrapper.text()).toContain('Apps détectées')
     })
   })
 })

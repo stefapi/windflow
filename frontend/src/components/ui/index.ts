@@ -5,7 +5,7 @@
  * Each component uses design system tokens for consistent styling.
  *
  * @example
- * import { StatusBadge, ResourceBar, ActionButtons, CounterCard } from '@/components/ui'
+ * import { StatusBadge, ResourceBar, ActionButtons, CounterCard, AppContextMenu } from '@/components/ui'
  */
 
 // Components
@@ -13,9 +13,11 @@ export { default as StatusBadge } from './StatusBadge.vue'
 export { default as ResourceBar } from './ResourceBar.vue'
 export { default as ActionButtons } from './ActionButtons.vue'
 export { default as CounterCard } from './CounterCard.vue'
+export { default as AppContextMenu } from './AppContextMenu.vue'
 
 // Types
 export type { StatusType, StatusBadgeProps } from './StatusBadge.vue'
 export type { ResourceBarProps } from './ResourceBar.vue'
 export type { ActionType, ActionConfig, ActionConfigObject, ActionButtonsProps } from './ActionButtons.vue'
 export type { CounterCardProps } from './CounterCard.vue'
+export type { AppContextMenuProps, ContextMenuItem, ContextMenuSection, ContextMenuAction, ContextMenuSectionKey } from '@/types/context-menu'

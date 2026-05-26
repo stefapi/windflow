@@ -13,6 +13,7 @@ export { default as StandaloneSection } from './StandaloneSection.vue'
 export { default as TargetGroupView } from './TargetGroupView.vue'
 export { default as AdoptionWizard } from './AdoptionWizard.vue'
 export { default as StackActionsBar } from './StackActionsBar.vue'
+export { default as AppCard } from './AppCard.vue'
 
 // Helpers & Types
 export {
@@ -26,7 +27,13 @@ export {
   formatPort,
   getActionPastParticiple,
   DEFAULT_COLUMNS,
+  stackToAppCards,
+  discoveredToAppCards,
+  standaloneToAppCard,
+  extractVersion,
+  getAppIcon,
+  deduceDomain,
 } from './helpers'
 
-export type { ContainerTableRow, ColumnKey } from './helpers'
+export type { ContainerTableRow, ColumnKey, AppCardData, AppCardCategory } from './helpers'
 export type { TargetGroupItem } from './TargetGroupView.vue'

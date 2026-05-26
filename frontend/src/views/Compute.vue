@@ -4,15 +4,21 @@
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
       <div>
         <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">
-          Containers — vue globale
+          {{ modeStore.isAppMode ? 'Mes Apps' : 'Containers — vue globale' }}
         </h1>
         <p class="text-sm text-gray-500 mt-1">
-          {{ computeStore.stats?.targets_count ?? 0 }} targets
-          · {{ techCount }} technologies
+          <template v-if="modeStore.isAppMode">
+            {{ totalAppCount }} app{{ totalAppCount !== 1 ? 's' : '' }}
+          </template>
+          <template v-else>
+            {{ computeStore.stats?.targets_count ?? 0 }} targets
+            · {{ techCount }} technologies
+          </template>
         </p>
       </div>
       <div class="flex items-center gap-2">
         <el-button
+          v-if="modeStore.isInfraMode"
           :type="!groupByTarget ? 'primary' : 'default'"
           size="small"
           @click="groupByTarget = false"
@@ -20,6 +26,7 @@
           Tout
         </el-button>
         <el-button
+          v-if="modeStore.isInfraMode"
           :type="groupByTarget ? 'primary' : 'default'"
           size="small"
           @click="groupByTarget = true"
@@ -31,9 +38,10 @@
           size="small"
           @click="createDialogVisible = true"
         >
-          + Créer un container
+          {{ modeStore.isAppMode ? '+ Nouvelle App' : '+ Créer un container' }}
         </el-button>
         <el-button
+          v-if="modeStore.isInfraMode"
           size="small"
           disabled
         >
@@ -54,13 +62,13 @@
             Tout
           </el-radio-button>
           <el-radio-button value="managed">
-            ● Stacks WindFlow
+            {{ modeStore.isAppMode ? '● Mes Apps' : '● Stacks WindFlow' }}
           </el-radio-button>
           <el-radio-button value="discovered">
-            ● Discovered
+            {{ modeStore.isAppMode ? '● Apps détectées' : '● Discovered' }}
           </el-radio-button>
           <el-radio-button value="standalone">
-            ● Standalone
+            {{ modeStore.isAppMode ? '● Apps autonomes' : '● Standalone' }}
           </el-radio-button>
         </el-radio-group>
 
@@ -69,14 +77,17 @@
         <el-input
           v-model="filterSearch"
           size="small"
-          placeholder="Rechercher..."
+          :placeholder="modeStore.isAppMode ? 'Rechercher une app...' : 'Rechercher...'"
           clearable
           style="width: 200px"
         />
       </div>
 
-      <!-- Ligne 2 : Pills technologie + pills target -->
-      <div class="flex flex-wrap items-center gap-2">
+      <!-- Ligne 2 : Pills technologie + pills target (Mode Infra uniquement) -->
+      <div
+        v-if="modeStore.isInfraMode"
+        class="flex flex-wrap items-center gap-2"
+      >
         <span class="text-xs text-gray-500 font-semibold">Tech :</span>
         <span
           v-for="tech in availableTechnologies"
@@ -101,16 +112,145 @@
       </div>
     </div>
 
-    <!-- C. Bandeau métriques -->
-    <div class="mb-6">
+    <!-- C. Bandeau métriques (Mode Infra uniquement) -->
+    <div
+      v-if="modeStore.isInfraMode"
+      class="mb-6"
+    >
       <ComputeStatsBanner
         :stats="computeStore.stats"
         :loading="computeStore.statsLoading"
       />
     </div>
 
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- MODE APP : Cards par section                                          -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <template v-if="modeStore.isAppMode">
+      <!-- Section Mes Apps (managed) -->
+      <div
+        v-if="filterType === 'all' || filterType === 'managed'"
+        class="section mb-6"
+      >
+        <div class="section-header border-b border-border py-2 mb-3 flex items-center gap-2">
+          <span class="inline-block w-3 h-3 rounded-sm bg-blue-600" />
+          <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+            Mes Apps
+            <span class="text-gray-400 font-normal">({{ filteredManagedCards.length }})</span>
+          </span>
+        </div>
+
+        <div
+          v-if="computeStore.loading"
+          class="flex justify-center py-8"
+        >
+          <el-icon class="is-loading text-2xl text-blue-500">
+            <Loading />
+          </el-icon>
+        </div>
+        <el-empty
+          v-else-if="filteredManagedCards.length === 0"
+          description="Aucune app managée"
+        />
+        <div
+          v-else
+          class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+        >
+          <AppCard
+            v-for="card in filteredManagedCards"
+            :key="card.id"
+            :app="card"
+            @refresh="refreshGlobal"
+            @action="handleCardAction"
+          />
+        </div>
+      </div>
+
+      <!-- Section Apps autonomes (standalone) -->
+      <div
+        v-if="filterType === 'all' || filterType === 'standalone'"
+        class="section mb-6"
+      >
+        <div class="section-header border-b border-border py-2 mb-3 flex items-center gap-2">
+          <span class="inline-block w-3 h-3 rounded-sm bg-gray-400" />
+          <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+            Apps autonomes
+            <span class="text-gray-400 font-normal">({{ filteredStandaloneCards.length }})</span>
+          </span>
+        </div>
+
+        <div
+          v-if="computeStore.loading"
+          class="flex justify-center py-8"
+        >
+          <el-icon class="is-loading text-2xl text-blue-500">
+            <Loading />
+          </el-icon>
+        </div>
+        <el-empty
+          v-else-if="filteredStandaloneCards.length === 0"
+          description="Aucune app autonome"
+        />
+        <div
+          v-else
+          class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+        >
+          <AppCard
+            v-for="card in filteredStandaloneCards"
+            :key="card.id"
+            :app="card"
+            @refresh="refreshGlobal"
+            @action="handleCardAction"
+          />
+        </div>
+      </div>
+
+      <!-- Section Apps détectées (discovered) -->
+      <div
+        v-if="filterType === 'all' || filterType === 'discovered'"
+        class="section mb-6"
+      >
+        <div class="section-header border-b border-border py-2 mb-3 flex items-center gap-2">
+          <span class="inline-block w-3 h-3 rounded-sm bg-orange-500" />
+          <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+            Apps détectées
+            <span class="text-gray-400 font-normal">({{ filteredDiscoveredCards.length }})</span>
+          </span>
+        </div>
+
+        <div
+          v-if="computeStore.loading"
+          class="flex justify-center py-8"
+        >
+          <el-icon class="is-loading text-2xl text-blue-500">
+            <Loading />
+          </el-icon>
+        </div>
+        <el-empty
+          v-else-if="filteredDiscoveredCards.length === 0"
+          description="Aucune app détectée"
+        />
+        <div
+          v-else
+          class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+        >
+          <AppCard
+            v-for="card in filteredDiscoveredCards"
+            :key="card.id"
+            :app="card"
+            @refresh="refreshGlobal"
+            @action="handleCardAction"
+          />
+        </div>
+      </div>
+    </template>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- MODE INFRA : Sections techniques (existant, inchangé)                 -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+
     <!-- Mode normal (D + E + F) -->
-    <template v-if="!groupByTarget">
+    <template v-if="modeStore.isInfraMode && !groupByTarget">
       <ManagedStacksSection
         v-if="filterType === 'all' || filterType === 'managed'"
         :stacks="visibleManagedStacks"
@@ -137,7 +277,7 @@
 
     <!-- G. Mode "Par machine" -->
     <TargetGroupView
-      v-if="groupByTarget"
+      v-if="modeStore.isInfraMode && groupByTarget"
       :groups="filteredTargetGroups"
       :loading="computeStore.loading"
     />
@@ -157,8 +297,11 @@
       @adopted="onAdopted"
     />
 
-    <!-- H. Légende -->
-    <div class="flex flex-wrap gap-6 mt-8 text-sm text-gray-500 border-t pt-4">
+    <!-- H. Légende (Mode Infra uniquement) -->
+    <div
+      v-if="modeStore.isInfraMode"
+      class="flex flex-wrap gap-6 mt-8 text-sm text-gray-500 border-t pt-4"
+    >
       <span>
         <span class="inline-block w-3 h-3 rounded-sm bg-blue-600 mr-1" />
         Stack WindFlow — géré, éditable
@@ -181,12 +324,17 @@
  *
  * Lightweight orchestrator that delegates rendering to dedicated
  * sub-components for each compute section.
+ *
+ * In Mode App: displays apps as cards with non-technical vocabulary.
+ * In Mode Infra: displays the technical compute view (tables, stats).
  */
 
 import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
 import { useComputeStore, useTargetsStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
+import { useModeStore } from '@/stores/mode'
 import ComputeStatsBanner from '@/components/ComputeStatsBanner.vue'
 import ContainerCreateDialog from '@/components/ContainerCreateDialog.vue'
 import {
@@ -195,12 +343,18 @@ import {
   StandaloneSection,
   TargetGroupView,
   AdoptionWizard,
+  AppCard,
+  stackToAppCards,
+  discoveredToAppCards,
+  standaloneToAppCard,
 } from '@/components/compute'
 import type { ControlLevel, AdoptionResponse } from '@/types/api'
+import type { AppCardData } from '@/components/compute/helpers'
 
 const computeStore = useComputeStore()
 const targetsStore = useTargetsStore()
 const authStore = useAuthStore()
+const modeStore = useModeStore()
 
 // ─── Filters ─────────────────────────────────────────────────────────────────
 const groupByTarget = ref(false)
@@ -247,6 +401,68 @@ const filteredTargetGroups = computed(() =>
     stacks: group.stacks,
     discovered: group.discovered,
   })),
+)
+
+// ─── Mode App: App Card Computeds ────────────────────────────────────────────
+
+/** All managed app cards from stacks */
+const managedAppCards = computed<AppCardData[]>(() => {
+  const cards: AppCardData[] = []
+  for (const stack of computeStore.managedStacks) {
+    cards.push(...stackToAppCards(stack))
+  }
+  return cards
+})
+
+/** All standalone app cards */
+const standaloneAppCards = computed<AppCardData[]>(() =>
+  computeStore.standaloneContainers.map(standaloneToAppCard),
+)
+
+/** All discovered app cards */
+const discoveredAppCards = computed<AppCardData[]>(() => {
+  const cards: AppCardData[] = []
+  for (const item of computeStore.discoveredItems) {
+    cards.push(...discoveredToAppCards(item))
+  }
+  return cards
+})
+
+/** Filter managed cards by search */
+const filteredManagedCards = computed<AppCardData[]>(() => {
+  if (!debouncedSearch.value) return managedAppCards.value
+  const q = debouncedSearch.value.toLowerCase()
+  return managedAppCards.value.filter(c =>
+    c.displayName.toLowerCase().includes(q) ||
+    c.statusLabel.toLowerCase().includes(q),
+  )
+})
+
+/** Filter standalone cards by search */
+const filteredStandaloneCards = computed<AppCardData[]>(() => {
+  if (!debouncedSearch.value) return standaloneAppCards.value
+  const q = debouncedSearch.value.toLowerCase()
+  return standaloneAppCards.value.filter(c =>
+    c.displayName.toLowerCase().includes(q) ||
+    c.statusLabel.toLowerCase().includes(q),
+  )
+})
+
+/** Filter discovered cards by search */
+const filteredDiscoveredCards = computed<AppCardData[]>(() => {
+  if (!debouncedSearch.value) return discoveredAppCards.value
+  const q = debouncedSearch.value.toLowerCase()
+  return discoveredAppCards.value.filter(c =>
+    c.displayName.toLowerCase().includes(q) ||
+    c.statusLabel.toLowerCase().includes(q),
+  )
+})
+
+/** Total app count across all categories */
+const totalAppCount = computed(() =>
+  managedAppCards.value.length +
+  standaloneAppCards.value.length +
+  discoveredAppCards.value.length,
 )
 
 // ─── Filter Params ────────────────────────────────────────────────────────────
@@ -326,6 +542,13 @@ function refreshGlobal(): void {
   }
 }
 
+/** Handle card action events from AppCard */
+function handleCardAction(actionType: string, _appId: string): void {
+  // Actions are already handled inside AppCard component
+  // This handler is for any parent-level action routing if needed
+  void actionType
+}
+
 // ─── Watchers ─────────────────────────────────────────────────────────────────
 
 watch(filterParams, () => {
@@ -378,5 +601,4 @@ onMounted(() => {
   cursor: pointer;
   user-select: none;
 }
-
 </style>

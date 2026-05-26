@@ -12,6 +12,8 @@ declare module 'vue' {
     ActivityFeedWidget: typeof import('./components/dashboard/ActivityFeedWidget.vue')['default']
     AdoptionWizard: typeof import('./components/compute/AdoptionWizard.vue')['default']
     AlertsNotificationsWidget: typeof import('./components/dashboard/AlertsNotificationsWidget.vue')['default']
+    AppCard: typeof import('./components/compute/AppCard.vue')['default']
+    AppContextMenu: typeof import('./components/ui/AppContextMenu.vue')['default']
     BaseWizard: typeof import('./components/BaseWizard.vue')['default']
     Breadcrumb: typeof import('./components/Breadcrumb.vue')['default']
     BulkActionBar: typeof import('./components/compute/BulkActionBar.vue')['default']

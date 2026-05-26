@@ -52,7 +52,7 @@ Aucune modification backend nécessaire — toutes les APIs existantes (`/contai
 
 ## Liste des Stories liées
 
-### STORY-002 : Refonte Sidebar — Navigation Mode App
+### STORY-002 : Refonte Sidebar — Navigation Mode App ✅ DONE
 
 **Description :** Transformer la sidebar actuelle (Infrastructure, Stockage & Réseau, Marketplace, Administration) en sidebar Mode App documentée dans 11b.
 
@@ -110,7 +110,7 @@ Aucune modification backend nécessaire — toutes les APIs existantes (`/contai
 - Conserver les widgets existants (métriques, activité, alertes) mais les repositionner sous la grille Apps
 - Salutation personnalisée ("Bonjour, {username}") en haut du dashboard
 
-### STORY-003 : Menu Contextuel `[⋯ Plus]` Canonique
+### STORY-003 : Menu Contextuel `[⋯ Plus]` Canonique ✅ DONE
 
 **Description :** Créer un composant réutilisable `AppContextMenu` pour le menu contextuel documenté dans 11b.
 

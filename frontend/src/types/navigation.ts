@@ -5,6 +5,9 @@
 
 import type { Component } from 'vue'
 
+/** UI mode determining which navigation items to display */
+export type UIMode = 'app' | 'infra'
+
 /**
  * Single navigation item
  */

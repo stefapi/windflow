@@ -46,7 +46,23 @@ vi.mock('@/stores/pluginNav', () => ({
   usePluginNavStore: vi.fn(() => ({
     hasPluginPages: false,
     pluginNavigationItems: [],
+    sections: [],
   })),
+}))
+
+// Mock mode store — hoisted so it's available in vi.mock factory
+const { mockModeStore } = vi.hoisted(() => {
+  const mockModeStore = {
+    mode: 'infra' as string,
+    isAppMode: false,
+    isInfraMode: true,
+    setMode: vi.fn(),
+    toggleMode: vi.fn(),
+  }
+  return { mockModeStore }
+})
+vi.mock('@/stores/mode', () => ({
+  useModeStore: vi.fn(() => mockModeStore),
 }))
 
 // Helper to create mock sidebar state
@@ -347,6 +363,103 @@ describe('STORY-413: Responsive Sidebar', () => {
       // Le vrai localStorage est utilisé, ce qui peut ne pas être détectable
       // Ce test vérifie juste que le bouton toggle est présent et cliquable
       expect(toggleBtn.exists()).toBe(true)
+    })
+  })
+})
+
+// ============================================================
+// STORY-002: Mode App — Navigation conditionnelle
+// ============================================================
+describe('STORY-002: Mode App', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+    // Switch mock to App mode for STORY-002 tests
+    mockModeStore.mode = 'app'
+    mockModeStore.isAppMode = true
+    mockModeStore.isInfraMode = false
+  })
+
+  afterEach(() => {
+    // Restore to Infra mode for other tests
+    mockModeStore.mode = 'infra'
+    mockModeStore.isAppMode = false
+    mockModeStore.isInfraMode = true
+  })
+
+  describe('Navigation Mode App', () => {
+    it('affiche la navigation Mode App quand le mode est App', async () => {
+      const wrapper = await mountComponent()
+      const html = wrapper.html()
+
+      // Mode App items should be present
+      expect(html).toContain('Dashboard')
+      expect(html).toContain('Apps')
+      expect(html).toContain('Marketplace')
+      expect(html).toContain('Plugins')
+      expect(html).toContain('Settings')
+    })
+
+    it('masque les entrées techniques en Mode App', async () => {
+      const wrapper = await mountComponent()
+      const html = wrapper.html()
+
+      // Technical items should NOT be present in App mode
+      expect(html).not.toContain('Volumes')
+      expect(html).not.toContain('Networks')
+      expect(html).not.toContain('Images')
+      expect(html).not.toContain('Targets')
+      expect(html).not.toContain('Stacks')
+      expect(html).not.toContain('Compute')
+    })
+
+    it('affiche la section WORKLOADS en Mode App', async () => {
+      const wrapper = await mountComponent()
+      const html = wrapper.html()
+
+      expect(html).toContain('WORKLOADS')
+    })
+
+    it('n\'affiche pas les sections techniques en Mode App', async () => {
+      const wrapper = await mountComponent()
+      const html = wrapper.html()
+
+      expect(html).not.toContain('INFRASTRUCTURE')
+      expect(html).not.toContain('STOCKAGE')
+      expect(html).not.toContain('ADMINISTRATION')
+    })
+  })
+
+  describe('Toggle Mode Infra', () => {
+    it('affiche le toggle Mode Infra', async () => {
+      const wrapper = await mountComponent()
+      const toggle = wrapper.find('.mode-toggle')
+      expect(toggle.exists()).toBe(true)
+    })
+
+    it('le toggle Mode Infra a le bouton disabled', async () => {
+      const wrapper = await mountComponent()
+      const btn = wrapper.find('.mode-toggle-btn')
+      expect(btn.exists()).toBe(true)
+      expect(btn.attributes('disabled')).toBeDefined()
+    })
+
+    it('le toggle Mode Infra est grisé (classe mode-toggle-btn)', async () => {
+      const wrapper = await mountComponent()
+      const btn = wrapper.find('.mode-toggle-btn')
+      expect(btn.exists()).toBe(true)
+      // The button should have opacity via CSS class
+      expect(btn.classes()).toContain('mode-toggle-btn')
+    })
+
+    it('le toggle contient le label Mode Infra et le cadenas', async () => {
+      const wrapper = await mountComponent()
+      const toggle = wrapper.find('.mode-toggle')
+      const text = toggle.text()
+      expect(text).toContain('Mode Infra')
+      // Lock icon should be present
+      const lock = wrapper.find('.mode-toggle-lock')
+      expect(lock.exists()).toBe(true)
     })
   })
 })
