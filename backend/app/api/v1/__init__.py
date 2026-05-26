@@ -14,6 +14,7 @@ from .discovery import router as discovery_router
 from .docker import router as docker_router
 from .import_export import router as import_export_router
 from .organizations import router as organizations_router
+from .plugins import router as plugins_router
 from .schedules import router as schedules_router
 from .stacks import router as stacks_router
 from .stats import router as stats_router
@@ -45,5 +46,6 @@ api_router.include_router(admin_router)  # Le préfixe /admin est déjà dans le
 api_router.include_router(docker_router, prefix="/docker", tags=["docker"])
 api_router.include_router(compute_router, prefix="/compute", tags=["compute"])
 api_router.include_router(discovery_router, prefix="/discovery", tags=["discovery"])
+api_router.include_router(plugins_router, prefix="/plugins", tags=["plugins"])
 
 __all__ = ["api_router"]

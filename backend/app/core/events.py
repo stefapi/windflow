@@ -46,6 +46,14 @@ class EventType(str, Enum):
     USER_LOGIN = "user.login"
     USER_LOGOUT = "user.logout"
 
+    # Plugin
+    PLUGIN_INSTALLED = "plugin.installed"
+    PLUGIN_INSTALLING = "plugin.installing"
+    PLUGIN_UPDATED = "plugin.updated"
+    PLUGIN_UNINSTALLED = "plugin.uninstalled"
+    PLUGIN_CONFIGURED = "plugin.configured"
+    PLUGIN_ERROR = "plugin.error"
+
     # Système
     SYSTEM_ERROR = "system.error"
     SYSTEM_WARNING = "system.warning"
