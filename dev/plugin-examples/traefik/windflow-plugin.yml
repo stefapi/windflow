@@ -1,0 +1,136 @@
+# =============================================================================
+# WindFlow Plugin Manifest — Traefik Reverse Proxy
+# =============================================================================
+# Ce manifest est un exemple complet de plugin de type "hybrid".
+# Il déploie un service Traefik ET étend le core avec des endpoints API
+# et une page de gestion des domaines.
+# =============================================================================
+
+# ===== Identité =====
+name: traefik
+version: 1.2.0
+display_name: "Traefik"
+description: "Reverse proxy avec TLS automatique via Let's Encrypt"
+long_description: |
+  Traefik est un reverse proxy moderne qui s'intègre nativement
+  avec Docker. Ce plugin déploie Traefik et permet d'associer
+  des noms de domaine à vos services depuis l'interface WindFlow.
+
+  Fonctionnalités principales :
+  - Routage automatique basé sur les labels Docker
+  - TLS automatique via Let's Encrypt (HTTP challenge)
+  - Dashboard d'administration intégré
+  - Support multi-domaines et certificats wildcard
+  - Middleware pour authentification, rate-limiting, compression
+category: access
+tags:
+  - reverse-proxy
+  - tls
+  - https
+  - letsencrypt
+icon: icon.svg
+author: "WindFlow Team"
+license: MIT
+homepage: "https://github.com/windflow/plugin-traefik"
+
+# ===== Type =====
+type: hybrid
+
+# ===== Compatibilité =====
+architectures:
+  - linux/amd64
+  - linux/arm64
+
+windflow_version: ">=1.1.0"
+
+# ===== Ressources =====
+resources:
+  ram_min_mb: 128
+  cpu_min_cores: 0.5
+  disk_min_mb: 100
+
+# ===== Dépendances =====
+dependencies:
+  requires:
+    - docker
+  optional:
+    - cloudflare-dns
+  conflicts:
+    - nginx-proxy-manager
+
+# ===== Capabilities =====
+provides:
+  - reverse_proxy
+  - tls_certificates
+
+# ===== Ports =====
+ports:
+  - port: 80
+    protocol: tcp
+    description: "HTTP"
+  - port: 443
+    protocol: tcp
+    description: "HTTPS"
+  - port: 8080
+    protocol: tcp
+    description: "Dashboard Traefik"
+    optional: true
+
+# ===== Configuration Utilisateur =====
+config:
+  - key: acme_email
+    label: "Email pour Let's Encrypt"
+    description: "Utilisé pour les notifications d'expiration de certificats"
+    type: string
+    required: true
+    validation: "^[^@]+@[^@]+\\.[^@]+$"
+
+  - key: dashboard_enabled
+    label: "Activer le dashboard Traefik"
+    type: boolean
+    default: true
+
+  - key: log_level
+    label: "Niveau de logs"
+    type: select
+    options:
+      - value: "DEBUG"
+        label: "Debug"
+      - value: "INFO"
+        label: "Info"
+      - value: "WARN"
+        label: "Warning"
+      - value: "ERROR"
+        label: "Error"
+    default: "INFO"
+
+  - key: custom_entrypoints
+    label: "Ports supplémentaires"
+    description: "Ports additionnels à ouvrir (ex: 8443 pour HTTPS alternatif)"
+    type: string
+    required: false
+
+# ===== Fichiers =====
+compose_file: docker-compose.yml
+config_schema: config-schema.yml
+
+# ===== Extensions =====
+extensions:
+  api_module: extensions/api.py
+  hooks_module: extensions/hooks.py
+  ui_routes: extensions/ui/routes.json
+  ui_components: extensions/ui/components/
+
+# ===== Hooks Lifecycle =====
+hooks:
+  on_install: scripts/install.sh
+  on_configure: scripts/configure.sh
+  on_start: null
+  on_stop: null
+  on_update: null
+  on_uninstall: scripts/uninstall.sh
+
+# ===== Détection Automatique =====
+auto_detect:
+  docker_images:
+    - "traefik"

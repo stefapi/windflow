@@ -2,7 +2,25 @@
 
 ## 📋 BACKLOG
 
-_(vide)_
+### EPIC-001 : Système de Plugins & Marketplace
+- [ ] STORY-002 : API REST Plugin Manager — CRUD plugins (install/update/uninstall)
+- [ ] STORY-003 : Gestion des dépendances entre plugins
+- [ ] STORY-004 : Vérification compatibilité architecture (arm64/amd64) et ressources
+- [ ] STORY-005 : Configuration plugin depuis l'UI (formulaires dynamiques générés depuis manifest)
+- [ ] STORY-006 : Hooks lifecycle plugins (on_install, on_configure, on_start, on_stop, on_uninstall)
+- [ ] STORY-007 : Support 3 types de plugins (service, extension, hybrid)
+- [ ] STORY-008 : API Marketplace — catalogue, recherche, filtres par catégorie
+- [ ] STORY-009 : UI Marketplace — catalogue browsable avec fiches plugin
+- [ ] STORY-010 : Installation one-click depuis la Marketplace
+- [ ] STORY-011 : Mise à jour plugins avec affichage changelog
+- [ ] STORY-012 : Distinction plugins officiels vs communautaires (badges, tri)
+- [ ] STORY-013 : Registre officiel (index JSON ou API simple)
+- [ ] STORY-014 : Support registre custom (self-hosted)
+- [ ] STORY-015 : Vérification d'intégrité (checksums SHA-256)
+- [ ] STORY-016 : Plugin Traefik — reverse proxy + TLS automatique Let's Encrypt
+- [ ] STORY-017 : Plugin PostgreSQL — détection containers, create DB/users/grants, backup
+- [ ] STORY-018 : Plugin Redis — détection containers, monitoring clés/stats
+- [ ] STORY-019 : Plugin Uptime Kuma — déploiement + widget status dashboard
 
 ## 🏗️ IN PROGRESS
 
@@ -18,4 +36,4 @@ _(vide)_
 
 ## ✅ DONE
 
-_(vide)_
+- [x] STORY-001 : Format manifest YAML (spécification + validation Pydantic)

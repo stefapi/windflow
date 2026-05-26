@@ -309,6 +309,42 @@ Méthodes à ajouter :
 
 ---
 
+## 📋 Ordre de traitement des stories
+
+### Graphe des dépendances
+
+```mermaid
+graph TD
+    S024["STORY-024<br/>Frontend Infos design"]
+    S025["STORY-025<br/>Backend recreate"]
+    S026["STORY-026<br/>Backend networks"]
+    S027["STORY-027<br/>Frontend ports + image"]
+    S028["STORY-028<br/>Frontend réseaux"]
+    S029["STORY-029<br/>Frontend volumes + sécurité"]
+    S030["STORY-030<br/>Frontend env vars + labels"]
+
+    S025 --> S027
+    S025 --> S029
+    S025 --> S030
+    S026 --> S028
+```
+
+### Ordre recommandé
+
+| Rang | Story | Couche | Dépendances | Raison |
+|------|-------|--------|-------------|--------|
+| 1 | STORY-024 | Frontend design | Aucune | Fondation visuelle, pattern cards |
+| 2 | STORY-025 | Backend | Aucune | Socle recreate, débloque 3 stories |
+| 3 | STORY-026 | Backend | Aucune | Socle networks, débloque STORY-028 |
+| 4 | STORY-030 | Frontend config | STORY-025 | Stubs existants → validation rapide du pattern recreate |
+| 5 | STORY-027 | Frontend config | STORY-025 | Complexité moyenne, nouvelles sections ports+image |
+| 6 | STORY-029 | Frontend config | STORY-025 | Complexité élevée, volumes+sécurité |
+| 7 | STORY-028 | Frontend config | STORY-026 | Pattern différent (hot ops), chaîne isolée |
+
+> **Note :** Les rangs 1-3 sont parallélisables entre eux. Les rangs 4-6 sont séquentiels (par complexité croissante) mais dépendent tous uniquement de STORY-025. Le rang 7 ne dépend que de STORY-026 et pourrait être traité en parallèle dès que STORY-026 est terminé.
+
+---
+
 ## Liste des Stories liées
 
 > ⚠️ Cette epic est fermée. Toutes les stories ont été supprimées le 2026-05-23.
