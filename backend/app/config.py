@@ -228,6 +228,20 @@ class Settings(BaseSettings):
         "update_if_newer"  # skip_existing | update_if_newer | force_update
     )
 
+    # === Plugin Registry ===
+    plugin_registry_url: str = Field(
+        default="https://registry.windflow.io/index.json",
+        description="URL de l'index JSON du registre officiel des plugins",
+    )
+    plugin_registry_cache_ttl: int = Field(
+        default=300,
+        description="TTL du cache du registre en secondes (défaut : 5 minutes)",
+    )
+    plugin_registry_timeout: int = Field(
+        default=10,
+        description="Timeout HTTP pour fetch l'index du registre en secondes",
+    )
+
     # Mode développement sans authentification
     # ⚠️ DANGER : Ne JAMAIS activer en production !
     # Utilise automatiquement le premier utilisateur superadmin trouvé en base

@@ -140,7 +140,7 @@ Vague 6 (Marketplace avancée)  → STORY-010 + STORY-011 + STORY-012
 - [ ] STORY-012 : Distinction plugins officiels vs communautaires (badges, tri)
 
 ### Registre de Plugins
-- [ ] STORY-013 : Registre officiel (index JSON ou API simple)
+- [x] STORY-013 : Registre officiel (index JSON ou API simple)
 - [ ] STORY-014 : Support registre custom (self-hosted)
 - [ ] STORY-015 : Vérification d'intégrité (checksums SHA-256)
 

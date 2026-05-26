@@ -1,0 +1,67 @@
+{
+  "version": "1.0",
+  "updated_at": "2026-05-26T00:00:00Z",
+  "registry_url": "https://registry.windflow.io",
+  "plugins": [
+    {
+      "name": "traefik",
+      "version": "1.2.0",
+      "display_name": "Traefik",
+      "description": "Reverse proxy avec TLS automatique via Let's Encrypt",
+      "category": "access",
+      "type": "hybrid",
+      "author": "WindFlow Team",
+      "license": "MIT",
+      "architectures": ["linux/amd64", "linux/arm64"],
+      "download_url": "https://registry.windflow.io/plugins/traefik/1.2.0/package.tar.gz",
+      "checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "homepage": "https://github.com/windflow/plugin-traefik",
+      "tags": ["reverse-proxy", "tls", "proxy", "letsencrypt"]
+    },
+    {
+      "name": "postgresql",
+      "version": "1.0.0",
+      "display_name": "PostgreSQL",
+      "description": "Base de données relationnelle avec détection de containers et backup automatique",
+      "category": "database",
+      "type": "hybrid",
+      "author": "WindFlow Team",
+      "license": "MIT",
+      "architectures": ["linux/amd64", "linux/arm64"],
+      "download_url": "https://registry.windflow.io/plugins/postgresql/1.0.0/package.tar.gz",
+      "checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "homepage": "https://github.com/windflow/plugin-postgresql",
+      "tags": ["database", "sql", "backup"]
+    },
+    {
+      "name": "redis",
+      "version": "1.0.0",
+      "display_name": "Redis",
+      "description": "Cache en mémoire avec monitoring des clés et statistiques",
+      "category": "database",
+      "type": "hybrid",
+      "author": "WindFlow Team",
+      "license": "MIT",
+      "architectures": ["linux/amd64", "linux/arm64"],
+      "download_url": "https://registry.windflow.io/plugins/redis/1.0.0/package.tar.gz",
+      "checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "homepage": "https://github.com/windflow/plugin-redis",
+      "tags": ["cache", "monitoring", "in-memory"]
+    },
+    {
+      "name": "uptime-kuma",
+      "version": "1.0.0",
+      "display_name": "Uptime Kuma",
+      "description": "Monitoring de disponibilité avec widget dashboard intégré",
+      "category": "monitoring",
+      "type": "hybrid",
+      "author": "WindFlow Team",
+      "license": "MIT",
+      "architectures": ["linux/amd64", "linux/arm64"],
+      "download_url": "https://registry.windflow.io/plugins/uptime-kuma/1.0.0/package.tar.gz",
+      "checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "homepage": "https://github.com/windflow/plugin-uptime-kuma",
+      "tags": ["monitoring", "uptime", "status", "dashboard"]
+    }
+  ]
+}

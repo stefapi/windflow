@@ -14,6 +14,7 @@ from .discovery import router as discovery_router
 from .docker import router as docker_router
 from .import_export import router as import_export_router
 from .organizations import router as organizations_router
+from .plugin_registry import router as plugin_registry_router
 from .plugins import router as plugins_router
 from .schedules import router as schedules_router
 from .stacks import router as stacks_router
@@ -47,5 +48,8 @@ api_router.include_router(docker_router, prefix="/docker", tags=["docker"])
 api_router.include_router(compute_router, prefix="/compute", tags=["compute"])
 api_router.include_router(discovery_router, prefix="/discovery", tags=["discovery"])
 api_router.include_router(plugins_router, prefix="/plugins", tags=["plugins"])
+api_router.include_router(
+    plugin_registry_router, prefix="/registry", tags=["plugin-registry"]
+)
 
 __all__ = ["api_router"]

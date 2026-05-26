@@ -12,7 +12,6 @@
 - [ ] STORY-010 : Installation one-click depuis la Marketplace
 - [ ] STORY-011 : Mise à jour plugins avec affichage changelog
 - [ ] STORY-012 : Distinction plugins officiels vs communautaires (badges, tri)
-- [ ] STORY-013 : Registre officiel (index JSON ou API simple)
 - [ ] STORY-014 : Support registre custom (self-hosted)
 - [ ] STORY-015 : Vérification d'intégrité (checksums SHA-256)
 - [ ] STORY-016 : Plugin Traefik — reverse proxy + TLS automatique Let's Encrypt
@@ -37,3 +36,4 @@ _(vide)_
 - [x] STORY-001 : Format manifest YAML (spécification + validation Pydantic)
 - [x] STORY-002 : API REST Plugin Manager — CRUD plugins (install/update/uninstall)
 - [x] STORY-003 : Gestion des dépendances entre plugins
+- [x] STORY-013 : Registre officiel (index JSON ou API simple)
