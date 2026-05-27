@@ -23,7 +23,7 @@
 
 ## 🏗️ IN PROGRESS
 
-- [~] STORY-006.1 : Backend — Service d'exécution des hooks lifecycle
+_(vide)_
 
 ## 🚫 BLOCKED
 
@@ -39,3 +39,4 @@ _(vide)_
 - [x] STORY-002 : API REST Plugin Manager — CRUD plugins (install/update/uninstall)
 - [x] STORY-003 : Gestion des dépendances entre plugins
 - [x] STORY-013 : Registre officiel (index JSON ou API simple)
+- [x] STORY-006.1 : Backend — Service d'exécution des hooks lifecycle

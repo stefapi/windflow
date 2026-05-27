@@ -18,6 +18,7 @@ from ..core.exceptions import WindFlowException
 from ..models.plugin import Plugin, PluginStatus
 from ..schemas.plugin import PluginConfigureRequest, PluginInstallRequest, PluginUpdateRequest
 from .plugin_dependency_service import PluginDependencyService
+from .plugin_lifecycle_service import PluginLifecycleService
 from .plugin_manifest_service import PluginManifestService
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ class PluginManagerService:
     def __init__(self) -> None:
         self._manifest_service = PluginManifestService()
         self._dependency_service = PluginDependencyService()
+        self._lifecycle_service = PluginLifecycleService()
 
     # ── Lecture ─────────────────────────────────────────────────────────────
 
@@ -261,7 +263,13 @@ class PluginManagerService:
         await db.commit()
         await db.refresh(plugin)
 
-        # Émettre l'événement PLUGIN_INSTALLED
+        # Exécuter le hook on_install (si déclaré dans le manifest)
+        # Si le hook échoue, le plugin passe en ERROR et une exception est levée
+        plugin = await self._lifecycle_service.execute_lifecycle_transition(
+            db, plugin, "install", user_id
+        )
+
+        # Émettre l'événement PLUGIN_INSTALLED (uniquement si le hook a réussi)
         self._emit_event(
             event_type=EventType.PLUGIN_INSTALLED,
             plugin_id=plugin.id,
@@ -413,10 +421,17 @@ class PluginManagerService:
             },
         )
 
+        # Exécuter le hook on_uninstall (si déclaré dans le manifest)
+        # Si le hook échoue, le plugin passe en ERROR et une exception est levée
+        # (le plugin n'est PAS supprimé)
+        await self._lifecycle_service.execute_lifecycle_transition(
+            db, plugin, "uninstall", user_id
+        )
+
         await db.delete(plugin)
         await db.commit()
 
-        # Émettre l'événement PLUGIN_UNINSTALLED
+        # Émettre l'événement PLUGIN_UNINSTALLED (uniquement si le hook a réussi)
         self._emit_event(
             event_type=EventType.PLUGIN_UNINSTALLED,
             plugin_id=plugin_id,
@@ -473,7 +488,13 @@ class PluginManagerService:
         await db.commit()
         await db.refresh(plugin)
 
-        # Émettre l'événement PLUGIN_CONFIGURED
+        # Exécuter le hook on_configure (si déclaré dans le manifest)
+        # Si le hook échoue, le plugin passe en ERROR et une exception est levée
+        plugin = await self._lifecycle_service.execute_lifecycle_transition(
+            db, plugin, "configure", user_id
+        )
+
+        # Émettre l'événement PLUGIN_CONFIGURED (uniquement si le hook a réussi)
         self._emit_event(
             event_type=EventType.PLUGIN_CONFIGURED,
             plugin_id=plugin.id,

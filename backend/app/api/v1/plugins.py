@@ -2,7 +2,7 @@
 Routes de gestion des plugins — CRUD complet.
 
 Endpoints REST pour le cycle de vie des plugins :
-list, get, install, update, configure, uninstall.
+list, get, install, update, configure, uninstall, hooks/logs.
 """
 
 import logging
@@ -26,8 +26,10 @@ from ...schemas.plugin import (
     PluginSummaryResponse,
     PluginUpdateRequest,
 )
+from ...schemas.plugin_hook_log import HookLogResponse, HookLogSummaryResponse
 from ...schemas.plugin_manifest import parse_dependency_string
 from ...services.plugin_dependency_service import PluginDependencyService
+from ...services.plugin_lifecycle_service import PluginLifecycleService
 from ...services.plugin_manager_service import PluginManagerService
 
 router = APIRouter()
@@ -37,6 +39,7 @@ logger = logging.getLogger(__name__)
 # les méthodes d'écriture utilisent l'instance (pour le manifest_service)
 _plugin_service = PluginManagerService()
 _dependency_service = PluginDependencyService()
+_lifecycle_service = PluginLifecycleService()
 
 
 @router.get(
@@ -434,3 +437,102 @@ async def get_plugin_dependencies(
         conflicts=conflicts_names,
         dependents=dependents,
     )
+
+
+# ── GET /plugins/{plugin_id}/hooks/logs ──────────────────────────────────────
+
+
+@router.get(
+    "/{plugin_id}/hooks/logs",
+    response_model=List[HookLogSummaryResponse],
+    summary="Logs d'exécution des hooks d'un plugin",
+    description="Retourne la liste paginée des logs d'exécution des hooks lifecycle pour un plugin.",
+    responses={
+        200: {"description": "Liste des logs de hooks"},
+        401: {"description": "Authentification requise"},
+        403: {"description": "Accès interdit (plugin d'une autre organisation)"},
+        404: {"description": "Plugin non trouvé"},
+    },
+)
+async def get_hook_logs(
+    plugin_id: str,
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+    _rate_limit=Depends(conditional_rate_limiter(100, 60)),
+) -> List[HookLogSummaryResponse]:
+    """Liste les logs d'exécution des hooks pour un plugin."""
+    logger.info(
+        "get_hook_logs",
+        extra={
+            "plugin_id": plugin_id,
+            "user_id": current_user.id,
+            "skip": skip,
+            "limit": limit,
+        },
+    )
+    plugin = await PluginManagerService.get_plugin(db, plugin_id)
+    if not plugin:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plugin non trouvé : {plugin_id}",
+        )
+    if plugin.organization_id != current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès interdit : ce plugin appartient à une autre organisation",
+        )
+
+    logs = await PluginLifecycleService.list_hook_logs(db, plugin_id, skip, limit)
+    return [HookLogSummaryResponse.model_validate(log) for log in logs]
+
+
+@router.get(
+    "/{plugin_id}/hooks/logs/{log_id}",
+    response_model=HookLogResponse,
+    summary="Détail d'un log d'exécution de hook",
+    description="Retourne le détail complet d'un log d'exécution de hook, incluant stdout et stderr.",
+    responses={
+        200: {"description": "Détail du log de hook"},
+        401: {"description": "Authentification requise"},
+        403: {"description": "Accès interdit (plugin d'une autre organisation)"},
+        404: {"description": "Plugin ou log non trouvé"},
+    },
+)
+async def get_hook_log_detail(
+    plugin_id: str,
+    log_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+    _rate_limit=Depends(conditional_rate_limiter(100, 60)),
+) -> HookLogResponse:
+    """Récupère le détail d'un log d'exécution de hook."""
+    logger.info(
+        "get_hook_log_detail",
+        extra={
+            "plugin_id": plugin_id,
+            "log_id": log_id,
+            "user_id": current_user.id,
+        },
+    )
+    plugin = await PluginManagerService.get_plugin(db, plugin_id)
+    if not plugin:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plugin non trouvé : {plugin_id}",
+        )
+    if plugin.organization_id != current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès interdit : ce plugin appartient à une autre organisation",
+        )
+
+    log = await PluginLifecycleService.get_hook_log(db, log_id)
+    if not log or log.plugin_id != plugin_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Log de hook non trouvé : {log_id}",
+        )
+
+    return HookLogResponse.model_validate(log)

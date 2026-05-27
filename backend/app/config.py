@@ -242,6 +242,12 @@ class Settings(BaseSettings):
         description="Timeout HTTP pour fetch l'index du registre en secondes",
     )
 
+    # === Plugins Hooks ===
+    plugins_base_dir: str = Field(
+        default="./data/plugins/",
+        description="Répertoire de base pour la résolution des chemins de scripts hooks des plugins",
+    )
+
     # Mode développement sans authentification
     # ⚠️ DANGER : Ne JAMAIS activer en production !
     # Utilise automatiquement le premier utilisateur superadmin trouvé en base
