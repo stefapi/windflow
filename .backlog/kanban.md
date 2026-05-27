@@ -5,7 +5,9 @@
 ### EPIC-001 : Système de Plugins & Marketplace
 - [ ] STORY-004 : Vérification compatibilité architecture (arm64/amd64) et ressources
 - [ ] STORY-005 : Configuration plugin depuis l'UI (formulaires dynamiques générés depuis manifest)
-- [ ] STORY-006 : Hooks lifecycle plugins (on_install, on_configure, on_start, on_stop, on_uninstall)
+- [~] STORY-006 : Hooks lifecycle plugins (on_install, on_configure, on_start, on_stop, on_uninstall)
+  - [~] STORY-006.1 : Backend — Service d'exécution des hooks lifecycle
+  - [ ] STORY-006.2 : Frontend — UI d'affichage des logs d'exécution des hooks
 - [ ] STORY-007 : Support 3 types de plugins (service, extension, hybrid)
 - [ ] STORY-008 : API Marketplace — catalogue, recherche, filtres par catégorie
 - [ ] STORY-009 : UI Marketplace — catalogue browsable avec fiches plugin
@@ -21,7 +23,7 @@
 
 ## 🏗️ IN PROGRESS
 
-_(vide)_
+- [~] STORY-006.1 : Backend — Service d'exécution des hooks lifecycle
 
 ## 🚫 BLOCKED
 

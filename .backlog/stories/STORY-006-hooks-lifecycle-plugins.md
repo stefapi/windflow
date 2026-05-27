@@ -1,6 +1,6 @@
 # STORY-006 : Hooks lifecycle plugins (on_install, on_configure, on_start, on_stop, on_uninstall)
 
-**Statut :** TODO
+**Statut :** IN_PROGRESS
 **Epic Parent :** EPIC-001 — Système de Plugins & Marketplace
 
 ## Description
@@ -16,15 +16,28 @@ Les hooks lifecycle permettent aux plugins d'exécuter des actions spécifiques 
 - [ ] AC 3 : Les logs d'exécution des hooks sont capturés et accessibles via l'API et l'UI
 - [ ] AC 4 : Build/lint/tests passent avec couverture ≥ 80%
 
+## Sous-stories
+- [ ] STORY-006.1 : Backend — Service d'exécution des hooks lifecycle — Couvre AC 1, AC 2, AC 4
+- [ ] STORY-006.2 : Frontend — UI d'affichage des logs d'exécution des hooks — Couvre AC 3
+
 ## Dépendances
 - STORY-001 : Format manifest YAML (spécification + validation Pydantic)
 - STORY-002 : API REST Plugin Manager — CRUD plugins
 
-## État d'avancement technique
-<!-- Rempli par analyse-story -->
-
 ## Tâches d'implémentation détaillées
-<!-- Rempli par analyse-story -->
+
+> ⚠️ Cette story a été découpée en sous-stories avant implémentation (complexité détectée par analyse-story).
+> Toutes les tâches ont été redistribuées dans les sous-stories listées ci-dessus.
+> Consulter chaque sous-story pour les tâches détaillées.
 
 ## Tests à écrire
-<!-- Rempli par analyse-story -->
+
+> ⚠️ Les tests sont désormais définis dans les sous-stories individuelles.
+
+## État d'avancement technique
+
+> ⚠️ L'avancement technique est désormais suivi dans les sous-stories individuelles.
+
+**Progression :** 0/2 sous-stories terminées
+- [ ] STORY-006.1 : Backend — Service d'exécution des hooks lifecycle
+- [ ] STORY-006.2 : Frontend — UI d'affichage des logs d'exécution des hooks
