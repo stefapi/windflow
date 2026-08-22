@@ -4,7 +4,7 @@
 
 ## Vue d'ensemble
 
-Ce chapitre décrit le **modèle directeur** de WindFlow : trois familles de workloads (Apps, Machines, Hosts), une grammaire UI partagée, et le pattern `WorkloadAdapter` qui traduit des verbes universels en opérations natives par profil technique. Tous les autres chapitres de cette spec sont écrits dans ce paradigme. Ce chapitre ne couvre pas la vue Compute par technologie (chapitre 03), le schéma de données (chapitre 06), la surface API (chapitre 09) ni la marketplace (chapitre 12) — il y renvoie.
+Ce chapitre décrit le **modèle directeur** de WindFlow : trois familles de workloads (Apps, Machines, Hosts), une entité **Cluster** de premier rang qui fédère des Hosts et des Machines en grappes multi-nœuds (Kubernetes, Proxmox, Swarm), une grammaire UI partagée, et le pattern `WorkloadAdapter` qui traduit des verbes universels en opérations natives par profil technique. Tous les autres chapitres de cette spec sont écrits dans ce paradigme. Ce chapitre ne couvre pas la vue Compute par technologie (chapitre 03), le schéma de données (chapitre 06), la surface API (chapitre 09) ni la marketplace (chapitre 12) — il y renvoie.
 
 ## Le principe à trois familles
 
@@ -57,31 +57,58 @@ Toute machine physique ou virtuelle sur laquelle WindFlow agit pour déployer Ap
 
 Profils inclus :
 - `host_baremetal` — machine physique sur laquelle WindFlow tourne ou qu'il pilote via SSH
-- `host_proxmox` — serveur ou cluster Proxmox VE accessible via son API
-- `host_kubernetes` — cluster Kubernetes (k8s, k3s, microk8s) accessible via kubeconfig
+- `host_proxmox` — **serveur Proxmox VE isolé** accessible via son API (voir l'arbitrage ci-dessous)
 - `host_remote_docker` — daemon Docker distant accessible via SSH
 
-Un Host est différent d'une App ou d'une Machine parce qu'il **n'est pas déployé** par WindFlow — il est **adopté** au moment où il est ajouté. Une fois adopté, on peut y déployer des Apps et y créer des Machines. Proxmox n'est pas un backend de VM parmi d'autres : c'est un **profil de Host** ; les VMs qu'il héberge sont des Machines standard pilotées via le Host `host_proxmox`.
+Un Host est différent d'une App ou d'une Machine parce qu'il **n'est pas déployé** par WindFlow — il est **adopté** au moment où il est ajouté. Une fois adopté, on peut y déployer des Apps et y créer des Machines. Les Hosts redeviennent **strictement des substrats** : chaque profil désigne une machine individuelle (physique, VM ou serveur hyperviseur isolé), jamais une grappe multi-nœuds — ce rôle est celui de l'entité **Cluster**.
+
+**Arbitrage Proxmox.** Le profil `host_proxmox` désigne désormais un **serveur Proxmox VE isolé** (un seul nœud piloté via son API). Un **cluster Proxmox** (plusieurs nœuds, quorum corosync) est représenté par une entité **Cluster** de type `proxmox` dont les nœuds sont des membres — cohérent avec la suppression du profil `host_kubernetes` : un Kubernetes multi-nœuds n'est plus un Host, un Proxmox multi-nœuds n'en est plus un non plus. Les VMs et LXC restent dans tous les cas des Machines standard, hébergées par leur nœud physique (`machines.host_id`) — que ce nœud soit un Host isolé ou un membre d'un Cluster Proxmox.
+
+**Arbitrage Kubernetes (historique).** L'ancien profil `host_kubernetes` est **supprimé** : un cluster Kubernetes (k8s, k3s, microk8s) est désormais exclusivement une entité **Cluster** de type `kubernetes` (connexion par kubeconfig). Les profils de Hosts sont au nombre de trois : `host_baremetal`, `host_proxmox`, `host_remote_docker`.
+
+### L'entité Cluster — grappe multi-nœuds de premier rang
+
+#### Définition
+
+Un **Cluster** est une entité de premier rang, aux côtés des familles Apps, Machines et Hosts : une grappe **multi-nœuds** pilotée par une API de cluster propre — et pas seulement par SSH hôte par hôte. Un Cluster est **constitué** de membres (des Hosts et/ou des Machines) et **héberge** des Apps.
+
+Types de Cluster (`type`) :
+- `kubernetes` — cluster Kubernetes (k8s, k3s, microk8s), connexion via **kubeconfig** ; rôles de membres `control-plane` / `worker` ;
+- `proxmox` — cluster Proxmox VE (quorum corosync), connexion via **l'API du cluster** ; rôle de membre `member` ;
+- `docker_swarm` — Swarm (managers/workers), connexion via le **socket/API Docker** ; rôles de membres `manager` (variante de `control-plane`) / `worker`.
+
+Sémantique canonique : **un Cluster est constitué de membres, il héberge des Apps.** L'appartenance cluster (`cluster_members`) est une relation **orthogonale** à l'hébergement physique : un nœud k3s virtualisé reste une Machine **hébergée par** son Host Proxmox (`machines.host_id`) **et** **membre d'un** Cluster kubernetes — la chaîne complète `Host → Machine (nœud) → Cluster → App` est désormais représentable. Un Cluster n'est pas déployé par WindFlow : comme un Host, il est **adopté** (ou créé et managé via WindFlow pour ses composants), et porte une **origine** `managed` / `adopted` / `external` (chapitre 03).
+
+#### Ce qu'un Cluster n'est pas
+
+- Un Cluster **n'est pas** un Host : il n'a pas de SSH unique, pas de hardware propre — ses métriques sont **agrégées** depuis ses membres, son hardware est l'union de ceux des membres.
+- Un Cluster **n'est pas** une stack : une stack regroupe des objets Compute managés **par WindFlow** (chapitre 03) ; un Cluster est une entité d'infrastructure, qui peut exister indépendamment de tout déploiement WindFlow (origine `external`).
+- En **Mode App**, un Cluster n'apparaît pas comme terme technique : les Apps hébergées par un cluster restent des Apps normales dans la liste Apps ; le Cluster est visible en Mode App comme objet d'infrastructure (liste Clusters), mais sans exposer pods, namespaces ni kubeconfig.
 
 ### La hiérarchie
 
-### Diagramme — Hiérarchie d'hébergement Host → Apps + Machines
+### Diagramme — Hiérarchie d'hébergement et d'appartenance
 
 ```mermaid
 flowchart TB
-    Host["Host - substrat: RPi 4 / nas-server / Proxmox-home / k3s-cluster"]
+    Host["Host - substrat: RPi 4 / nas-server / prox-home"]
     Sys["Services système du Host: nginx.service, postgresql.service, samba.service"]
-    Apps["Apps container-based: nextcloud en compose, monitoring en helm, pihole en docker"]
+    Apps["Apps container-based: nextcloud en compose, pihole en docker"]
     Machines["Machines VM-based: ubuntu-dev en KVM, pfsense-router en KVM, k3s-node-1 en LXC"]
     AppsInVM["Apps dans la Machine ubuntu-dev: dev-postgres, dev-redis - docker daemon dans la VM"]
+    Cluster["Cluster kubernetes 'k3s-cluster' - type: kubernetes, connexion kubeconfig"]
+    ClusterMembers["Membres: k3s-node-1 (Machine, worker), k3s-node-2 (Machine, worker), pi4-home (Host, control-plane)"]
+    AppsInCluster["Apps hébergées par le Cluster: web (helm_release), cert-manager (k8s_manifest)"]
 
     Host --- Sys
     Host -- "héberge (1..*)" --> Apps
     Host -- "héberge (1..*)" --> Machines
     Machines -- "héberge (0..*)" --> AppsInVM
+    Cluster -- "constitué de (0..*)" --> ClusterMembers
+    Cluster -- "héberge (1..*) App cluster-scoped" --> AppsInCluster
 ```
 
-La règle d'hébergement canonique est : une **Machine** est hébergée par un et un seul **Host** ; une **App** est hébergée par un et un seul hôte, qui est soit un **Host**, soit une **Machine** — exactement un des deux. Un Host peut héberger une ou plusieurs Machines et/ou Apps ; une Machine peut héberger une ou plusieurs Apps. Deux cas d'usage canoniques : le conteneur posé directement sur une machine physique (App → Host) et le conteneur dans un Docker daemon tournant **dans** une VM (App → Machine, chaîne `Host → Machine → App`). La règle complète est détaillée en section [Hiérarchie d'hébergement](#hiérarchie-dhébergement). Les services système (systemd sur le Host) sont gérés **dans le détail du Host**, pas dans une famille à part. Ils peuvent être adoptés comme Apps avec le profil `app_native_service` pour apparaître dans la liste Apps (voir [Services système](#services-système--mode-adoption)).
+La règle d'hébergement canonique est : une **Machine** est hébergée par un et un seul **Host** ; une **App** est hébergée par un et un seul hôte, qui est un **Host**, une **Machine** **ou un Cluster** — exactement un des trois. Un Host peut héberger une ou plusieurs Machines et/ou Apps ; une Machine peut héberger une ou plusieurs Apps ; un Cluster héberge les Apps *cluster-scoped* (helm_release, k8s_manifest — chapitre 03). Indépendamment, un Host ou une Machine peut être **membre d'au plus un Cluster** (`cluster_members`) — l'appartenance est orthogonale à l'hébergement. Cas d'usage canoniques : le conteneur posé directement sur une machine physique (App → Host), le conteneur dans un Docker daemon tournant **dans** une VM (App → Machine, chaîne `Host → Machine → App`), et la release Helm posée sur un cluster k8s multi-nœuds (App → Cluster, avec `Host → Machine nœud → Cluster` pour la chaîne physique). La règle complète est détaillée en section [Hiérarchie d'hébergement](#hiérarchie-dhébergement). Les services système (systemd sur le Host) sont gérés **dans le détail du Host**, pas dans une famille à part. Ils peuvent être adoptés comme Apps avec le profil `app_native_service` pour apparaître dans la liste Apps (voir [Services système](#services-système--mode-adoption)).
 
 ## La grammaire UI partagée
 
@@ -117,6 +144,9 @@ Chaque famille a son propre jeu de 5 verbes canoniques :
 | **Apps** | `[🔗 Ouvrir]` `[⏵ Lifecycle ▾]` `[📋 Logs]` `[🖥 Console]` `[⚙ Config]` `[⋯ Plus]` |
 | **Machines** | `[🔗 Ouvrir]` `[⏵ Power ▾]` `[📸 Snapshot]` `[🖥 Console VNC]` `[⚙ Hardware]` `[⋯ Plus]` |
 | **Hosts** | `[🖥 SSH]` `[📊 Métriques]` `[📋 journalctl]` `[📦 Packages]` `[⚙ Config]` `[⋯ Plus]` |
+| **Clusters** | `[🔗 Ouvrir dashboard]` `[📊 Santé]` `[📋 Events]` `[🖥 Console nœud ▾]` `[⚙ Config]` `[⋯ Plus]` |
+
+`[🔗 Ouvrir dashboard]` ouvre l'UI web du Cluster si elle existe (dashboards Kubernetes, UI Proxmox, port Swarm) ; `[🖥 Console nœud ▾]` propose la console (SSH/kubectl) de chaque membre.
 
 Le bouton `[⏵]` est un split-button dans les deux premières familles :
 - Apps : `Start / Stop / Restart / Pause`
@@ -133,6 +163,8 @@ Chaque famille a son ensemble d'onglets canoniques, dans un ordre cohérent (Ape
 **Onglets Machines** — `Aperçu | Console VNC | Métriques | Disques | Réseau | Snapshots | Hardware` — plus l'onglet conditionnel `Apps hébergées` (uniquement si un moteur container est détecté dans la Machine) ; plus en Mode Infra : `Définition libvirt (XML)`.
 
 **Onglets Hosts** — `Aperçu | Apps déployées | Machines hébergées | Services système | Métriques | Stockage | Réseau | Config` — plus en Mode Infra : `Moteurs installés | Scan & Diagnostics`.
+
+**Onglets Clusters** — `Aperçu | Nœuds & Membres | Santé | Workloads hébergés | Config` — plus en Mode Infra : `K8s : Namespaces & Events | Scan & Diagnostics`. « Nœuds & Membres » liste les membres avec leur rôle (`control-plane`/`worker`/`member`), labels/taints et nœud physique correspondant ; « Santé » agrège disponibilité, versions et métriques des membres ; « Workloads hébergés » liste les Apps hébergées par le Cluster.
 
 ### Menus contextuels (identiques pour les trois familles)
 
@@ -394,18 +426,20 @@ Cinq verbes définissent l'expérience Host. Vocabulaire d'**administration**, p
 
 **Différences sémantiques notables avec Apps/Machines :**
 - Pas de cycle de vie universel — un Host n'a pas d'état « running » géré par WindFlow. L'action `Reboot` est dans `[⋯ Plus]`.
-- Pas de « Snapshot » universel — un Host n'a pas de mécanisme natif de snapshot complet (les Hosts Proxmox/k8s peuvent en avoir, mais c'est spécifique à l'adapter).
+- Pas de « Snapshot » universel — un Host n'a pas de mécanisme natif de snapshot complet (les nœuds Proxmox peuvent en avoir, mais c'est spécifique à l'adapter ; au niveau grappe, c'est une action Avancé du Cluster).
 - Pas de « Mettre à jour » comme bouton de barre — l'update OS du Host est dans `[⋯ Plus]`, marqué `danger=True` (peut nécessiter un reboot).
 
 ### Mapping par profil Host
 
-| Verbe | host_baremetal (SSH) | host_proxmox | host_kubernetes | host_remote_docker |
-|-------|------------------------|---------------|------------------|---------------------|
-| SSH | session SSH directe | session SSH au node | kubectl exec sur node ou `kubectl debug` | session SSH au daemon |
-| Métriques | parse `/proc`, `node_exporter` | API Proxmox `/nodes/.../status` | `kubectl top nodes` + metrics-server | docker stats agrégé |
-| journalctl | `journalctl` via SSH | API Proxmox tasks/syslog | `kubectl logs -n kube-system` | `journalctl` via SSH |
-| Packages | apt/yum/apk via SSH | apt sur le node Proxmox | (limité à `kubectl get nodes -o wide`) | apt via SSH |
-| Configuration | edit `/etc/network/...`, hostname | API Proxmox node config | kubeconfig, taints, labels | docker daemon.json |
+| Verbe | host_baremetal (SSH) | host_proxmox | host_remote_docker |
+|-------|------------------------|---------------|---------------------|
+| SSH | session SSH directe | session SSH au node | session SSH au daemon |
+| Métriques | parse `/proc`, `node_exporter` | API Proxmox `/nodes/.../status` | docker stats agrégé |
+| journalctl | `journalctl` via SSH | API Proxmox tasks/syslog | `journalctl` via SSH |
+| Packages | apt/yum/apk via SSH | apt sur le node Proxmox | apt via SSH |
+| Configuration | edit `/etc/network/...`, hostname | API Proxmox node config | docker daemon.json |
+
+Les opérations *cluster-scoped* (kubeconfig, `kubectl top nodes`, labels/taints de nœuds, events, `helm list`…) ne sont plus des verbes de Host : elles relèvent de l'adapter du **Cluster** (voir [Famille Clusters](#famille-clusters)).
 
 ### Hiérarchie des adapters Host
 
@@ -435,7 +469,6 @@ class HostAdapter(WorkloadAdapter):
 # Implémentations concrètes par profil
 class BaremetalHostAdapter(HostAdapter): ...      # host_baremetal
 class ProxmoxHostAdapter(HostAdapter): ...        # host_proxmox
-class KubernetesHostAdapter(HostAdapter): ...     # host_kubernetes
 class RemoteDockerHostAdapter(HostAdapter): ...   # host_remote_docker
 ```
 
@@ -468,21 +501,89 @@ class NativeServiceAdapter(AppAdapter):
 
 L'adoption demande à l'utilisateur quelques métadonnées (icône, nom affiché, URL d'ouverture si applicable). C'est l'équivalent de l'adoption Discovered → Managed décrite au chapitre 03 *Modèle Compute* ([03-modele-compute.md](03-modele-compute.md)).
 
+## Famille Clusters
+
+L'entité **Cluster** (définie en [L'entité Cluster — grappe multi-nœuds de premier rang](#lentité-cluster--grappe-multi-nœuds-de-premier-rang)) suit la même grammaire UI que les familles : squelette de page invariant, action bar canonique, onglets canoniques, menu `[⋯ Plus]` à cinq sections. Les trois types (`kubernetes`, `proxmox`, `docker_swarm`) sont traités **uniformément** — seules les traductions natives du profil changent.
+
+### Verbes universels (Clusters)
+
+Cinq verbes définissent l'expérience Cluster. Vocabulaire d'**administration de grappe**.
+
+| Verbe | Sémantique Cluster |
+|-------|--------------------|
+| **Ouvrir dashboard** | Ouvre l'UI web native du Cluster si disponible (dashboard k8s, UI Proxmox, port Swarm) |
+| **Santé** | Vue agrégée : disponibilité des membres, versions, quorum, nœuds notReady |
+| **Events** | Flux des événements du Cluster (events k8s, tâches Proxmox, events Swarm) |
+| **Console nœud ▾** | Ouvre la console d'un membre choisi (SSH au membre, ou `kubectl debug` sur un nœud k8s) |
+| **Configuration** | Connexion (kubeconfig, API endpoint, socket Swarm), labels/taints par membre |
+
+Comme pour les Hosts, pas de cycle de vie universel — un Cluster n'a pas d'état « off » géré depuis WindFlow. Les opérations de maintenance (drain d'un nœud, ajout/retrait d'un membre) sont dans `[⋯ Plus]`, section « Avancé ».
+
+### Mapping par type de Cluster
+
+| Verbe | kubernetes | proxmox | docker_swarm |
+|-------|------------|---------|--------------|
+| Dashboard | dashboard k8s (si déployé) | UI web Proxmox du quorum | port du manager Swarm |
+| Santé | `kubectl get nodes` + quorum + versions | quorum corosync + tâches | `docker node ls` |
+| Events | `kubectl get events` | API Proxmox tasks | events Swarm |
+| Console nœud | `kubectl debug` / SSH au membre | console VNC/SSH du nœud | SSH au membre |
+| Configuration | kubeconfig, labels/taints | tokens API du cluster | socket/API + TLS |
+
+### Hiérarchie des adapters Cluster
+
+Exemple illustratif — spécialisations de `ClusterAdapter` :
+
+```python
+class ClusterAdapter(WorkloadAdapter):
+    """Entité Cluster — sémantique de grappe multi-nœuds."""
+
+    @abstractmethod
+    async def list_members(self) -> list[ClusterMember]:
+        """Membres avec rôle (control-plane | worker | member) et santé."""
+        ...
+
+    @abstractmethod
+    async def get_aggregated_metrics(self) -> WorkloadMetrics:
+        """Agrégation des métriques des membres (CPU, RAM, pods…)."""
+        ...
+
+    @abstractmethod
+    async def list_apps_hosted(self) -> list[App]:
+        """Apps hébergées par le Cluster (helm_release, k8s_manifest, stacks Swarm)."""
+        ...
+
+# Implémentations concrètes par type
+class KubernetesClusterAdapter(ClusterAdapter): ...   # type kubernetes (kubeconfig)
+class ProxmoxClusterAdapter(ClusterAdapter): ...      # type proxmox (API cluster)
+class SwarmClusterAdapter(ClusterAdapter): ...        # type docker_swarm (socket/API)
+```
+
+### Catalogue des ContextualActions par type de Cluster
+
+| Section | Contenu |
+|---------|---------|
+| Cycle de vie | (aucun — pas de lifecycle universel ; `Reboot d'un membre` possible en Avancé) |
+| Configuration | Éditer la connexion (kubeconfig/API/socket), gérer labels & taints (kubernetes) |
+| Données | Export inventory, Backup de la configuration du Cluster |
+| Avancé (type) | kubernetes : drain/uncordon un nœud, `helm list`, namespaces ; proxmox : tâches du cluster, migration de VMs entre nœuds ; docker_swarm : `node promote/demote`, `stack ls` |
+| Dangereux | Retirer du suivi WindFlow (ne supprime pas le Cluster, juste la connexion) |
+
 ## Interface WorkloadAdapter
 
-L'interface abstraite est commune aux trois familles, avec des spécialisations par famille (voir ci-dessus). Exemple illustratif — base commune :
+L'interface abstraite est commune aux trois familles et à l'entité Cluster, avec des spécialisations (voir ci-dessus). Exemple illustratif — base commune :
 
 ```python
 class WorkloadFamily(str, Enum):
     APP = "app"
     MACHINE = "machine"
     HOST = "host"
+    CLUSTER = "cluster"
 
 class WorkloadAdapter(ABC):
-    """Base commune aux trois familles — toutes les méthodes sont abstraites."""
+    """Base commune aux trois familles et à l'entité Cluster — méthodes abstraites."""
 
     # ─── Identité ─────────────────────────────────────────────
-    def family(self) -> WorkloadFamily: ...       # APP | MACHINE | HOST
+    def family(self) -> WorkloadFamily: ...       # APP | MACHINE | HOST | CLUSTER
     def profile(self) -> str: ...                 # ex. docker_compose, vm_kvm, host_proxmox
     def profile_label(self) -> str: ...           # libellé affiché en Mode Infra
 
@@ -499,7 +600,7 @@ class WorkloadAdapter(ABC):
     async def get_technical_components(self) -> list[TechnicalComponent]: ...
 ```
 
-Les spécialisations ajoutent les verbes propres à chaque famille : `start/stop/restart/update/backup/configure/stream_logs/open_console` pour `AppAdapter` ; `power_on/power_off/reboot/pause/suspend/take_snapshot/restore_snapshot/get_hardware/set_hardware/open_vnc/open_serial/backup_disk/list_apps_hosted` pour `MachineAdapter` ; `open_ssh/get_hardware_info/list_engines/list_apps_hosted/list_machines_hosted/list_system_services/install_package/reboot/update_os/stream_journal` pour `HostAdapter`.
+Les spécialisations ajoutent les verbes propres à chaque famille : `start/stop/restart/update/backup/configure/stream_logs/open_console` pour `AppAdapter` ; `power_on/power_off/reboot/pause/suspend/take_snapshot/restore_snapshot/get_hardware/set_hardware/open_vnc/open_serial/backup_disk/list_apps_hosted` pour `MachineAdapter` ; `open_ssh/get_hardware_info/list_engines/list_apps_hosted/list_machines_hosted/list_system_services/install_package/reboot/update_os/stream_journal` pour `HostAdapter` ; `list_members/get_aggregated_metrics/list_apps_hosted` pour `ClusterAdapter`.
 
 Le contrat complet (types de retour, sémantique des erreurs) est spécifié au chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md) pour les entités et [09-api.md](09-api.md) pour l'exposition REST des verbes.
 
@@ -544,6 +645,7 @@ WindFlow propose deux niveaux de lecture de la même infrastructure : le **Mode 
 │  📱  Apps                │  ← profil révélé dans le header
 │  🖥️  Machines           │
 │  🖧  Hosts               │
+│  ⎈  Clusters            │  ← entité Cluster (Mode Infra uniquement)
 │                          │
 │  🏪  Marketplace         │
 │  🔌  Plugins             │
@@ -570,11 +672,12 @@ La vue **Compute** (chapitre 03 *Modèle Compute*, [03-modele-compute.md](03-mod
 
 ### Mode Infra ciblé (par workload)
 
-Le toggle `[🔧 Voir les composants techniques]` dans le menu `[⋯ Plus]` d'un workload bascule **uniquement cette page** en Mode Infra. Disponible pour les trois familles :
+Le toggle `[🔧 Voir les composants techniques]` dans le menu `[⋯ Plus]` d'un workload bascule **uniquement cette page** en Mode Infra. Disponible pour les trois familles et l'entité Cluster :
 
 - **App** → ajoute les onglets « Composants techniques » (workloads K8s, services Compose) et « Manifest »
 - **Machine** → ajoute l'onglet « Définition libvirt (XML) » et révèle l'hyperviseur exact
 - **Host** → ajoute les onglets « Moteurs installés » et « Scan & Diagnostics »
+- **Cluster** → ajoute les onglets « Namespaces & Events » (type kubernetes) et « Scan & Diagnostics »
 
 ## Hiérarchie d'hébergement
 
@@ -583,41 +686,55 @@ Le toggle `[🔧 Voir les composants techniques]` dans le menu `[⋯ Plus]` d'un
 Règle canonique (une seule, sans exception) :
 
 - Une **Machine** est hébergée par **un et un seul Host** (`machines.host_id` obligatoire, chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)).
-- Une **App** est hébergée par **un et un seul hôte**, qui est soit un **Host**, soit une **Machine** : exactement un des deux, jamais aucun, jamais les deux (`apps.host_id` XOR `apps.machine_id`).
+- Une **App** est hébergée par **un et un seul hôte**, qui est un **Host**, une **Machine** ou un **Cluster** : exactement un des trois, jamais aucun, jamais deux (`apps.host_id` XOR `apps.machine_id` XOR `apps.cluster_id`).
 - Un **Host** peut héberger une ou plusieurs Machines et/ou Apps (cardinalité `1..*` côté hôte).
 - Une **Machine** peut héberger une ou plusieurs Apps (cardinalité `1..*` côté hôte).
+- Un **Cluster** héberge les Apps *cluster-scoped* — profils `helm_release` et `k8s_manifest`, stacks Docker en Swarm — avec la cardinalité `0..*`.
 
 Cas d'usage canoniques :
 
 - **Conteneur sur machine physique** — l'App est posée directement sur le Host (ex. `pihole` sur `nas-server`) → `apps.host_id`.
 - **Conteneur dans une VM** — le Docker daemon tourne **dans** une Machine (ex. `dev-postgres` dans la VM `ubuntu-dev`) → `apps.machine_id`. La chaîne d'hébergement complète est alors `Host → Machine → App`.
+- **Release Helm sur un cluster** — l'App est déployée via l'API du Cluster (ex. `web` en `helm_release` sur `k3s-cluster`) → `apps.cluster_id`. Les nœuds du cluster sont des **membres** (voir ci-dessous), pas des hébergeurs de l'App ; un nœud virtualisé reste une Machine hébergée par son Host physique.
 
 La profondeur d'imbrication s'arrête à un niveau : une Machine n'héberge jamais une autre Machine. La virtualisation imbriquée (VM dans VM) se représente par l'identité duale « Machine-as-Host » (chapitre [14-ui-maquettes.md](14-ui-maquettes.md), Écran 12) : la VM y est enregistrée comme Host **uniquement** pour héberger des Machines filles et pour l'administration — ses Apps restent rattachées à la Machine.
 
 Cette relation est exposée :
 
-- dans la card de l'App/Machine : `Sur : nas-server` (Host) ou `Sur : ubuntu-dev (Machine)` ;
+- dans la card de l'App/Machine : `Sur : nas-server` (Host), `Sur : ubuntu-dev (Machine)` ou `Sur : k3s-cluster (Cluster)` ;
 - dans le détail de l'App/Machine : header avec l'hôte cliquable ;
 - dans le détail du Host : onglets « Apps déployées » et « Machines hébergées » ;
-- dans le détail d'une Machine : onglet « Apps hébergées » (conditionnel — uniquement si un moteur container est détecté dans la Machine).
+- dans le détail d'une Machine : onglet « Apps hébergées » (conditionnel — uniquement si un moteur container est détecté dans la Machine) ;
+- dans le détail d'un Cluster : onglet « Workloads hébergés ».
+
+### Appartenance cluster (orthogonale à l'hébergement)
+
+L'appartenance à un Cluster est une relation **distincte** de l'hébergement, régie par sa propre règle :
+
+- Un **Host** ou une **Machine** peut être **membre d'au plus un Cluster** — un serveur ne participe pas à deux grappes simultanément (table `cluster_members`, chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)).
+- Un **Cluster** est constitué de zéro ou plusieurs membres (`0..*` — un cluster déclaré mais momentanément injoignable n'expose aucun membre résolu).
+- L'appartenance **ne remplace pas** l'hébergement physique : un nœud k3s en LXC sur Proxmox est une Machine **hébergée par** `prox-home` (Host) **et** **membre de** `k3s-cluster` (Cluster). Les deux relations coexistent et restent exploitables indépendamment (migrer la VM d'un Host à l'autre vs drain/retrait du nœud du cluster).
+- **Rôles de membre** : `control-plane` / `worker` pour `kubernetes` (Swarm : `manager` comme variante de `control-plane`) ; `member` pour `proxmox`. Les métadonnées k8s (labels, taints) sont portées par membre en JSON (`k8s_metadata`).
+
+Cette relation est exposée : dans la card d'une Machine/Host membre (note `💡 Membre du cluster k3s-cluster` avec lien vers le Cluster), dans le détail d'un Cluster (onglet « Nœuds & Membres ») et dans la vue par Host/topologie (chapitres [09-api.md](09-api.md) et [14-ui-maquettes.md](14-ui-maquettes.md)).
 
 ### Filtres et vues croisées
 
-La liste Apps a un filtre `Sur quel Host ?` qui cible l'hôte direct de l'App (Host ou Machine) ; le détail d'un Host expose en outre, dans son onglet « Apps déployées », les Apps hébergées par ses Machines. Idem pour la liste Machines. Inversement, depuis le détail d'un Host ou d'une Machine hôte, on accède directement aux Apps hébergées.
+La liste Apps a un filtre `Sur quel Host ?` qui cible l'hôte direct de l'App (Host, Machine ou Cluster) ; le détail d'un Host expose en outre, dans son onglet « Apps déployées », les Apps hébergées par ses Machines. Idem pour la liste Machines. Inversement, depuis le détail d'un Host, d'une Machine hôte ou d'un Cluster, on accède directement aux Apps hébergées.
 
 ### Migration entre hôtes
 
 Cas particuliers :
 - **Une App docker_container/docker_compose** peut être migrée vers un autre hôte Docker — Host ou Machine (export volumes + redéploiement).
-- **Une App helm_release** ne se « migre » pas (elle est liée au cluster k8s qui est un Host).
-- **Une Machine KVM** peut être migrée vers un autre Host KVM (live migration ou cold migration selon la configuration) ; ses Apps hébergées suivent la Machine.
+- **Une App helm_release/k8s_manifest** ne se « migre » pas d'un cluster à l'autre : elle est liée au Cluster qui l'héberge (`apps.cluster_id`). La réinstallation sur un autre Cluster passe par un nouveau déploiement (values et manifests réutilisables) ; en revanche, ses nœuds membres peuvent évoluer (drain, ajout, retrait) sans toucher à l'App.
+- **Une Machine KVM** peut être migrée vers un autre Host KVM (live migration ou cold migration selon la configuration) ; ses Apps hébergées suivent la Machine. Sur Proxmox, la migration d'une VM entre nœuds d'un même Cluster Proxmox est une action Avancé du Cluster.
 
 Ces opérations apparaissent dans `[⋯ Plus]`, section « Avancé ». Les dépendances logicielles (Docker, libvirt) requises côté hôte sont vérifiées avant migration via `list_engines`.
 
 ## Voir aussi
 
-- [06-modele-de-donnees.md](06-modele-de-donnees.md) — entités `App`, `Machine`, `Host`, profils et statuts en base
-- [09-api.md](09-api.md) — exposition REST des familles (`/apps`, `/machines`, `/hosts`) et de la vue Compute
+- [06-modele-de-donnees.md](06-modele-de-donnees.md) — entités `App`, `Machine`, `Host`, `Cluster`, profils et statuts en base
+- [09-api.md](09-api.md) — exposition REST des familles (`/apps`, `/machines`, `/hosts`, `/clusters`) et de la vue Compute
 - [../technical_specs/VIRTUALIZATION-SYSTEMS.md](../technical_specs/VIRTUALIZATION-SYSTEMS.md) — taxonomie complète des moteurs de virtualisation
 - [03-modele-compute.md](03-modele-compute.md) — taxonomie stack/discovered/standalone et vue Compute par technologie
 - [11-plugins.md](11-plugins.md) — système de plugins, transversal aux trois familles

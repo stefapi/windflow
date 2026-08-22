@@ -43,13 +43,13 @@ backends:
     available_for: [host_baremetal_with_docker, host_remote_docker]
     recommended: true
   - profile: helm_release
-    available_for: [host_kubernetes]
+    available_for: [cluster_kubernetes]
   - profile: docker_container
     available_for: [host_baremetal_with_docker]
     note: "Configuration minimale, pour tester"
 ```
 
-Exemple illustratif — une même App déployée selon le contexte : `nextcloud` en `docker_compose` sur `nas-server`, ou en `helm_release` sur le Host `k3s-cluster`. L'entrée d'origine est tracée par `marketplace_entry_id` (chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)).
+Exemple illustratif — une même App déployée selon le contexte : `nextcloud` en `docker_compose` sur `nas-server`, ou en `helm_release` sur le Cluster `k3s-cluster`. L'entrée d'origine est tracée par `marketplace_entry_id` (chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)).
 
 Les entrées Apps du catalogue officiel couvrent notamment : Nextcloud, Immich, Photoprism (cloud) ; Gitea, Forgejo (Git) ; Jellyfin, Plex (média) ; Home Assistant (domotique) ; WordPress, Ghost (CMS) ; Baserow, NocoDB, Metabase (data) ; Plausible, Matomo (analytics) ; Mattermost, Matrix/Element (communication). Chaque template embarque un docker-compose paramétré Jinja2, un schéma de configuration (wizard), des valeurs par défaut adaptées au profil de la machine, et des labels conditionnels pour les plugins installés (ex. labels Traefik).
 

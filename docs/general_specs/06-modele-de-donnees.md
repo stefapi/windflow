@@ -4,14 +4,14 @@
 
 ## Vue d'ensemble
 
-Ce chapitre spécifie le schéma de données de WindFlow : entités comptes/organisations, entités workloads (Apps, Machines, Hosts — issues du modèle directeur du chapitre 02), entités plugins et entités transverses (déploiements, audit, auth). Il couvre aussi la stratégie de migration `targets` → `hosts` et les règles de compatibilité PostgreSQL/SQLite. Les comportements métier (verbes, adoption, cycles de vie) sont définis aux chapitres 02 et 03 ; seul leur support persistant est décrit ici.
+Ce chapitre spécifie le schéma de données de WindFlow : entités comptes/organisations, entités workloads (Apps, Machines, Hosts — issues du modèle directeur du chapitre 02), entité **Cluster** et ses membres (`clusters`, `cluster_members`), entités plugins et entités transverses (déploiements, audit, auth). Il couvre aussi la stratégie de migration `targets` → `hosts` (et la transformation des anciens Hosts `host_kubernetes` en Clusters) ainsi que les règles de compatibilité PostgreSQL/SQLite. Les comportements métier (verbes, adoption, cycles de vie) sont définis aux chapitres 02 et 03 ; seul leur support persistant est décrit ici.
 
 ## Principes de conception
 
 - **Simplicité** : peu de tables, relations claires. Pas d'over-engineering relationnel.
 - **Compatibilité SQLite** : pas de types PostgreSQL spécifiques (CIDR, INET, arrays). Les types complexes utilisent JSON.
 - **Extensibilité via JSON** : les colonnes `configuration` et `metadata` en JSON permettent de stocker des données structurées sans migration pour chaque nouveau champ.
-- **Alignement familles** : les workloads sont persistés selon les trois familles du chapitre 02 — tables `apps`, `machines`, `hosts` distinctes, avec profils et statuts par famille.
+- **Alignement familles** : les workloads sont persistés selon les trois familles du chapitre 02 — tables `apps`, `machines`, `hosts` distinctes, avec profils et statuts par famille — et l'entité Cluster de premier rang dans `clusters` / `cluster_members`.
 - **Plugins séparés** : les plugins stockent leurs propres données dans des tables préfixées (`plugin_traefik_*`) ou dans la colonne JSON `metadata` de l'entité concernée. Le modèle core ne contient pas de tables pour le DNS, les domaines, les certificats, le monitoring, etc.
 
 ## Diagramme entité-relations
@@ -27,6 +27,10 @@ erDiagram
     Host ||--o{ App : "héberge (direct)"
     Host ||--o{ Machine : "héberge"
     Machine ||--o{ App : "héberge (dans la VM)"
+    Cluster ||--o{ App : "héberge (cluster-scoped)"
+    Cluster ||--o{ ClusterMember : "constitué de"
+    ClusterMember }o--|| Host : "membre (si Host)"
+    ClusterMember }o--|| Machine : "membre (si Machine)"
     Stack ||--o{ Deployment : "crée"
     Deployment ||--o{ DeploymentEvent : "génère"
     User ||--o{ APIKey : "possède"
@@ -91,8 +95,9 @@ erDiagram
         string name
         string profile
         string status
-        uuid host_id FK "si hébergement direct (XOR machine_id)"
-        uuid machine_id FK "si l'App tourne dans la Machine (XOR host_id)"
+        uuid host_id FK "si hébergement direct (XOR machine_id, cluster_id)"
+        uuid machine_id FK "si l'App tourne dans la Machine (XOR host_id, cluster_id)"
+        uuid cluster_id FK "si l'App est hébergée par un Cluster (XOR host_id, machine_id)"
         uuid organization_id FK
         uuid environment_id FK
         string domain
@@ -129,6 +134,30 @@ erDiagram
         int version
         string status
         timestamp created_at
+    }
+
+    Cluster {
+        uuid id PK
+        string name
+        string type "kubernetes | proxmox | docker_swarm"
+        string origin "managed | adopted | external"
+        string status
+        uuid organization_id FK
+        uuid environment_id FK
+        json connection_config "chiffré : kubeconfig, API, socket"
+        json aggregated_metrics "calculées depuis les membres"
+        timestamp last_scan_at
+        timestamp created_at
+    }
+
+    ClusterMember {
+        uuid id PK
+        uuid cluster_id FK
+        uuid host_id FK "nullable (XOR machine_id)"
+        uuid machine_id FK "nullable (XOR host_id)"
+        string role "control-plane | worker | member"
+        json k8s_metadata "labels, taints"
+        timestamp joined_at
     }
 
     Deployment {
@@ -227,7 +256,7 @@ erDiagram
 
 ## Entités workloads (familles)
 
-Les trois familles du chapitre 02 sont persistées dans trois tables distinctes. Chaque table porte le `profile` (sous-type technique) et un champ de statut propre à la famille.
+Les trois familles du chapitre 02 sont persistées dans trois tables distinctes. Chaque table porte le `profile` (sous-type technique) et un champ de statut propre à la famille. L'entité Cluster (premier rang, hors familles) est persistée dans `clusters` / `cluster_members` (section suivante).
 
 ### App — workload container-based
 
@@ -240,6 +269,7 @@ CREATE TABLE apps (
     profile VARCHAR(30) NOT NULL,                 -- docker_container, docker_compose, helm_release, k8s_manifest, app_native_service
     host_id TEXT REFERENCES hosts(id),            -- le Host qui l'héberge (hébergement direct)
     machine_id TEXT REFERENCES machines(id),      -- la Machine qui l'héberge (App dans le daemon Docker de la VM)
+    cluster_id TEXT REFERENCES clusters(id),      -- le Cluster qui l'héberge (App cluster-scoped : helm_release, k8s_manifest, stacks Swarm)
     organization_id TEXT NOT NULL REFERENCES organizations(id),
     environment_id TEXT REFERENCES environments(id),
     domain VARCHAR(255),                          -- domaine public si exposé
@@ -252,17 +282,21 @@ CREATE TABLE apps (
     origin VARCHAR(10) NOT NULL DEFAULT 'managed', -- origine : managed | adopted | external (matrice profil × origine, chapitre 03)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    -- Règle d'hébergement (chapitre 02) : exactement un des deux — host_id XOR machine_id
+    -- Règle d'hébergement (chapitre 02) : exactement un des trois —
+    -- host_id XOR machine_id XOR cluster_id (triple XOR)
     CHECK (
-        (host_id IS NOT NULL AND machine_id IS NULL)
-        OR (host_id IS NULL AND machine_id IS NOT NULL)
+        (CASE WHEN host_id    IS NOT NULL THEN 1 ELSE 0 END
+        + CASE WHEN machine_id IS NOT NULL THEN 1 ELSE 0 END
+        + CASE WHEN cluster_id IS NOT NULL THEN 1 ELSE 0 END) = 1
     ),
     UNIQUE(host_id, name),
-    UNIQUE(machine_id, name)
+    UNIQUE(machine_id, name),
+    UNIQUE(cluster_id, name)
 );
 
 CREATE INDEX idx_apps_host ON apps(host_id);
 CREATE INDEX idx_apps_machine ON apps(machine_id);
+CREATE INDEX idx_apps_cluster ON apps(cluster_id);
 CREATE INDEX idx_apps_origin ON apps(origin);
 CREATE INDEX idx_apps_status ON apps(status);
 ```
@@ -295,14 +329,14 @@ CREATE INDEX idx_machines_state ON machines(power_state);
 
 ### Host — substrat d'exécution
 
-La table `hosts` remplace l'ancienne table `targets` (voir [Migration de `targets` vers `hosts`](#migration-de-targets-vers-hosts)).
+La table `hosts` remplace l'ancienne table `targets` (voir [Migration de `targets` vers `hosts`](#migration-de-targets-vers-hosts)). Le profil `host_kubernetes` est **supprimé** — un cluster Kubernetes est une entité Cluster (table `clusters`) ; les anciens Hosts `host_kubernetes` sont transformés en Clusters (voir [Migration `host_kubernetes` → `clusters`](#migration-host_kubernetes--clusters)).
 
 ```sql
 CREATE TABLE hosts (
     id TEXT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     description TEXT,
-    profile VARCHAR(30) NOT NULL,                 -- host_baremetal, host_proxmox, host_kubernetes, host_remote_docker
+    profile VARCHAR(30) NOT NULL,                 -- host_baremetal, host_proxmox, host_remote_docker
     organization_id TEXT NOT NULL REFERENCES organizations(id),
     environment_id TEXT NOT NULL REFERENCES environments(id),
     connection_config TEXT DEFAULT '{}',          -- JSON chiffré : SSH config, API endpoint, kubeconfig
@@ -337,6 +371,68 @@ CREATE INDEX idx_hosts_status ON hosts(status);
 }
 ```
 
+## Entité Cluster (clusters et membres)
+
+L'entité **Cluster** (premier rang, chapitre 02) est persistée dans deux tables : `clusters` (la grappe) et `cluster_members` (l'appartenance des Hosts/Machines à un Cluster). Un Cluster héberge des Apps (`apps.cluster_id`, triple XOR ci-dessus) et est constitué de membres.
+
+### Cluster — grappe multi-nœuds
+
+```sql
+CREATE TABLE clusters (
+    id TEXT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    type VARCHAR(20) NOT NULL,                    -- kubernetes | proxmox | docker_swarm (enum ClusterType)
+    origin VARCHAR(10) NOT NULL DEFAULT 'adopted', -- managed | adopted | external (l'origine s'applique aux Clusters, chapitre 03)
+    organization_id TEXT NOT NULL REFERENCES organizations(id),
+    environment_id TEXT NOT NULL REFERENCES environments(id),
+    connection_config TEXT DEFAULT '{}',          -- JSON chiffré : kubeconfig (kubernetes), API endpoint + tokens (proxmox), socket/API + TLS (docker_swarm)
+    status VARCHAR(20) DEFAULT 'unknown',         -- healthy, degraded, unreachable, scanning (enum ClusterStatus)
+    aggregated_metrics TEXT DEFAULT '{}',         -- JSON calculé (jamais saisi) : CPU/RAM agrégés des membres, nombre de pods/namespaces
+    last_scan_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(environment_id, name)
+);
+
+CREATE INDEX idx_clusters_env ON clusters(environment_id);
+CREATE INDEX idx_clusters_type ON clusters(type);
+CREATE INDEX idx_clusters_status ON clusters(status);
+```
+
+Les métriques agrégées sont **calculées** à chaque scan depuis les membres (jamais saisies manuellement) — un Cluster n'a pas de hardware propre.
+
+### ClusterMember — appartenance Host/Machine à un Cluster
+
+```sql
+CREATE TABLE cluster_members (
+    id TEXT PRIMARY KEY,
+    cluster_id TEXT NOT NULL REFERENCES clusters(id) ON DELETE CASCADE,
+    host_id TEXT REFERENCES hosts(id),            -- le membre est un Host…
+    machine_id TEXT REFERENCES machines(id),      -- …ou une Machine : exactement un des deux (XOR)
+    role VARCHAR(20) NOT NULL DEFAULT 'member',   -- control-plane | worker | member (enum ClusterRole)
+    k8s_metadata TEXT DEFAULT '{}',               -- JSON : labels, taints k8s du nœud (vide pour proxmox/swarm)
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Règle d'appartenance (chapitre 02) : le membre est un Host OU une Machine, jamais les deux
+    CHECK (
+        (host_id IS NOT NULL AND machine_id IS NULL)
+        OR (host_id IS NULL AND machine_id IS NOT NULL)
+    ),
+    -- Un Host/une Machine est membre d'au plus un Cluster (règle d'appartenance, chapitre 02)
+    UNIQUE(host_id),
+    UNIQUE(machine_id),
+    UNIQUE(cluster_id, role, host_id, machine_id)
+);
+
+CREATE INDEX idx_cluster_members_cluster ON cluster_members(cluster_id);
+CREATE INDEX idx_cluster_members_host ON cluster_members(host_id);
+CREATE INDEX idx_cluster_members_machine ON cluster_members(machine_id);
+```
+
+**Formulation de la relation membre.** Le style « deux FK nullables avec XOR » (`host_id` / `machine_id`) est retenu : cohérent avec la règle d'hébergement des Apps (`apps.host_id` XOR `apps.machine_id`), il conserve les clés étrangères réelles et les `UNIQUE` par colonne (garantissant « au plus un cluster » par membre). Une variante d'implémentation polymorphe (`member_type` / `member_id`) est documentée comme option si l'appartenance devait s'étendre à d'autres entités — au prix de l'intégrité référentielle nativement garantie par les FK.
+
+L'appartenance est **orthogonale** à l'hébergement : une VM nœud conserve `machines.host_id` (hébergement physique par son Host Proxmox) et porte en plus sa ligne `cluster_members` (appartenance au Cluster kubernetes).
+
 ## Profils canoniques
 
 Les valeurs de `profile` sont des enums canoniques. `HostProfile` unifie les anciennes valeurs divergentes de `Target.type` (`local | ssh | proxmox`) : `local` et `ssh` deviennent `host_baremetal`, et le pilotage Docker distant devient `host_remote_docker`.
@@ -358,9 +454,18 @@ class MachineProfile(str, Enum):
 
 class HostProfile(str, Enum):
     HOST_BAREMETAL     = "host_baremetal"
-    HOST_PROXMOX       = "host_proxmox"
-    HOST_KUBERNETES    = "host_kubernetes"
+    HOST_PROXMOX       = "host_proxmox"       # serveur Proxmox VE isolé (un cluster Proxmox = entité Cluster)
     HOST_REMOTE_DOCKER = "host_remote_docker"
+
+class ClusterType(str, Enum):
+    KUBERNETES  = "kubernetes"   # k8s, k3s, microk8s — connexion kubeconfig
+    PROXMOX     = "proxmox"      # cluster Proxmox VE (quorum) — API du cluster
+    DOCKER_SWARM = "docker_swarm" # Swarm — socket/API Docker
+
+class ClusterRole(str, Enum):
+    CONTROL_PLANE = "control-plane"  # kubernetes ; « manager » pour Swarm (variante)
+    WORKER        = "worker"         # kubernetes, docker_swarm
+    MEMBER        = "member"         # proxmox (rôle par défaut des autres types)
 
 class WorkloadOrigin(str, Enum):
     MANAGED  = "managed"    # déployé par WindFlow
@@ -368,7 +473,9 @@ class WorkloadOrigin(str, Enum):
     EXTERNAL = "external"   # pré-existant, observé uniquement, jamais managé
 ```
 
-L'enum `WorkloadOrigin` porte l'**origine** d'un workload — deuxième axe de la matrice canonique « profil × origine » définie au chapitre [03-modele-compute.md](03-modele-compute.md). Il remplace l'ancien booléen `adopted_from_discovered` (voir [Rétro-compatibilité `adopted_from_discovered`](#rétro-compatibilité-adopted_from_discovered)).
+L'enum `WorkloadOrigin` porte l'**origine** d'un workload — deuxième axe de la matrice canonique « profil × origine » définie au chapitre [03-modele-compute.md](03-modele-compute.md). Il s'applique aux Apps, aux Machines **et aux Clusters** (`clusters.origin`). Il remplace l'ancien booléen `adopted_from_discovered` (voir [Rétro-compatibilité `adopted_from_discovered`](#rétro-compatibilité-adopted_from_discovered)).
+
+Le profil `host_kubernetes` est retiré de `HostProfile` : les grappes multi-nœuds sont typées par `ClusterType` sur l'entité Cluster, et les Hosts redeviennent strictement des substrats individuels (trois profils).
 
 ### Rétro-compatibilité `adopted_from_discovered`
 
@@ -408,19 +515,37 @@ class HostStatus(str, Enum):
     OFFLINE     = "offline"      # ⚪
     UNREACHABLE = "unreachable"  # 🔴
     SCANNING    = "scanning"     # 🔵
+
+class ClusterStatus(str, Enum):   # Clusters — santé de la grappe (quorum, membres notReady)
+    HEALTHY    = "healthy"       # 🟢
+    DEGRADED   = "degraded"      # 🟠 (un membre down, quorum maintenu)
+    UNREACHABLE = "unreachable"  # 🔴
+    SCANNING   = "scanning"      # 🔵
 ```
 
 ## Migration de `targets` vers `hosts`
 
 L'entité `Target` (colonne `type = local | ssh | proxmox`) est remplacée par l'entité **Host**. *Target* reste cité ici uniquement comme alias historique. Stratégie de migration :
 
-1. **Création de `hosts`** avec le schéma ci-dessus (profils canoniques à 4 valeurs).
+1. **Création de `hosts`** avec le schéma ci-dessus (profils canoniques à 3 valeurs).
 2. **Copie des lignes** de `targets` vers `hosts` avec correspondance de profils : `local` → `host_baremetal`, `ssh` → `host_baremetal` (accès SSH) ou `host_remote_docker` (si le Docker distant est le seul usage), `proxmox` → `host_proxmox`.
 3. **Reprise des colonnes** : `capabilities` → `hardware_info` + `installed_engines` (éclaté), `connection_config` conservé, `last_seen` → `last_scan_at`.
-4. **Mise à jour des clés étrangères** : `stacks.target_id` → `stacks.host_id` ; les FK `machines.host_id` (obligatoire) et `apps.host_id`/`apps.machine_id` (XOR, règle d'hébergement du chapitre 02) sont peuplées depuis les objets Compute existants — une App tournant dans le daemon Docker d'une VM est rattachée à sa Machine via `apps.machine_id`.
+4. **Mise à jour des clés étrangères** : `stacks.target_id` → `stacks.host_id` ; les FK `machines.host_id` (obligatoire) et `apps.host_id`/`apps.machine_id`/`apps.cluster_id` (triple XOR, règle d'hébergement du chapitre 02) sont peuplées depuis les objets Compute existants — une App tournant dans le daemon Docker d'une VM est rattachée à sa Machine via `apps.machine_id` ; une App helm_release est rattachée à son Cluster via `apps.cluster_id`.
 5. **Suppression de `targets`** après validation (les lectures API passent par `/hosts`, cf. chapitre 09).
 
 Les migrations Alembic restent compatibles PostgreSQL + SQLite (voir [Compatibilité PostgreSQL et SQLite](#compatibilité-postgresql-et-sqlite)).
+
+## Migration `host_kubernetes` → `clusters`
+
+Le profil `host_kubernetes` disparaît des Hosts (chapitre 02) : un cluster Kubernetes devient une entité Cluster. Stratégie documentaire de transformation des Hosts `host_kubernetes` existants :
+
+1. **Création de `clusters`** et `cluster_members` avec les schémas ci-dessus.
+2. **Transformation des lignes** : chaque Host `host_kubernetes` devient un Cluster `type = 'kubernetes'` — `name`, `connection_config` (kubeconfig) et `last_scan_at` sont repris ; `origin` vaut `adopted` (un Host était une entité adoptée).
+3. **Reprise des Apps** : les Apps `helm_release`/`k8s_manifest` hébergées par l'ancien Host passent de `apps.host_id` à `apps.cluster_id` (le triple XOR est respecté : `host_id` remis à NULL).
+4. **Résolution des membres** : lorsque les nœuds du cluster correspondent à des Machines/Hosts déjà connus de WindFlow (rapprochement par nom de nœud k8s ou IP), des lignes `cluster_members` sont créées (`role` déduit de `kubectl get nodes`, labels/taints dans `k8s_metadata`). Les nœuds non reconnus ne créent pas d'entités — le rattachement se fait à la demande depuis l'UI (Écran 27) ou la CLI (`windflow clusters members`).
+5. **Suppression des Hosts `host_kubernetes`** après validation (les lectures API passent par `/clusters`, cf. chapitre 09).
+
+Le même chemin s'applique aux clusters Proxmox : un ancien Host `host_proxmox` correspondant en réalité à un cluster multi-nœuds peut être promu en Cluster `type = 'proxmox'` (ses nœuds deviennent des membres) ; un serveur isolé reste un Host `host_proxmox`.
 
 Exemple illustratif — migration Alembic de la table `hosts` :
 
@@ -750,7 +875,7 @@ class Host(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(100))
-    profile: Mapped[HostProfile] = mapped_column(String(30))   # baremetal | proxmox | kubernetes | remote_docker
+    profile: Mapped[HostProfile] = mapped_column(String(30))   # baremetal | proxmox | remote_docker
     environment_id: Mapped[str] = mapped_column(ForeignKey("environments.id"))
     connection_config: Mapped[dict] = mapped_column(JSON, default=dict)  # chiffré en application
     installed_engines: Mapped[list] = mapped_column(JSON, default=list)
@@ -759,21 +884,63 @@ class Host(Base):
     apps: Mapped[list["App"]] = relationship(back_populates="host")
     machines: Mapped[list["Machine"]] = relationship(back_populates="host")
 
+class Cluster(Base):
+    __tablename__ = "clusters"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    name: Mapped[str] = mapped_column(String(100))
+    type: Mapped[ClusterType] = mapped_column(String(20))      # kubernetes | proxmox | docker_swarm
+    origin: Mapped[WorkloadOrigin] = mapped_column(String(10), default="adopted")
+    environment_id: Mapped[str] = mapped_column(ForeignKey("environments.id"))
+    connection_config: Mapped[dict] = mapped_column(JSON, default=dict)  # kubeconfig / API / socket — chiffré
+    aggregated_metrics: Mapped[dict] = mapped_column(JSON, default=dict) # calculées depuis les membres
+    status: Mapped[str] = mapped_column(String(20), default="unknown")
+
+    members: Mapped[list["ClusterMember"]] = relationship(back_populates="cluster")
+    apps: Mapped[list["App"]] = relationship(back_populates="cluster")
+
+class ClusterMember(Base):
+    __tablename__ = "cluster_members"
+    __table_args__ = (
+        CheckConstraint(  # le membre est un Host OU une Machine (jamais les deux)
+            "(host_id IS NOT NULL AND machine_id IS NULL) OR "
+            "(host_id IS NULL AND machine_id IS NOT NULL)"
+        ),
+        UniqueConstraint("host_id"),     # au plus un cluster par Host
+        UniqueConstraint("machine_id"),  # au plus un cluster par Machine
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    cluster_id: Mapped[str] = mapped_column(ForeignKey("clusters.id"))
+    host_id: Mapped[str | None] = mapped_column(ForeignKey("hosts.id"))
+    machine_id: Mapped[str | None] = mapped_column(ForeignKey("machines.id"))
+    role: Mapped[ClusterRole] = mapped_column(String(20), default="member")  # control-plane | worker | member
+    k8s_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    cluster: Mapped["Cluster"] = relationship(back_populates="members")
+
 class App(Base):
     __tablename__ = "apps"
+    __table_args__ = (
+        CheckConstraint(  # triple XOR : exactement un des trois (règle d'hébergement, chapitre 02)
+            "(CASE WHEN host_id IS NOT NULL THEN 1 ELSE 0 END"
+            " + CASE WHEN machine_id IS NOT NULL THEN 1 ELSE 0 END"
+            " + CASE WHEN cluster_id IS NOT NULL THEN 1 ELSE 0 END) = 1"
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(100))
     profile: Mapped[AppProfile] = mapped_column(String(30))    # docker_compose, helm_release…
-    host_id: Mapped[str | None] = mapped_column(ForeignKey("hosts.id"))       # hébergement direct…
-    machine_id: Mapped[str | None] = mapped_column(ForeignKey("machines.id")) # …ou App dans la VM
+    host_id: Mapped[str | None] = mapped_column(ForeignKey("hosts.id"))        # hébergement direct…
+    machine_id: Mapped[str | None] = mapped_column(ForeignKey("machines.id"))  # …ou App dans la VM…
+    cluster_id: Mapped[str | None] = mapped_column(ForeignKey("clusters.id"))  # …ou App cluster-scoped
     status: Mapped[str] = mapped_column(String(20), default="unknown")
     origin: Mapped[WorkloadOrigin] = mapped_column(String(10), default="managed")
 
-    # Règle d'hébergement (chapitre 02) : exactement un des deux (XOR),
-    # contrainte CheckConstraint("…") au niveau table.
     host: Mapped["Host"] = relationship(back_populates="apps")
     machine: Mapped["Machine"] = relationship(back_populates="apps")
+    cluster: Mapped["Cluster"] = relationship(back_populates="apps")
 ```
 
 ## Compatibilité PostgreSQL et SQLite
@@ -821,7 +988,9 @@ Les plugins simples stockent leur configuration dans la table `plugin_configs` (
 | `organizations` | Organization | Organisations (groupes de travail) |
 | `user_organizations` | UserOrganization | Appartenance utilisateur ↔ organisation avec rôle |
 | `environments` | Environment | Environnements (dev, staging, prod) |
-| `hosts` | Host | Substrats d'exécution (baremetal, proxmox, kubernetes, remote_docker) |
+| `hosts` | Host | Substrats d'exécution individuels (baremetal, proxmox isolé, remote_docker) |
+| `clusters` | Cluster | Grappes multi-nœuds (kubernetes, proxmox, docker_swarm) — hébergent des Apps cluster-scoped |
+| `cluster_members` | ClusterMember | Appartenance Host/Machine à un Cluster (rôle, k8s_metadata) — orthogonale à l'hébergement |
 | `apps` | App | Workloads container-based (famille Apps) |
 | `machines` | Machine | Workloads VM-based (famille Machines) |
 | `stacks` | Stack | Groupes de services Docker Compose |
@@ -835,7 +1004,7 @@ Les plugins simples stockent leur configuration dans la table `plugin_configs` (
 | `audit_logs` | AuditLog | Journal d'audit |
 | `ssh_keys` | SSHKey | Clés SSH réutilisables (authentification des Hosts distants) |
 | `host_ssh_fingerprints` | HostSSHFingerprint | Empreintes known_hosts des serveurs distants |
-| | **Total** | **18 tables core** |
+| | **Total** | **20 tables core** |
 
 Les plugins ajoutent leurs propres tables si nécessaire (préfixées `plugin_{name}_*`).
 

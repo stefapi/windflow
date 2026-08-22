@@ -186,8 +186,9 @@ La gestion des Machines et des Hosts repose sur les **WorkloadAdapter** du chapi
 - **KVM/QEMU via libvirt** : bibliothèque Python `libvirt`, connexion locale (`qemu:///system`) ou distante via SSH (`qemu+ssh://user@host/system`).
 - **LXD / Incus** : API REST native de chaque outil, pour les VMs et les system containers.
 - **VirtualBox** : support optionnel via VBoxManage pour les environnements de test.
-- **Proxmox VE** : consommé via l'API REST du Host `host_proxmox` (`ProxmoxHostAdapter`) — les VMs Proxmox sont des Machines standard. Il n'y a **pas** de `ProxmoxService` dans le core.
-- **Kubernetes** : client kubeconfig via le Host `host_kubernetes`, pour les Apps `helm_release` et `k8s_manifest`.
+- **Proxmox VE** : consommé via l'API REST du Host `host_proxmox` (`ProxmoxHostAdapter`, serveur isolé) ou de l'entité Cluster de type `proxmox` (`ProxmoxClusterAdapter`, grappe multi-nœuds) — les VMs Proxmox sont des Machines standard. Il n'y a **pas** de `ProxmoxService` dans le core.
+- **Kubernetes** : client kubeconfig via l'entité **Cluster** de type `kubernetes` (`KubernetesClusterAdapter`, chapitre 02), pour les Apps `helm_release` et `k8s_manifest` hébergées par le Cluster (`apps.cluster_id`). Les nœuds restent des Hosts/Machines scannés individuellement par SSH.
+- **Docker Swarm** : consommé via le socket/API Docker de l'entité Cluster de type `docker_swarm` (`SwarmClusterAdapter`).
 
 Exemple illustratif — listing libvirt derrière `KVMAdapter` :
 

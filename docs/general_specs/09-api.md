@@ -4,7 +4,7 @@
 
 ## Vue d'ensemble
 
-Ce chapitre spécifie l'API REST et WebSocket de WindFlow. La surface principale est organisée **par famille de workloads** (`/apps`, `/machines`, `/hosts`), conformément au modèle directeur du chapitre 02. La vue Compute (`/compute/*`), organisée par technologie, est une surface secondaire réservée au Mode Infra. Les endpoints transverses (auth, organisations, environnements, plugins, marketplace, admin, système) complètent l'API. Ce chapitre couvre les conventions, les endpoints et le protocole WebSocket ; les comportements métier sont aux chapitres 02 et 03.
+Ce chapitre spécifie l'API REST et WebSocket de WindFlow. La surface principale est organisée **par famille de workloads** (`/apps`, `/machines`, `/hosts`) plus l'entité **Cluster** (`/clusters`), conformément au modèle directeur du chapitre 02. La vue Compute (`/compute/*`), organisée par technologie, est une surface secondaire réservée au Mode Infra. Les endpoints transverses (auth, organisations, environnements, plugins, marketplace, admin, système) complètent l'API. Ce chapitre couvre les conventions, les endpoints et le protocole WebSocket ; les comportements métier sont aux chapitres 02 et 03.
 
 ## Conventions générales
 
@@ -25,6 +25,7 @@ Ce chapitre spécifie l'API REST et WebSocket de WindFlow. La surface principale
 ├── apps/                          # Famille Apps (surface principale)
 ├── machines/                      # Famille Machines (surface principale)
 ├── hosts/                         # Famille Hosts (surface principale)
+├── clusters/                      # Entité Cluster (surface principale)
 ├── compute/                       # Vue Compute par technologie (Mode Infra)
 │   ├── containers/
 │   ├── vms/
@@ -48,7 +49,7 @@ Ce chapitre spécifie l'API REST et WebSocket de WindFlow. La surface principale
     └── ...
 ```
 
-**Cohabitation des deux surfaces** : les endpoints `/apps`, `/machines`, `/hosts` exposent les workloads **par famille** avec leurs verbes universels (chapitre 02). Les endpoints `/compute/*` exposent les **objets techniques par technologie** (containers individuels, instances VM, stacks, snapshots, volumes, networks, images) : c'est la surface consommée par la vue Compute du Mode Infra (chapitre 03). Un même container géré apparaît donc comme une App dans `/apps` et comme un container dans `/compute/containers` ; les identifiants techniques sont partagés.
+**Cohabitation des deux surfaces** : les endpoints `/apps`, `/machines`, `/hosts`, `/clusters` exposent les workloads et l'entité Cluster **par famille** avec leurs verbes universels (chapitre 02). Les endpoints `/compute/*` exposent les **objets techniques par technologie** (containers individuels, instances VM, stacks, snapshots, volumes, networks, images) : c'est la surface consommée par la vue Compute du Mode Infra (chapitre 03). Un même container géré apparaît donc comme une App dans `/apps` et comme un container dans `/compute/containers` ; les identifiants techniques sont partagés.
 
 ### Format de réponse
 
@@ -117,7 +118,7 @@ class ErrorResponse(BaseModel):
 ### Famille Apps — `/api/v1/apps/`
 
 ```
-GET    /                       # Lister les Apps (filtres: host_id, machine_id, status, profile, origin, name)
+GET    /                       # Lister les Apps (filtres: host_id, machine_id, cluster_id, status, profile, origin, name)
 POST   /                       # Créer une App (deploy depuis la marketplace ou manuel)
 GET    /{id}                   # Détails d'une App
 PUT    /{id}/config            # Modifier la configuration (formulaire)
@@ -143,7 +144,9 @@ class AppCreateRequest(BaseModel):
     name: str                          # ex. nextcloud
     profile: str                       # docker_container, docker_compose, helm_release, k8s_manifest
     host_id: Optional[str]             # hébergement direct sur un Host…
-    machine_id: Optional[str]          # …ou App tournant dans une Machine (XOR avec host_id)
+    machine_id: Optional[str]          # …ou App tournant dans une Machine…
+    cluster_id: Optional[str]          # …ou App hébergée par un Cluster (helm_release, k8s_manifest)
+                                       # (triple XOR — exactement un des trois, règle d'hébergement chapitre 02)
     marketplace_entry_id: Optional[str] = None
     configuration: Optional[dict] = None
 
@@ -152,8 +155,9 @@ class AppResponse(BaseModel):
     name: str
     profile: str
     status: str                # running, stopped, starting, stopping, updating, degraded, error, unknown
-    host_id: Optional[str]     # XOR avec machine_id (règle d'hébergement, chapitre 02)
-    machine_id: Optional[str]
+    host_id: Optional[str]     # triple XOR host_id / machine_id / cluster_id
+    machine_id: Optional[str]  # (règle d'hébergement, chapitre 02)
+    cluster_id: Optional[str]
     domain: Optional[str]
     current_version: Optional[str]
     available_version: Optional[str]
@@ -234,11 +238,11 @@ class MachineCreateRequest(BaseModel):
 
 ### Famille Hosts — `/api/v1/hosts/`
 
-La famille Hosts remplace l'ancienne ressource `/targets` (alias historique : *target*).
+La famille Hosts remplace l'ancienne ressource `/targets` (alias historique : *target*). `/hosts` ne liste **plus de clusters** — les grappes multi-nœuds (kubernetes, proxmox, swarm) sont des Clusters exposés par `/clusters`.
 
 ```
 GET    /                       # Lister les Hosts (filtres: environment_id, status, profile)
-POST   /                       # Ajouter un Host (adoption d'un substrat)
+POST   /                       # Ajouter un Host (adoption d'un substrat individuel)
 GET    /{id}                   # Détails (hardware, moteurs installés, statut)
 PUT    /{id}                   # Modifier un Host
 DELETE /{id}                   # Retirer du suivi WindFlow (ne supprime pas la machine)
@@ -247,6 +251,7 @@ GET    /{id}/metrics           # Métriques système (CPU, RAM, disque, réseau,
 GET    /{id}/services          # Services système (systemd…)
 GET    /{id}/apps              # Apps déployées sur ce Host
 GET    /{id}/machines          # Machines hébergées sur ce Host
+GET    /{id}/cluster           # Cluster dont ce Host est membre (si applicable)
 POST   /{id}/actions/{action_id}  # Exécuter une ContextualAction (reboot, update OS…)
 GET    /{id}/ssh               # Session SSH (WebSocket)
 GET    /{id}/journal           # Journal système (WebSocket)
@@ -257,9 +262,9 @@ Exemple illustratif — modèles de requête/réponse :
 ```python
 class HostCreateRequest(BaseModel):
     name: str                          # ex. nas-server
-    profile: str                       # host_baremetal, host_proxmox, host_kubernetes, host_remote_docker
+    profile: str                       # host_baremetal, host_proxmox, host_remote_docker
     environment_id: str
-    connection_config: dict            # SSH config, API endpoint, kubeconfig (chiffré en base)
+    connection_config: dict            # SSH config, API endpoint (chiffré en base)
 
 class HostResponse(BaseModel):
     id: str
@@ -272,9 +277,51 @@ class HostResponse(BaseModel):
     last_scan_at: Optional[str]
 ```
 
+### Entité Cluster — `/api/v1/clusters/`
+
+Les grappes multi-nœuds du chapitre 02 (types `kubernetes`, `proxmox`, `docker_swarm`) — surface principale, au même rang que les familles. L'ajout d'un Cluster suit le wizard dédié (chapitre 14, Écran 13) : l'utilisateur choisit le type, fournit la connexion (kubeconfig, API endpoint, socket) et le test résout les membres.
+
+```
+GET    /                       # Lister les Clusters (filtres: environment_id, type, status, origin)
+POST   /                       # Ajouter un Cluster (kubernetes: kubeconfig, proxmox: API, docker_swarm: socket/API)
+GET    /{id}                   # Détails (type, membres, métriques agrégées, statut)
+PUT    /{id}                   # Modifier un Cluster (connexion, description)
+DELETE /{id}                   # Retirer du suivi WindFlow (ne supprime pas la grappe)
+POST   /{id}/scan              # Rescanner les membres et les workloads (API du cluster)
+GET    /{id}/health            # Santé : quorum, membres down/notReady, versions
+GET    /{id}/members           # Membres (host_id/machine_id, rôle, labels/taints, santé)
+POST   /{id}/members           # Rattacher un membre (host_id ou machine_id, rôle) — nœud non résolu automatiquement
+DELETE /{id}/members/{member_id}  # Détacher un membre (retire l'appartenance, jamais l'entité Host/Machine)
+GET    /{id}/apps              # Apps hébergées par ce Cluster (helm_release, k8s_manifest…)
+POST   /{id}/actions/{action_id}  # Exécuter une ContextualAction (drain, promote/demote…)
+GET    /{id}/events            # Événements du Cluster (events k8s, tâches Proxmox) — WebSocket
+```
+
+Exemple illustratif — modèles de requête/réponse :
+
+```python
+class ClusterCreateRequest(BaseModel):
+    name: str                          # ex. k3s-cluster
+    type: str                          # kubernetes | proxmox | docker_swarm
+    environment_id: str
+    connection_config: dict            # kubeconfig (kubernetes), API endpoint + tokens (proxmox),
+                                       # socket/API + TLS (docker_swarm) — chiffré en base
+
+class ClusterMemberResponse(BaseModel):
+    id: str
+    cluster_id: str
+    host_id: Optional[str]     # le membre est un Host…
+    machine_id: Optional[str]  # …ou une Machine (XOR host_id/machine_id, chapitre 06)
+    role: str                  # control-plane | worker | member
+    k8s_metadata: dict         # labels, taints (kubernetes)
+    joined_at: str
+```
+
+**Rattachement des membres.** Le scan d'un Cluster résout automatiquement les nœuds qu'il reconnaît (rapprochement par nom/IP avec des Hosts/Machines existants → création de lignes `cluster_members`). Les nœuds non reconnus sont listés en lecture seule dans `/clusters/{id}/members` (sans `host_id` ni `machine_id` tant qu'aucune entité ne les représente — le rattachement manuel crée ou réutilise l'entité).
+
 ## API Mode Infra — vue Compute
 
-La vue Compute expose les objets bas niveau **par technologie** (chapitre 03). Elle complète les familles, sans les remplacer : les opérations par famille passent par `/apps`, `/machines`, `/hosts`.
+La vue Compute expose les objets bas niveau **par technologie** (chapitre 03). Elle complète les familles, sans les remplacer : les opérations par famille passent par `/apps`, `/machines`, `/hosts`, `/clusters`.
 
 ### Containers — `/api/v1/compute/containers/`
 
@@ -471,7 +518,7 @@ POST   /pending-updates/{id}/skip  # Marquer une suggestion semver comme ignoré
 
 ### Graphe de dépendances — `/api/v1/compute/graph`
 
-Source de données de l'Écran 20 (chapitre [14-ui-maquettes.md](14-ui-maquettes.md)). Le backend dérive le graphe du parsing des compose (`depends_on`, condition `service_started` / `service_healthy`) et de l'inspection runtime ; pour Kubernetes/Helm, les arêtes relient les workloads du même namespace (généralisation profil × origine, chapitre [03-modele-compute.md](03-modele-compute.md)).
+Source de données de l'Écran 20 (chapitre [14-ui-maquettes.md](14-ui-maquettes.md)). Le backend dérive le graphe du parsing des compose (`depends_on`, condition `service_started` / `service_healthy`) et de l'inspection runtime ; pour Kubernetes/Helm, les arêtes relient les workloads du même namespace (généralisation profil × origine, chapitre [03-modele-compute.md](03-modele-compute.md)). Le graphe peut en outre afficher la **topologie des membres** d'un Cluster (filtre `cluster_id` : sous-graphe par membre, arêtes membre → Cluster — hôte de l'App) quand elle est pertinente pour la lecture des dépendances.
 
 ```
 GET    /                       # Graphe global (filtres: host_id, app_id, origin, status)

@@ -4,7 +4,7 @@
 
 ## Vue d'ensemble
 
-Ce chapitre est la **référence unique** de l'interface en ligne de commande (CLI) et de l'interface terminal interactive (TUI) de WindFlow. Les deux consomment la même API REST que le frontend (chapitre 09) — toute action de l'UI est donc possible en CLI et inversement. La grammaire est normalisée : groupes de ressources au **pluriel** (`windflow apps`, `windflow machines`, `windflow hosts`, `windflow plugins`), administration sous `windflow admin`, une seule forme par commande. L'authentification CLI (anciennement dispersée dans le chapitre auth) est spécifiée ici.
+Ce chapitre est la **référence unique** de l'interface en ligne de commande (CLI) et de l'interface terminal interactive (TUI) de WindFlow. Les deux consomment la même API REST que le frontend (chapitre 09) — toute action de l'UI est donc possible en CLI et inversement. La grammaire est normalisée : groupes de ressources au **pluriel** (`windflow apps`, `windflow machines`, `windflow hosts`, `windflow clusters`, `windflow plugins`), administration sous `windflow admin`, une seule forme par commande. L'authentification CLI (anciennement dispersée dans le chapitre auth) est spécifiée ici.
 
 **Technologies** : Typer (framework CLI, auto-complétion et aide générées), Rich (tableaux, couleurs, barres de progression), Textual (TUI).
 
@@ -23,8 +23,8 @@ windflow --help
 
 Règles canoniques :
 
-- **Groupes de ressources au pluriel** : `windflow apps`, `windflow machines`, `windflow hosts`, `windflow stacks`, `windflow plugins`, `windflow volumes`, `windflow images`, `windflow marketplace` — jamais au singulier.
-- **Familles plutôt que technologies** : `windflow machines` (pas `vms`), `windflow hosts` (pas `targets`), `windflow apps` (pas `containers`).
+- **Groupes de ressources au pluriel** : `windflow apps`, `windflow machines`, `windflow hosts`, `windflow clusters`, `windflow stacks`, `windflow plugins`, `windflow volumes`, `windflow images`, `windflow marketplace` — jamais au singulier.
+- **Familles plutôt que technologies** : `windflow machines` (pas `vms`), `windflow hosts` (pas `targets`), `windflow apps` (pas `containers`) ; **grappes plutôt que substrats** : `windflow clusters` pour les clusters Kubernetes/Proxmox/Swarm, `windflow hosts` pour les serveurs individuels.
 - **Administration sous `windflow admin`** : utilisateurs, audit, info système.
 - **Backup/restore sous `windflow admin backup`** : une seule forme (`windflow admin backup create`, `windflow admin backup restore`).
 - **Sous-commandes consistentes** : `list`, `create`, `start`, `stop`, `restart`, `rm`, `logs`, `inspect`, `config`.
@@ -154,9 +154,9 @@ windflow hosts list
 # local         host_baremetal   online    docker ✓, libvirt ✓
 # nas-server    host_baremetal   online    docker ✓
 # prox-home     host_proxmox     online    proxmox-api ✓
-# k3s-cluster   host_kubernetes  online    k8s ✓, helm ✓
+# docker-remote host_remote_docker online  docker ✓
 
-# Ajouter un Host (adoption d'un substrat)
+# Ajouter un Host (adoption d'un substrat individuel)
 windflow hosts add nas-server \
   --type baremetal \
   --host 192.168.1.50 \
@@ -173,9 +173,43 @@ Autres profils d'ajout — un par profil canonique :
 ```bash
 windflow hosts add prox-home --type proxmox --host 192.168.1.100 \
   --token-id user@pam!windflow --token-secret abc123...
-windflow hosts add k3s-cluster --type kubernetes --kubeconfig ~/.kube/config
 windflow hosts add docker-remote --type remote-docker --host 192.168.1.60
 ```
+
+Les valeurs de `--type` correspondent aux profils canoniques : `baremetal | proxmox | remote-docker` (chapitre [02-familles-workloads.md](02-familles-workloads.md)). Les grappes multi-nœuds ne sont **pas** des Hosts — elles s'ajoutent via `windflow clusters add` (ci-dessous).
+
+### Clusters — entité Cluster
+
+Les clusters Kubernetes (k8s, k3s, microk8s), les clusters Proxmox VE et les Swarms Docker sont des entités **Cluster** (chapitre 02) :
+
+```bash
+# Lister les Clusters
+windflow clusters list
+
+# NAME          TYPE         STATUS    MEMBERS            ORIGIN
+# k3s-cluster   kubernetes   healthy   3 (2 workers)     adopted
+# prox-cluster  proxmox      healthy   2 nodes           adopted
+
+# Ajouter un Cluster (un --type par type canonique)
+windflow clusters add k3s-cluster --type kubernetes --kubeconfig ~/.kube/config
+windflow clusters add prox-cluster --type proxmox --host 192.168.1.100 \
+  --token-id user@pam!windflow --token-secret abc123...
+windflow clusters add swarm-prod --type docker-swarm --host 192.168.1.70
+
+# Membres, santé, workloads, scan
+windflow clusters members k3s-cluster
+# NODE           ROLE           MEMBER OF      STATUS
+# pi4-home       control-plane  Host           ready
+# k3s-node-1     worker         Machine (LXC)  ready
+# k3s-node-2     worker         —              ready
+
+windflow clusters health k3s-cluster
+windflow clusters apps k3s-cluster          # Apps hébergées (helm_release, k8s_manifest…)
+windflow clusters scan k3s-cluster          # rescan des membres et workloads
+windflow clusters rm k3s-cluster            # retire du suivi (ne supprime pas la grappe)
+```
+
+L'ancienne forme `windflow hosts add k3s-cluster --type kubernetes` est retirée — un cluster Kubernetes n'est plus un profil de Host (chapitre 02).
 
 Scan des moteurs, adoption des objets découverts, retrait du suivi :
 
@@ -192,8 +226,6 @@ windflow hosts adopt nas-server          # wizard d'adoption (chapitre 03)
 # Retirer du suivi
 windflow hosts rm nas-server
 ```
-
-Les valeurs de `--type` correspondent aux profils canoniques : `baremetal | proxmox | kubernetes | remote-docker` (chapitre [02-familles-workloads.md](02-familles-workloads.md)).
 
 ## Compute (Mode Infra)
 
@@ -375,7 +407,7 @@ Actions    : s start · p stop · r restart · l logs · c console · i inspect 
 Global     : Tab cycle Apps/Machines/Stacks · h changer de Host · m marketplace · / rechercher · ? aide · q quitter
 ```
 
-Le TUI suit le vocabulaire des familles (Apps, Machines, Hosts) et expose les mêmes verbes universels que l'UI web (chapitre [02-familles-workloads.md](02-familles-workloads.md)).
+Le TUI suit le vocabulaire des familles (Apps, Machines, Hosts) et de l'entité Cluster (commandes `windflow clusters`), et expose les mêmes verbes universels que l'UI web (chapitre [02-familles-workloads.md](02-familles-workloads.md)).
 
 ## Configuration CLI
 

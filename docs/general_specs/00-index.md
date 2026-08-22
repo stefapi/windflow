@@ -12,7 +12,7 @@ Cet index est le point d'entrée de la spécification générale de WindFlow : s
 
 - **Spec cible** : `general_specs` décrit la vision produit cible de WindFlow, en avance sur l'implémentation réelle. Les écarts avec le code sont attendus et tracés par [../Roadmap.md](../Roadmap.md).
 - **QUOI vs COMMENT** : la spec générale décrit les comportements, contrats et périmètres (le QUOI). Le détail d'implémentation (schémas de code, procédures, protocoles) vit dans [`../technical_specs/`](../technical_specs) ; les parcours utilisateurs pas à pas dans [`../user-guide/`](../user-guide).
-- **Modèle directeur** : toute la spec est écrite dans le paradigme des trois familles (Apps, Machines, Hosts) défini au chapitre [02-familles-workloads.md](02-familles-workloads.md). Le terme *target* est un alias historique de Host ; les anciens libellés « Mode Standard / Mode Avancé » correspondent à Mode App / Mode Infra.
+- **Modèle directeur** : toute la spec est écrite dans le paradigme des trois familles (Apps, Machines, Hosts) défini au chapitre [02-familles-workloads.md](02-familles-workloads.md), complétées par l'entité **Cluster** de premier rang (grappes Kubernetes, Proxmox, Swarm — constituées de membres Hosts/Machines, hébergeant des Apps). Le terme *target* est un alias historique de Host ; les anciens libellés « Mode Standard / Mode Avancé » correspondent à Mode App / Mode Infra.
 - **Gabarit** : chaque chapitre suit le même gabarit (bloc `Statut · Public · Lié à`, vue d'ensemble, sections, « Voir aussi ») et vise 200 à 600 lignes.
 - **Liens** : tous les liens sont relatifs et vérifiés.
 - **Terminologie** : le glossaire canonique (définitions et alias interdits) est au chapitre [19-glossaire.md](19-glossaire.md) ; il prévaut en cas de divergence.
@@ -24,16 +24,16 @@ Cet index est le point d'entrée de la spécification générale de WindFlow : s
 | Chapitre | Périmètre |
 |---|---|
 | [01-vision.md](01-vision.md) | Vision, objectifs, proposition de valeur, cas d'usage, différenciateurs, métriques de succès, standards |
-| [02-familles-workloads.md](02-familles-workloads.md) | **Modèle directeur** : familles Apps/Machines/Hosts, grammaire UI, verbes universels, WorkloadAdapter, Mode App/Mode Infra ; sémantique des verbes Sauvegarder et Mettre à jour/recreate |
+| [02-familles-workloads.md](02-familles-workloads.md) | **Modèle directeur** : familles Apps/Machines/Hosts + entité Cluster (grappes k8s/Proxmox/Swarm, membres, hébergement triple XOR), grammaire UI, verbes universels, WorkloadAdapter, Mode App/Mode Infra ; sémantique des verbes Sauvegarder et Mettre à jour/recreate |
 | [04-architecture.md](04-architecture.md) | Monolithe modulaire, frontière core/plugins, profils de déploiement, services core, résilience, performance, collecte des métriques Hosts |
-| [06-modele-de-donnees.md](06-modele-de-donnees.md) | Schéma unifié : comptes/organisations, entités App/Machine/Host, stacks/déploiements, plugins, audit, clés SSH, exécutions de tâches ; migration `targets` → `hosts` |
-| [09-api.md](09-api.md) | API unifiée : `/apps`, `/machines`, `/hosts` en surface principale, `/compute/*` en Mode Infra, endpoints transverses, WebSocket, erreurs, rate limiting ; validation Compose (catalogue de règles), mises à jour d'images (check/pending), batch update, prunes protégés |
+| [06-modele-de-donnees.md](06-modele-de-donnees.md) | Schéma unifié : comptes/organisations, entités App/Machine/Host + Cluster (`clusters`/`cluster_members`), stacks/déploiements, plugins, audit, clés SSH, exécutions de tâches ; migrations `targets` → `hosts` et `host_kubernetes` → `clusters` |
+| [09-api.md](09-api.md) | API unifiée : `/apps`, `/machines`, `/hosts`, `/clusters` en surface principale, `/compute/*` en Mode Infra, endpoints transverses, WebSocket, erreurs, rate limiting ; validation Compose (catalogue de règles), mises à jour d'images (check/pending), batch update, prunes protégés |
 
 ### Chapitres fonctionnels (vague 2 — publiée)
 
 | Chapitre | Périmètre |
 |---|---|
-| [03-modele-compute.md](03-modele-compute.md) | Taxonomie stack/discovered/standalone, **matrice canonique profil × origine (managed/adopted/external)**, vue Compute (Mode Infra), adoption, snapshots, bibliothèque d'images OS |
+| [03-modele-compute.md](03-modele-compute.md) | Taxonomie stack/discovered/standalone, **matrice canonique profil × origine (managed/adopted/external — appliquée aussi aux Clusters)**, vue Compute (Mode Infra), scan Cluster vs nœuds, adoption, snapshots, bibliothèque d'images OS |
 | [05-stack-technologique.md](05-stack-technologique.md) | Choix techniques, backends VM (adapters), dépendances, CI Gitea Actions, correspondance spec ↔ technical_specs |
 | [07-authentification.md](07-authentification.md) | JWT, refresh tokens, clés API, brute-force, SSO via plugin Keycloak |
 | [08-rbac-permissions.md](08-rbac-permissions.md) | 4 rôles, matrice complète des permissions, RBAC par famille, gestion des utilisateurs, audit des permissions |
@@ -41,7 +41,7 @@ Cet index est le point d'entrée de la spécification générale de WindFlow : s
 | [11-plugins.md](11-plugins.md) | Système de plugins : manifest, Plugin Manager, **liste canonique des événements**, hooks (dont gates pre-deploy), extension API/UI, guide dev |
 | [12-marketplace.md](12-marketplace.md) | Marketplace 3 onglets, registres, **catalogue officiel des plugins** (compte canonique 20+), spec du plugin Git (GitOps), sources de templates externes (format Portainer) |
 | [13-ui-principes.md](13-ui-principes.md) | Principes UX, analyse concurrentielle synthétique, navigation (sidebars Mode App/Infra), direction esthétique |
-| [14-ui-maquettes.md](14-ui-maquettes.md) | Les 26 écrans maquettés (familles, marketplace, Hosts, adoption, console, plugins, activité, graphe de dépendances, éditeur de composition, Vue Compute, Settings, Login/SSO, vues listes Mode Infra, Assistant IA) + piste d'évolution E1 (vue Réseaux éditable) |
+| [14-ui-maquettes.md](14-ui-maquettes.md) | Les 27 écrans maquettés (familles, marketplace, Hosts, Clusters, adoption, console, plugins, activité, graphe de dépendances, éditeur de composition, Vue Compute, Settings, Login/SSO, vues listes Mode Infra, Assistant IA) + piste d'évolution E1 (vue Réseaux éditable) |
 | [15-securite.md](15-securite.md) | SecretManager, Docker socket, réseau, audit trail, sécurité des plugins, clés SSH réutilisables + known_hosts, résolveur de secrets (point d'extension), checklists |
 | [16-deploiement.md](16-deploiement.md) | Installation léger/standard/dev, mise à jour, sauvegarde/restauration, dépannage, **récupération d'urgence** (instance verrouillée) |
 | [17-automatisation-workflows.md](17-automatisation-workflows.md) | Scheduler core + workflows en plugins (arbitrage D2 : n8n/Node-RED, pas de moteur intégré) ; exécutions tracées (anti-chevauchement, fuseaux), maintenance planifiée, contrat de notifications (routage, anti-spam) |
@@ -61,7 +61,7 @@ Ce tableau récapitule les fonctionnalités disponibles dès l'installation, san
 |---|----------------|--------------|
 | 1 | Gestion des Apps | Docker/Podman/K8s : containers, compose, images, logs, terminal |
 | 2 | Gestion des Machines | VMs KVM/libvirt, LXD, Incus, VirtualBox ; snapshots, consoles |
-| 3 | Gestion des Hosts | Substrats baremetal/Proxmox/Kubernetes/remote-docker, moteurs détectés |
+| 3 | Gestion des Hosts & Clusters | Substrats individuels (baremetal/Proxmox isolé/remote-docker) + grappes Kubernetes/Proxmox/Swarm (membres, santé, moteurs détectés) |
 | 4 | Système de Plugins | Installation, configuration, lifecycle, registre |
 | 5 | Marketplace | Catalogue Apps + Machine Templates + Plugins, installation one-click |
 | 6 | Stacks & Templates | Groupes de services, versioning, templates Jinja2 |

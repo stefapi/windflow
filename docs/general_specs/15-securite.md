@@ -62,7 +62,8 @@ class SecretManager:
 **Ce qui est chiffré :**
 
 - `stacks.env_vars_encrypted` — variables d'environnement sensibles des stacks ;
-- `hosts.connection_config` — clés SSH, tokens Proxmox, kubeconfigs ;
+- `hosts.connection_config` — clés SSH, tokens API Proxmox (serveurs isolés) ;
+- `clusters.connection_config` — kubeconfigs (Clusters kubernetes), tokens API des clusters Proxmox, credentials socket/TLS Swarm ;
 - `plugin_configs.value` (quand `encrypted=true`) — configurations sensibles des plugins (clés API, mots de passe) ;
 - `api_keys.key_hash` et `refresh_tokens.token_hash` — hashés avec bcrypt (pas chiffrés : on ne peut pas retrouver la valeur).
 

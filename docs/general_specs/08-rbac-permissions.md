@@ -96,13 +96,13 @@ Cette matrice est la **référence unique** des permissions RBAC ; les autres ch
 
 ### RBAC par famille
 
-La matrice ci-dessus s'applique à l'identique aux trois familles du modèle directeur — seuls les noms de ressources changent :
+La matrice ci-dessus s'applique à l'identique aux trois familles du modèle directeur et à l'entité Cluster — seuls les noms de ressources changent :
 
-| Permission | Apps | Machines | Hosts |
-|---|---|---|---|
-| Lecture (tous rôles) | Lister, logs, inspecter | Lister, inspecter | Lister, statut, métriques |
-| Opération (Operator+) | Start/Stop/Restart/Update/Console/Backup | Power/Snapshot/Console VNC | SSH/journalctl (lecture) |
-| Gestion (Admin+) | Créer/Supprimer/Configurer | Créer/Supprimer/Hardware | Ajouter/Supprimer/Scanner |
+| Permission | Apps | Machines | Hosts | Clusters |
+|---|---|---|---|---|
+| Lecture (tous rôles) | Lister, logs, inspecter | Lister, inspecter | Lister, statut, métriques | Lister, statut, membres |
+| Opération (Operator+) | Start/Stop/Restart/Update/Console/Backup | Power/Snapshot/Console VNC | SSH/journalctl (lecture) | Santé/events (lecture), console nœud |
+| Gestion (Admin+) | Créer/Supprimer/Configurer | Créer/Supprimer/Hardware | Ajouter/Supprimer/Scanner | Ajouter/Supprimer/Scanner, rattachement de membres |
 
 Les ContextualActions par profil (chapitre 02) héritent de la catégorie de leur verbe : une action de lecture est accessible au Viewer, une action opérationnelle à l'Operator, une action de gestion à l'Admin.
 

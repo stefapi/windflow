@@ -4,7 +4,7 @@
 
 ## Vue d'ensemble
 
-Ce chapitre présente les **26 écrans** de l'interface WindFlow, renumérotés et nettoyés de tout vestige. Chaque maquette est un bloc ASCII avec sa légende ; la grammaire UI (squelette, action bars, onglets canoniques) et la navigation de référence sont définies aux chapitres [02-familles-workloads.md](02-familles-workloads.md) et [13-ui-principes.md](13-ui-principes.md) — ce chapitre montre des instances concrètes. Les Écrans 20 et 21 sont rendus avec Vue Flow (chapitre [05-stack-technologique.md](05-stack-technologique.md)). Les Écrans 22 à 25 complètent le Mode Infra (Vue Compute, vues listes Stacks/Volumes/Networks/Images) et les écrans transverses (Settings, Login/SSO) ; l'Écran 26 est le contrat d'intégration UI des plugins IA (page apportée par un plugin, pas un écran core). Une piste d'évolution — Écran E1, vue Réseaux éditable — est maquettée en fin de chapitre et ne renumérote pas les écrans livrés. Valeurs d'exemple cohérentes : Apps `nextcloud`, `gitea`, `jellyfin` ; Machines `ubuntu-dev`, `pfsense-router` ; Hosts `nas-server`, `pi4-home`, `k3s-cluster`, `prox-home`.
+Ce chapitre présente les **27 écrans** de l'interface WindFlow, renumérotés et nettoyés de tout vestige. Chaque maquette est un bloc ASCII avec sa légende ; la grammaire UI (squelette, action bars, onglets canoniques) et la navigation de référence sont définies aux chapitres [02-familles-workloads.md](02-familles-workloads.md) et [13-ui-principes.md](13-ui-principes.md) — ce chapitre montre des instances concrètes. Les Écrans 20 et 21 sont rendus avec Vue Flow (chapitre [05-stack-technologique.md](05-stack-technologique.md)). Les Écrans 22 à 26 complètent le Mode Infra (Vue Compute, vues listes Stacks/Volumes/Networks/Images) et les écrans transverses (Settings, Login/SSO, Assistant IA) ; l'Écran 27 — **Clusters** — matérialise l'entité Cluster de premier rang (chapitre 02) : liste des grappes Kubernetes/Proxmox/Swarm, membres, santé, workloads hébergés. Une piste d'évolution — Écran E1, vue Réseaux éditable — est maquettée en fin de chapitre et ne renumérote pas les écrans livrés. Valeurs d'exemple cohérentes : Apps `nextcloud`, `gitea`, `jellyfin` ; Machines `ubuntu-dev`, `pfsense-router` ; Hosts `nas-server`, `pi4-home`, `prox-home` ; Clusters `k3s-cluster`, `prox-cluster`.
 
 ## Écran 1 — Dashboard (homepage)
 
@@ -193,7 +193,7 @@ Inspiré de Proxmox VE (liste VMs) + Incus (`incus list`) + Scaleway (cards). Fa
 │  ┌─ 🖥️ k3s-node-1 ──────────────────────────── 🟢 Running ───────────┐   │
 │  │  Alpine 3.19 · LXC system container · 2 vCPU · 4 GB · 20 GB         │   │
 │  │  Sur : prox-home  ·  IP : 192.168.1.61                              │   │
-│  │  💡 Membre du cluster k3s-cluster  [→ Voir le cluster]               │   │
+│  │  💡 Membre du cluster k3s-cluster (worker)  [→ Voir le cluster]      │   │
 │  │  [🔗 SSH] [⏵ Power ▾] [📸 Snapshot] [🖥 Console] [⚙ Config]      [⋯]  │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
 │                                                                            │
@@ -206,7 +206,7 @@ Inspiré de Proxmox VE (liste VMs) + Incus (`incus list`) + Scaleway (cards). Fa
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Légende :** action bar canonique Machines — « Power » (pas « Lifecycle »), `Snapshot` canonique, `Hardware` au lieu de `Config`. Split-button `[⏵ Power ▾]` : Power on / Power off (ACPI) / Reboot / Reset / Pause / Suspend. Notes `💡` pour les cas particuliers ; Machines arrêtées → barre réduite aux actions hors-tension.
+**Légende :** action bar canonique Machines — « Power » (pas « Lifecycle »), `Snapshot` canonique, `Hardware` au lieu de `Config`. Split-button `[⏵ Power ▾]` : Power on / Power off (ACPI) / Reboot / Reset / Pause / Suspend. Notes `💡` pour les cas particuliers ; Machines arrêtées → barre réduite aux actions hors-tension. La note `💡 Membre du cluster` pointe vers l'entité **Cluster** (Écran 27) — l'appartenance (`cluster_members`) est orthogonale à l'hébergement : cette Machine reste hébergée par son Host `prox-home` (chapitre 02).
 
 ## Écran 7 — Détail Machine
 
@@ -315,11 +315,12 @@ Inspiré de Proxmox (édition par sections) + VirtualBox (panneaux). Famille Mac
 
 ## Écran 10 — Liste Hosts
 
-Inspiré de Coolify (cards serveurs) + Proxmox (cluster view). Famille Hosts — sémantique d'administration.
+Inspiré de Coolify (cards serveurs). Famille Hosts — sémantique d'administration. Les Hosts sont des **substrats individuels** : les grappes multi-nœuds (k3s-cluster…) ne figurent plus dans cette liste — elles sont des Clusters (Écran 27).
 
 ```
 ┌─ Hosts ───────────────────────────────────────[+ Ajouter un Host]────────┐
-│  Mes Hosts (4)              [▼ Tous profils] [▼ Tous statuts]            │
+│  Mes Hosts (3)              [▼ Tous profils] [▼ Tous statuts]            │
+│  ⎈ Clusters (2) — grappes multi-nœuds  [→ Voir les Clusters]             │
 │                                                                            │
 │  ┌─ 🖧 nas-server ─────────────────────────── 🟢 Online · 47j ─────────┐ │
 │  │  Profil : Baremetal SSH · x86_64 · Ubuntu 22.04                      │ │
@@ -335,14 +336,9 @@ Inspiré de Coolify (cards serveurs) + Proxmox (cluster view). Famille Hosts —
 │  │  Héberge : 3 Apps · 0 sous-Machines                                   │ │
 │  │  [📊 Détails] [🖥 SSH] [→ Voir comme Machine]                      [⋯] │ │
 │  └──────────────────────────────────────────────────────────────────────┘ │
-│  ┌─ 🖧 k3s-cluster ───────────────────────── 🟢 Online · 3 nodes ──────┐ │
-│  │  Profil : Kubernetes (k3s v1.28.5) · 3 nodes amd64                  │ │
-│  │  Total : CPU 22% · RAM 8.4/24 GB · 23 pods · 4 namespaces            │ │
-│  │  Moteurs : ✗ Docker (containerd)  ✗ libvirt  ✅ k3s + helm           │ │
-│  │  [📊 Détails] [🖥 kubectl] [📋 events]                             [⋯] │ │
-│  └──────────────────────────────────────────────────────────────────────┘ │
 │  ┌─ 🖧 prox-home ──────────────────────────── 🔴 Unreachable ──────────┐ │
-│  │  Profil : Proxmox VE 8.1 · cluster 2 nodes                          │ │
+│  │  Profil : Proxmox VE 8.1 (serveur isolé)                            │ │
+│  │  💡 Membre du cluster prox-cluster  [→ Voir le cluster]              │ │
 │  │  Pas de connexion depuis 2h17min · Dernière erreur : timeout API     │ │
 │  │  Dernière vue : CPU 8% · 22/64 GB RAM · 15 VMs · 4 LXC               │ │
 │  │  [🔄 Réessayer] [📊 Détails (dernière vue)]                       [⋯] │ │
@@ -350,7 +346,7 @@ Inspiré de Coolify (cards serveurs) + Proxmox (cluster view). Famille Hosts —
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Légende :** action bar canonique Hosts — pas de Lifecycle, pas de Snapshot (chapitre 02). Status pills : `🟢 Online` / `⚪ Offline` / `🔴 Unreachable` / `🔵 Scanning`. Moteurs détectés avec ✓/✗ (déterminent ce qui peut être déployé) ; compteurs `Héberge : X Apps · Y Machines · Z services` ; Host unreachable → actions réduites, aucune action destructive.
+**Légende :** action bar canonique Hosts — pas de Lifecycle, pas de Snapshot (chapitre 02). Status pills : `🟢 Online` / `⚪ Offline` / `🔴 Unreachable` / `🔵 Scanning`. Moteurs détectés avec ✓/✗ (déterminent ce qui peut être déployé) ; compteurs `Héberge : X Apps · Y Machines · Z services` ; Host unreachable → actions réduites, aucune action destructive. Le bandeau `⎈ Clusters` sous le titre renvoie à l'Écran 27 — les métriques agrégées de grappe (« 3 nodes », pods, namespaces) vivent dans la carte Cluster, plus ici.
 
 ## Écran 11 — Détail Host (baremetal)
 
@@ -426,7 +422,7 @@ Une Machine virtuelle avec Docker devient aussi un Host. La même entité a deux
 
 ## Écran 13 — Wizard « Ajouter un Host »
 
-Inspiré de Coolify (wizard SSH) + Proxmox (datacenter join). Étape 1 : choix du profil parmi `baremetal`, `proxmox`, `kubernetes`, `remote-docker`.
+Inspiré de Coolify (wizard SSH) + Proxmox (datacenter join). Étape 1 : choix du profil parmi `baremetal`, `proxmox`, `remote-docker` ; les grappes multi-nœuds (Kubernetes k8s/k3s/microk8s, cluster Proxmox, Swarm) s'ajoutent via **Ajouter un Cluster** — même wizard, choix du type de Cluster (`kubernetes`, `proxmox`, `docker_swarm`) et de sa connexion (kubeconfig, API du cluster, socket Swarm) ; le test résout les membres et propose leur rattachement aux Hosts/Machines existants.
 
 ```
 ┌─ Ajouter un Host ────────────────────────────────────────────────────────┐
@@ -435,16 +431,14 @@ Inspiré de Coolify (wizard SSH) + Proxmox (datacenter join). Étape 1 : choix d
 │                                                                            │
 │  Étape 1 — Quel type de Host souhaitez-vous ajouter ?                     │
 │  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐           │
-│  │ 🖧 Baremetal SSH │ │ 🖥️ Proxmox VE    │ │ ⎈ Kubernetes     │           │
-│  │ Machine          │ │ Serveur ou       │ │ Cluster k8s,     │           │
-│  │ physique ou VM   │ │ cluster Proxmox  │ │ k3s, microk8s    │           │
-│  │ accessible SSH   │ │ via son API      │ │ via kubeconfig   │           │
+│  │ 🖧 Baremetal SSH │ │ 🖥️ Proxmox VE    │ │ 🐳 Docker distant│           │
+│  │ Machine          │ │ Serveur Proxmox  │ │ Daemon Docker    │           │
+│  │ physique ou VM   │ │ isolé via son    │ │ accessible par   │           │
+│  │ accessible SSH   │ │ API              │ │ SSH ou TCP TLS   │           │
 │  │ [Choisir]        │ │ [Choisir]        │ │ [Choisir]        │           │
 │  └──────────────────┘ └──────────────────┘ └──────────────────┘           │
-│  ┌──────────────────┐                                                   │
-│  │ 🐳 Docker distant│  Daemon Docker accessible par SSH ou TCP TLS      │
-│  │ [Choisir]        │                                                   │
-│  └──────────────────┘                                                   │
+│  💡 Un cluster k8s/k3s/microk8s, un cluster Proxmox multi-nœuds ou un    │
+│     Swarm ?  [⎈ Ajouter un Cluster à la place]                           │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -977,9 +971,65 @@ Vues listes du bloc « Compute (technique) » de la sidebar Mode Infra (chapitre
 
 **Légende :** contrat d'intégration UI d'une page apportée par un plugin. Sans plugin IA installé, la page n'existe pas — l'entrée « Assistant IA » de la section Plugins de la sidebar (chapitre [13-ui-principes.md](13-ui-principes.md)) est ajoutée dynamiquement. Le chrome de la page est standard WindFlow (sidebar, header) ; le contenu est rendu par l'extension UI du plugin via les endpoints `/plugins/ai/*` (chapitres [18-plugins-ia.md](18-plugins-ia.md) et [09-api.md](09-api.md)). L'encart « Contexte accessible » explicite le périmètre : contexte de l'instance oui, secrets jamais. Les suggestions sont accompagnées d'actions de navigation/copy — **rien n'est exécuté ni déployé automatiquement**. Cette maquette sert de contrat de référence pour toute page plugin ; les autres pages plugins (Domaines, Monitoring, Backups) ne sont volontairement pas maquettées.
 
+## Écran 27 — Clusters (liste et détail)
+
+**Arbitrage UI** : plutôt qu'un Écran 10 renommé « Hosts & Clusters » (qui brouillerait la sémantique « Hosts = substrats individuels »), les grappes multi-nœuds obtiennent leur **propre écran** au gabarit existant (titre + compteur, filtres, bouton d'ajout, cards avec actions inline) — cohérent avec le rang de première classe de l'entité. Entrée de navigation : section Workloads des sidebars, sous « Hosts » (icône ⎈, chapitre 02). La card k3s-cluster autrefois dans l'Écran 10 vit ici, avec ses métriques agrégées.
+
+Liste :
+
+```
+┌─ Clusters ─────────────────────────────────[+ Ajouter un Cluster]───────┐
+│  Mes Clusters (2)           [▼ Tous types] [▼ Tous statuts]             │
+│                                                                           │
+│  ┌─ ⎈ k3s-cluster ──────────────────────────── 🟢 Healthy ───────────┐  │
+│  │  Type : Kubernetes (k3s v1.28.5) · kubeconfig · Origine : Adopté   │  │
+│  │  Membres : 3 (1 control-plane · 2 workers) · 23 pods · 4 ns        │  │
+│  │  Agrégé : CPU 22% · RAM 8.4/24 GB                                  │  │
+│  │  Héberge : 4 Apps (helm_release, k8s_manifest)                     │  │
+│  │  [📊 Détails] [🖥 kubectl] [📋 events]                          [⋯] │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│  ┌─ ⎈ prox-cluster ─────────────────────────── 🟢 Healthy ───────────┐  │
+│  │  Type : Proxmox VE 8.1 (quorum 2 nodes) · API cluster              │  │
+│  │  Membres : 2 nodes (prox-home, prox-2) · 15 VMs · 4 LXC            │  │
+│  │  Agrégé : CPU 8% · RAM 22/64 GB                                    │  │
+│  │  [📊 Détails] [🖥 Console nœud ▾] [📋 tâches]                   [⋯] │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+Détail (squelette invariant, onglets canoniques Clusters — chapitre 02) :
+
+```
+┌─ Détail Cluster : k3s-cluster ───────────────────────────────────────────┐
+│  ⎈ k3s-cluster                    🟢 Healthy · 3 nodes          [🖥]      │
+│  Kubernetes k3s v1.28.5 · kubeconfig · Origine : Adopté                  │
+│  CPU 22% · RAM 8.4/24 GB · 23 pods · 4 namespaces                        │
+│                                                                           │
+│  [🔗 Ouvrir dashboard] [📊 Santé] [📋 Events] [🖥 Console nœud ▾] [⚙][⋯] │
+│                                                                           │
+│  ┌Aperçu┬Nœuds & Membres┬Santé┬Workloads hébergés┬Config─────────────┐   │
+│  │                                                                │   │
+│  │  ┌─ Nœuds & Membres (3) ─────────────────────────────────────┐   │   │
+│  │  │  pi4-home    control-plane · Host · ready · v1.28.5       │   │   │
+│  │  │  k3s-node-1  worker · Machine LXC (sur prox-home) · ready │   │   │
+│  │  │  k3s-node-2  worker · Machine KVM (sur nas-server) · ready│   │   │
+│  │  │  💡 L'appartenance est orthogonale à l'hébergement —      │   │   │
+│  │  │     chaque nœud reste hébergé par son Host physique.      │   │   │
+│  │  └───────────────────────────────────────────────────────────┘   │   │
+│  │  ┌─ Workloads hébergés (4) ──────────────────────────────────┐   │   │
+│  │  │  ⎈ web (helm_release · namespace windflow) 🟢             │   │   │
+│  │  │  ⎈ cert-manager (k8s_manifest) 🟢                         │   │   │
+│  │  │                                  [+ Déployer une App ici] │   │   │
+│  │  └───────────────────────────────────────────────────────────┘   │   │
+│  └────────────────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Légende :** les trois types (`kubernetes`, `proxmox`, `docker_swarm`) partagent le même gabarit — seuls les libellés changent (rôles `control-plane`/`worker` vs `member`/`manager`, dashboard vs port Swarm). La note `💡` rappelle l'orthogonalité hébergement/appartenance (chapitre 02). En Mode App, l'écran reste accessible (c'est une vue d'infrastructure), mais sans exposer pods/namespaces comme termes techniques — les compteurs restent. Wizard d'ajout : Écran 13 (`[⎈ Ajouter un Cluster à la place]`). Source de données : endpoints `/clusters` (chapitre [09-api.md](09-api.md)).
+
 ## Écran E1 (piste d'évolution) — Réseaux : vue infra éditable
 
-**Piste d'évolution, non comptée dans les 26 écrans livrés.** Vue Vue Flow des networks et containers d'un Host, **éditable** — à distinguer du Graphe de dépendances (Écran 20, lecture seule) et de l'Éditeur de composition (Écran 21, round-trip compose) : ici les liens représentent les connexions réseau réelles, manipulables à chaud. Point d'entrée : onglet Networks de la vue listes Mode Infra (Écran 25) → bascule `[🕸 Vue infra]`.
+**Piste d'évolution, non comptée dans les 27 écrans livrés.** Vue Vue Flow des networks et containers d'un Host, **éditable** — à distinguer du Graphe de dépendances (Écran 20, lecture seule) et de l'Éditeur de composition (Écran 21, round-trip compose) : ici les liens représentent les connexions réseau réelles, manipulables à chaud. Point d'entrée : onglet Networks de la vue listes Mode Infra (Écran 25) → bascule `[🕸 Vue infra]`.
 
 ```
 ┌─ Réseaux : nas-server ──────────────────────────────────────────────────────┐
@@ -1018,10 +1068,10 @@ Vues listes du bloc « Compute (technique) » de la sidebar Mode Infra (chapitre
 | 7 | Détail Machine | Machines | App/Infra | Proxmox + Incus | Onglets VNC/Disques/Snapshots/Hardware ; « Apps hébergées » conditionnel |
 | 8 | Snapshots (arbre) | Machines | App/Infra | Proxmox + VMware | Arbre interactif, alerte chaînes longues |
 | 9 | Hardware Editor | Machines | App/Infra | Proxmox + VirtualBox | Indicateur ↻, toggle XML libvirt (Mode Infra) |
-| 10 | Liste Hosts | Hosts | App | Coolify + Proxmox | Moteurs détectés, cas récursif explicite |
+| 10 | Liste Hosts | Hosts | App | Coolify | Moteurs détectés, cas récursif explicite ; grappes renvoyées vers l'Écran 27 |
 | 11 | Détail Host (baremetal) | Hosts | App | Coolify + Proxmox | Onglets Apps/Machines/Services ; création contextuelle |
 | 12 | Détail Host (Machine-as-Host) | Hosts | App | spécifique WindFlow | Navigation croisée [→ Gérer comme Machine] |
-| 13 | Wizard Ajouter un Host | Hosts | App | Coolify + Proxmox | 4 profils, détection des moteurs et objets adoptables |
+| 13 | Wizard Ajouter un Host | Hosts/Clusters | App | Coolify + Proxmox | 3 profils de Host + création de Cluster, détection des moteurs et objets adoptables |
 | 14 | Adoption d'objets découverts | toutes | App | Proxmox + Portainer | Adoption granulaire, non-destructive, différable |
 | 15 | Wizard création manuelle | Apps/Machines | Infra | Proxmox + Incus | Wizard unifié, sections adaptées au type |
 | 16 | Volume Browser | Apps | App/Infra | CasaOS + Nextcloud | Preview inline, breadcrumbs, drag & drop |
@@ -1035,6 +1085,7 @@ Vues listes du bloc « Compute (technique) » de la sidebar Mode Infra (chapitre
 | 24 | Login / SSO | — | — | spécifique WindFlow | Auth JWT native + bouton SSO apporté par le plugin Keycloak |
 | 25 | Vues listes Mode Infra (Stacks · Volumes · Networks · Images) | toutes | Infra | Portainer | Maquette de référence + variantes par onglet |
 | 26 | Assistant IA (page plugin) | — | App/Infra | spécifique WindFlow | Contrat d'intégration plugin : chat, contexte sans secrets, zéro auto-exécution |
+| 27 | Clusters (liste et détail) | Clusters | App/Infra | Proxmox (cluster view) + Coolify | Grappes k8s/Proxmox/Swarm : membres avec rôles, santé, workloads hébergés |
 | E1 *(évolution)* | Réseaux — vue infra éditable | toutes | Infra | Portainer + Écrans 20/21 WindFlow | connect/disconnect à chaud, positions persistées |
 
 L'onboarding (wizard de premier lancement) est décrit au chapitre [13-ui-principes.md](13-ui-principes.md) ; les variantes mobile/tablette également.

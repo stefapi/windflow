@@ -106,6 +106,7 @@ Les sidebars ci-dessous constituent la **référence unique** de navigation Wind
 │  📱  Apps                │  ← profil révélé dans le header
 │  🖥️  Machines           │
 │  🖧  Hosts               │
+│  ⎈  Clusters            │  ← entité Cluster (Mode Infra uniquement)
 │                          │
 │  🏪  Marketplace         │
 │  🔌  Plugins             │
@@ -255,7 +256,7 @@ Les tokens complets et les composants détaillés sont dans [../technical_specs/
 ## Voir aussi
 
 - [02-familles-workloads.md](02-familles-workloads.md) — grammaire UI par famille dont ce chapitre est l'application
-- [14-ui-maquettes.md](14-ui-maquettes.md) — les 26 écrans maquettés
+- [14-ui-maquettes.md](14-ui-maquettes.md) — les 27 écrans maquettés
 - [03-modele-compute.md](03-modele-compute.md) — vue Compute révélée en Mode Infra
 - [12-marketplace.md](12-marketplace.md) — structure 3 onglets derrière l'écran Marketplace
 - [../technical_specs/DESIGN-SYSTEM.md](../technical_specs/DESIGN-SYSTEM.md) — design system détaillé

@@ -260,7 +260,7 @@ windflow/
 
 **Machine Service** — pilote les workloads de la famille Machines via les adapters (`KVMAdapter`, `LXDAdapter`, `IncusAdapter`, `LXCAdapter`, `VirtualBoxAdapter`). Chaque adapter implémente l'interface commune `MachineAdapter` (chapitre 02) : power, snapshots, console VNC/SPICE, hardware, export de disques.
 
-**Host Service** — gère les Hosts (le terme historique *target* est remplacé par Host partout). Fournit l'inventaire des substrats et leurs moteurs détectés (Docker, libvirt, Kubernetes…) via les adapters `BaremetalHostAdapter`, `ProxmoxHostAdapter`, `KubernetesHostAdapter`, `RemoteDockerHostAdapter`. C'est lui qui exécute la découverte et l'adoption d'objets existants (chapitre 03).
+**Host Service** — gère les Hosts (le terme historique *target* est remplacé par Host partout) : substrats individuels et leurs moteurs détectés (Docker, libvirt…) via les adapters `BaremetalHostAdapter`, `ProxmoxHostAdapter`, `RemoteDockerHostAdapter`. **Cluster Service** — gère les grappes multi-nœuds du chapitre 02 (Kubernetes, Proxmox, Swarm) via `KubernetesClusterAdapter`, `ProxmoxClusterAdapter`, `SwarmClusterAdapter` : connexion (kubeconfig/API/socket), membres, santé, Apps cluster-scoped. C'est le Host Service qui exécute la découverte et l'adoption d'objets existants (chapitre 03) ; le Cluster Service scanne ses grappes via leur API propre.
 
 **Stack Service** — gère les stacks (groupes de services) avec versioning, templates Jinja2 et configuration. Les stacks peuvent venir de la marketplace, d'un dépôt Git (plugin), ou être créées manuellement (chapitre 03).
 

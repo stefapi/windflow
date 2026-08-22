@@ -19,7 +19,7 @@ WindFlow est le source of truth. Il a créé l'objet, en connaît la configurati
 Une stack WindFlow est un **environnement nommé** qui regroupe un ensemble d'objets Compute liés fonctionnellement. Elle peut contenir :
 
 - un ou plusieurs containers Docker définis via un Compose intégré ;
-- une ou plusieurs releases Helm sur un cluster Kubernetes connecté ;
+- une ou plusieurs releases Helm sur un Cluster Kubernetes connecté (entité Cluster, chapitre 02) ;
 - une ou plusieurs Machines (KVM ou LXD), provisionnées depuis un template cloud-init ;
 - ou un **mélange des trois** (stack mixte).
 
@@ -31,7 +31,7 @@ WindFlow a détecté l'objet lors du scan d'un Host, mais ne l'a pas créé. Il 
 
 - **Containers Docker orphelins** — présents sur le daemon Docker mais non connus de WindFlow ;
 - **Compositions Compose** — fichiers `docker-compose.yml` ou `compose.yaml` détectés sur le système de fichiers du Host, avec leurs containers associés ;
-- **Releases Helm** — releases déployées sur un cluster Kubernetes connecté (`helm list`) ;
+- **Releases Helm** — releases déployées sur un Cluster Kubernetes connecté (`helm list`) ;
 - **VMs libvirt** — VMs présentes dans libvirt (`virsh list --all`) non créées par WindFlow ;
 - **VMs et containers LXC** — instances détectées via LXD ou Incus mais non créées par WindFlow.
 
@@ -53,7 +53,7 @@ Objet créé directement depuis WindFlow, sans appartenir à une stack. WindFlow
 | VM | LXD / Incus | LXD / Incus | Instance VM ou system container |
 | VM | LXC | via Host `host_proxmox` | Container système |
 
-Proxmox n'est **pas** un backend de VM dans cette taxonomie : les VMs et LXC hébergés par un serveur Proxmox sont des Machines standard, pilotées via le Host `host_proxmox` (chapitre 02).
+Proxmox n'est **pas** un backend de VM dans cette taxonomie : les VMs et LXC hébergés par un serveur Proxmox sont des Machines standard, pilotées via le Host `host_proxmox` isolé ou via l'entité **Cluster** de type `proxmox` (chapitre 02).
 
 ## Matrice canonique « profil × origine »
 
@@ -67,7 +67,7 @@ La taxonomie ci-dessus est affinée par un croisement canonique : l'axe **profil
 | **`adopted`** | Découvert puis **adopté** par WindFlow (wizard d'adoption) | **Complet après adoption** — WindFlow devient source of truth | Cycle de vie complet, identique à `managed`, dès la fin du wizard (sans interruption de service) |
 | **`external`** | Pré-existant / à côté, **jamais managé** par WindFlow | **Lecture seule** — observation | Observation (logs, métriques, état) et **adoption uniquement** — jamais stop/remove/update direct |
 
-Articulation avec l'axe 1 (niveau de contrôle) : les objets `managed` correspondent aux stacks WindFlow et aux standalones ; les objets `external` sont les objets *discovered* **non adoptés** (section « Discovered » de la vue globale) ; le wizard d'adoption fait passer un objet de `external` à `adopted`. L'origine s'applique aussi aux Machines (`machines.origin`, chapitre 06) ; la matrice ci-dessous porte sur les 4 profils conteneurs.
+Articulation avec l'axe 1 (niveau de contrôle) : les objets `managed` correspondent aux stacks WindFlow et aux standalones ; les objets `external` sont les objets *discovered* **non adoptés** (section « Discovered » de la vue globale) ; le wizard d'adoption fait passer un objet de `external` à `adopted`. L'origine s'applique aussi aux Machines (`machines.origin`) et aux **Clusters** (`clusters.origin` — un cluster externe découvert reste un Cluster d'origine `external`, cohérent avec la matrice ; chapitre 06) ; la matrice ci-dessous porte sur les 4 profils conteneurs.
 
 ### La matrice
 
@@ -100,7 +100,7 @@ Une fois l'objet adopté, l'origine `adopted` est portée en base (`origin`) —
 
 ### Lecture depuis le modèle de données
 
-La matrice se lit directement depuis le schéma (chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)) : l'axe profil est la colonne `profile` (`apps.profile`), l'axe origine est la colonne `origin` (`apps.origin`, `machines.origin` — enum `WorkloadOrigin` : `managed | adopted | external`). La cellule d'un objet vaut `(profile, origin)`. L'ancien booléen `adopted_from_discovered` est remplacé par `origin` (correspondance documentée au chapitre 06).
+La matrice se lit directement depuis le schéma (chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)) : l'axe profil est la colonne `profile` (`apps.profile`), l'axe origine est la colonne `origin` (`apps.origin`, `machines.origin`, `clusters.origin` — enum `WorkloadOrigin` : `managed | adopted | external`). La cellule d'un objet vaut `(profile, origin)`. L'ancien booléen `adopted_from_discovered` est remplacé par `origin` (correspondance documentée au chapitre 06).
 
 ## Vue Compute (Mode Infra)
 
@@ -151,7 +151,7 @@ La vue globale expose des filtres combinables :
 
 - **Niveau de contrôle** : Stacks WindFlow / Discovered / Standalone — combinable avec l'origine (`managed` / `adopted` / `external`, voir [Matrice canonique « profil × origine »](#matrice-canonique-profil--origine)) ;
 - **Technologie** : Docker / Compose / Helm / VM KVM / LXD / LXC / Incus ;
-- **Host** : filtrer par Host (local, nas-server, pi4-home, k3s-cluster…) ;
+- **Host** : filtrer par Host ou par Cluster (local, nas-server, pi4-home, k3s-cluster…) ;
 - **Statut** : running / stopped / paused / exited / suspended ;
 - **Recherche libre** : nom, image, OS.
 
@@ -353,12 +353,28 @@ GET /api2/json/nodes/{node}/qemu      # VMs
 GET /api2/json/nodes/{node}/lxc       # LXC
 ```
 
-**Sur un Host `host_kubernetes` :**
+**Sur un Cluster `kubernetes` (API du cluster, kubeconfig) :**
 
 ```bash
-kubectl get pods --all-namespaces
-helm list --all-namespaces
+kubectl get nodes -o wide             # membres : noms, rôles (control-plane/worker), versions
+kubectl get pods --all-namespaces     # workloads (cluster-level)
+helm list --all-namespaces            # releases
 ```
+
+**Sur un Cluster `proxmox` (API du cluster) :**
+
+```bash
+GET /api2/json/cluster/status         # nœuds du quorum et quorum lui-même
+```
+
+**Sur un Cluster `docker_swarm` (socket/API Docker) :**
+
+```bash
+docker node ls                        # managers/workers
+docker stack ls                       # stacks Swarm
+```
+
+**Scan du Cluster vs scan des nœuds.** Le scan *cluster-scoped* (ci-dessus) interroge l'**API de la grappe** : workloads, releases, événements, santé des membres — il ne remplace jamais le scan SSH des nœuds individuels, qui reste le rôle des Hosts/Machines membres (moteurs, services système, hardware). Les deux scans sont complémentaires : `clusters.last_scan_at` pour le premier, `hosts.last_scan_at` / `machines` pour le second. Les pods découverts portent leur `node_name` (visible en découverte via `kubectl get pods -o wide`) : lorsqu'un nœud correspond à un membre connu (Machine/Host de `cluster_members`), le pod est **rattachable à ce membre** dans l'UI (colonne nœud, vue par Host) — le rattachement reste informatif, l'App reste hébergée par le Cluster (`apps.cluster_id`).
 
 ### Réconciliation
 

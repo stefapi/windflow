@@ -12,16 +12,18 @@ Le modèle à trois familles est spécifié au chapitre [02-familles-workloads.m
 
 | Terme | Définition | Spécifié au |
 |---|---|---|
-| **Workload** | Terme générique désignant tout objet géré par WindFlow : une App, une Machine ou un Host. | [02-familles-workloads.md](02-familles-workloads.md) |
+| **Workload** | Terme générique désignant tout objet géré par WindFlow : une App, une Machine, un Host ou un Cluster. | [02-familles-workloads.md](02-familles-workloads.md) |
 | **Famille** | L'une des trois familles distinctes du modèle : Apps, Machines, Hosts. | [02-familles-workloads.md](02-familles-workloads.md) |
 | **App** | Workload *container-based* : service installé via Docker, Podman, Compose, Helm, manifests K8s, ou service systemd adopté (profil `app_native_service`). Identité : « je déploie un service ». | [02-familles-workloads.md](02-familles-workloads.md) |
 | **Machine** | Workload *VM-based* : machine virtuelle avec son OS complet (KVM, LXD, Incus, LXC, VirtualBox). Identité : « je gère une machine ». Un system container (LXC/LXD mode container) est une Machine, pas une App. | [02-familles-workloads.md](02-familles-workloads.md) |
-| **Host** | Substrat d'exécution (machine physique, serveur Proxmox, cluster Kubernetes, daemon Docker distant) qui héberge Apps et Machines. Un Host n'est pas déployé par WindFlow : il est **adopté**. | [02-familles-workloads.md](02-familles-workloads.md) |
+| **Host** | Substrat d'exécution **individuel** (machine physique, serveur Proxmox VE isolé, daemon Docker distant) qui héberge Apps et Machines. Un Host n'est pas déployé par WindFlow : il est **adopté**. Un cluster Kubernetes ou un cluster Proxmox multi-nœuds n'est **pas** un Host — c'est un Cluster. | [02-familles-workloads.md](02-familles-workloads.md) |
+| **Cluster** | Entité de premier rang (aux côtés des familles) : grappe multi-nœuds pilotée par une API de cluster propre. Types : `kubernetes` (k8s/k3s/microk8s, kubeconfig), `proxmox` (quorum corosync, API), `docker_swarm` (socket/API). Un Cluster est **constitué de membres** (Hosts et/ou Machines) et **héberge des Apps** cluster-scoped (`helm_release`, `k8s_manifest`). Porte une origine `managed`/`adopted`/`external`. | [02-familles-workloads.md](02-familles-workloads.md) |
+| **Membre (cluster)** | Relation d'appartenance entre un Host/une Machine et un Cluster (table `cluster_members`, rôle `control-plane`/`worker`/`member`, k8s labels/taints en JSON). Un Host/une Machine est membre d'**au plus un** Cluster ; l'appartenance est **orthogonale** à l'hébergement (une VM nœud reste hébergée par son Host physique). | [02-familles-workloads.md](02-familles-workloads.md), [06-modele-de-donnees.md](06-modele-de-donnees.md) |
 | **Profil** | Sous-type technique d'un workload (ex. `docker_compose`, `vm_kvm`, `host_proxmox`). Invisible en Mode App, révélé en Mode Infra. | [02-familles-workloads.md](02-familles-workloads.md) |
 | **WorkloadAdapter** | Pattern qui traduit les verbes universels d'une famille en opérations natives du profil (`AppAdapter`, `MachineAdapter`, `HostAdapter` et leurs spécialisations). | [02-familles-workloads.md](02-familles-workloads.md) |
 | **Verbes universels** | Actions canoniques exposées dans l'UI par famille (ex. Apps : Ouvrir, Démarrer/Arrêter/Redémarrer, Mettre à jour, Sauvegarder, Configurer, Logs, Console). | [02-familles-workloads.md](02-familles-workloads.md) |
 | **ContextualAction** | Action spécifique au profil, exposée dans le menu `[⋯ Plus]` et organisée en cinq sections (Cycle de vie, Configuration, Données, Avancé, Dangereux). | [02-familles-workloads.md](02-familles-workloads.md) |
-| **Relation d'hébergement** | Une Machine est hébergée par un et un seul Host. Une App est hébergée par un et un seul hôte — soit un Host (conteneur posé directement sur le substrat), soit une Machine (conteneur dans le daemon Docker de la VM) — exactement un des deux (`apps.host_id` XOR `apps.machine_id`). Un Host comme une Machine peut héberger plusieurs Apps. Exposée dans les cards, détails et filtres « Sur quel Host ? ». | [02-familles-workloads.md](02-familles-workloads.md) |
+| **Relation d'hébergement** | Une Machine est hébergée par un et un seul Host. Une App est hébergée par un et un seul hôte — un Host (conteneur posé directement sur le substrat), une Machine (conteneur dans le daemon Docker de la VM) **ou un Cluster** (App cluster-scoped : helm_release, k8s_manifest) — exactement un des trois (`apps.host_id` XOR `apps.machine_id` XOR `apps.cluster_id`, triple XOR). Un Host, une Machine ou un Cluster peut héberger plusieurs Apps. Exposée dans les cards, détails et filtres « Sur quel Host ? ». | [02-familles-workloads.md](02-familles-workloads.md) |
 | **Migration** | Déplacement d'une App ou d'une Machine vers un autre Host (export volumes + redéploiement, live/cold migration KVM), via `[⋯ Plus]` → Avancé. | [02-familles-workloads.md](02-familles-workloads.md) |
 
 ### Profils canoniques par famille
@@ -30,9 +32,10 @@ Le modèle à trois familles est spécifié au chapitre [02-familles-workloads.m
 |---|---|
 | Apps | `docker_container`, `docker_compose`, `helm_release`, `k8s_manifest`, `app_native_service` |
 | Machines | `vm_kvm`, `vm_lxd`, `vm_incus`, `vm_virtualbox`, `vm_lxc` |
-| Hosts | `host_baremetal`, `host_proxmox`, `host_kubernetes`, `host_remote_docker` |
+| Hosts | `host_baremetal`, `host_proxmox`, `host_remote_docker` |
+| Clusters (types) | `kubernetes`, `proxmox`, `docker_swarm` |
 
-**Arbitrage backends VM** : les backends de Machines sont KVM/libvirt, LXD, Incus, VirtualBox et LXC. Proxmox n'est **pas** un backend de VM — c'est un profil de Host (`host_proxmox`) ; les VMs qu'il héberge sont des Machines standard (chapitre [02-familles-workloads.md](02-familles-workloads.md), voir aussi [../technical_specs/VIRTUALIZATION-SYSTEMS.md](../technical_specs/VIRTUALIZATION-SYSTEMS.md)).
+**Arbitrage backends VM** : les backends de Machines sont KVM/libvirt, LXD, Incus, VirtualBox et LXC. Proxmox n'est **pas** un backend de VM — un serveur isolé est un Host (`host_proxmox`), un cluster multi-nœuds une entité Cluster (`proxmox`) ; les VMs qu'il héberge sont dans tous les cas des Machines standard (chapitre [02-familles-workloads.md](02-familles-workloads.md), voir aussi [../technical_specs/VIRTUALIZATION-SYSTEMS.md](../technical_specs/VIRTUALIZATION-SYSTEMS.md)). L'ancien profil `host_kubernetes` est supprimé — un cluster Kubernetes est une entité Cluster de type `kubernetes`.
 
 ## Les deux modes UI
 
@@ -42,6 +45,8 @@ Le modèle à trois familles est spécifié au chapitre [02-familles-workloads.m
 | **Mode Infra** | UI augmentée : section Compute par technologie, onglets techniques (Composants techniques, Manifest, Définition libvirt XML, Moteurs installés, Scan & Diagnostics), Audit. | [02-familles-workloads.md](02-familles-workloads.md) |
 | **Mode Infra ciblé** | Mode Infra activé pour une seule page workload (toggle « Voir les composants techniques »), sans bascule globale. | [02-familles-workloads.md](02-familles-workloads.md) |
 | **Vue Compute** | Vue par technologie (containers, VMs, stacks, images, snapshots) exposée en Mode Infra uniquement — complément des familles, pas un remplaçant. | [03-modele-compute.md](03-modele-compute.md) |
+
+Le Cluster est une entité d'infrastructure visible en Mode App (liste Clusters) mais sans jargon technique (pods, namespaces, kubeconfig) ; ses onglets techniques (Namespaces & Events, Scan & Diagnostics) ne sont révélés qu'en Mode Infra.
 
 ## Objets Compute et niveaux de contrôle
 

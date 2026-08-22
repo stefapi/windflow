@@ -75,7 +75,7 @@ Le concept central de **niveaux de contrôle** sur les objets Compute (stacks g�
 ### Pour l'administrateur système
 
 - **Machines et Apps côte à côte** : KVM/libvirt, LXD, Incus, VirtualBox pour les Machines ; Docker, Podman ou Kubernetes pour les Apps — le tout accessible au travers d'un SSH ou d'APIs natives.
-- **Proxmox comme Host** : un serveur ou cluster Proxmox VE s'ajoute comme Host (`host_proxmox`) ; ses VMs deviennent des Machines standard.
+- **Proxmox managé** : un serveur Proxmox VE isolé s'ajoute comme Host (`host_proxmox`), un cluster Proxmox multi-nœuds comme entité **Cluster** ; ses VMs deviennent des Machines standard dans tous les cas.
 - **Profondeur Portainer** pour les containers : logs inline, terminal exec, gestion des images/volumes/réseaux, variables d'environnement et labels, métriques live.
 - **Console VNC/SPICE** intégrée au navigateur pour les Machines, sans client lourd.
 - **Volume browser** : naviguer, éditer, uploader des fichiers dans les volumes sans accès SSH.
