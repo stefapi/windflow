@@ -4,7 +4,7 @@
 
 ## Vue d'ensemble
 
-Ce chapitre présente les **19 écrans** de l'interface WindFlow, renumérotés et nettoyés de tout vestige. Chaque maquette est un bloc ASCII avec sa légende ; la grammaire UI (squelette, action bars, onglets canoniques) et la navigation de référence sont définies aux chapitres [02-familles-workloads.md](02-familles-workloads.md) et [13-ui-principes.md](13-ui-principes.md) — ce chapitre montre des instances concrètes. Valeurs d'exemple cohérentes : Apps `nextcloud`, `gitea`, `jellyfin` ; Machines `ubuntu-dev`, `pfsense-router` ; Hosts `nas-server`, `pi4-home`, `k3s-cluster`, `prox-home`.
+Ce chapitre présente les **26 écrans** de l'interface WindFlow, renumérotés et nettoyés de tout vestige. Chaque maquette est un bloc ASCII avec sa légende ; la grammaire UI (squelette, action bars, onglets canoniques) et la navigation de référence sont définies aux chapitres [02-familles-workloads.md](02-familles-workloads.md) et [13-ui-principes.md](13-ui-principes.md) — ce chapitre montre des instances concrètes. Les Écrans 20 et 21 sont rendus avec Vue Flow (chapitre [05-stack-technologique.md](05-stack-technologique.md)). Les Écrans 22 à 25 complètent le Mode Infra (Vue Compute, vues listes Stacks/Volumes/Networks/Images) et les écrans transverses (Settings, Login/SSO) ; l'Écran 26 est le contrat d'intégration UI des plugins IA (page apportée par un plugin, pas un écran core). Valeurs d'exemple cohérentes : Apps `nextcloud`, `gitea`, `jellyfin` ; Machines `ubuntu-dev`, `pfsense-router` ; Hosts `nas-server`, `pi4-home`, `k3s-cluster`, `prox-home`.
 
 ## Écran 1 — Dashboard (homepage)
 
@@ -110,7 +110,7 @@ Inspiré de Proxmox (onglets) + Cosmos (URL/routing) + Cloudron (backup + domain
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Légende :** onglets canoniques Apps (Aperçu → Config), onglet « Domaine » ajouté par le plugin Traefik, actions contextuelles des plugins en bas de l'Aperçu. En Mode Infra : onglets additionnels « Composants techniques » et « Manifest ».
+**Légende :** onglets canoniques Apps (Aperçu → Config), onglet « Domaine » ajouté par le plugin Traefik, actions contextuelles des plugins en bas de l'Aperçu. En Mode Infra : onglets additionnels « Composants techniques » (qui donne accès au Graphe de dépendances — Écran 20) et « Manifest ».
 
 ## Écran 4 — Marketplace
 
@@ -571,7 +571,7 @@ Inspiré de Proxmox (Create VM/CT) + Incus. Point d'entrée `[+ Nouvelle App]` /
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Légende :** le wizard partage stepper, sections « Nom / Host / Ressources » et bouton « Déployer » entre types ; seules les sections spécifiques diffèrent (Image Docker vs Template OS, Ports vs Cloud-init). La variante Container expose Nom, Image (avec recherche), Host, RAM/CPU limits, Ports, et les sections dépliables Volumes / Réseau / Env vars / Labels.
+**Légende :** le wizard partage stepper, sections « Nom / Host / Ressources » et bouton « Déployer » entre types ; seules les sections spécifiques diffèrent (Image Docker vs Template OS, Ports vs Cloud-init). La variante Container expose Nom, Image (avec recherche), Host, RAM/CPU limits, Ports, et les sections dépliables Volumes / Réseau / Env vars / Labels. La variante Stack (Compose) propose à l'étape Config un lien « Éditer visuellement » vers l'Éditeur de composition (Écran 21).
 
 ## Écran 16 — Volume Browser
 
@@ -691,6 +691,292 @@ Inspiré de Cloudron (Activity log) + Umbrel (Activity tab). Journal chronologiq
 
 **Légende :** chaque entrée montre qui, quand, quoi, et le résultat ; actions directes (« Renouveler », « Voir les logs », « Réessayer »). Les événements de sécurité y sont visibles (l'audit complet et sa rétention : chapitre [15-securite.md](15-securite.md)).
 
+## Écran 20 — Graphe de dépendances
+
+Inspiré du `WorkflowEditor` WindFlow existant (précédent Vue Flow interne) + viewers type Portainer/Compose. Vue **lecture seule** rendue avec Vue Flow + dagre (layout automatique). Nœuds = services conteneurs, arêtes = `depends_on`. Trois points d'entrée : l'onglet « Composants techniques » du Détail App (Écran 3, Mode Infra), la vue Compute (chapitre [03-modele-compute.md](03-modele-compute.md)) et le détail d'une stack (vue Stacks).
+
+```
+┌─ Graphe de dépendances ──────────────────────────────────────────────────────┐
+│  ⊞ Par application   [App ▾: Toutes] [Origine ▾: Toutes] [Statut ▾: Tous]   │
+│  ⚠ 1 cycle détecté : baserow-web → baserow-backend → baserow-web            │
+│                                                                            │
+│  ┌─ 🖧 nas-server ──────────────────────────────────────────────────┐      │
+│  │  ┌─ ☁️ App « baserow » (docker_compose · Managé) ──────────────┐ │      │
+│  │  │                                                             │ │      │
+│  │  │   ┌──────────────┐        ┌──────────────┐                  │ │      │
+│  │  │   │ 🗄 baserow-db │◀───────│ 🛠 baserow-  │                  │ │      │
+│  │  │   │ postgres:15  │ healthy│ backend      │                  │ │      │
+│  │  │   │ 🟢 Managé    │        │ 🟢 Managé    │                  │ │      │
+│  │  │   └──────────────┘        └──────┬───────┘                  │ │      │
+│  │  │                                  │ service_started           │ │      │
+│  │  │                                  ▼                          │ │      │
+│  │  │   ┌──────────────┐        ┌──────────────┐                  │ │      │
+│  │  │   │ 🌐 traefik    │◀───────│ 🖥 baserow-  │                  │ │      │
+│  │  │   │ Externe      │        │ web          │                  │ │      │
+│  │  │   │ 🟢 [Adopter] │        │ 🟢 Managé    │                  │ │      │
+│  │  │   └──────────────┘        └──────────────┘                  │ │      │
+│  │  └─────────────────────────────────────────────────────────────┘ │      │
+│  └──────────────────────────────────────────────────────────────────┘      │
+│  🔍 ──────── ·  [⊞ Réorganiser (dagre)]  [⤢ Ajuster]  [⋯]   ┌─────┐        │
+│  Zoom: − 100% +                          Minimap ▢          │ ▢ │        │
+│                                                            └─────┘        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Légende :** lecture seule — aucun nœud ni arête éditable. Chaque nœud porte l'icône du profil (`docker_container` / `docker_compose`), le badge d'origine (`Managé` / `Adopté` / `Externe`) et le statut runtime (🟢 running / 🔴 stopped / 🟡 degraded). Les arêtes `depends_on` portent la condition (`service_started` / `service_healthy`) quand elle est disponible. Regroupement par application (sous-graphe/cluster par App), l'app hôte affichée en amont (nas-server) — respect de la relation d'hébergement Host/Machine (chapitre [02-familles-workloads.md](02-familles-workloads.md)) ; les arêtes animées reflètent l'activité runtime. Filtres par application, origine et statut. Minimap, zoom/pan (Controls), bouton « Réorganiser » relançant le layout dagre. Clic sur un nœud → Détail App (Écran 3) ou fiche conteneur Compute. Les nœuds `Externe` offrent un bouton `[Adopter]` qui renvoie au wizard d'adoption (Écran 14). Un cycle détecté affiche un bandeau `⚠` (détection transposable du moteur de dépendances plugins). Source de données : graphe normalisé `nodes`/`edges` exposé par l'API (chapitre [09-api.md](09-api.md) — `GET /compute/graph`, `GET /apps/{id}/graph`), dérivé du parsing des compose et de l'inspection runtime ; pour Kubernetes/Helm, arêtes entre workloads du même namespace (généralisation profil × origine, chapitre [03-modele-compute.md](03-modele-compute.md)).
+
+## Écran 21 — Éditeur de composition
+
+Inspiré du `WorkflowEditor` WindFlow existant (palette + canvas + propriétés) + éditeurs compose type Portainer. Éditeur **interactif** Vue Flow, Mode Infra uniquement, ciblant le profil `docker_compose`. Génération/sérialisation du compose depuis le graphe ; les autres profils restent en lecture seule (matrice profil × origine, chapitre [03-modele-compute.md](03-modele-compute.md)).
+
+```
+┌─ Éditeur de composition : baserow ───────────────────────────────────────────┐
+│  ┌─ Palette ────────┐  ┌─ Canvas ──────────────────────────────────────┐   │
+│  │ ── Nœuds ──      │  │  [↶ Undo] [↷ Redo] [🧲 Snap] [⊞ Réorganiser]   │   │
+│  │  🛠 Service   │  │        ┌──────────────┐                          │   │
+│  │  🌐 Réseau    │  │        │ 🛠 web        │◀────┐                    │   │
+│  │  💾 Volume    │  │        │ nginx:alpine │     │ service_started   │   │
+│  │ (glisser sur   │  │        └──────────────┘     │                    │   │
+│  │  le canvas)    │  │        ┌──────────────┐     │                    │   │
+│  │ ── Représ. ──  │  │        │ 🛠 backend   │─────┘                    │   │
+│  │ [⊞ Graphe]     │  │        └──────────────┘                          │   │
+│  │ [📋 YAML]      │  │             ▼                                  │   │
+│  │                │  │        ┌──────────────┐     ┌─────┐ Minimap      │   │
+│  │                │  │        │ 🗄 db         │     │ ▢ │              │   │
+│  │                │  │        └──────────────┘     └─────┘              │   │
+│  └────────────────┘  └─────────────────────────────────────────────────┘   │
+│  ┌─ Propriétés : 🛠 web ──────────────────────────────────────────────┐   │
+│  │  Image *  [nginx:alpine        ]   Ports  [80:80          ] (+)      │   │
+│  │  Env      [KEY=value         ] (+)   Volumes [data:/data   ] (+)     │   │
+│  │  Réseau  [▼ interne]  ⚠ Dépendances : aucune (créées par connexion) │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│  Graphe ⇄ YAML synchronisés ·     [Valider]  [Déployer]                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Légende :** palette de nœuds `Service` / `Réseau` / `Volume` à glisser sur le canvas ; panneau « Propriétés » latéral (image, ports, env, volumes ; `depends_on` créé par connexion entre deux services, condition éditable sur l'arête). Représentation double et synchrone **graphe ⇄ YAML** (le YAML reste éditable, two-way). Validation temps réel via `isValidConnection` (pas d'auto-boucle, pas de cycle — détection locale complétée par la validation serveur) ; boutons `[Valider]` (`POST /compute/stacks/validate`) et `[Déployer]` ; compose régénéré depuis les `nodes`/`edges`. Undo/redo, snapping + snaplines, minimap, zoom. Round-trip complet : réimport d'un compose existant → graphe. Trois cas d'usage : création manuelle (prolonge le wizard de l'Écran 15 — l'étape Config propose « Éditer visuellement »), édition d'une stack existante (depuis la vue Stacks), adoption (compose généré par le wizard d'adoption — Écran 14 — éditable avant déploiement). Mode Infra uniquement.
+
+Modèle de données du graphe (sérialisation JSON `nodes`/`edges`) :
+
+```json
+{
+  "nodes": [
+    { "id": "web", "type": "service", "data": { "image": "nginx:alpine", "ports": ["80:80"], "env": {}, "volumes": [], "networks": ["interne"] } },
+    { "id": "interne", "type": "network", "data": { "driver": "bridge" } },
+    { "id": "data", "type": "volume", "data": { "driver": "local" } }
+  ],
+  "edges": [
+    { "id": "web-backend", "source": "backend", "target": "web", "data": { "condition": "service_started" } }
+  ]
+}
+```
+
+Mapping compose : les arêtes `service → service` produisent `services.<cible>.depends_on` (avec `condition` si définie) ; les nœuds `network` deviennent des réseaux top-level (`networks:`) ; les nœuds `volume` des volumes top-level (`volumes:`). Endpoints : `POST /compute/stacks/from-graph` (génération compose), `POST /compute/stacks/validate` (chapitre [09-api.md](09-api.md)).
+
+## Écran 22 — Vue Compute (Mode Infra)
+
+Écran central du Mode Infra (chapitre [03-modele-compute.md](03-modele-compute.md)). Inspiré de Portainer (profondeur containers) + Proxmox (vue globale datacenter). La section **Compute** unifie ce qui serait autrement des sections séparées « Containers », « VMs », « Stacks » : les objets y sont affichés **par technologie**, pas par famille.
+
+### Vue globale (groupement logique)
+
+```
+┌─ Compute ───────────────────────────────────────────────────────────────────┐
+│  [Vue globale] [Containers] [VMs] [Images & ISOs] [Snapshots]               │
+│  Filtres : [▼ Niveau de contrôle] [▼ Technologie] [▼ Host] [▼ Statut] [🔍]  │
+│  Vue : (⊞ Logique — par stack)  (🖥 Par Host)                                │
+│                                                                             │
+│  ── 1. Stacks WindFlow ──────────────────────────────────────────────────── │
+│  ┌─ 📚 nextcloud · compose · nas-server ─────────────────────── 3/3 🟢 ──┐  │
+│  │   ├─ 📦 nextcloud   🟢 running · Managé      [🖥] [📋] [⋯]           │  │
+│  │   ├─ 📦 postgres    🟢 running · Managé      [🖥] [📋] [⋯]           │  │
+│  │   └─ 📦 redis       🟢 running · Managé      [🖥] [📋] [⋯]           │  │
+│  │   [⏵ Démarrer] [⏹ Arrêter] [🔄 Redéployer] [🕸 Graphe] [⋯]           │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│  ┌─ 📚 dev-env · compose mixte · nas-server ────────────────── all up 🟢 ┐  │
+│  │   ├─ 🖥️ ubuntu-dev   VM KVM 🟢 · Managé       [VNC] [📸] [⋯]         │  │
+│  │   ├─ 📦 postgres     🟢 running · Managé      [🖥] [📋] [⋯]           │  │
+│  │   └─ 📦 redis        🟢 running · Managé      [🖥] [📋] [⋯]           │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│  ┌─ ⎈ web · helm · k3s-cluster ─────────────────────────────── 5/5 🟢 ──┐  │
+│  │   └─ 5 workloads · namespace windflow           [🕸 Graphe] [⋯]       │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ── 2. Discovered — non managés ─────────────────────────────────────────── │
+│  ┌─ 📚 monitoring · compose détecté · nas-server ──── observé, adoptable ┐  │
+│  │   ├─ 📦 prometheus  🟢 running · Externe      [Adopter] [📋]          │  │
+│  │   └─ 📦 grafana     🟢 running · Externe      [Adopter] [📋]          │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│  ┌─ 🖥️ windows-legacy · VM KVM · local ───────────── observé, adoptable ─┐  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ── 3. Standalone ───────────────────────────────────────────────────────── │
+│  🖥️ pfsense-router   VM KVM    · local      · 🟢 running    [VNC] [⋯]       │
+│  🖥️ k3s-node-1       LXC       · prox-home  · 🟢 running    [Console] [⋯]   │
+│  📦 traefik          container · local      · 🟢 running    [🖥] [📋] [⋯]    │
+│  📦 pihole           container · pi4-home   · 🟢 running    [🖥] [📋] [⋯]    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Vue par Host (groupement physique)
+
+```
+┌─ Compute · Par Host ────────────────────────────────────────────────────────┐
+│  ┌─ 🖧 local ── Docker 24.0.7 · libvirt 9.0 ─────────────────────────────┐  │
+│  │  1 container · 1 VM · CPU 9% · RAM 3.1/8 GB                          │  │
+│  │  traefik 🟢 · windows-legacy ⚪ (adoptable)                           │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│  ┌─ 🖧 nas-server ── Docker 24.0.7 · libvirt 9.0 ────────────────────────┐  │
+│  │  8 containers · 3 VMs · CPU 18% · RAM 6.4/16 GB                      │  │
+│  │  nextcloud 3/3 🟢 · dev-env all up 🟢 · monitoring (adoptable)        │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│  ┌─ 🖧 k3s-cluster ── containerd · k3s v1.28.5 ──────────────────────────┐  │
+│  │  web (helm) 5/5 🟢 · 23 pods · 4 namespaces                          │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│  ┌─ 🖧 pi4-home ── Docker 24.0.7 ────────────────────────────────────────┐  │
+│  │  1 container · pihole 🟢                                             │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Légende :** la vue globale affiche les objets Compute en trois sections ordonnées (stacks managées → discovered → standalone). Onglets internes : Vue globale / Containers / VMs / Images & ISOs / Snapshots (chapitre 03). Filtres combinables : niveau de contrôle (croisé avec l'origine `managed`/`adopted`/`external` — chaque cellule de la matrice profil × origine est adressable), technologie, Host, statut, recherche libre. Chaque ligne porte le badge d'origine (`Managé` / `Adopté` / `Externe`) et des actions conditionnées par la cellule profil × origine — un objet `Externe` n'expose ni Lifecycle ni Supprimer, seulement l'observation et `[Adopter]` (wizard Écran 14). Les stacks exposent les actions globales de stack (chapitre 03) ; `[🕸 Graphe]` ouvre le Graphe de dépendances (Écran 20). Le toggle bascule entre vue logique (par stack) et vue physique (par Host : résumé containers/VMs, métriques agrégées CPU/RAM, hyperviseur et version du daemon Docker). Source de données : endpoints `/compute/*` (chapitre [09-api.md](09-api.md)).
+
+## Écran 23 — Settings (Utilisateurs · Audit · Tâches planifiées)
+
+Écran transverse de gestion. Inspiré de Cloudron (membres) + Proxmox (journal d'audit). Point d'entrée unique « Settings » de la sidebar (chapitre [13-ui-principes.md](13-ui-principes.md)) ; l'Audit dispose en outre d'une entrée directe en Mode Infra.
+
+### Onglet Utilisateurs
+
+```
+┌─ Settings ──────────────────────────────────────────────────────────────────┐
+│  [👤 Utilisateurs] [📋 Audit] [⏰ Tâches planifiées]                         │
+│  Organisation : homelab · 3 membres                    [+ Inviter un membre]│
+│                                                                             │
+│  👤 admin   admin@example.com   Super Admin   depuis 2026-03-15         [⋯] │
+│  👤 alice   alice@example.com   Operator      depuis 2026-04-01   [⚙ Rôle ▾]│
+│  👤 bob     bob@example.com     Viewer        depuis 2026-04-02   [⚙ Rôle ▾]│
+│                                                                             │
+│  ⚠ Le dernier Super Admin ne peut pas être supprimé ni rétrogradé.          │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Onglet Audit
+
+```
+┌─ Settings · Audit ──────────────────────────────────────────────────────────┐
+│  [👤 Utilisateurs] [📋 Audit] [⏰ Tâches planifiées]                         │
+│  Filtres : [▼ Type d'événement] [▼ Utilisateur] [📅 Période]                │
+│                                                                             │
+│  🔒 14:32  admin a changé le rôle de bob (viewer → operator)   IP 192.168.1.10│
+│  ✏️ 11:03  admin a invité alice (operator) dans homelab        IP 192.168.1.10│
+│  🗑 09:58  admin a révoqué la clé API « ci-deploy »             IP 192.168.1.10│
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Onglet Tâches planifiées
+
+```
+┌─ Settings · Tâches planifiées ──────────────────────────────────────────────┐
+│  [👤 Utilisateurs] [📋 Audit] [⏰ Tâches planifiées]       [+ Nouvelle tâche]│
+│                                                                             │
+│  ⏰ backup-nextcloud       app.backup · cron 0 2 * * *        🟢 ✅ 02:00 · 12s│
+│  ⏰ prune-images-nuit      compute.images.prune · cron 30 3 * * *  🟢 ✅ 03:30│
+│  ⚡ notify-deploy-failure  notification.send · event deployment.failed · 🟢  │
+│                                                                             │
+│  ▸ backup-nextcloud — dernières exécutions                                  │
+│     aujourd'hui 02:00 ✅ 12s · hier 02:00 ✅ 11s · il y a 2j 02:00 ❌ timeout │
+│                                         [▶ Exécuter maintenant] [⚙] [⋯]     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Légende :** **Utilisateurs** — membres de l'organisation courante, changement de rôle, protections anti-escalade du chapitre [08-rbac-permissions.md](08-rbac-permissions.md) ; miroir UI de `windflow admin user` (chapitre 10). **Audit** — toutes les modifications de permissions loggées avec qui/quand/quoi/IP (rétention : chapitre [15-securite.md](15-securite.md)) ; consultation équivalente en CLI (`windflow admin audit`). **Tâches planifiées** — scheduler core du chapitre [17-automatisation-workflows.md](17-automatisation-workflows.md) : liste, statut de la dernière exécution, historique des exécutions (durée, résultat) ; `[▶ Exécuter maintenant]` = `windflow admin tasks run` ; les exécutions sont aussi visibles dans l'écran Activité (Écran 19).
+
+## Écran 24 — Login / SSO
+
+Page de login core (auth JWT native, chapitre [07-authentification.md](07-authentification.md)). Le bouton « Se connecter avec SSO » n'est rendu que lorsque le plugin Keycloak est installé.
+
+```
+┌───────────────────────────────────────────────┐
+│                                               │
+│                 🌀 WindFlow                    │
+│      Votre infrastructure, simplifiée         │
+│                                               │
+│   ┌───────────────────────────────────────┐   │
+│   │  Utilisateur   [admin              ]  │   │
+│   │  Mot de passe  [••••••••            ]  │   │
+│   │                                       │   │
+│   │  ⚠ 5 tentatives échouées — blocage   │   │
+│   │    pendant 5 min                      │   │
+│   │                                       │   │
+│   │           [Se connecter]              │   │
+│   │   ──────────  ou  ──────────          │   │
+│   │   [🔑 Se connecter avec SSO]          │   │
+│   └───────────────────────────────────────┘   │
+│                                               │
+│   Auth native JWT core · SSO via plugin       │
+│   Keycloak (bouton absent si non installé)    │
+└───────────────────────────────────────────────┘
+```
+
+**Légende :** formulaire core — `POST /auth/login` délivre access + refresh tokens (chapitre 07). Le bouton « Se connecter avec SSO » est ajouté par le plugin Keycloak (OIDC/SAML, LDAP/AD, 2FA côté Keycloak) ; le flow SSO aboutit à un JWT WindFlow standard — le reste de l'application ignore le mode d'authentification. Message de blocage après 5 échecs (fenêtre 10 min, blocage 5 min, compteur réinitialisé après un login réussi — chapitre 07).
+
+## Écran 25 — Vues listes Mode Infra (Stacks · Volumes · Networks · Images)
+
+Vues listes du bloc « Compute (technique) » de la sidebar Mode Infra (chapitre [02-familles-workloads.md](02-familles-workloads.md)), inspirées de Portainer. Une seule maquette de référence (vue Stacks) ; Volumes, Networks et Images en sont des variantes décrites en légende.
+
+```
+┌─ Stacks ────────────────────────────────────────────────────────────────────┐
+│  Stacks (3)           [▼ Host] [▼ Statut] [🔍]             [+ Nouvelle stack]│
+│                                                                             │
+│  ┌─ 📚 nextcloud · compose · nas-server ─────────────────────── 3/3 🟢 ──┐  │
+│  │  3 services · version 5 · déployée il y a 15 jours · RAM 342 MB       │  │
+│  │  [⏵ Démarrer] [⏹ Arrêter] [🔄 Redéployer] [✏️ Éditer] [🕸 Graphe] [⋯]  │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│  ┌─ 📚 dev-env · compose mixte · nas-server ────────────────── all up 🟢 ┐  │
+│  │  3 composants (1 VM KVM + 2 containers) · RAM 2.4 GB                 │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│  ┌─ ⎈ web · helm · k3s-cluster ─────────────────────────────── 5/5 🟢 ──┐  │
+│  │  release · namespace windflow · 5 workloads                          │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Légende :** grammaire commune — titre + compteur, filtres `[▼ Host] [▼ Statut] [🔍]`, bouton de création, cards avec état global à droite et actions inline. Variantes :
+
+- **Stacks** (ci-dessus) : actions globales de stack du chapitre [03-modele-compute.md](03-modele-compute.md) — démarrer dans l'ordre des dépendances, arrêter dans l'ordre inverse, redéployer, mettre à jour depuis Git (plugin Git), dupliquer, archiver ; `[✏️ Éditer]` ouvre l'Éditeur de composition (Écran 21) pour les stacks `docker_compose` ; `[🕸 Graphe]` → Écran 20.
+- **Volumes** : lignes `nom · driver · taille · utilisé par` (ex. `nextcloud_data · local · 2.1 GB · utilisé par nextcloud`) ; `[📂 Browser]` ouvre le Volume Browser (Écran 16) ; suppression bloquée si le volume est utilisé.
+- **Networks** : lignes `nom · driver · scope · containers rattachés` (ex. `windflow_net · bridge · local · 4 containers`).
+- **Images** : bibliothèque images Docker + ISOs/qcow2 — lignes `tag · taille · date de pull · utilisée par N containers` ; action « Prune » des images inutilisées (cf. tâche `compute.images.prune`, chapitre [17-automatisation-workflows.md](17-automatisation-workflows.md)) ; fait écho à l'onglet « Images & ISOs » de la Vue Compute (Écran 22).
+
+## Écran 26 — Assistant IA (page plugin)
+
+**Exemple d'intégration plugin, pas un écran core.** Chat intégré à l'UI, page « Assistant IA » ajoutée dynamiquement à la sidebar par les plugins IA (Ollama/LiteLLM — chapitre [18-plugins-ia.md](18-plugins-ia.md)).
+
+```
+┌─ 🤖 Assistant IA ────────────────────────────────────────────────────────────┐
+│  Moteur : Ollama · plugin « windflow-ollama » v1.0.0                        │
+│                                                                             │
+│  ┌─ Contexte accessible ────────────────────────────────────────────────┐   │
+│  │  ✅ Hosts (4) · Apps (5) · stacks (3) · plugins (3) · logs récents    │   │
+│  │  ⛔ Secrets — jamais transmis au modèle                               │   │
+│  └───────────────────────────────────────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │  👤 Pourquoi mon container redis redémarre en boucle ?                │   │
+│  │                                                                       │   │
+│  │  🤖 redis (stack nextcloud) a redémarré 6 fois en 1 h :              │   │
+│  │     OOMKilled — limite RAM 128 MB atteinte (logs 14:02, 14:11, …).   │   │
+│  │     Suggestions :                                                     │   │
+│  │     • passer la limite à 256 MB                                       │   │
+│  │     • réduire maxmemory-policy à allkeys-lru                          │   │
+│  │     [→ Ouvrir la stack]  [📋 Copier la config suggérée]               │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│  ┌───────────────────────────────────────────────────────┐    [Envoyer ➤]   │
+│  │  Poser une question sur votre infrastructure…          │                 │
+│  └───────────────────────────────────────────────────────┘                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Légende :** contrat d'intégration UI d'une page apportée par un plugin. Sans plugin IA installé, la page n'existe pas — l'entrée « Assistant IA » de la section Plugins de la sidebar (chapitre [13-ui-principes.md](13-ui-principes.md)) est ajoutée dynamiquement. Le chrome de la page est standard WindFlow (sidebar, header) ; le contenu est rendu par l'extension UI du plugin via les endpoints `/plugins/ai/*` (chapitres [18-plugins-ia.md](18-plugins-ia.md) et [09-api.md](09-api.md)). L'encart « Contexte accessible » explicite le périmètre : contexte de l'instance oui, secrets jamais. Les suggestions sont accompagnées d'actions de navigation/copy — **rien n'est exécuté ni déployé automatiquement**. Cette maquette sert de contrat de référence pour toute page plugin ; les autres pages plugins (Domaines, Monitoring, Backups) ne sont volontairement pas maquettées.
+
 ## Récapitulatif des écrans
 
 | # | Écran | Famille | Mode | Inspiré de | Point saillant |
@@ -714,6 +1000,13 @@ Inspiré de Cloudron (Activity log) + Umbrel (Activity tab). Journal chronologiq
 | 17 | Console unifiée | toutes | App | Proxmox + Incus | Terminal / VNC / SSH — même chrome UI |
 | 18 | Plugins installés | — | App | Runtipi + Cosmos | Résumé d'activité, RAM totale |
 | 19 | Activité | toutes | App | Cloudron + Umbrel | Journal filtrable avec actions directes |
+| 20 | Graphe de dépendances | toutes | Infra | WorkflowEditor WindFlow + Portainer | Lecture seule, nœuds/depends_on, filtres, adoption inline |
+| 21 | Éditeur de composition | Apps | Infra | WorkflowEditor WindFlow + Portainer | Graphe ⇄ YAML, validation cycles, round-trip compose |
+| 22 | Vue Compute | toutes | Infra | Portainer + Proxmox | 3 sections (stacks/discovered/standalone), filtres croisés, vue par Host |
+| 23 | Settings (Utilisateurs · Audit · Tâches planifiées) | — | App | Cloudron + Proxmox | Gestion des membres, journal d'audit, scheduler core |
+| 24 | Login / SSO | — | — | spécifique WindFlow | Auth JWT native + bouton SSO apporté par le plugin Keycloak |
+| 25 | Vues listes Mode Infra (Stacks · Volumes · Networks · Images) | toutes | Infra | Portainer | Maquette de référence + variantes par onglet |
+| 26 | Assistant IA (page plugin) | — | App/Infra | spécifique WindFlow | Contrat d'intégration plugin : chat, contexte sans secrets, zéro auto-exécution |
 
 L'onboarding (wizard de premier lancement) est décrit au chapitre [13-ui-principes.md](13-ui-principes.md) ; les variantes mobile/tablette également.
 

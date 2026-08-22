@@ -32,7 +32,8 @@ Ce chapitre spécifie l'API REST et WebSocket de WindFlow. La surface principale
 │   ├── snapshots/
 │   ├── volumes/
 │   ├── networks/
-│   └── images/
+│   ├── images/
+│   └── graph/
 ├── plugins/                       # Gestion des plugins (core)
 ├── marketplace/                   # Catalogue (core)
 ├── organizations/                 # Organisations (core)
@@ -131,6 +132,7 @@ GET    /{id}/actions           # Lister les ContextualActions disponibles
 POST   /{id}/actions/{action_id}  # Exécuter une ContextualAction
 GET    /{id}/logs              # Logs (WebSocket)
 GET    /{id}/console           # Console interactive (WebSocket)
+GET    /{id}/graph             # Graphe de dépendances de l'App (nodes/edges normalisés)
 ```
 
 Exemple illustratif — modèles de requête/réponse :
@@ -323,6 +325,45 @@ GET    /                       # Lister les images (filtre: host_id)
 POST   /pull                   # Pull une image
 DELETE /{id}                   # Supprimer une image
 POST   /prune                  # Supprimer les images non utilisées
+```
+
+### Graphe de dépendances — `/api/v1/compute/graph`
+
+Source de données de l'Écran 20 (chapitre [14-ui-maquettes.md](14-ui-maquettes.md)). Le backend dérive le graphe du parsing des compose (`depends_on`, condition `service_started` / `service_healthy`) et de l'inspection runtime ; pour Kubernetes/Helm, les arêtes relient les workloads du même namespace (généralisation profil × origine, chapitre [03-modele-compute.md](03-modele-compute.md)).
+
+```
+GET    /                       # Graphe global (filtres: host_id, app_id, origin, status)
+POST   /from-compose           # Graphe normalisé depuis un compose fourni (round-trip éditeur)
+```
+
+Exemple illustratif — réponse normalisée (contrat `nodes`/`edges` de Vue Flow) :
+
+```json
+{
+    "data": {
+        "nodes": [
+            {"id": "baserow-db", "type": "service", "app_id": "app_baserow",
+             "data": {"image": "postgres:15", "profile": "docker_compose",
+                      "origin": "managed", "status": "running"}}
+        ],
+        "edges": [
+            {"id": "e1", "source": "baserow-backend", "target": "baserow-db",
+             "data": {"condition": "service_healthy"}}
+        ],
+        "cycles": []
+    }
+}
+```
+
+La clé `cycles` liste les cycles détectés (avertissement d'affichage) — la détection réutilise le pattern de résolution transitive du moteur de dépendances plugins.
+
+### Génération compose — `/api/v1/compute/stacks/`
+
+L'Éditeur de composition (Écran 21) sérialise le graphe et délègue la génération et la validation au backend :
+
+```
+POST   /from-graph             # Générer un compose depuis un graphe nodes/edges
+POST   /validate               # Valider un compose sans déployer (existant, réutilisé)
 ```
 
 ## Endpoints transverses

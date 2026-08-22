@@ -123,7 +123,7 @@ Quand un déploiement échoue, l'IA analyse les logs et la configuration pour id
 
 ### Chat assistant
 
-Un chat intégré à l'UI (page « Assistant IA » ajoutée par les plugins) permet de poser des questions sur l'infrastructure gérée : « Combien de RAM utilise ma stack Nextcloud ? », « Pourquoi mon container redémarre en boucle ? ». Le chat a accès au contexte de l'instance (Hosts, Apps, stacks, plugins, logs récents) **mais pas aux secrets**.
+Un chat intégré à l'UI (page « Assistant IA » ajoutée par les plugins) permet de poser des questions sur l'infrastructure gérée : « Combien de RAM utilise ma stack Nextcloud ? », « Pourquoi mon container redémarre en boucle ? ». Le chat a accès au contexte de l'instance (Hosts, Apps, stacks, plugins, logs récents) **mais pas aux secrets**. Contrat d'intégration UI de cette page : Écran 26 du chapitre [14-ui-maquettes.md](14-ui-maquettes.md).
 
 ### Suggestions de sécurité
 

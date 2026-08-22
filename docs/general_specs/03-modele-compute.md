@@ -375,6 +375,6 @@ Une stack WindFlow expose des actions globales en plus des actions par composant
 - [02-familles-workloads.md](02-familles-workloads.md) — familles Apps/Machines/Hosts et WorkloadAdapter, qui s'appuient sur ce modèle Compute
 - [06-modele-de-donnees.md](06-modele-de-donnees.md) — tables `stacks`, `deployments`, `deployment_events`
 - [09-api.md](09-api.md) — endpoints `/compute/*` exposant ces objets par technologie
-- [14-ui-maquettes.md](14-ui-maquettes.md) — écrans « Vue Compute », « Snapshots » et « Adoption d'objets découverts »
+- [14-ui-maquettes.md](14-ui-maquettes.md) — Vue Compute (Écran 22), Snapshots Machines (Écran 8) et Adoption d'objets découverts (Écran 14)
 - [12-marketplace.md](12-marketplace.md) — onglet Machine Templates de la marketplace
 - [../user-guide/adoption.md](../user-guide/adoption.md) — parcours utilisateur d'adoption pas à pas

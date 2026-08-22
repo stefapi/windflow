@@ -65,6 +65,8 @@ Deuxième axe de la **matrice canonique « profil × origine »** spécifiée au
 | **Origine (`external`)** | Workload pré-existant à côté, jamais managé. Lecture seule : observation et adoption uniquement — jamais stop/remove/update direct. | [03-modele-compute.md](03-modele-compute.md) |
 | **Discovery / réconciliation** | Scan périodique des Hosts qui détecte les objets discovered et réconcilie l'état observé avec l'état connu. |
 | **Snapshot** | Capture de l'état complet d'une Machine (mémoire + disques) ; verbe canonique Machines, action contextuelle pour les Apps. |
+| **Graphe de dépendances** | Vue lecture seule (Mode Infra) représentant les services conteneurs et leurs relations `depends_on`, groupés par application, avec badges d'origine et statut runtime. | [14-ui-maquettes.md](14-ui-maquettes.md) |
+| **Éditeur de composition** | Éditeur visuel interactif (profil `docker_compose`, Mode Infra) définissant une composition de services en graphe, synchronisé avec le YAML compose (round-trip complet). | [14-ui-maquettes.md](14-ui-maquettes.md) |
 
 ## Plugins, marketplace et registres
 

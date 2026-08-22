@@ -152,7 +152,7 @@ Le SSO n'est pas dans le core — il est fourni par le **plugin Keycloak** (chap
 
 ### Ce que le plugin ajoute
 
-- Bouton « Se connecter avec SSO » sur la page de login ;
+- Bouton « Se connecter avec SSO » sur la page de login (maquette : Écran 24 du chapitre [14-ui-maquettes.md](14-ui-maquettes.md)) ;
 - support OIDC (OpenID Connect) et SAML 2.0 ;
 - intégration LDAP / Active Directory ;
 - 2FA (TOTP, WebAuthn) géré par Keycloak ;
@@ -197,6 +197,8 @@ default_role: viewer           # Rôle si aucun mapping ne correspond
 auto_create_users: true        # Création au premier login SSO
 default_organization: "main"   # Organisation par défaut des nouveaux utilisateurs
 ```
+
+Les rôles effectifs des utilisateurs WindFlow — y compris ceux issus du mapping SSO — sont consultables et gérables dans Settings → Utilisateurs (Écran 23 du chapitre [14-ui-maquettes.md](14-ui-maquettes.md)).
 
 ## Configuration
 

@@ -41,7 +41,7 @@ Cet index est le point d'entrée de la spécification générale de WindFlow : s
 | [11-plugins.md](11-plugins.md) | Système de plugins : manifest, Plugin Manager, **liste canonique des événements**, hooks, extension API/UI, guide dev |
 | [12-marketplace.md](12-marketplace.md) | Marketplace 3 onglets, registres, **catalogue officiel des plugins** (compte canonique 20+) |
 | [13-ui-principes.md](13-ui-principes.md) | Principes UX, analyse concurrentielle synthétique, navigation (sidebars Mode App/Infra), direction esthétique |
-| [14-ui-maquettes.md](14-ui-maquettes.md) | Les 19 écrans maquettés (familles, marketplace, Hosts, adoption, console, plugins, activité) |
+| [14-ui-maquettes.md](14-ui-maquettes.md) | Les 26 écrans maquettés (familles, marketplace, Hosts, adoption, console, plugins, activité, graphe de dépendances, éditeur de composition, Vue Compute, Settings, Login/SSO, vues listes Mode Infra, Assistant IA) |
 | [15-securite.md](15-securite.md) | SecretManager, Docker socket, réseau, audit trail, sécurité des plugins, checklists |
 | [16-deploiement.md](16-deploiement.md) | Installation léger/standard/dev, mise à jour, sauvegarde/restauration, dépannage |
 | [17-automatisation-workflows.md](17-automatisation-workflows.md) | Scheduler core + workflows en plugins (arbitrage D2 : n8n/Node-RED, pas de moteur intégré) |

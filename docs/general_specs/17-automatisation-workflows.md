@@ -145,7 +145,7 @@ windflow admin tasks disable backup-nextcloud
 windflow admin tasks run backup-nextcloud        # exécution immédiate
 ```
 
-Via l'UI : Settings → Tâches planifiées (liste, historique des exécutions, statut de la dernière exécution). Les exécutions sont journalisées (qui/quoi/quand, durée, statut) et visibles dans l'écran Activité.
+Via l'UI : Settings → Tâches planifiées (liste, historique des exécutions, statut de la dernière exécution — Écran 23 du chapitre [14-ui-maquettes.md](14-ui-maquettes.md)). Les exécutions sont journalisées (qui/quoi/quand, durée, statut) et visibles dans l'écran Activité.
 
 ## Workflows avancés = plugins
 

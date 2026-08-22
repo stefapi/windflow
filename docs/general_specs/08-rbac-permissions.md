@@ -222,7 +222,7 @@ windflow admin user list --org homelab
 # alice       alice@example.com     operator   2026-04-01
 ```
 
-Les mêmes opérations sont disponibles via l'API (`/organizations/{id}/users`, chapitre [09-api.md](09-api.md)) et depuis l'UI (Settings → Utilisateurs).
+Les mêmes opérations sont disponibles via l'API (`/organizations/{id}/users`, chapitre [09-api.md](09-api.md)) et depuis l'UI (Settings → Utilisateurs, Écran 23 du chapitre [14-ui-maquettes.md](14-ui-maquettes.md)).
 
 ## Scénarios d'usage
 
@@ -257,7 +257,7 @@ Quand un rôle est modifié, le cache de permissions est invalidé immédiatemen
 
 ### Audit des permissions
 
-Toutes les modifications de permissions (ajout/suppression d'utilisateur, changement de rôle) sont loggées dans le journal d'audit avec qui, quand, quoi, depuis quelle IP (chapitre [15-securite.md](15-securite.md)). Consultation : UI (Settings → Audit) et CLI (`windflow admin audit`, chapitre [10-cli-tui.md](10-cli-tui.md)).
+Toutes les modifications de permissions (ajout/suppression d'utilisateur, changement de rôle) sont loggées dans le journal d'audit avec qui, quand, quoi, depuis quelle IP (chapitre [15-securite.md](15-securite.md)). Consultation : UI (Settings → Audit, Écran 23 du chapitre [14-ui-maquettes.md](14-ui-maquettes.md)) et CLI (`windflow admin audit`, chapitre [10-cli-tui.md](10-cli-tui.md)).
 
 ### Protection contre l'escalade
 

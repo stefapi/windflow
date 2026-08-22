@@ -144,6 +144,17 @@ Element Plus fournit les composants UI (tables, formulaires, dialogs, menus) ; U
 
 Pinia gère l'état global (authentification, session, préférences), un store par domaine fonctionnel. Vue Router gère les routes protégées par rôle avec lazy loading, y compris les routes injectées dynamiquement par les plugins (chapitre 11).
 
+### Vue Flow + dagre — vues graphe et flow
+
+Les vues graphe — **Graphe de dépendances** et **Éditeur de composition** (chapitre [14-ui-maquettes.md](14-ui-maquettes.md), Écrans 20 et 21) — reposent sur **Vue Flow** : `@vue-flow/core` et les plugins officiels `@vue-flow/background`, `@vue-flow/controls`, `@vue-flow/minimap`. **`@dagrejs/dagre`** complète la stack pour le layout automatique (placement des nœuds) des graphes en lecture seule. Choix retenu pour :
+
+- un rendu **natif Vue 3 + TypeScript** (Composition API, aucun wrapper) ;
+- les **plugins officiels** Background, Controls (zoom/pan) et MiniMap (vue d'ensemble) ;
+- la **sérialisation** `toObject()` / `fromObject()`, alignée sur le contrat `nodes`/`edges` de l'API graphe (chapitre [09-api.md](09-api.md)) ;
+- le hook **`isValidConnection`** pour imposer les contraintes de connexion à la volée (pas d'auto-boucle, pas de cycle).
+
+Alternatives écartées : **Rete.js** et **AntV X6** — complexité et couche d'abstraction supplémentaires, intégration Vue non native.
+
 ### Injection de composants plugin
 
 Les plugins injectent pages et widgets dans l'UI sans modifier le code core : le Plugin Manager charge dynamiquement les composants des plugins installés, chaque plugin déclarant ses pages et widgets dans son manifest (chapitre [11-plugins.md](11-plugins.md)).
@@ -268,6 +279,8 @@ Le détail des pipelines (lint, tests, build des images multi-arch, publication)
 | `axios` | Client HTTP |
 | `xterm.js` | Terminal WebSocket |
 | `@novnc/novnc` | Console VNC dans le navigateur |
+| `@vue-flow/core` (+ `background`, `controls`, `minimap`) | Vues graphe/flow — Graphe de dépendances, Éditeur de composition |
+| `@dagrejs/dagre` | Layout automatique des graphes |
 
 ### Services Docker (core)
 
