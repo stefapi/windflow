@@ -3,11 +3,7 @@
 | Rubrique | Valeur |
 |---|---|
 | **Chapitre** | 09 — Volumes, réseaux et maintenance système |
-| **Statut** | Rédigé (phase 2, lot 3/5) |
-| **Date de rédaction** | 21/08/2026 |
-| **Version du logiciel analysée** | Dockhand **1.0.43** (numéro issu de [`package.json`](../../package.json:4)) |
-| **Document de référence** | [`docs/spec/00-chapitrage.md`](00-chapitrage.md) |
-| **Sources principales** | [`src/routes/api/volumes/`](../../src/routes/api/volumes/+server.ts:1), [`src/routes/api/networks/`](../../src/routes/api/networks/+server.ts:1), [`src/routes/api/prune/`](../../src/routes/api/prune/volumes/+server.ts:1), [`src/routes/api/system/`](../../src/routes/api/system/disk/+server.ts:1), [`src/lib/server/docker.ts`](../../src/lib/server/docker.ts:4280), [`src/lib/server/volume-prune-core.ts`](../../src/lib/server/volume-prune-core.ts:1), [`src/lib/server/mount-dedupe.ts`](../../src/lib/server/mount-dedupe.ts:1), [`src/lib/server/scheduler/tasks/system-cleanup.ts`](../../src/lib/server/scheduler/tasks/system-cleanup.ts:1), [`src/routes/networks/NetworkGraphViewer.svelte`](../../src/routes/networks/NetworkGraphViewer.svelte:1) |
+| **Document de référence** | [`00-chapitrage.md`](00-chapitrage.md) |
 
 ## Table des matières
 
@@ -21,7 +17,7 @@
 8. [Connectivité conteneur ↔ réseau](#8-connectivité-conteneur--réseau)
 9. [Graphe des réseaux de l'environnement](#9-graphe-des-réseaux-de-lenvironnement)
 10. [Maintenance système et prunes globaux](#10-maintenance-système-et-prunes-globaux)
-11. [Nettoyages système planifiés (tâche system-cleanup)](#11-nettoyages-système-planifiés-tâche-system-cleanup)
+11. [Nettoyages système planifiés (job system-cleanup)](#11-nettoyages-système-planifiés-job-system-cleanup)
 12. [Synthèse des règles de sécurité](#12-synthèse-des-règles-de-sécurité)
 13. [Renvois vers les autres chapitres](#13-renvois-vers-les-autres-chapitres)
 
@@ -29,7 +25,7 @@
 
 ## 1. Objet, périmètre et prérequis de lecture
 
-Ce chapitre décrit la gestion des **volumes** et des **réseaux** Docker, ainsi que la **maintenance système** de l'hôte : inventaires temps réel, création, suppression (avec audit), clone de volume, prune protégé des volumes (exclusion des volumes internes de Dockhand), navigateur de fichiers de volume (helper conteneur dédié, distinct du navigateur de conteneur du ch. 05), déduplication des montages à la recréation (`mount-dedupe`), inventaire/création/suppression des réseaux, connectivité conteneur↔réseau (connexion/déconnexion), graphe des réseaux de l'environnement, usage disque (`docker system df`), prunes par ressource et global, et nettoyages système planifiés (exécutions, événements, helpers de volume, cache des scanners).
+Ce chapitre décrit la gestion des **volumes** et des **réseaux** Docker, ainsi que la **maintenance système** de l'hôte : inventaires temps réel, création, suppression (avec audit), clone de volume, prune protégé des volumes (exclusion des volumes internes de Dockhand), navigateur de fichiers de volume (helper conteneur dédié, distinct du navigateur de conteneur du ch. 05), déduplication des montages à la recréation, inventaire/création/suppression des réseaux, connectivité conteneur↔réseau (connexion/déconnexion), graphe des réseaux de l'environnement (Vue Flow, éditable), usage disque (`docker system df`), prunes par ressource et global, et nettoyages système planifiés (exécutions, événements, helpers de volume, cache des scanners).
 
 **Prérequis de lecture** : chapitre 04 (environnements, modes de connexion) et chapitre 05 (navigateur de fichiers du **conteneur** — à distinguer du présent, labels `dockhand.*`). Le chapitre 03 §5 rappelle que volumes et réseaux sont des objets Docker **non répliqués en base**.
 
@@ -37,18 +33,18 @@ Ce chapitre décrit la gestion des **volumes** et des **réseaux** Docker, ainsi
 
 ## 2. Vue d'ensemble
 
-Volumes et réseaux suivent le même modèle que les autres ressources Docker : lecture temps réel, actions qualifiées par environnement, permissions par domaine. La spécificité fonctionnelle tient aux **garde-fous orientés données** (le volume porte des données utilisateur) et aux **helpers** (conteneurs utilitaires internes mis à contribution pour parcourir/clôner).
+Volumes et réseaux suivent le même modèle que les autres ressources Docker : lecture temps réel (aiodocker, ou à travers la session SSH du remote shell), actions qualifiées par environnement, permissions par domaine. La spécificité fonctionnelle tient aux **garde-fous orientés données** (le volume porte des données utilisateur) et aux **helpers** (conteneurs utilitaires internes mis à contribution pour parcourir/clôner).
 
 ```mermaid
 flowchart TB
-    subgraph UI[ pages volumes et réseaux ]
+    subgraph UI[ pages volumes et réseaux - SPA Vue / PrimeVue ]
         VOL[Liste volumes<br/>taille, usage, actions]
         VBROW[Navigateur fichiers volume<br/>via helper dédié]
         NET[Liste réseaux<br/>driver, scope, usage]
-        GRAPH[Graphe des réseaux<br/>cytoscape]
+        GRAPH[Graphe des réseaux<br/>Vue Flow - éditable]
     end
 
-    subgraph API[ API REST ]
+    subgraph API[ API REST - FastAPI ]
         VCRUD[volumes - CRUD, clone, inspect]
         VBROWAPI[volumes - browse, content, release]
         NCRUD[networks - CRUD, inspect]
@@ -58,13 +54,13 @@ flowchart TB
     end
 
     subgraph Serv[ services serveur ]
-        HELPER[Helper busybox<br/>TTL 5 min, caché par volume]
+        HELPER[Helper busybox 1.37.0<br/>TTL 5 min, caché par volume]
         VPRUNE[selectVolumesToPrune<br/>volumes protégés exclus]
         DEDUP[dedupeVolumesForRecreate<br/>montages équivalents fusionnés]
     end
 
     D[Docker Engine de l environnement]
-    SCHED[Planificateur<br/>system-cleanup, image-prune]
+    SCHED[Planificateur APScheduler<br/>system-cleanup, image-prune]
 
     VOL --> VCRUD
     VBROW --> VBROWAPI --> HELPER --> D
@@ -83,7 +79,7 @@ flowchart TB
 
 ### 3.1 Inventaire
 
-`GET /api/volumes?env=<id>` ([`src/routes/api/volumes/+server.ts`](../../src/routes/api/volumes/+server.ts:18), service `listVolumes`) :
+`GET /api/volumes?env=<id>` (service d'inventaire de volumes adossé à **aiodocker**) :
 
 - par volume : nom, driver, point de montage, portée, date de création, labels et **utilisateurs** (`usedBy` : conteneurs qui le montent, **y compris arrêtés** — un volume tenu par un conteneur arrêté est considéré **utilisé**, sémantique alignée sur le prune Docker) ;
 - comportements aux limites : sans environnement → tableau vide ; environnement inexistant → 404 ;
@@ -109,11 +105,11 @@ Audit `create` *(Enterprise)*. Les volumes créés manuellement sont immédiatem
 
 ### 3.4 Clone de volume
 
-`POST /api/volumes/[name]/clone` ([route](../../src/routes/api/volumes/[name]/clone/+server.ts:21)) copie un volume vers un **nouveau volume nommé** :
+`POST /api/volumes/[name]/clone` copie un volume vers un **nouveau volume nommé** :
 
 1. inspection de la source : le clone **préserve driver, options et labels** (label additionnel `dockhand.cloned.from` traçant l'origine) ;
 2. création du volume cible ;
-3. copie des données par un **conteneur utilitaire temporaire** (busybox, `cp -a /src/. /dst/`, source montée en lecture seule, destination en lecture-écriture, label `dockhand.volume.helper`) ;
+3. copie des données par un **conteneur utilitaire temporaire** (`busybox:1.37.0`, `cp -a /src/. /dst/`, source montée en lecture seule, destination en lecture-écriture, label `dockhand.volume.helper`) ;
 4. attente de la fin du conteneur (code de sortie non nul = échec explicite) puis **nettoyage systématique** du conteneur de copie (y compris en erreur) ;
 5. audit `clone` avec le couple source → cible.
 
@@ -127,16 +123,16 @@ Permission requise : `volumes:create`. Usage type : sauvegarde ponctuelle avant 
 
 ### 4.1 Principe
 
-Le prune natif de Docker (`/volumes/prune`) ne supprime par défaut que les volumes **anonymes** depuis l'API v1.42 — les volumes **nommés** inutilisés survivraient. Dockhand implémente donc son propre prune ([`pruneVolumes`](../../src/lib/server/docker.ts:4695)) :
+Le prune natif de Docker (`/volumes/prune`) ne supprime par défaut que les volumes **anonymes** depuis l'API v1.42 — les volumes **nommés** inutilisés survivraient. Dockhand implémente donc son propre prune :
 
 1. liste des volumes avec leurs utilisateurs (conteneurs actifs **et** arrêtés) ;
-2. sélection des volumes **inutilisés et non protégés** ([`selectVolumesToPrune`](../../src/lib/server/volume-prune-core.ts:24)) ;
+2. sélection des volumes **inutilisés et non protégés** ;
 3. suppression **unitaire** de chacun, **sans force** : un volume devenu utilisé entre la liste et la suppression échoue et est **passé** (sémantique non-forçante du prune Docker) — un volume récalcitrant n'interrompt jamais la file ;
 4. l'espace libéré n'est **pas fabriqué** : l'API de liste de volumes ne donne pas de taille par volume, la valeur reste 0 (aucun octet inventé).
 
 ### 4.2 Volumes protégés
 
-Deux volumes internes de Dockhand sont **exclus par nom** ([`PROTECTED_VOLUME_NAMES`](../../src/lib/server/volume-prune-core.ts:15)) : `dockhand-grype-db` et `dockhand-trivy-db` — les caches des bases de vulnérabilités des scanners (ch. 10). Ce sont des volumes nommés inutilisés entre deux scans : un prune non filtré les détruirait et forcerait un re-téléchargement coûteux à chaque scan.
+Deux volumes internes de Dockhand sont **exclus par nom** : `dockhand-grype-db` et `dockhand-trivy-db` — les caches des bases de vulnérabilités des scanners (ch. 10). Ce sont des volumes nommés inutilisés entre deux scans : un prune non filtré les détruirait et forcerait un re-téléchargement coûteux à chaque scan.
 
 ### 4.3 Points d'entrée
 
@@ -146,7 +142,7 @@ Deux volumes internes de Dockhand sont **exclus par nom** ([`PROTECTED_VOLUME_NA
 
 ### 5.1 Principe et distinction avec le navigateur conteneur
 
-Contrairement au navigateur de fichiers **du conteneur** (ch. 05 §10, qui s'exécute au sein du conteneur via l'API Docker), un volume Docker **n'appartient à aucun conteneur en particulier** : Dockhand mobilise un **helper dédié** — un conteneur utilitaire (image `busybox:latest`, tirée automatiquement si absente, avec authentification de registre le cas échéant) qui monte le volume à parcourir.
+Contrairement au navigateur de fichiers **du conteneur** (ch. 05 §10, qui s'exécute au sein du conteneur via l'API Docker), un volume Docker **n'appartient à aucun conteneur en particulier** : Dockhand mobilise un **helper dédié** — un conteneur utilitaire (image **`busybox:1.37.0` épinglée**, tirée automatiquement si absente, avec authentification de registre le cas échéant) qui monte le volume à parcourir.
 
 ### 5.2 Cycle de vie du helper
 
@@ -155,13 +151,13 @@ Contrairement au navigateur de fichiers **du conteneur** (ch. 05 §10, qui s'ex�
 | Obtention | Cache par (volume, environnement) : un helper existant est **réutilisé** et son échéance rafraîchie ; sinon création (`sleep infinity`, label `dockhand.volume.helper=true`) |
 | Durée de vie | TTL de **5 minutes**, renouvelé à chaque accès ; pas de démon permanent |
 | Libération anticipée | `POST /api/volumes/[name]/browse/release` à la fermeture de la fenêtre : le helper est retiré du cache puis arrêté/supprimé |
-| Recyclage planifié | la tâche système **Volume helper cleanup** (§11.3) supprime les helpers expirés et les helpers orphelins ; au démarrage, un nettoyage des helpers obsolètes de tous les environnements évite les résidus de crash |
+| Recyclage planifié | le job système **Volume helper cleanup** (§11.3) supprime les helpers expirés et les helpers orphelins ; au démarrage, un nettoyage des helpers obsolètes de tous les environnements évite les résidus de crash |
 
 Les helpers portent le label `dockhand.volume.helper=true`, ce qui les rend **masqués de l'inventaire** (label `dockhand.hidden` de fait, ch. 05 §3.2) et exclus des recensements.
 
 ### 5.3 Parcours et lecture
 
-`GET /api/volumes/[name]/browse?path=<p>&env=<id>` ([route](../../src/routes/api/volumes/[name]/browse/+server.ts:19)) :
+`GET /api/volumes/[name]/browse?path=<p>&env=<id>` :
 
 - **usage préalable** : les conteneurs qui montent le volume sont listés (avec état) ; la réponse expose `isInUse` ;
 - **montage conditionnel** : le volume est monté **en lecture seule dans le helper si des conteneurs l'utilisent** (prudence vis-à-vis des données vives), en lecture-écriture sinon ;
@@ -173,11 +169,11 @@ La navigation **en écriture** (créer/modifier/supprimer des fichiers du volume
 
 ## 6. Déduplication des montages (recreate)
 
-À la recréation d'un conteneur (ch. 05 §7), Docker peut se voir reproposer un point de montage déjà occupé — collision entre le `Config.Volumes` hérité de l'image (directive `VOLUME`), un tmpfs, un bind existant, un bind sur le point d'être ajouté, ou un volume nommé qui n'apparaît que dans l'inspection (forme renvoyée par les daemons distants/Hawser). [`dedupeVolumesForRecreate`](../../src/lib/server/mount-dedupe.ts:27) :
+À la recréation d'un conteneur (ch. 05 §7), Docker peut se voir reproposer un point de montage déjà occupé — collision entre le `Config.Volumes` hérité de l'image (directive `VOLUME`), un tmpfs, un bind existant, un bind sur le point d'être ajouté, ou un volume nommé qui n'apparaît que dans l'inspection (forme renvoyée par certains daemons distants). Le service de déduplication des montages :
 
 - collecte les destinations **déjà montées** depuis les cinq sources (tmpfs, binds, binds additionnels, `Mounts` de HostConfig, `Mounts` de l'inspection) ;
 - retire du `Config.Volumes` toute entrée dont le chemin est déjà monté (les entrées VOLUME d'image n'ont pas vocation à créer un montage concurrent) ;
-- [`getAdditionalVolumeBinds`](../../src/lib/server/mount-dedupe.ts:49) reconstruit a contrario les **binds manquants** pour les volumes nommés présents dans l'inspection mais absents de HostConfig.
+- reconstruit a contrario les **binds manquants** pour les volumes nommés présents dans l'inspection mais absents de HostConfig.
 
 Fonctionnellement : la recréation (édition, auto-update, mise à jour groupée) **conserve exactement les montages d'origine**, sans doublon ni perte — un point clé pour les mises à jour automatiques de conteneurs à montages complexes.
 
@@ -185,7 +181,7 @@ Fonctionnellement : la recréation (édition, auto-update, mise à jour groupée
 
 ### 7.1 Inventaire et inspection
 
-`GET /api/networks?env=<id>` ([`src/routes/api/networks/+server.ts`](../../src/routes/api/networks/+server.ts:17), service [`listNetworks`](../../src/lib/server/docker.ts:4280)) : par réseau — identifiant, nom, driver, portée, indicateurs internal/attachable/ingress, et **conteneurs connectés** (croisés avec l'inventaire des conteneurs). L'inspection (`GET /api/networks/[id]/inspect`) détaille la configuration IPAM (sous-réseaux, passerelles), les options et les points de montage.
+`GET /api/networks?env=<id>` (service d'inventaire de réseaux adossé à **aiodocker**) : par réseau — identifiant, nom, driver, portée, indicateurs internal/attachable/ingress, et **conteneurs connectés** (croisés avec l'inventaire des conteneurs). L'inspection (`GET /api/networks/[id]/inspect`) détaille la configuration IPAM (sous-réseaux, passerelles), les options et les points de montage.
 
 ### 7.2 Création
 
@@ -213,26 +209,29 @@ Audit `create` *(Enterprise)*. Les réseaux créés sont utilisables dans les Co
 - **Connexion** : `POST /api/networks/[id]/connect` (corps : `containerId`, `containerName` facultatif pour l'audit) — permission `networks:connect` ; le nom du réseau est résolu pour l'audit ; la même opération sert aux **réseaux additionnels** à la création d'un conteneur (ch. 05 §4.2) et au raccrochage des réseaux à la recréation (ch. 05 §7.2) ;
 - **Déconnexion** : `POST /api/networks/[id]/disconnect` — retire un conteneur du réseau ;
 - l'interface propose la connexion depuis la fiche réseau (fenêtre dédiée avec choix du conteneur) et la déconnexion depuis les conteneurs connectés ;
-- ces opérations sont **à chaud** (pas de recréation du conteneur) ; l'inspection du conteneur reflète immédiatement les réseaux additionnels (ch. 05 §6).
+- ces opérations sont **à chaud** (pas de recréation du conteneur) ; l'inspection du conteneur reflète immédiatement les réseaux additionnels (ch. 05 §6) ;
+- la **création et la suppression de liens dans le graphe des réseaux** (§9) s'appuient sur ces mêmes opérations.
 
 ## 9. Graphe des réseaux de l'environnement
 
-La page réseaux propose une vue **graphe** de la connectivité de l'environnement ([`NetworkGraphViewer.svelte`](../../src/routes/networks/NetworkGraphViewer.svelte:1), rendu **cytoscape**) :
+La page réseaux propose une vue **graphe** de la connectivité de l'environnement, rendue avec **Vue Flow** (@vue-flow/core) :
 
 - **nœuds** : réseaux et conteneurs connectés (forme distincte par type) ; **arêtes** : appartenance conteneur → réseau ; les métadonnées (IP du conteneur dans le réseau, driver) sont consultables par sélection ;
-- disposition calculée automatiquement, thème clair/sombre commutable, sélection et inspection des nœuds ;
-- cette vue **complète** la visionneuse par stack du ch. 06 §5 (graphe d'une stack précise) : ici le périmètre est **l'environnement entier**, tous projets confondus — utile pour repérer les ponts entre stacks et les réseaux orphelins.
+- le graphe est **éditable** : **drag & drop** des nœuds pour organiser la vue, **création de nœuds** (réseaux) et **création/suppression de liens** (rattachement/détachement d'un conteneur à un réseau, via les opérations à chaud du §8) ; la **suppression d'un réseau** est possible depuis le graphe avec ses garde-fous habituels ;
+- les **positions des nœuds sont persistées** (préférences d'interface) : la disposition retravaillée par l'administrateur est conservée d'une session à l'autre ; une disposition automatique reste disponible pour initialiser ou réorganiser la vue ;
+- thème clair/sombre commutable, sélection et inspection des nœuds ;
+- cette vue **complète** la vue par stack du ch. 06 §5 (graphe d'une stack précise) : ici le périmètre est **l'environnement entier**, tous projets confondus — utile pour repérer les ponts entre stacks et les réseaux orphelins.
 
 ## 10. Maintenance système et prunes globaux
 
 ### 10.1 Usage disque de l'hôte Docker
 
-`GET /api/system/disk?env=<id>` ([route](../../src/routes/api/system/disk/+server.ts:23), `docker system df`) :
+`GET /api/system/disk?env=<id>` (`docker system df`, exécuté via aiodocker ou à distance via le remote shell) :
 
 - retourne l'usage détaillé : taille des couches d'images, et par catégorie (images, conteneurs, volumes) les éléments avec taille et compteur d'inutilisés ;
 - **contournement possible** : `SKIP_DF_COLLECTION=true` (variable d'environnement, contournement de performances pour certains NAS Synology) → réponse `null` ; l'interface affiche alors un état « indisponible » ;
 - délai de garde de **15 s** : au-delà, `null` plutôt qu'une erreur (même comportement d'interface) ;
-- les **informations système** générales de l'hôte (version Docker, OS, ressources) proviennent de la collecte du chapitre 04 (collecteur Go `/info`, métriques — ch. 13).
+- les **informations système** générales de l'hôte (version Docker, OS, ressources) proviennent de la couche de collecte intégrée du chapitre 04 (`/info`, métriques — ch. 13).
 
 ### 10.2 Prunes par ressource et global
 
@@ -246,9 +245,9 @@ La page réseaux propose une vue **graphe** de la connectivité de l'environneme
 
 Tous sont qualifiés par environnement (`?env=`), audités, et retournent le rapport Docker correspondant (éléments supprimés, espace libéré le cas échéant).
 
-## 11. Nettoyages système planifiés (tâche system-cleanup)
+## 11. Nettoyages système planifiés (job system-cleanup)
 
-La tâche `system_cleanup` du planificateur ([`src/lib/server/scheduler/tasks/system-cleanup.ts`](../../src/lib/server/scheduler/tasks/system-cleanup.ts:1)) regroupe quatre jobs système identifiés (`scheduleId` 1 à 4) — chacun activable/désactivable et doté de sa rétention/cron dans les réglages (ch. 15) :
+La tâche `system_cleanup` du planificateur unifié (**APScheduler**) regroupe quatre jobs système identifiés (`scheduleId` 1 à 4) — chacun activable/désactivable et doté de sa rétention/cron dans les réglages (ch. 15) :
 
 | Job (id) | Nettoyage | Règles |
 |---|---|---|
@@ -264,8 +263,9 @@ Le **déclenchement manuel** hors cron est possible (ch. 14) ; les exécutions s
 | Risque | Mesure fonctionnelle |
 |---|---|
 | Perte de données de volumes | Prune **sélectif** : seuls les volumes sans utilisateur (y compris conteneurs arrêtés) et hors liste protégée ; suppression unitaire **sans force** ; volumes des scanners exclus par nom |
-|Écrasement de données vives via le navigateur | Volume monté **lecture seule** dans le helper dès qu'un conteneur l'utilise ; écritures possibles seulement hors usage |
+| Écrasement de données vives via le navigateur | Volume monté **lecture seule** dans le helper dès qu'un conteneur l'utilise ; écritures possibles seulement hors usage |
 | Conteneurs utilitaires visibles/éternels | Helpers labellisés `dockhand.volume.helper` (masqués de l'inventaire), TTL 5 min, libération à la fermeture, recyclage planifié et purge au démarrage |
+| Dérive de l'image helper | Image **épinglée** `busybox:1.37.0` (pas de tag flottant) : comportement du helper reproductible |
 | Injection via identifiants | Tous les noms/identifiants de volume/réseau validés (format d'identifiant Docker) avant opération |
 | Suppression hors périmètre | Prunes et suppressions qualifiés par environnement ; permissions `volumes:*` / `networks:*` par domaine et portée *(Enterprise)* |
 | Rapports de prune trompeurs | Espace « libéré » des volumes non fabriqué (l'API Docker ne fournit pas la taille par volume) |
@@ -276,15 +276,15 @@ Le **déclenchement manuel** hors cron est possible (ch. 14) ; les exécutions s
 | Chapitre | Lien | Pourquoi y aller |
 |---|---|---|
 | 00 — Chapitrage | [`00-chapitrage.md`](00-chapitrage.md) | Sommaire de référence. |
-| 02 — Architecture fonctionnelle | [`02-architecture-fonctionnelle.md`](02-architecture-fonctionnelle.md) | Collecte disque par le collecteur Go, prunes dans la carte des modules. |
+| 02 — Architecture fonctionnelle | [`02-architecture-fonctionnelle.md`](02-architecture-fonctionnelle.md) | Collecte disque par la couche de collecte intégrée, prunes dans la carte des modules. |
 | 03 — Concepts et entités | [`03-concepts-entites.md`](03-concepts-entites.md) | Volumes/réseaux comme objets Docker non répliqués ; `schedule_executions`. |
 | 04 — Environnements | [`04-environnements.md`](04-environnements.md) | `/info` et métriques hôtes, suppression des réglages de prune à la suppression d'environnement. |
 | 05 — Gestion des conteneurs | [`05-conteneurs.md`](05-conteneurs.md) | Navigateur de fichiers conteneur (distinct, §10), recreate et réseaux additionnels (§7), batch transverse (§5). |
 | 06 — Stacks Compose | [`06-stacks.md`](06-stacks.md) | Volumes/réseaux des stacks, `down` avec `removeVolumes`, graphe par stack (§5). |
 | 07 — Intégration Git | [`07-git.md`](07-git.md) | Binds relatifs `./data` protégés par la surimpression sans effacement. |
 | 08 — Images et registres | [`08-images.md`](08-images.md) | Prune d'images (manuel/planifié), lien avec le prune global. |
-| 10 — Sécurité applicative | `10-securite-applicative.md` *(à rédiger, lot 4)* | Volumes protégés des scanners, nettoyage du cache scanners. |
-| 11 — Sauvegardes (bêta) | `11-sauvegardes.md` *(à rédiger, lot 4)* | Sauvegarde de volumes, helpers restic *(flag)*. |
-| 13 — Observabilité | `13-observabilite.md` *(à rédiger, lot 4)* | Rétention des événements, notifications d'alerte disque. |
-| 14 — Automatisation | `14-automatisation-api.md` *(à rédiger, lot 5)* | Tâches `system_cleanup`/`image_prune`, déclenchement manuel, rétentions. |
-| 15 — Administration | `15-administration-exploitation.md` *(à rédiger, lot 5)* | Réglages des nettoyages (crons, rétentions), `SKIP_DF_COLLECTION`. |
+| 10 — Sécurité applicative | [`10-securite-applicative.md`](10-securite-applicative.md) | Volumes protégés des scanners, nettoyage du cache scanners. |
+| 11 — Sauvegardes (bêta) | [`11-sauvegardes.md`](11-sauvegardes.md) | Sauvegarde de volumes, helper restic *(flag)*. |
+| 13 — Observabilité | [`13-observabilite.md`](13-observabilite.md) | Rétention des événements, notifications d'alerte disque. |
+| 14 — Automatisation | [`14-automatisation-api.md`](14-automatisation-api.md) | Jobs `system_cleanup`/`image_prune`, déclenchement manuel, rétentions. |
+| 15 — Administration | [`15-administration-exploitation.md`](15-administration-exploitation.md) | Réglages des nettoyages (crons, rétentions), `SKIP_DF_COLLECTION`. |

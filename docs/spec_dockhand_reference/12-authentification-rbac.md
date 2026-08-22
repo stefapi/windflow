@@ -3,11 +3,7 @@
 | Rubrique | Valeur |
 |---|---|
 | **Chapitre** | 12 — Authentification, utilisateurs et contrôle d'accès (RBAC) |
-| **Statut** | Rédigé (phase 2, lot 4/5) |
-| **Date de rédaction** | 21/08/2026 |
-| **Version du logiciel analysée** | Dockhand **1.0.43** (numéro issu de [`package.json`](../../package.json:4)) |
-| **Document de référence** | [`docs/spec/00-chapitrage.md`](00-chapitrage.md) |
-| **Sources principales** | [`src/lib/server/auth.ts`](../../src/lib/server/auth.ts:1), [`src/lib/server/authorize.ts`](../../src/lib/server/authorize.ts:1), [`src/lib/server/api-tokens.ts`](../../src/lib/server/api-tokens.ts:1), [`src/lib/server/license.ts`](../../src/lib/server/license.ts:159), [`src/lib/server/db/drizzle.ts`](../../src/lib/server/db/drizzle.ts:760) (rôles système), [`src/lib/server/db/schema/index.ts`](../../src/lib/server/db/schema/index.ts:166), [`src/routes/api/auth/`](../../src/routes/api/auth/login/+server.ts:1), [`src/routes/api/users/`](../../src/routes/api/users/+server.ts:1), [`src/routes/api/roles/`](../../src/routes/api/roles/+server.ts:1), [`scripts/emergency/`](../../scripts/emergency/create-admin.sh:1) |
+| **Document de référence** | [`00-chapitrage.md`](00-chapitrage.md) |
 
 ## Table des matières
 
@@ -29,7 +25,7 @@
 
 ## 1. Objet, périmètre et prérequis de lecture
 
-Ce chapitre décrit l'**authentification** (comptes locaux Argon2id, connexion avec MFA TOTP et codes de secours, sessions par cookie HttpOnly, SSO OIDC multi-fournisseurs, LDAP/AD, mode authentification désactivée et installation initiale) et le **contrôle d'accès** (rôles et permissions par domaine fonctionnel, portée par environnement, mappings de rôles OIDC/LDAP, rôles système Admin/Operator/Viewer, différences Free/Enterprise, auto-attribution du rôle Admin au créateur d'environnement, jetons d'API personnels, scripts d'urgence d'administration des comptes).
+Ce chapitre décrit l'**authentification** (comptes locaux Argon2id via argon2-cffi, connexion avec MFA TOTP et codes de secours, sessions par cookie HttpOnly, SSO OIDC multi-fournisseurs via authlib, LDAP/AD via ldap3, mode authentification désactivée et installation initiale) et le **contrôle d'accès** (rôles et permissions par domaine fonctionnel, portée par environnement, mappings de rôles OIDC/LDAP, rôles système Admin/Operator/Viewer, différences Free/Enterprise, auto-attribution du rôle Admin au créateur d'environnement, jetons d'API personnels `dh_`, commandes d'urgence d'administration des comptes).
 
 **Prérequis de lecture** : chapitre 01 (modèle d'éditions et licence — §7), chapitre 03 §12 (entités `users`, `sessions`, `roles`, `user_roles`, `oidc_config`, `ldap_config`, `api_tokens`, `auth_settings`). Les préférences par utilisateur *(Enterprise)* sont traitées au ch. 15.
 
@@ -48,9 +44,9 @@ flowchart TB
 
     subgraph Cœur[ noyau commun ]
         SESS[(sessions)]
-        CTX[Contexte d autorisation<br/>authorize]
-        PERM[checkPermission<br/>Free - tout - Enterprise - RBAC]
-        ENV[Portée environnement<br/>canAccessEnvironment]
+        CTX[Contexte d autorisation<br/>middleware FastAPI]
+        PERM[Vérification de permission<br/>Free - tout - Enterprise - RBAC]
+        ENV[Portée environnement<br/>accès par environnement]
     end
 
     subgraph RBAC[ contrôle d accès - Enterprise ]
@@ -68,7 +64,7 @@ flowchart TB
     ROLES --> ADMIN
 ```
 
-Le modèle d'accès se résume en trois questions posées à chaque requête (contexte [`authorize`](../../src/lib/server/authorize.ts:136)) :
+Le modèle d'accès se résume en trois questions posées à chaque requête (contexte d'autorisation construit par le middleware d'authentification du backend FastAPI) :
 
 1. **Authentification** : l'appelant est-il identifié (session cookie ou jeton Bearer) — et l'authentification est-elle seulement activée ?
 2. **Permission** : a-t-il le droit `ressource:action` demandé — en Free tous les authentifiés ont tout, en Enterprise le RBAC décide ;
@@ -95,7 +91,7 @@ flowchart LR
 
 ### 3.1 Comptes locaux
 
-Les comptes locaux stockent un **hachage Argon2id** (`passwordHash`) — jamais de mot de passe en clair. Un compte porte : `username` (unique), `email`, `displayName`, `avatar`, `authProvider` (`local`, `oidc:<Nom>`, `ldap:<Nom>` selon l'origine), `mfaEnabled`/`mfaSecret` (JSON : secret TOTP + codes de secours **hachés**), `isActive`, `lastLogin`.
+Les comptes locaux stockent un **hachage Argon2id** (`passwordHash`, calculé par la bibliothèque **argon2-cffi**) — jamais de mot de passe en clair. Un compte porte : `username` (unique), `email`, `displayName`, `avatar`, `authProvider` (`local`, `oidc:<Nom>`, `ldap:<Nom>` selon l'origine), `mfaEnabled`/`mfaSecret` (JSON : secret TOTP + codes de secours **hachés**), `isActive`, `lastLogin`.
 
 ### 3.2 Connexion
 
@@ -103,7 +99,7 @@ Les comptes locaux stockent un **hachage Argon2id** (`passwordHash`) — jamais 
 
 ### 3.3 MFA TOTP *(Enterprise)*
 
-L'activation se fait par l'utilisateur lui-même : `action=setup` régénère un secret et retourne un **QR code** ; `action=verify` confirme un code et active. Des **codes de secours** hachés sont générés à l'activation (repli en cas de perte du générateur). La désactivation requiert un code valide.
+L'activation se fait par l'utilisateur lui-même : `action=setup` régénère un secret TOTP (via la bibliothèque **pyotp**) et retourne un **QR code** ; `action=verify` confirme un code et active. Des **codes de secours** hachés sont générés à l'activation (repli en cas de perte du générateur). La désactivation requiert un code valide.
 
 ### 3.4 Mode sans authentification et installation initiale
 
@@ -114,13 +110,13 @@ Les réglages globaux (`auth_settings`) portent `authEnabled` : une instance peu
 - **Cookie HttpOnly** `dockhand_session` — le navigateur ne peut pas le lire (anti-exfiltration XSS) ; la **déconnexion** détruit la session côté serveur et efface le cookie ;
 - chaque session (`sessions`) porte `userId`, le `provider` d'origine (locale/OIDC/LDAP) et `expiresAt` — expiration selon le délai configuré (`sessionTimeout`, défaut 86 400 s) ;
 - la session courante s'interroge via `/api/auth/session` (amorçage du frontend : état authentifié, `authEnabled`, profil) ;
-- **révocation globale** : le script d'urgence `clear-sessions` purge toutes les sessions (§11) — il n'y a pas de liste de sessions actives gérable depuis l'interface en 1.0.43.
+- **révocation globale** : la commande d'urgence `clear-sessions` purge toutes les sessions (§11) — il n'existe pas de liste de sessions actives gérable depuis l'interface.
 
 ## 5. SSO OpenID Connect
 
 ### 5.1 Configuration
 
-Plusieurs **fournisseurs OIDC** peuvent coexister (`oidc_config`, gestion `/api/auth/oidc` — CRUD, secret client masqué, test de découverte) :
+Plusieurs **fournisseurs OIDC** peuvent coexister (`oidc_config`, gestion `/api/auth/oidc` — CRUD, secret client masqué, test de découverte) ; le protocole est implémenté via la bibliothèque **authlib** :
 
 | Champ | Rôle |
 |---|---|
@@ -137,7 +133,7 @@ Le flux est un **Authorization Code** standard : `initiate` construit l'URL d'au
 
 ## 6. LDAP / Active Directory *(Enterprise)*
 
-La connexion LDAP complète le SSO pour les annuaires d'entreprise (gestion `/api/auth/ldap` — CRUD **réservé Enterprise**, mot de passe de bind masqué, test de connectivité) :
+La connexion LDAP complète le SSO pour les annuaires d'entreprise (implémentation via la bibliothèque **ldap3** ; gestion `/api/auth/ldap` — CRUD **réservé Enterprise**, mot de passe de bind masqué, test de connectivité) :
 
 - **Connexion à l'annuaire** : `serverUrl`, `bindDn`/`bindPassword` (chiffré), `baseDn`, TLS (`tlsEnabled`, `tlsCa`) — le **test** vérifie la liaison ;
 - **recherche d'utilisateurs** : `userFilter` (avec substituable de nom d'utilisateur), attributs `usernameAttribute`, `emailAttribute`, `displayNameAttribute` ;
@@ -161,11 +157,11 @@ La connexion LDAP complète le SSO pour les annuaires d'entreprise (gestion `/ap
 
 ### 8.2 Domaines de permissions
 
-L'ensemble des domaines (`Permissions`) : `containers`, `images`, `volumes`, `networks`, `stacks`, `environments`, `registries`, `notifications`, `configsets`, `settings`, `users`, `git`, `license`, `audit_logs`, `activity`, `schedules`, `templates`, `secrets`, `backups`. Les actions typiques : `view`, `create`, `edit`, `delete`, plus des actions dédiées (`start`/`stop`/`restart`/`exec`/`logs`/`inspect` pour les conteneurs ; `pull`/`load`/`push`/`build` pour les images ; `connect`/`disconnect` pour les réseaux ; `test` pour les notifications ; `run` pour les planifications ; `deploy`/`manage` pour les modèles ; `manage` pour la licence).
+L'ensemble des domaines (19) : `containers`, `images`, `volumes`, `networks`, `stacks`, `environments`, `registries`, `notifications`, `configsets`, `settings`, `users`, `git`, `license`, `audit_logs`, `activity`, `schedules`, `templates`, `secrets`, `backups`. Les actions typiques : `view`, `create`, `edit`, `delete`, plus des actions dédiées (`start`/`stop`/`restart`/`exec`/`logs`/`inspect` pour les conteneurs ; `pull`/`load`/`push`/`build` pour les images ; `connect`/`disconnect` pour les réseaux ; `test` pour les notifications ; `run` pour les planifications ; `deploy`/`manage` pour les modèles ; `manage` pour la licence).
 
 ### 8.3 Rôles système
 
-Trois rôles `isSystem` sont créés (et **recalés** à chaque démarrage — [`drizzle.ts`](../../src/lib/server/db/drizzle.ts:760)) :
+Trois rôles `isSystem` sont créés (et **recalés** à chaque démarrage par le service d'initialisation des données de référence) :
 
 | Domaine | Admin | Operator | Viewer |
 |---|---|---|---|
@@ -199,14 +195,14 @@ OIDC (`roleMappings` sur claim de groupes) et LDAP (`roleMappings` groupe → r�
 
 ### 9.1 Portée environnement
 
-- `canAccessEnvironment(env)` : vrai pour les admins, en Free pour tout authentifié ; en Enterprise, vrai si l'utilisateur tient **au moins un rôle s'appliquant** à cet environnement (rôle global `environmentIds=null` ou couvrant l'environnement, ou attribution ciblée) ;
-- `getAccessibleEnvironmentIds()` : `null` = tous les environnements (admin, Free, auth désactivée) ; sinon la liste des identifiants accessibles (utilisée p.ex. pour **filtrer l'inventaire des environnements** — ch. 04) ;
+- **accès à un environnement** : vrai pour les admins, en Free pour tout authentifié ; en Enterprise, vrai si l'utilisateur tient **au moins un rôle s'appliquant** à cet environnement (rôle global `environmentIds=null` ou couvrant l'environnement, ou attribution ciblée) ;
+- **liste des environnements accessibles** : `null` = tous les environnements (admin, Free, auth désactivée) ; sinon la liste des identifiants accessibles (utilisée p.ex. pour **filtrer l'inventaire des environnements** — ch. 04) ;
 - la vérification de permission **avec contexte d'environnement** (`can(ressource, action, envId)`) ne considère que les rôles **applicables à cet environnement** — un Operator global et Viewer sur l'env 3 est Viewer sur l'env 3 ;
-- **auto-attribution du rôle Admin au créateur d'environnement** *(Enterprise)* : un utilisateur non-admin qui crée un environnement reçoit le rôle **Admin borné à cet environnement** (échec de l'attribution non bloquant — l'environnement est créé) : le créateur peut administrer sa création sans devenir admin global ([`src/routes/api/environments/+server.ts`](../../src/routes/api/environments/+server.ts:155)).
+- **auto-attribution du rôle Admin au créateur d'environnement** *(Enterprise)* : un utilisateur non-admin qui crée un environnement reçoit le rôle **Admin borné à cet environnement** (échec de l'attribution non bloquant — l'environnement est créé) : le créateur peut administrer sa création sans devenir admin global.
 
 ### 9.2 Gating d'édition
 
-Le RBAC n'est actif que si [`isEnterprise()`](../../src/lib/server/license.ts:159) — qui exige **exactement** `type === 'enterprise'` dans la charge de licence validée : une licence **SMB** valide n'active **pas** le RBAC (pas de LDAP/MFA non plus — §§3.3 et 6). Récapitulatif :
+Le RBAC n'est actif que si la **licence validée est de type `enterprise` exactement** (vérification par signature RSA-SHA256 — le service de licence exige `type === 'enterprise'` dans la charge validée) : une licence **SMB** valide n'active **pas** le RBAC (pas de LDAP/MFA non plus — §§3.3 et 6). Récapitulatif :
 
 | Capacité | Free | SMB | Enterprise |
 |---|---|---|---|
@@ -218,40 +214,40 @@ Le RBAC n'est actif que si [`isEnterprise()`](../../src/lib/server/license.ts:15
 | Journal d'audit | — | — | ✔ |
 | Préférences nominatives | — (partagées) | — (partagées) | ✔ |
 
-En Free (et SMB sans Enterprise), **tout utilisateur authentifié est de facto administrateur** : `checkPermission` répond vrai, l'inventaire n'est pas filtré — modèle d'« administration de confiance » assumé pour un homelab mono-utilisateur.
+En Free (et SMB sans Enterprise), **tout utilisateur authentifié est de facto administrateur** : la vérification de permission répond vrai, l'inventaire n'est pas filtré — modèle d'« administration de confiance » assumé pour un homelab mono-utilisateur.
 
 ## 10. Jetons d'API
 
 Les jetons personnels (`api_tokens`, gestion `/api/auth/tokens` — propres à l'utilisateur authentifié, jamais via un autre jeton) permettent d'appeler l'API REST sans session navigateur :
 
-- **Format** : préfixe `dh_` + 43 caractères base64url (32 octets aléatoires) — la valeur **complète n'est montrée qu'une fois** à la création ; la base ne stocke que le **hachage Argon2id** (`tokenHash`, unique) et un `tokenPrefix` (8 caractères après `dh_`) pour l'identification dans les listes ;
+- **Format** : préfixe `dh_` + 43 caractères base64url (32 octets aléatoires) — la valeur **complète n'est montrée qu'une fois** à la création ; la base ne stocke que le **hachage Argon2id** (`tokenHash`, unique — argon2-cffi) et un `tokenPrefix` (8 caractères après `dh_`) pour l'identification dans les listes ;
 - **Usage** : en-tête `Authorization: Bearer dh_…` ; la validation recharge l'utilisateur propriétaire (avec son `authProvider` d'origine), vérifie `isActive`, l'**expiration optionnelle** (`expiresAt`, testée **après** vérification du hachage — pas d'oracle de timing) et reconstruit ses permissions (Free : Admin ; Enterprise : fusion des rôles) ;
 - **Performance** : cache mémoire (clé SHA-256, TTL 60 s borné par l'expiration) — Argon2id ne tourne qu'au premier appel ; un jeton sans candidat déclenche quand même une vérification contre un haché factice (temps constant) ;
 - **Traçabilité** : `lastUsed` mis à jour au vol (non bloquant) ; **révocation** = suppression (le cache est invalidé pour l'utilisateur) ;
 - la création d'un jeton exige une **session** (pas un Bearer) et la confirmation du mot de passe.
 
-Le périmètre effectif d'un jeton est celui de son propriisateur (mêmes permissions RBAC, même portée d'environnement) — l'usage pour l'API documentée et l'export SARIF est traité au ch. 14.
+Le périmètre effectif d'un jeton est celui de son propriétaire (mêmes permissions RBAC, même portée d'environnement) — l'usage pour l'API documentée et l'export SARIF est traité au ch. 14. Ces jetons sont les **seuls** jetons du produit : l'administration distante d'hôtes s'effectue par le remote shell SSH authentifié par **clés SSH** (ch. 04), pas par des jetons dédiés.
 
 ## 11. Procédures d'urgence d'administration des comptes
 
-Scripts shell dans [`scripts/emergency/`](../../scripts/emergency/create-admin.sh:1) (variants `sqlite/` et `postgres/` selon la base — les scripts racines délèguent), exécutés sur l'hôte, typiquement le conteneur Dockhand :
+Des **commandes d'urgence** sont exécutées sur l'hôte, typiquement dans le conteneur Dockhand (elles agissent directement sur la base via la couche de données — SQLAlchemy selon `DATABASE_URL` : aiosqlite/SQLite par défaut, psycopg 3/PostgreSQL le cas échéant) :
 
-| Script | Action fonctionnelle |
+| Commande | Action fonctionnelle |
 |---|---|
-| `create-admin.sh` | Crée (ou réactive) un compte **administrateur** avec un mot de passe fourni — reprise en main d'une instance verrouillée |
-| `reset-password.sh` | Réinitialise le mot de passe d'un utilisateur (hachage Argon2id) — et **désactive sa MFA** au passage |
-| `disable-auth.sh` | Désactive l'authentification de l'instance (`authEnabled=false`) — accès direct à l'interface pour dépannage |
-| `clear-sessions.sh` | Purge **toutes** les sessions (déconnexion forcée de tout le monde) |
-| `list-users.sh` | Liste les comptes (nom, fournisseur, état MFA/actif) — diagnostic sans interface |
+| `create-admin` | Crée (ou réactive) un compte **administrateur** avec un mot de passe fourni — reprise en main d'une instance verrouillée |
+| `reset-password` | Réinitialise le mot de passe d'un utilisateur (hachage Argon2id) — et **désactive sa MFA** au passage |
+| `disable-auth` | Désactive l'authentification de l'instance (`authEnabled=false`) — accès direct à l'interface pour dépannage |
+| `clear-sessions` | Purge **toutes** les sessions (déconnexion forcée de tout le monde) |
+| `list-users` | Liste les comptes (nom, fournisseur, état MFA/actif) — diagnostic sans interface |
 
-Ces scripts complètent les outils d'urgence base de données (`backup-db`, `restore-db`, `reset-db` — ch. 15). Ils agissent **directement sur la base** (contournement de l'application) : ils supposent un accès hôte légitime.
+Ces commandes complètent les outils d'urgence base de données (`backup-db`, `restore-db`, `reset-db` — ch. 15). Elles agissent **directement sur la base** (contournement de l'application) : elles supposent un accès hôte légitime.
 
 ## 12. Synthèse des règles de sécurité
 
 | Risque | Mesure fonctionnelle |
 |---|---|
 | Vol de session par XSS | Cookie **HttpOnly** ; expiration configurée ; purge globale en urgence |
-| Force brute / oracle de comptes | Hachage **Argon2id** (coût élevé par essai) ; échec de connexion indifférencié |
+| Force brute / oracle de comptes | Hachage **Argon2id** (argon2-cffi, coût élevé par essai) ; échec de connexion indifférencié |
 | Perte du générateur TOTP | Codes de secours **hachés** générés à l'activation MFA |
 | Élévation non maîtrisée via SSO | Élévation Admin par claim/groupe **explicite** (`adminClaim`/`adminGroup`), mappings déclarés par fournisseur |
 | Compte inactif persistant | `isActive=false` bloque connexions, sessions et jetons (vérifié à chaque usage de jeton) |
@@ -259,9 +255,9 @@ Ces scripts complètent les outils d'urgence base de données (`backup-db`, `res
 | Jeton d'API volé en base | Valeur complète jamais stockée (hachage Argon2id) ni réaffichée ; préfixe d'identification seul |
 | Oracle d'expiration de jeton | Expiration testée **après** vérification du hachage ; haché factice sur candidat absent |
 | Divergence de droits entre session et jeton | Même reconstruction de permissions (fusion des rôles, portées d'environnement) |
-| Verrouillage accidentel de l'instance | Garde « au moins un admin » à l'activation de l'auth ; scripts d'urgence (create-admin, disable-auth) |
+| Verrouillage accidentel de l'instance | Garde « au moins un admin » à l'activation de l'auth ; commandes d'urgence (create-admin, disable-auth) |
 | Créateur d'environnement sans droits dessus *(Enterprise)* | Auto-attribution du rôle **Admin borné à cet environnement** |
-| Escalade via SMB | `isEnterprise()` exige `type=enterprise` exactement — SMB ne débloque ni RBAC, ni LDAP, ni MFA |
+| Escalade via SMB | Le contrôle de licence exige `type=enterprise` exactement — SMB ne débloque ni RBAC, ni LDAP, ni MFA |
 
 ## 13. Renvois vers les autres chapitres
 
@@ -269,9 +265,9 @@ Ces scripts complètent les outils d'urgence base de données (`backup-db`, `res
 |---|---|---|
 | 00 — Chapitrage | [`00-chapitrage.md`](00-chapitrage.md) | Sommaire de référence. |
 | 01 — Présentation générale | [`01-presentation-generale.md`](01-presentation-generale.md) | Modèle de licence BSL, éditions Free/SMB/Enterprise, activation par clé signée. |
-| 02 — Architecture fonctionnelle | [`02-architecture-fonctionnelle.md`](02-architecture-fonctionnelle.md) | Cookies de session, en-têtes de sécurité, contexte de requête (hook Bearer/cookie). |
+| 02 — Architecture fonctionnelle | [`02-architecture-fonctionnelle.md`](02-architecture-fonctionnelle.md) | Cookies de session, en-têtes de sécurité, contexte de requête (middleware session/Bearer). |
 | 03 — Concepts et entités | [`03-concepts-entites.md`](03-concepts-entites.md) | Entités du domaine identité et accès (§12). |
-| 04 — Environnements | [`04-environnements.md`](04-environnements.md) | Filtrage de l'inventaire par environnements accessibles, auto-attribution Admin au créateur, jetons Hawser (authentification d'agent distincte). |
+| 04 — Environnements | [`04-environnements.md`](04-environnements.md) | Filtrage de l'inventaire par environnements accessibles, auto-attribution Admin au créateur, clés SSH du remote shell. |
 | 05 — Gestion des conteneurs | [`05-conteneurs.md`](05-conteneurs.md) | Application des permissions `containers:*` sur les opérations. |
 | 06 — Stacks Compose | [`06-stacks.md`](06-stacks.md) | Permissions `stacks:*`, exigence `secrets:view` pour lier un fournisseur. |
 | 07 — Intégration Git | [`07-git.md`](07-git.md) | Permissions `git:*`, webhooks signés (authentification entrante). |
@@ -279,6 +275,6 @@ Ces scripts complètent les outils d'urgence base de données (`backup-db`, `res
 | 09 — Volumes, réseaux et maintenance | [`09-volumes-reseaux.md`](09-volumes-reseaux.md) | Permissions `volumes:*`, `networks:*`, prune global multi-permissions. |
 | 10 — Sécurité applicative | [`10-securite-applicative.md`](10-securite-applicative.md) | Permissions `secrets:*`, `images:view` sur les vulnérabilités, portée d'environnement des vues. |
 | 11 — Sauvegardes (bêta) | [`11-sauvegardes.md`](11-sauvegardes.md) | Permissions `backups:view/manage` et résolution d'environnement depuis les étiquettes de snapshot *(flag)*. |
-| 13 — Observabilité | `13-observabilite.md` *(à rédiger, lot 5)* | Journal d'audit *(Enterprise)*, diffusion SSE, contexte IP/user-agent des traces. |
-| 14 — Automatisation | `14-automatisation-api.md` *(à rédiger, lot 5)* | API REST et authentification Bearer, viewer Scalar, préférences d'interface des jetons. |
-| 15 — Administration | `15-administration-exploitation.md` *(à rédiger, lot 5)* | Gestion de licence (activation/expiration), préférences par utilisateur *(Enterprise)*, réglages d'authentification, mode installation initiale. |
+| 13 — Observabilité | [`13-observabilite.md`](13-observabilite.md) | Journal d'audit *(Enterprise)*, diffusion SSE, contexte IP/user-agent des traces. |
+| 14 — Automatisation | [`14-automatisation-api.md`](14-automatisation-api.md) | API REST et authentification Bearer, viewer Scalar, préférences d'interface des jetons. |
+| 15 — Administration | [`15-administration-exploitation.md`](15-administration-exploitation.md) | Gestion de licence (activation/expiration), préférences par utilisateur *(Enterprise)*, réglages d'authentification, mode installation initiale. |

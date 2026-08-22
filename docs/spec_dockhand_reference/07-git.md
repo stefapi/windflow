@@ -3,11 +3,7 @@
 | Rubrique | Valeur |
 |---|---|
 | **Chapitre** | 07 — Intégration Git |
-| **Statut** | Rédigé (phase 2, lot 3/5) |
-| **Date de rédaction** | 21/08/2026 |
-| **Version du logiciel analysée** | Dockhand **1.0.43** (numéro issu de [`package.json`](../../package.json:4)) |
-| **Document de référence** | [`docs/spec/00-chapitrage.md`](00-chapitrage.md) |
-| **Sources principales** | [`src/lib/server/git.ts`](../../src/lib/server/git.ts:1), [`src/lib/server/git-deletions.ts`](../../src/lib/server/git-deletions.ts:1), [`src/lib/server/git-url-safety.ts`](../../src/lib/server/git-url-safety.ts:1), [`src/lib/server/git-auth.ts`](../../src/lib/server/git-auth.ts:1), [`src/lib/server/git-ssh-key.ts`](../../src/lib/server/git-ssh-key.ts:1), [`src/lib/server/webhook-signature.ts`](../../src/lib/server/webhook-signature.ts:1), [`src/lib/server/scheduler/tasks/git-stack-sync.ts`](../../src/lib/server/scheduler/tasks/git-stack-sync.ts:1), [`src/routes/api/git/`](../../src/routes/api/git/credentials/+server.ts:1), [`src/lib/server/db/schema/index.ts`](../../src/lib/server/db/schema/index.ts:273) |
+| **Document de référence** | [`00-chapitrage.md`](00-chapitrage.md) |
 
 ## Table des matières
 
@@ -28,15 +24,15 @@
 
 ## 1. Objet, périmètre et prérequis de lecture
 
-Ce chapitre décrit l'**intégration Git** de Dockhand : le déploiement et la tenue à jour de stacks Compose depuis des dépôts Git. Il couvre les credentials Git (authentification none/HTTPS/SSH, chiffrement au repos), les dépôts (entité `git_repositories`), les stacks Git (rattachement dépôt + chemins + répertoire de contexte + options de déploiement), la synchronisation (manuelle, planifiée via la tâche `git-stack-sync`, ou déclenchée par webhook signé), le mécanisme de copie **en surimpression sans effacement** (protection des volumes relatifs `./data`), le **manifeste des fichiers synchronisés** (`syncedFiles`) et la suppression vérifiée par empreinte SHA-256 des fichiers retirés du dépôt, ainsi que les webhooks signés (secret par dépôt et par stack, vérification de signature, réponses) et les événements de notification `git_sync_*`.
+Ce chapitre décrit l'**intégration Git** de Dockhand : le déploiement et la tenue à jour de stacks Compose depuis des dépôts Git. Il couvre les credentials Git (authentification none/HTTPS/SSH, chiffrement au repos), les dépôts (entité `git_repositories`), les stacks Git (rattachement dépôt + chemins + répertoire de contexte + options de déploiement), la synchronisation (manuelle, planifiée via le planificateur unifié APScheduler, ou déclenchée par webhook signé), le mécanisme de copie **en surimpression sans effacement** (protection des volumes relatifs `./data`), le **manifeste des fichiers synchronisés** (`syncedFiles`) et la suppression vérifiée par empreinte SHA-256 des fichiers retirés du dépôt, ainsi que les webhooks signés (secret par dépôt et par stack, vérification de signature, réponses) et les événements de notification `git_sync_*`.
 
-**Prérequis de lecture** : chapitre 04 (environnements, exécution distante de `docker compose`, staging Hawser) et chapitre 06 (déploiement des stacks, source de stack, variables d'environnement). Le chapitre 03 §7 donne le modèle d'entités (`git_credentials`, `git_repositories`, `git_stacks`).
+**Prérequis de lecture** : chapitre 04 (environnements, exécution distante de `docker compose`, staging remote shell SSH) et chapitre 06 (déploiement des stacks, source de stack, variables d'environnement). Le chapitre 03 §7 donne le modèle d'entités (`git_credentials`, `git_repositories`, `git_stacks`).
 
 **Conventions** : mentions *(Enterprise)* / *(SMB)* pour le gating d'édition, *(flag)* pour les fonctions sous feature flag.
 
 ## 2. Vue d'ensemble de l'intégration Git
 
-L'intégration Git est un producteur de stacks : une stack Git est une stack Compose (ch. 06) dont la source des fichiers est un **sous-chemin d'un dépôt Git**. La synchronisation clône (ou re-clône) le dépôt localement, détecte les changements, met à jour le répertoire de déploiement de la stack, puis déclenche le déploiement Compose standard si du contenu a changé.
+L'intégration Git est un producteur de stacks : une stack Git est une stack Compose (ch. 06) dont la source des fichiers est un **sous-chemin d'un dépôt Git**. La synchronisation clone (ou re-clone) le dépôt localement via la **CLI Git invoquée en sous-processus**, détecte les changements, met à jour le répertoire de déploiement de la stack, puis déclenche le déploiement Compose standard si du contenu a changé.
 
 ```mermaid
 flowchart TB
@@ -49,13 +45,13 @@ flowchart TB
 
     subgraph Declencheurs[ déclencheurs ]
         MANUEL[synchro manuelle - SSE]
-        CRON[planification cron<br/>tâche git-stack-sync]
+        CRON[planification cron<br/>job APScheduler git-stack-sync]
         HOOK[webhook signé<br/>POST ou GET]
     end
 
-    subgraph Service[ service git ]
+    subgraph Service[ service git - couche de synchronisation ]
         TEST[test ls-remote]
-        SYNC[synchro - re-clone blobless]
+        SYNC[synchro - re-clone blobless<br/>Git CLI en sous-processus]
         DIFF[diff de commit sur le répertoire]
         DELET[plan de suppression<br/>manifeste vs clone]
         DEPLOY[déploiement stack - surimpression<br/>+ suppressions vérifiées + .env.dockhand]
@@ -89,7 +85,7 @@ flowchart TB
 
 ### 3.1 Modèle et types
 
-L'entité `git_credentials` ([schéma](../../src/lib/server/db/schema/index.ts:273)) est un secret **réutilisable** référencé par zéro à N dépôts (déréférencé à sa suppression, `onDelete: set null`) :
+L'entité `git_credentials` (cf. ch. 03 §7.1) est un secret **réutilisable** référencé par zéro à N dépôts (déréférencé à sa suppression) :
 
 | Champ | Rôle |
 |---|---|
@@ -98,7 +94,7 @@ L'entité `git_credentials` ([schéma](../../src/lib/server/db/schema/index.ts:2
 | `username` / `password` | Couple HTTPS (utilisateur + mot de passe ou jeton PAT GitHub/GitLab/Gitea) |
 | `sshPrivateKey` / `sshPassphrase` | Clé privée SSH OpenSSH + passphrase optionnelle |
 
-Tous les champs sensibles sont **chiffrés au repos** (AES, rotation de clé au démarrage — ch. 02 §7.2) et **jamais retournés par l'API** : la liste n'expose que des indicateurs `hasPassword` / `hasSshKey` ([`src/routes/api/git/credentials/+server.ts`](../../src/routes/api/git/credentials/+server.ts:19)).
+Tous les champs sensibles sont **chiffrés au repos** (AES-256-GCM, rotation de clé au démarrage — ch. 02 §7.2) et **jamais retournés par l'API** : la liste n'expose que des indicateurs `hasPassword` / `hasSshKey`.
 
 **Règles de création** (`POST /api/git/credentials`) :
 
@@ -109,22 +105,22 @@ Tous les champs sensibles sont **chiffrés au repos** (AES, rotation de clé au 
 
 ### 3.2 Mise en œuvre de l'authentification
 
-La construction de l'environnement d'exécution Git ([`buildGitEnv`](../../src/lib/server/git.ts:228)) applique des règles de sécurité strictes :
+La **couche de synchronisation Git** construit l'environnement d'exécution des sous-processus `git` en appliquant des règles de sécurité strictes :
 
 | Type | Mécanisme | Mesures de sécurité |
 |---|---|---|
 | `none` | Accès anonyme | `GIT_TERMINAL_PROMPT=0` (jamais d'invite interactive) ; SSH configuré pour **refuser toute clé** (`IdentitiesOnly=yes`, `PubkeyAuthentication=no`) — aucune clé de l'hôte n'est utilisée |
-| `password` (HTTPS) | En-tête `Authorization: Basic` injecté par variables d'environnement `GIT_CONFIG_COUNT`/`http.extraHeader` | **Jamais d'identifiants dans l'URL** (fuite via `/proc/<pid>/cmdline`) ; identifiants éventuels de l'URL **retirés** avant clonage ; compatible jetons PAT et utilisateur vide |
+| `password` (HTTPS) | En-tête `Authorization: Basic` injecté par variables d'environnement Git (`http.extraHeader`) | **Jamais d'identifiants dans l'URL** (fuite via la ligne de commande du sous-processus) ; identifiants éventuels de l'URL **retirés** avant clonage ; compatible jetons PAT et utilisateur vide |
 | `ssh` | Clé privée écrite dans un fichier temporaire (sous `/tmp`, permissions `0600`) référencée par `GIT_SSH_COMMAND` (`IdentitiesOnly=yes`, aucun agent) | Une **passphrase** éventuelle est levée in place (ssh-keygen) pour un usage non interactif ; fichier **unique par opération** et supprimé après usage (pas de partage entre syncs concurrentes) ; `StrictHostKeyChecking=no` avec `UserKnownHostsFile=/dev/null` |
 
 Comportements annexes notables :
 
-- **Certificats personnalisés** : si `NODE_EXTRA_CA_CERTS` est positionné (autorité interne), un **bundle CA fusionné** (CA système + CA personnalisée) est constitué pour `GIT_SSL_CAINFO` — sinon le remplacement du magasin par défaut casserait les dépôts publics (GitHub/GitLab) ;
-- **UID non déclaré** : lorsque le conteneur Dockhand tourne sous un UID absent de `/etc/passwd` (fréquent avec `--user`), une entrée temporaire est injectée via `libnss_wrapper` pour que les appels SSH de `getpwuid()` réussissent.
+- **Certificats personnalisés** : si une autorité interne est configurée (variable d'environnement dédiée, p.ex. `SSL_CERT_FILE`), un **bundle CA fusionné** (CA système + CA personnalisée) est constitué pour `GIT_SSL_CAINFO` — sinon le remplacement du magasin par défaut casserait les dépôts publics (GitHub/GitLab) ;
+- **UID non déclaré** : lorsque le conteneur Dockhand tourne sous un UID absent de `/etc/passwd` (fréquent avec `--user`), une entrée temporaire est injectée via `libnss_wrapper` pour que les appels SSH (`getpwuid()`) réussissent. Ce mécanisme est **conservé** : il est lié à OpenSSH (invoqué par `GIT_SSH_COMMAND`), pas au runtime applicatif.
 
 ### 3.3 Test de credential / dépôt
 
-Le test (`git ls-remote --heads --refs`) vérifie **sans clonage** l'URL, la branche et les credentials ([`testRepositoryConnection`](../../src/lib/server/git.ts:539)) :
+Le test (`git ls-remote --heads --refs`) vérifie **sans clonage** l'URL, la branche et les credentials :
 
 - connexion impossible → message fonctionnel nettoyé (les avertissements SSH/bruit sont filtrés, les messages `fatal:`/`permission denied` traduits) ;
 - branche inexistante mais dépôt joignable → liste des branches disponibles (5 premières) ;
@@ -136,7 +132,7 @@ Le test s'applique à une configuration enregistrée (bouton de grille) ou à un
 
 ### 4.1 Modèle
 
-L'entité `git_repositories` ([schéma](../../src/lib/server/db/schema/index.ts:298)) décrit **la source distante** ; la configuration de déploiement a migré vers les stacks Git (PUT du dépôt limité aux champs `name`/`url`/`branch`/`credentialId`) :
+L'entité `git_repositories` (cf. ch. 03 §7.2) décrit **la source distante** ; la configuration de déploiement a migré vers les stacks Git (édition du dépôt limitée aux champs `name`/`url`/`branch`/`credentialId`) :
 
 | Champ | Rôle | Défaut |
 |---|---|---|
@@ -152,17 +148,17 @@ L'entité `git_repositories` ([schéma](../../src/lib/server/db/schema/index.ts:
 
 - **Création** : directe (`POST /api/git/repositories`) ou **implicite** lors de la création d'une stack Git (fourniture de `url`/`branch`/`credentialId` en lieu et place d'un `repositoryId`) — dans ce cas le nom du dépôt prend celui de la stack sauf `repoName` fourni ;
 - **Édition** : champs de base uniquement ; l'`url` reste soumise à la validation de sûreté (§11) ;
-- **Suppression** (`DELETE /api/git/repositories/[id]`) : les **clones des stacks Git** qu'il porte sont supprimés d'abord (répertoires), puis le clone propre du dépôt (`repo-<id>`), puis la ligne en base — la **cascade** emporte les stacks Git (l'entité `git_stacks` référence le dépôt en `onDelete: cascade`).
+- **Suppression** (`DELETE /api/git/repositories/[id]`) : les **clones des stacks Git** qu'il porte sont supprimés d'abord (répertoires), puis le clone propre du dépôt (`repo-<id>`), puis la ligne en base — la **cascade** emporte les stacks Git.
 
 ### 4.3 Vérification de mises à jour disponibles
 
-`checkForUpdates` ([`src/lib/server/git.ts`](../../src/lib/server/git.ts:788)) compare le commit local au commit distant par un `fetch` sans fusion : un clone absent (jamais synchronisé) est signalé « à jour à prendre » ; un échec de commande est remonté en erreur.
+La vérification compare le commit local au commit distant par un `fetch` sans fusion : un clone absent (jamais synchronisé) est signalé « à jour à prendre » ; un échec de commande est remonté en erreur.
 
 ## 5. Stacks Git : rattachement, chemins et options de déploiement
 
 ### 5.1 Création et identité
 
-La création (`POST /api/git/stacks`, [`src/routes/api/git/stacks/+server.ts`](../../src/routes/api/git/stacks/+server.ts:60)) rassemble :
+La création (`POST /api/git/stacks`) rassemble :
 
 | Paramètre | Rôle | Règles |
 |---|---|---|
@@ -179,7 +175,7 @@ La création (`POST /api/git/stacks`, [`src/routes/api/git/stacks/+server.ts`](.
 | `envVars` | Variables d'override | Sauvegardées avant déploiement ; secrets masqués `***` filtrés |
 | `deployNow` | Déployer immédiatement | Réponse en **flux SSE** (job) avec le résultat |
 
-À la création : la **source de stack** est enregistrée immédiatement (`sourceType: git`, rattachements dépôt + stack Git, fournisseur de secrets), la **planification** est inscrite au planificateur si `autoUpdate` est actif, l'audit `create` est journalisé *(Enterprise)*.
+À la création : la **source de stack** est enregistrée immédiatement (`sourceType: git`, rattachements dépôt + stack Git, fournisseur de secrets), la **planification** est inscrite au planificateur (APScheduler) si `autoUpdate` est actif, l'audit `create` est journalisé *(Enterprise)*.
 
 ### 5.2 Répertoire de contexte (`contextDir`)
 
@@ -192,7 +188,7 @@ Le `contextDir` répond au cas des dépôts *monorepo* où le Compose et ses fic
 
 ### 5.3 Options de déploiement
 
-Reportées à chaque déploiement Git ([`deployGitStack`](../../src/lib/server/git.ts:1151)) vers le déploiement Compose unifié (ch. 06 §8) :
+Reportées à chaque déploiement Git vers le déploiement Compose unifié (ch. 06 §8) :
 
 | Option | Effet au déploiement Git |
 |---|---|
@@ -207,11 +203,9 @@ De plus, tout changement détecté implique `forceRecreate` (recréation des con
 
 ### 6.1 Déroulement d'une synchronisation
 
-[`syncGitStack`](../../src/lib/server/git.ts:875) :
-
 1. **verrou d'état** : si `syncStatus = syncing`, la demande est refusée (« Sync already in progress ») ;
 2. **état** : passage à `syncing` (effacé en `synced` ou `error` avec message) ;
-3. **re-clone blobless** de la branche (l'ancien clone est supprimé) ; le **commit précédent** est capturé avant destruction (repli sur `lastCommit` en base si le clone avait déjà disparu) ;
+3. **re-clone blobless** de la branche via la CLI Git en sous-processus (l'ancien clone est supprimé) ; le **commit précédent** est capturé avant destruction (repli sur `lastCommit` en base si le clone avait déjà disparu) ;
 4. **détection de changement** : comparaison des commits (7 caractères) ; si différent, `git diff --name-only <précédent> <nouveau> -- <contextDir ou répertoire Compose>/` — un échec de diff (force-push, commit disparu) **suppose un changement** (prudence) ; pas de commit précédent (première synchro) = changement ;
 5. **lecture** du Compose (obligatoire : erreur si absent) et du `.env` du dépôt (facultatif : absence ou échec d'analyse non bloquant ; les variables sont analysées, clés invalides ignorées) ;
 6. **plan de suppression** : confrontation manifeste ↔ clone (§8) ;
@@ -224,13 +218,13 @@ Le **déploiement avec progression** (interface) reprend les mêmes étapes en c
 | Déclencheur | Mécanique | Force |
 |---|---|---|
 | **Manuel** | `POST /api/git/stacks/[id]/sync` ou `/deploy` (ou `deployNow` à la création/édition), flux SSE de progression | **oui** (déploie même sans changement) |
-| **Planifié** | tâche scheduler `git-stack-sync` ([`runGitStackSync`](../../src/lib/server/scheduler/tasks/git-stack-sync.ts:18)) sur le cron de la stack ; exécution tracée dans `schedule_executions` (`triggeredBy: cron`), journalisée ligne à ligne | **non** (saute si aucun changement → statut `skipped`) |
+| **Planifié** | job `git-stack-sync` du planificateur unifié (**APScheduler**, AsyncIOScheduler, trigger cron) sur le cron de la stack ; exécution tracée dans `schedule_executions` (`triggeredBy: cron`), journalisée ligne à ligne | **non** (saute si aucun changement → statut `skipped`) |
 | **Webhook** | `POST /api/git/stacks/[id]/webhook` (signature) ou `GET …?secret=…` | **non** (saute si aucun changement, sauf `forceRedeploy`) |
 
 Règles communes :
 
 - la modification (PUT) de la stack réinscrit/désinscrit la planification selon `autoUpdate` ;
-- au **démarrage du planificateur**, les stacks bloquées en `syncing` (crash d'un processus précédent) sont réinitialisées à `pending` avec mention « recovered from interrupted sync » ([`cleanupStaleSyncStates`](../../src/lib/server/scheduler/index.ts:106)) ;
+- au **démarrage du planificateur**, les stacks bloquées en `syncing` (crash d'un processus précédent) sont réinitialisées à `pending` avec mention « recovered from interrupted sync » ;
 - à la **suppression** de la stack ou de l'environnement, la planification est désinscrite et les fichiers supprimés.
 
 ### 6.3 État de synchronisation et historique
@@ -262,32 +256,32 @@ Les variables d'environnement saisies dans l'éditeur Dockhand (variables de sta
 
 ### 7.3 Staging distant
 
-Pour les environnements distants, l'arborescence complète (Compose, `.env`, fichiers du dépôt, override) transite par le **staging** décrit au ch. 04 §9.3 : transmission à l'agent Hawser (fichiers binaires en base64, plafonds 10 Mo/fichier et 256 Mo total) ou copie vers `remote_stacks_dir` avec réécriture des binds relatifs (mode `direct`). Les suppressions distantes suivent les règles du §8.4.
+Pour les environnements distants, l'arborescence complète (Compose, `.env`, fichiers du dépôt, override) transite par le **staging** décrit au ch. 04 §9.3 : **transfert sur l'hôte distant via la session SSH** du remote shell (fichiers binaires encodés, plafonds 10 Mo/fichier et 256 Mo total), ou copie vers `remote_stacks_dir` avec réécriture des binds relatifs (mode `direct`). Les suppressions distantes suivent les règles du §8.4.
 
 ## 8. Manifeste des fichiers synchronisés et suppression vérifiée
 
 ### 8.1 Manifeste `syncedFiles`
 
-L'attribut `git_stacks.syncedFiles` ([schéma](../../src/lib/server/db/schema/index.ts:340)) porte un **manifeste JSON** `{ commit, files }` :
+L'attribut `git_stacks.syncedFiles` porte un **manifeste JSON** `{ commit, files }` :
 
-- `files` : mapping **chemin relatif → empreinte SHA-256** des fichiers (réguliers uniquement, hors `.git`) écrits lors de la **dernière synchro réussie** ;
+- `files` : mapping **chemin relatif → empreinte SHA-256** (calculée via `hashlib`) des fichiers (réguliers uniquement, hors `.git`) écrits lors de la **dernière synchro réussie** ;
 - `commit` : commit complet (40 caractères) d'où proviennent les fichiers (`null` pour un manifeste hérité/vide).
 
 C'est la **référence de propriété** : seuls les fichiers listés dans le manifeste ont été écrits par Dockhand et sont donc éligibles à la suppression automatique.
 
 ### 8.2 Calcul du plan de suppression
 
-À chaque synchro ([`computeSyncDeletionPlan`](../../src/lib/server/git.ts:390), cœur logique dans [`git-deletions.ts`](../../src/lib/server/git-deletions.ts:260)) :
+À chaque synchro :
 
 1. **hachage du clone** : chaque fichier du répertoire source est haché (SHA-256) ;
 2. **manifeste vide** (première synchro, base fraîche, manifeste corrompu) → **rien à supprimer** (échec fermé : un manifeste illisible vaut manifeste vide) ;
-3. **garde de sanité** ([`deletionSafetyCheck`](../../src/lib/server/git-deletions.ts:236)) : si le parcours du clone paraît cassé (aucun fichier, ou le Compose lui-même absent du parcours), **toutes** les suppressions de cette synchro sont annulées — un défaut de Dockhand ne doit pas ressembler à un dépôt vidé ;
+3. **garde de sanité** : si le parcours du clone paraît cassé (aucun fichier, ou le Compose lui-même absent du parcours), **toutes** les suppressions de cette synchro sont annulées — un défaut de Dockhand ne doit pas ressembler à un dépôt vidé ;
 4. **diff** : chaque entrée du manifeste absente du nouveau clone devient candidate (chemin + empreinte) ; les chemins non sûrs (absolus, échappants) et les **fichiers porteurs** (noms `docker-compose.yml`/`.yaml`, `compose.yml`/`.yaml`, `.env`) sont exclus d'office ;
 5. le plan `{ toDelete, skipped }` est transmis au déploiement, qui l'applique **après** le succès de la copie en surimpression.
 
 ### 8.3 Application vérifiée par empreinte
 
-L'application ([`applyFileDeletions`](../../src/lib/server/git-deletions.ts:296)) est structurellement incapable de toucher quoi que ce soit hors du répertoire de la stack :
+L'application est structurellement incapable de toucher quoi que ce soit hors du répertoire de la stack :
 
 | Contrôle | Effet |
 |---|---|
@@ -297,15 +291,15 @@ L'application ([`applyFileDeletions`](../../src/lib/server/git-deletions.ts:296)
 | **Empreinte disque** | Le fichier n'est supprimé que si ses octets **correspondent encore** à l'empreinte du manifeste ; toute divergence = modification locale → conservé (`locally-modified`) |
 | Répertoires | Nettoyage des répertoires devenus vides par `rmdir` **non récursif** (un répertoire contenant autre chose survit) |
 
-Les **sauts sont définitifs par conception** : une suppression est tentée une seule fois, à la synchro où le fichier disparaît du clone ; tout échec (agent ancien, empreinte divergente, erreur d'unlink) laisse le fichier en **résidu non géré** — le pire cas est toujours « un fichier périmé survit », jamais une perte de données. Les fichiers sautés sortent du manifeste suivant (ils cessent d'être gérés).
+Les **sauts sont définitifs par conception** : une suppression est tentée une seule fois, à la synchro où le fichier disparaît du clone ; tout échec (empreinte divergente, erreur de suppression) laisse le fichier en **résidu non géré** — le pire cas est toujours « un fichier périmé survit », jamais une perte de données. Les fichiers sautés sortent du manifeste suivant (ils cessent d'être gérés).
 
-### 8.4 Environnement Hawser
+### 8.4 Environnement remote shell SSH
 
-Pour un déploiement via agent, la **liste à supprimer** est transmise à l'agent avec l'arborescence ; l'agent applique les mêmes vérifications (containment, porteurs, empreinte) côté hôte distant. Un agent trop ancien pour la fonction répond `agent-no-support` : rien n'est supprimé à distance (comportement antérieur à la fonction), message explicite invitant à mettre à jour l'agent. Les raisons de saut remontées par l'agent sont normalisées (toute raison inconnue devient `apply-failed`).
+Pour un déploiement d'un environnement remote shell, la **liste à supprimer** est transmise sur l'hôte distant avec l'arborescence (via la session SSH) ; le serveur applique **les mêmes vérifications** (containment, fichiers porteurs, empreinte) en exécutant les commandes de suppression **sur l'hôte distant à travers SSH**. Les raisons de saut sont normalisées (toute raison inconnue devient `apply-failed`) ; un échec de canal SSH suspend les suppressions distantes (aucune suppression aveugle).
 
 ### 8.5 Résumé de changements
 
-Chaque synchro réussie produit un **tableau par fichier** (`added`/`updated`/`removed`/`skipped` avec raison + compteur d'inchangés) via [`buildSyncChangeSummary`](../../src/lib/server/git-deletions.ts:383) : affiché en progression avant déploiement, journalisé avec les résultats réels d'application après. Le **manifeste suivant** est exactement l'ensemble des fichiers écrits à cette synchro, au commit de cette synchro ([`buildNextManifest`](../../src/lib/server/git-deletions.ts:375)).
+Chaque synchro réussie produit un **tableau par fichier** (`added`/`updated`/`removed`/`skipped` avec raison + compteur d'inchangés) : affiché en progression avant déploiement, journalisé avec les résultats réels d'application après. Le **manifeste suivant** est exactement l'ensemble des fichiers écrits à cette synchro, au commit de cette synchro.
 
 ## 9. Webhooks de déploiement signés
 
@@ -313,8 +307,8 @@ Chaque synchro réussie produit un **tableau par fichier** (`added`/`updated`/`r
 
 | Webhook | Endpoint | Cible |
 |---|---|---|
-| **Par dépôt** | `POST|GET /api/git/webhook/[id]` ([route](../../src/routes/api/git/webhook/[id]/+server.ts:27)) | Déploiement de la stack portant le nom du dépôt (usage historique, `deployFromRepository`) |
-| **Par stack Git** | `POST|GET /api/git/stacks/[id]/webhook` ([route](../../src/routes/api/git/stacks/[id]/webhook/+server.ts:27)) | Synchro + déploiement de la stack désignée (`deployGitStack`, force = faux) |
+| **Par dépôt** | `POST|GET /api/git/webhook/[id]` | Déploiement de la stack portant le nom du dépôt (usage historique, déploiement par dépôt) |
+| **Par stack Git** | `POST|GET /api/git/stacks/[id]/webhook` | Synchro + déploiement de la stack désignée (`deployGitStack`, force = faux) |
 
 Chacun porte son **propre secret** (`webhookSecret` de l'entité concernée) et son **propre interrupteur** (`webhookEnabled`). Le webhook par stack est le mécanisme recommandé : il bénéficie de la détection de changement (saut propre sans re-déploiement) et de toutes les options de la stack.
 
@@ -322,11 +316,11 @@ Chacun porte son **propre secret** (`webhookSecret` de l'entité concernée) et 
 
 Le secret est **obligatoire** : un webhook activé sans secret configuré est rejeté (401) et journalisé en audit — jamais de webhook « ouvert ».
 
-**POST (fournisseurs)** — deux familles de format, détectées par en-tête ([`verifyWebhookSignature`](../../src/lib/server/webhook-signature.ts:13)) :
+**POST (fournisseurs)** — deux familles de format, détectées par en-tête, signature vérifiée via le module `hmac` de la bibliothèque standard :
 
 | Source | En-tête | Vérification |
 |---|---|---|
-| GitHub / Gitea / Forgejo | `X-Hub-Signature-256: sha256=<hmac>` | HMAC-SHA256 du **corps brut** de la requête, clé = secret ; comparaison à temps constant |
+| GitHub / Gitea / Forgejo | `X-Hub-Signature-256: sha256=<hmac>` | HMAC-SHA256 du **corps brut** de la requête, clé = secret ; comparaison à temps constant (`hmac.compare_digest`) |
 | GitLab | `X-Gitlab-Token: <secret>` | Égalité exacte du jeton, comparaison à temps constant |
 
 **GET (déclenchement manuel/sonde)** — le secret passe en paramètre d'URL `?secret=…` et est comparé à la valeur configurée (401 explicite en cas d'écart).
@@ -371,11 +365,11 @@ sequenceDiagram
     end
 ```
 
-Le déploiement lui-même (`deployStack`, option `isGitDeploy`) suit le flux du **ch. 06 §8.1** : verrou par stack, résolution de variables et secrets, staging distant le cas échéant, exécution `docker compose up -d` avec les options de la stack, réconciliation des mises à jour en attente si le pull était demandé.
+Le déploiement lui-même (`deployStack`, option `isGitDeploy`) suit le flux du **ch. 06 §8.1** : verrou par stack, résolution de variables et secrets, staging distant le cas échéant, exécution `docker compose up -d` en sous-processus avec les options de la stack, réconciliation des mises à jour en attente si le pull était demandé.
 
 ### 10.2 Événements de notification `git_sync_*`
 
-Le déploiement Git **supprime** la notification générique `stack_deployed` (option `isGitDeploy`) au profit d'événements dédiés, émis par [`notifyGitSync`](../../src/lib/server/git.ts:1127) — **quel que soit l'appelant** (webhook, manuel, création/édition, planificateur) :
+Le déploiement Git **supprime** la notification générique `stack_deployed` (option `isGitDeploy`) au profit d'événements dédiés — **quel que soit l'appelant** (webhook, manuel, création/édition, planificateur) :
 
 | Événement | Quand | Type |
 |---|---|---|
@@ -395,12 +389,12 @@ Ces événements sont **routables** par canal de notification et par environneme
 
 | Risque | Mesure fonctionnelle |
 |---|---|
-| Injection d'options Git via l'URL/branche | URL : refus des valeurs commençant par `-`, des transports `ext::`/`fd::`/`file://`, des chemins locaux ([`assertSafeRepoUrl`](../../src/lib/server/git-url-safety.ts:13)) ; branche : refus des refs option-like |
+| Injection d'options Git via l'URL/branche | URL : refus des valeurs commençant par `-`, des transports `ext::`/`fd::`/`file://`, des chemins locaux ; branche : refus des refs option-like |
 | Évasion du clone par les chemins Compose/.env | Résolution + contrôle de containment : tout chemin qui s'échapperait du clone est refusé ; un `/` initial est traité comme relatif à la racine du clone |
 | Fuite de credentials en ligne de commande | HTTPS par variables d'environnement (jamais dans l'URL, identifiants retirés de l'URL) ; SSH par fichier temporaire `0600` unique par opération, nettoyé après |
 | Utilisation de clés SSH de l'hôte | `IdentitiesOnly=yes`, agent désactivé, et sans credential SSH : authentification par clé explicitement désactivée |
-| Suppression de fichiers utilisateur | Suppression conditionnée au **manifeste** (fichiers écrits par Dockhand uniquement), vérification **d'empreinte** avant unlink, fichiers porteurs intouchables, `rmdir` non récursif, garde de sanité sur clone vide |
-| Webhook non authentifié | Secret obligatoire, HMAC-SHA256 à temps constant (GitHub) ou jeton (GitLab), audit des échecs |
+| Suppression de fichiers utilisateur | Suppression conditionnée au **manifeste** (fichiers écrits par Dockhand uniquement), vérification **d'empreinte SHA-256** avant suppression, fichiers porteurs intouchables, `rmdir` non récursif, garde de sanité sur clone vide |
+| Webhook non authentifié | Secret obligatoire, HMAC-SHA256 à temps constant (`hmac.compare_digest`) pour GitHub/Gitea/Forgejo ou jeton (GitLab), audit des échecs |
 | Clé SSH exposée sur volume réseau | Écrite sous `/tmp` (filesystem local fiable), pas dans le répertoire de données |
 | État `syncing` orphelin après crash | Réinitialisation à `pending` au démarrage du planificateur avec trace explicite |
 | Données de stack détruites au re-déploiement | Copie **en surimpression sans effacement** ; overrides dans `.env.dockhand` séparé du `.env` du dépôt |
@@ -411,13 +405,13 @@ Ces événements sont **routables** par canal de notification et par environneme
 | Chapitre | Lien | Pourquoi y aller |
 |---|---|---|
 | 00 — Chapitrage | [`00-chapitrage.md`](00-chapitrage.md) | Sommaire de référence. |
-| 02 — Architecture fonctionnelle | [`02-architecture-fonctionnelle.md`](02-architecture-fonctionnelle.md) | Sous-processus Git, flux de synchro de bout en bout (§8.4). |
+| 02 — Architecture fonctionnelle | [`02-architecture-fonctionnelle.md`](02-architecture-fonctionnelle.md) | Sous-processus Git, flux de synchro de bout en bout. |
 | 03 — Concepts et entités | [`03-concepts-entites.md`](03-concepts-entites.md) | Attributs complets de `git_credentials`/`git_repositories`/`git_stacks`, cascades. |
-| 04 — Environnements | [`04-environnements.md`](04-environnements.md) | Répertoires `git-repos/<nom>/`, impact du renommage et de la suppression d'environnement, staging Hawser. |
+| 04 — Environnements | [`04-environnements.md`](04-environnements.md) | Répertoires `git-repos/<nom>/`, impact du renommage et de la suppression d'environnement, staging remote shell SSH. |
 | 05 — Gestion des conteneurs | [`05-conteneurs.md`](05-conteneurs.md) | Conteneurs recréés par les re-déploiements Git (`force-recreate`). |
 | 06 — Stacks Compose | [`06-stacks.md`](06-stacks.md) | Flux de déploiement (§8.1) consommé par le déploiement Git, variables/`.env.dockhand` (§7.2), suppression de stack (§9). |
 | 08 — Images et registres | [`08-images.md`](08-images.md) | Option `repullImages` → pull `always` et réconciliation des mises à jour en attente. |
-| 10 — Sécurité applicative | `10-securite-applicative.md` *(à rédiger, lot 4)* | Fournisseurs de secrets liés aux stacks Git. |
-| 13 — Observabilité | `13-observabilite.md` *(à rédiger, lot 4)* | Routage des événements `git_sync_*`, historique. |
-| 14 — Automatisation | `14-automatisation-api.md` *(à rédiger, lot 5)* | Tâche `git-stack-sync`, exécutions, fuseaux horaires, endpoints webhook dans l'OpenAPI. |
-| 15 — Administration | `15-administration-exploitation.md` *(à rédiger, lot 5)* | `NODE_EXTRA_CA_CERTS` (autorités internes), `GIT_REPOS_DIR`. |
+| 10 — Sécurité applicative | [`10-securite-applicative.md`](10-securite-applicative.md) | Fournisseurs de secrets liés aux stacks Git. |
+| 13 — Observabilité | [`13-observabilite.md`](13-observabilite.md) | Routage des événements `git_sync_*`, historique. |
+| 14 — Automatisation | [`14-automatisation-api.md`](14-automatisation-api.md) | Job `git-stack-sync` (APScheduler), exécutions, fuseaux horaires, endpoints webhook dans l'OpenAPI. |
+| 15 — Administration | [`15-administration-exploitation.md`](15-administration-exploitation.md) | Autorités de certification internes, `GIT_REPOS_DIR`. |

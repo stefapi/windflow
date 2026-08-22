@@ -3,11 +3,7 @@
 | Rubrique | Valeur |
 |---|---|
 | **Chapitre** | 05 — Gestion des conteneurs |
-| **Statut** | Rédigé (phase 2, lot 2/5) |
-| **Date de rédaction** | 21/08/2026 |
-| **Version du logiciel analysée** | Dockhand **1.0.43** (numéro issu de [`package.json`](../../package.json:4)) |
-| **Document de référence** | [`docs/spec/00-chapitrage.md`](00-chapitrage.md) |
-| **Sources principales** | [`src/routes/api/containers/`](../../src/routes/api/containers/+server.ts:1), [`src/lib/server/docker.ts`](../../src/lib/server/docker.ts:1), [`src/routes/api/batch/+server.ts`](../../src/routes/api/batch/+server.ts:1), [`src/lib/server/container-env-merge.ts`](../../src/lib/server/container-env-merge.ts:1), [`src/lib/server/container-labels.ts`](../../src/lib/server/container-labels.ts:1), [`src/routes/+layout.ts`](../../src/routes/+layout.ts:1), [`src/lib/stores/containers.ts`](../../src/lib/stores/containers.ts:1), [`server.js`](../../server.js:1) |
+| **Document de référence** | [`00-chapitrage.md`](00-chapitrage.md) |
 
 ## Table des matières
 
@@ -42,26 +38,26 @@ Toutes les opérations conteneurs sont qualifiées par l'environnement sélectio
 
 ```mermaid
 flowchart TB
-    subgraph UI[ pages conteneurs ]
+    subgraph UI[ pages conteneurs - SPA Vue / PrimeVue ]
         LISTE[Inventaire + filtres]
         DETAIL[Détails / inspection]
         LOGS[Vue journaux]
-        TERM[Terminal xterm]
+        TERM[Terminal xterm.js]
         FICHIERS[Navigateur fichiers]
         STATS[Vue statistiques]
     end
 
     subgraph API[ API REST + flux ]
         REST[REST inventaire, cycle de vie, inspect, update]
-        SSE[SSE logs stream, stats stream, événements]
-        WS[WebSocket exec]
+        SSE[SSE logs stream, stats stream, événements<br/>sse-starlette]
+        WS[WebSocket exec - Starlette]
     end
 
     subgraph SERV[ services serveur ]
-        DOCK[Client Docker unifié<br/>socket, direct, Hawser]
+        DOCK[Couche d accès Docker unifiée<br/>socket, socket-proxy, direct, SSH]
         MERGE[Fusion env-labels au recreate]
         BATCH[Moteur batch SSE]
-        HAW[Relais Hawser edge]
+        SSH[Remote shell SSH - AsyncSSH]
     end
 
     DOCKER[Docker Engine de l environnement]
@@ -75,10 +71,10 @@ flowchart TB
     REST --> DOCK
     SSE --> DOCK
     WS --> DOCK
-    DOCK --> HAW
+    DOCK --> SSH
     REST --> MERGE
     REST --> BATCH
-    HAW --> DOCKER
+    SSH --> DOCKER
 ```
 
 **Principes transverses** :
@@ -92,7 +88,7 @@ flowchart TB
 
 ### 3.1 Liste des conteneurs
 
-`GET /api/containers?env=<id>` ([`src/routes/api/containers/+server.ts`](../../src/routes/api/containers/+server.ts:19)) :
+`GET /api/containers?env=<id>` :
 
 - paramètre `all` : par défaut **vrai** (conteneurs arrêtés inclus ; passer `false` pour ne voir que les actifs) ;
 - retourne id, nom, image, état (`state`), statut lisible (`status`, ex. « Up 2 hours (healthy) »), ports, labels ;
@@ -119,7 +115,7 @@ L'inventaire est complété par des tailles disque optionnelles (`GET /api/conta
 
 ### 4.1 Actions élémentaires
 
-Chaque action est un endpoint REST dédié (`POST /api/containers/[id]/…`) adossé à une opération Docker ([`src/lib/server/docker.ts`](../../src/lib/server/docker.ts:1217)) :
+Chaque action est un endpoint REST dédié (`POST /api/containers/[id]/…`) adossé à une opération Docker :
 
 | Action | Endpoint | Effet | Notes fonctionnelles |
 |---|---|---|---|
@@ -168,7 +164,7 @@ stateDiagram-v2
 
 ## 5. Opérations groupées (batch)
 
-`POST /api/batch` ([`src/routes/api/batch/+server.ts`](../../src/routes/api/batch/+server.ts:1)) applique une même opération à un ensemble d'éléments, avec **suivi en flux (SSE)** :
+`POST /api/batch` applique une même opération à un ensemble d'éléments, avec **suivi en flux (SSE)** :
 
 - **types d'entités et opérations** : conteneurs (start/stop/restart/pause/unpause/remove), images (remove), volumes (remove), réseaux (remove), **stacks** (start/stop/restart/down/remove) — la batch est donc transverse aux chapitres 05/06/09 ;
 - **options** : force, suppression des volumes (pour remove) ;
@@ -220,7 +216,7 @@ sequenceDiagram
     opt repullImage
         S->>D: pull de l image
     end
-    S->>S: résolution des secrets masqués *** 
+    S->>S: résolution des secrets masqués ***
     S->>S: fusion env-labels par valeur
     S->>D: stop si le conteneur tourne
     S->>D: rename en nom-old
@@ -235,7 +231,7 @@ sequenceDiagram
     S-->>U: succès + id du nouveau conteneur
 ```
 
-Étapes clés ([`src/lib/server/docker.ts`](../../src/lib/server/docker.ts:1917)) :
+Étapes clés :
 
 1. **arrêt** (si actif), **renommage** en `<nom>-old` pour libérer le nom ;
 2. **déconnexion des réseaux** de l'ancien (libère les IP statiques) — **sauf** modes réseau partagés (`container:`, `service:`, `host`, `none`) où toute manipulation réseau est ignorée ;
@@ -243,9 +239,11 @@ sequenceDiagram
 4. **démarrage** (si le conteneur tournait ou si demandé) puis **suppression de l'ancien** ;
 5. **rollback** en cas d'échec : renommage restauré, réseaux reconnectés avec leurs réglages d'origine, redémarrage si nécessaire.
 
+Ces opérations transitent par la couche d'accès Docker unifiée : requêtes API Docker (aiodocker) pour les modes socket/socket-proxy/direct, ou commandes équivalentes exécutées à distance via le remote shell SSH pour les environnements concernés.
+
 ### 7.3 Fusion (rebase) env/labels/commande
 
-Problème fonctionnel : la configuration d'un conteneur **aplatit** à la création les valeurs par défaut de l'image (env, labels, CMD) avec les choix de l'utilisateur — au moment de recréer avec une **nouvelle image**, il faut distinguer ce qui doit **suivre la nouvelle image** de ce qui doit être **préservé**. La fusion s'opère **par valeur** ([`src/lib/server/container-env-merge.ts`](../../src/lib/server/container-env-merge.ts:1)) :
+Problème fonctionnel : la configuration d'un conteneur **aplatit** à la création les valeurs par défaut de l'image (env, labels, CMD) avec les choix de l'utilisateur — au moment de recréer avec une **nouvelle image**, il faut distinguer ce qui doit **suivre la nouvelle image** de ce qui doit être **préservé**. La fusion s'opère **par valeur** :
 
 - pour chaque clé d'env / label : si la valeur actuelle du conteneur est **identique** à celle de l'ancienne image → l'utilisateur ne l'a pas touchée → elle prend la valeur de la **nouvelle** image ; si elle **diffère** → choix explicite de l'utilisateur → conservée ; les entrées absentes de l'ancienne image sont conservées ;
 - même logique pour **Cmd/Entrypoint** : la commande « cuite » par l'ancienne image suit la nouvelle image, un `command:` utilisateur survit ;
@@ -256,7 +254,7 @@ Problème fonctionnel : la configuration d'un conteneur **aplatit** à la créat
 
 L'inspection **masque** les valeurs secrètes (noms ressemblant à des secrets : `*_PASSWORD`, `*_TOKEN`, `*_KEY`… — même heuristique que la règle `SECRET_IN_ENVIRONMENT` du validateur Compose, cf. ch. 06 §7). À l'édition, le formulaire renvoie `***` pour les valeurs inchangées : le serveur **résout** ces placeholders en relisant les valeurs réelles du conteneur courant avant la recréation — l'utilisateur édite les autres champs sans jamais réimporter les secrets.
 
-### 7.4bis Effet sur les mises à jour en attente
+### 7.5 Effet sur les mises à jour en attente
 
 Une recréation réussie **efface** la mise à jour en attente du conteneur (l'indicateur ambre disparaît).
 
@@ -264,13 +262,13 @@ Une recréation réussie **efface** la mise à jour en attente du conteneur (l'i
 
 ### 8.1 Flux SSE de journaux
 
-`GET /api/containers/[id]/logs/stream?env=<id>&tail=<n>&since=<t>&until=<t>` ([`src/routes/api/containers/[id]/logs/stream/+server.ts`](../../src/routes/api/containers/[id]/logs/stream/+server.ts:271)) ouvre un flux **Server-Sent Events** :
+`GET /api/containers/[id]/logs/stream?env=<id>&tail=<n>&since=<t>&until=<t>` ouvre un flux **Server-Sent Events** (servi par **sse-starlette**) :
 
 - **paramètres** : `tail` (nombre de lignes historiques amorcées, défaut 100), `since`/`until` (horodatage Unix ou durée Docker, ex. `10m`) ;
 - **événements** : `connected` (id, nom, TTY du conteneur) → `log` (texte + nom du conteneur + canal `stdout`/`stderr`) → `end` (motif) ; `error` en cas d'échec ;
 - **battements** : commentaire keepalive toutes les 5 s (compatibilité reverse-proxy, ex. Traefik) ;
 - **démultiplexage** : les trames Docker (en-tête 8 octets) sont décodées côté serveur ; les conteneurs **TTY** diffusent le texte brut ; les fragments de trames incomplets sont conservés en tampon jusqu'à complétude ;
-- **Hawser edge** : le flux passe par la WebSocket de l'agent (messages `stream`/`stream_end`, base64) ; si l'agent n'est pas connecté, le flux renvoie un événement d'erreur explicite (503 fonctionnel).
+- **remote shell SSH** : le flux de journaux est relayé à travers la session SSH de l'environnement (sortie du CLI/API Docker transportée puis rediffusée en SSE) ; si la session ne peut être établie, le flux renvoie un événement d'erreur explicite (503 fonctionnel).
 
 ### 8.2 Consultation ponctuelle et consolidation
 
@@ -284,13 +282,13 @@ Une recréation réussie **efface** la mise à jour en attente du conteneur (l'i
 ### 9.1 Établissement
 
 1. `POST /api/containers/[id]/exec?envId=<id>` crée une **instance exec** dans le conteneur (shell proposé par défaut `/bin/sh`, utilisateur `root`) et retourne l'identifiant d'exec ainsi que les **informations de connexion Docker** pour la WebSocket ;
-2. le navigateur ouvre une **WebSocket** (serveur `ws` de [`server.js`](../../server.js:1)) authentifiée par le mécanisme partagé `ws-auth` (session) ;
-3. l'interface rend un terminal **xterm** ; l'utilisateur peut changer de shell (les shells disponibles sont listés par `GET …/shells` : `/bin/bash`, `/bin/sh`…) et d'utilisateur.
+2. le navigateur ouvre une **WebSocket native Starlette** authentifiée par le mécanisme de session partagé (le handshake transporte la session/le jeton ; les connexions non authentifiées sont refusées avant tout accès Docker) ;
+3. l'interface rend un terminal **xterm.js** ; l'utilisateur peut changer de shell (les shells disponibles sont listés par `GET …/shells` : `/bin/bash`, `/bin/sh`…) et d'utilisateur.
 
 ### 9.2 Comportement
 
 - **bidirectionnel** : entrées clavier → stdin du processus ; stdout/stderr → affichage temps réel ; **redimensionnement** du terminal pris en compte (colonnes/lignes transmises à Docker) ;
-- **modes de connexion** : socket local (relais direct), TCP/TLS direct, Hawser standard (relais HTTP) et **Hawser edge** (messages dédiés `exec_start`/`exec_ready`/`exec_input`/`exec_output`/`exec_resize`/`exec_end` sur la WebSocket de l'agent — cf. ch. 04 §7.2) ;
+- **modes de connexion** : socket local et socket-proxy (relais direct), TCP/TLS direct, et **remote shell SSH** (flux exec relayés à travers la session SSH de l'environnement — équivalents des commandes à distance, transportés sur la WebSocket navigateur) ;
 - **fin de session** : sortie du processus, fermeture du navigateur, ou arrêt du conteneur — la fermeture est propre des deux côtés ;
 - **permission dédiée** `containers:exec` exigée (contrôlée à la création de l'exec).
 
@@ -313,14 +311,14 @@ Sous-arborescence `GET/POST /api/containers/[id]/files/…` :
 Points fonctionnels :
 
 - l'accès aux fichiers d'un conteneur **s'exécute au sein du conteneur** (API Docker arch tar) — les volumes montés sont donc parcourables par leur point de montage (la navigation dans les **volumes** eux-mêmes passe par le helper de volume dédié, ch. 09) ;
-- le **staging Hawser** transmet les archives en base64 (binaire) sur la WebSocket edge — y compris les téléversements volumineux (canal `isBinary`) ;
+- pour les environnements **remote shell SSH**, les archives tar sont transportées à travers la session SSH (y compris les téléversements volumineux, en trames binaires) ;
 - l'interface offre un explorateur à deux volets avec fil d'Ariane, actions contextuelles et éditeur de texte intégré (fichiers texte ; les binaires sont proposés au téléchargement).
 
 ## 11. Statistiques et métriques temps réel
 
 ### 11.1 Flux SSE de statistiques
 
-`GET /api/containers/stats/stream?env=<id>` ([`src/routes/api/containers/stats/stream/+server.ts`](../../src/routes/api/containers/stats/stream/+server.ts:75)) effectue **une ronde de mesures** sur tous les conteneurs actifs puis se termine :
+`GET /api/containers/stats/stream?env=<id>` effectue **une ronde de mesures** sur tous les conteneurs actifs puis se termine :
 
 - un événement `stat` par conteneur : `cpuPercent`, `memoryUsage` (hors cache), `memoryRaw`, `memoryCache`, `memoryLimit`, `memoryPercent`, `networkRx/Tx`, `blockRead/Write` ;
 - calculs normalisés : CPU en pourcentage du système pondéré par le nombre de cœurs ; mémoire **hors cache de pages** (usage réel) ; réseau sommé par interface ; E/S bloc sommées par opération ;
@@ -333,7 +331,7 @@ Les vues de grille/tableau affichent les colonnes de ressources rafraîchies par
 
 ## 12. Événements de conteneurs
 
-Les événements Docker de cycle de vie (create, start, stop, die, kill, restart, pause, unpause, destroy, rename, update, oom, health_status) sont collectés en arrière-plan (collecteur Go en stream/poll, ou agent Hawser edge) puis :
+Les événements Docker de cycle de vie (create, start, stop, die, kill, restart, pause, unpause, destroy, rename, update, oom, health_status) sont collectés en arrière-plan (tâches asyncio de la couche de collecte en stream/poll, y compris via le remote shell SSH) puis :
 
 - **historisés** (`container_events` : conteneur, image, action, attributs d'acteur, horodatage) avec filtrage des **répétitions de sondes de santé** (seules les transitions healthy↔unhealthy sont conservées pour éviter la noyade de la base) ;
 - **diffusés en SSE** (`/api/events`) pour le flux d'activité temps réel (ch. 13) ;
@@ -363,9 +361,9 @@ Les **règles d'auto-update** par conteneur nommé (planification cron + critèr
 | 03 — Concepts et entités | [`03-concepts-entites.md`](03-concepts-entites.md) | Conteneur comme objet Docker, mises à jour en attente, jeux de configuration. |
 | 04 — Environnements | [`04-environnements.md`](04-environnements.md) | Modes de connexion derrière chaque opération conteneur, sélection d'environnement. |
 | 06 — Stacks Compose | [`06-stacks.md`](06-stacks.md) | Conteneurs vus comme services d'une stack ; batch transverse. |
-| 08 — Images et registres | `08-images-registres.md` *(à rédiger, lot 3)* | Détection digest/semver, auto-update, application groupée des mises à jour. |
-| 09 — Volumes, réseaux et maintenance | `09-volumes-reseaux-maintenance.md` *(à rédiger, lot 3)* | Navigateur de fichiers de volume (helper), connexions réseau des conteneurs. |
-| 10 — Sécurité applicative | `10-securite-applicative.md` *(à rédiger, lot 3)* | Critères de vulnérabilités conditionnant l'auto-update. |
-| 12 — Authentification et RBAC | `12-authentification-rbac.md` *(à rédiger, lot 4)* | Permissions du domaine `containers` et portée par environnement. |
-| 13 — Observabilité | `13-observabilite.md` *(à rédiger, lot 4)* | Flux d'activité, événements, notifications de cycle de vie, dashboard. |
-| 15 — Administration | `15-administration-exploitation.md` *(à rédiger, lot 5)* | Préférences de grilles/colonnes, favoris de journaux. |
+| 08 — Images et registres | [`08-images.md`](08-images.md) | Détection digest/semver, auto-update, application groupée des mises à jour. |
+| 09 — Volumes, réseaux et maintenance | [`09-volumes-reseaux.md`](09-volumes-reseaux.md) | Navigateur de fichiers de volume (helper), connexions réseau des conteneurs. |
+| 10 — Sécurité applicative | [`10-securite-applicative.md`](10-securite-applicative.md) | Critères de vulnérabilités conditionnant l'auto-update. |
+| 12 — Authentification et RBAC | [`12-authentification-rbac.md`](12-authentification-rbac.md) | Permissions du domaine `containers` et portée par environnement. |
+| 13 — Observabilité | [`13-observabilite.md`](13-observabilite.md) | Flux d'activité, événements, notifications de cycle de vie, dashboard. |
+| 15 — Administration | [`15-administration-exploitation.md`](15-administration-exploitation.md) | Préférences de grilles/colonnes, favoris de journaux. |

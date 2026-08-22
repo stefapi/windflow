@@ -3,11 +3,7 @@
 | Rubrique | Valeur |
 |---|---|
 | **Chapitre** | 06 — Stacks Compose |
-| **Statut** | Rédigé (phase 2, lot 2/5) |
-| **Date de rédaction** | 21/08/2026 |
-| **Version du logiciel analysée** | Dockhand **1.0.43** (numéro issu de [`package.json`](../../package.json:4)) |
-| **Document de référence** | [`docs/spec/00-chapitrage.md`](00-chapitrage.md) |
-| **Sources principales** | [`src/lib/server/stacks.ts`](../../src/lib/server/stacks.ts:1), [`src/routes/api/stacks/`](../../src/routes/api/stacks/+server.ts:1), [`src/lib/server/compose-validate/`](../../src/lib/server/compose-validate/rules.ts:1), [`src/lib/server/stack-delete-guard.ts`](../../src/lib/server/stack-delete-guard.ts:1), [`src/lib/server/compose-docker-args.ts`](../../src/lib/server/compose-docker-args.ts:1), [`src/lib/server/remote-staging-plan.ts`](../../src/lib/server/remote-staging-plan.ts:1), [`src/routes/stacks/`](../../src/routes/stacks/+page.svelte:1) |
+| **Document de référence** | [`00-chapitrage.md`](00-chapitrage.md) |
 
 ## Table des matières
 
@@ -38,19 +34,19 @@ Ce chapitre décrit la gestion des **stacks Docker Compose** : définition et id
 
 ## 2. Vue d'ensemble de la gestion des stacks
 
-Le pilotage des stacks est **compose-first** : toutes les opérations de cycle de vie s'appuient sur la CLI `docker compose` exécutée côté serveur, avec un contexte de connexion (socket, `DOCKER_HOST` + TLS, ou relais Hawser) reconstitué pour l'environnement cible ([`src/lib/server/compose-docker-args.ts`](../../src/lib/server/compose-docker-args.ts:1)). Les résultats (sortie Compose, succès/échec) sont retournés en **flux SSE** pour un retour visuel progressif.
+Le pilotage des stacks est **compose-first** : toutes les opérations de cycle de vie s'appuient sur la CLI `docker compose` **invoquée en sous-processus côté serveur** (`asyncio.create_subprocess_exec`), avec un contexte de connexion (socket, `DOCKER_HOST` + TLS, ou exécution à distance via le remote shell SSH) reconstitué pour l'environnement cible. Les résultats (sortie Compose, succès/échec) sont retournés en **flux SSE** (via sse-starlette) pour un retour visuel progressif.
 
 ```mermaid
 flowchart TB
-    subgraph UI[ page stacks ]
-        EDITEUR[Éditeur YAML CodeMirror]
+    subgraph UI[ page stacks - SPA Vue / PrimeVue ]
+        EDITEUR[Éditeur YAML CodeMirror 6]
         TOPO[Éditeur graphique de topologie]
         VALID[Panneau de validation]
-        GRAPH[Visionneuse graphe réseau]
+        GRAPH[Graphe des réseaux<br/>Vue Flow - éditable]
         HISTO[Historique et événements]
     end
 
-    subgraph API[ API stacks ]
+    subgraph API[ API stacks - FastAPI ]
         SRC[sources de stacks - type et chemins]
         DEPLOY[déployer - SSE]
         VIE[start, stop, restart, down]
@@ -61,8 +57,8 @@ flowchart TB
     subgraph SERV[ service stacks ]
         LOCK[Verrou par stack]
         ENVVAR[Résolution variables et secrets]
-        STAGE[Staging - local, distant direct, edge]
-        COMPOSE[Exécution docker compose<br/>avec DOCKER_HOST adapté]
+        STAGE[Staging - local, distant direct, remote shell]
+        COMPOSE[Exécution docker compose en sous-processus<br/>DOCKER_HOST adapté ou SSH]
     end
 
     DOCKER[Docker Engine de l environnement]
@@ -85,7 +81,7 @@ flowchart TB
 
 - **Identité** : le couple **(nom de stack, environnement)** — il n'existe pas d'identifiant numérique global (cf. ch. 03 §6.1) ; toutes les entités liées (source, variables, événements, stack Git) rejoignent ce couple.
 - **Nom** : contrainte forte au déploiement — minuscules alphanumériques, tirets et underscores ; doit **commencer par une lettre ou un chiffre** (contrôle explicite avec message d'erreur dédié, sinon refus du déploiement).
-- **Types de sources** ([`stack_sources`](../../src/lib/server/db/schema/index.ts:347)) :
+- **Types de sources** (entité `stack_sources`, cf. ch. 03 §6.2) :
   - `internal` — stack créée/éditée dans Dockhand (fichier Compose stocké dans le répertoire de stacks de l'instance) ;
   - `git` — stack déployée depuis un chemin d'un dépôt Git (ch. 07) ;
   - `external` — stack **découverte** sur l'environnement (conteneurs Docker Compose préexistants) ou **adoptée** (fichier Compose à un emplacement personnalisé sur l'hôte).
@@ -104,9 +100,9 @@ flowchart TB
 
 ### 4.1 Parcours de création
 
-`POST /api/stacks?env=<id>` ([`src/routes/api/stacks/+server.ts`](../../src/routes/api/stacks/+server.ts:92)) :
+`POST /api/stacks?env=<id>` :
 
-1. **nom** (requis, cf. §3) et **contenu Compose** (requis) saisis dans l'éditeur **CodeMirror** (coloration YAML, replis) ;
+1. **nom** (requis, cf. §3) et **contenu Compose** (requis) saisis dans l'éditeur **CodeMirror 6** (coloration YAML, replis) ;
 2. **variables d'environnement** : saisie structurée (clé/valeur, marqueur *secret*) **et/ou** contenu brut `.env` (éditeur texte) — les deux coexistent, cf. §7 ;
 3. liaison facultative d'un **fournisseur de secrets** (nécessite en outre la permission `secrets:view`) ;
 4. chemins personnalisés facultatifs (`composePath`, `envPath` — cf. §10) ;
@@ -131,7 +127,7 @@ L'éditeur graphique complète l'éditeur YAML par une manipulation **visuelle**
 
 - **objets manipulables** : services (avec image, ports, variables), réseaux, volumes et secrets du fichier Compose ;
 - **liaisons visuelles** : rattachement d'un service à un réseau ou à un volume, exposition de ports — les modifications sont **sérialisées en YAML** (l'éditeur graphique et l'éditeur texte restent deux vues du même document) ;
-- la **visionneuse de graphe** (`ComposeGraphViewer`) rend ensuite le réseau effectif : nœuds services, liens par réseau, volumes et ports publiés — visualisation **par stack** et au niveau environnement (graphe des réseaux, ch. 09) ;
+- la **vue de graphe des réseaux**, rendue avec **Vue Flow** (@vue-flow/core), montre ensuite le réseau effectif : nœuds services, liens par réseau, volumes et ports publiés — visualisation **par stack** et au niveau environnement (graphe des réseaux, ch. 09). Le graphe est **éditable** : drag & drop des nœuds, **création et suppression de nœuds et de liens** (rattachements conteneur↔réseau), et **positions persistées** pour retrouver la disposition d'une session à l'autre ;
 - fonctions d'aide : détection des références pendantes (réseau/volume non déclaré), repli vers l'éditeur YAML pour tout ce qui n'a pas de représentation graphique.
 
 Cet éditeur produit du Compose standard : aucune fonctionnalité propriétaire n'est requise au déploiement.
@@ -140,7 +136,7 @@ Cet éditeur produit du Compose standard : aucune fonctionnalité propriétaire 
 
 ### 6.1 Moteur de règles
 
-Dockhand embarque un **validateur Compose maison** ([`src/lib/server/compose-validate/`](../../src/lib/server/compose-validate/rules.ts:1)), distinct de la validation Docker : analyse du YAML parsé + confrontation à l'**état réel de l'environnement** (ports utilisés, noms de conteneurs, ressources externes existantes). Chaque règle est un plugin auto-déclaré (`id`, description, groupe, sévérité par défaut) ; le moteur applique les **sévérités personnalisées** de l'utilisateur, isole une règle qui plante (sans faire échouer les autres) et complète les trouvailles avec la sévérité effective.
+Dockhand embarque un **service de validation Compose** intégré au backend, distinct de la validation Docker : analyse du YAML parsé + confrontation à l'**état réel de l'environnement** (ports utilisés, noms de conteneurs, ressources externes existantes). Chaque règle est auto-déclarée (`id`, description, groupe, sévérité par défaut) ; le moteur applique les **sévérités personnalisées** de l'utilisateur, isole une règle qui plante (sans faire échouer les autres) et complète les trouvailles avec la sévérité effective.
 
 ### 6.2 Catalogue des règles
 
@@ -169,7 +165,7 @@ Dockhand embarque un **validateur Compose maison** ([`src/lib/server/compose-val
 
 ### 6.3 Usage fonctionnel
 
-- Le **panneau de validation** ([`ComposeValidatePanel.svelte`](../../src/routes/stacks/ComposeValidatePanel.svelte:1)) affiche les trouvailles avec sévérité, position et explication ; les réglages permettent de **désactiver une règle** ou d'en changer la sévérité (persistés — ch. 15) ;
+- Le **panneau de validation** (composant de la page stacks) affiche les trouvailles avec sévérité, position et explication ; les réglages permettent de **désactiver une règle** ou d'en changer la sévérité (persistés — ch. 15) ;
 - la validation est proposée **avant déploiement** (bouton dédié) et à la demande (`POST /api/stacks/[name]/validate` avec le contenu à valider) ;
 - elle est **informative** : elle ne bloque pas le déploiement (les blockers effectifs sont les erreurs Docker/Compose elles-mêmes), sauf usage par l'auto-update où des critères de vulnérabilités peuvent bloquer (ch. 08/10).
 
@@ -177,7 +173,7 @@ Dockhand embarque un **validateur Compose maison** ([`src/lib/server/compose-val
 
 ### 7.1 Modèle
 
-- Les variables de stack ([`stack_environment_variables`](../../src/lib/server/db/schema/index.ts:366)) sont uniques par **(stack, environnement, clé)** ; chaque entrée porte un marqueur `isSecret`.
+- Les variables de stack (entité `stack_environment_variables`, cf. ch. 03 §6.3) sont uniques par **(stack, environnement, clé)** ; chaque entrée porte un marqueur `isSecret`.
 - Deux modes de saisie coexistent : **grille structurée** (clé, valeur, secret) et **contenu brut `.env`** (le texte intégral du fichier — conservé tel quel, réécrit à l'édition).
 
 ### 7.2 Règles de secret
@@ -185,14 +181,14 @@ Dockhand embarque un **validateur Compose maison** ([`src/lib/server/compose-val
 | Règle | Comportement |
 |---|---|
 | Masquage | Les valeurs marquées *secret* sont **masquées à l'affichage** dans toute l'interface (et l'inspection de conteneurs, via `injectedSecretKeys`, ch. 10). |
-| Stockage | Chiffrées au repos (AES) ; **jamais écrites dans le fichier `.env`** de la stack. |
+| Stockage | Chiffrées au repos (AES-256-GCM) ; **jamais écrites dans le fichier `.env`** de la stack. |
 | Injection | Passées à Compose **par environnement de processus** du déploiement (pas par fichier), uniquement au moment de l'exécution. |
 | Fournisseurs externes | Une stack peut être liée à un **fournisseur de secrets** (1Password, Vault, Infisical, Doppler, Bitwarden, Proton) : interpolation de références (`op://…`) et extraction en masse ; les **clés injectées** sont tracées dans la source pour masquage sans rappel du fournisseur (détail ch. 10). |
 | Priorité de fusion | Au déploiement : `.env` du répertoire **+ variables non secrètes de la base + résolutions du fournisseur + secrets** ; pour les stacks Git, les valeurs du dépôt viennent du `.env` synchronisé du dépôt et les redéfinitions de l'éditeur passent par un **fichier d'override dédié** (`.env.dockhand`) — seules les valeurs de la base vont dans l'override (cf. §8.3). |
 
 ### 7.3 Réécriture des chemins de volumes
 
-Pour les environnements où les chemins vus par le Docker Engine diffèrent des chemins vus par Dockhand (conteneurisé), les **binds relatifs** du Compose peuvent être réécrits vers le chemin hôte effectif (mécanisme de réécriture des chemins de volumes, cf. ch. 04 §9.3 et [`src/lib/server/host-path.ts`](../../src/lib/server/host-path.ts:1)).
+Pour les environnements où les chemins vus par le Docker Engine diffèrent des chemins vus par Dockhand (conteneurisé), les **binds relatifs** du Compose peuvent être réécrits vers le chemin hôte effectif (mécanisme de réécriture des chemins de volumes, cf. ch. 04 §9.3).
 
 ## 8. Déploiement, redéploiement et cycle de vie
 
@@ -210,7 +206,7 @@ sequenceDiagram
     S->>B: lecture compose, variables, secrets, source
     S->>S: résolution fournisseur de secrets
     S->>S: staging - fichiers transmis si distant
-    S->>D: docker compose up -d<br/>DOCKER_HOST et TLS adaptés
+    S->>D: docker compose up -d en sous-processus<br/>DOCKER_HOST et TLS adaptés ou exécution via SSH
     D-->>S: sortie Compose en flux
     S-->>U: SSE - progression puis résultat
     S->>B: événement de stack + notification
@@ -219,13 +215,13 @@ sequenceDiagram
     end
 ```
 
-Étapes clés ([`deployStack`](../../src/lib/server/stacks.ts:2802)) :
+Étapes clés :
 
 - **verrou par stack** : les opérations concurrentes sur une même stack sont sérialisées (aucun déploiement parallèle) ;
-- **emplacement de travail** : répertoire interne de la stack (`DATA_DIR/stacks/<env>/<stack>/`) ; pour une stack adoptée, **emplacement d'origine du Compose** (usage en place) ; pour une stack Git, copie **en surimpression** du répertoire source vers le répertoire de la stack — **sans effacer au préalable** (les données des volumes relatifs comme `./data` vivent dans ce répertoire et seraient détruites sinon), puis application des **suppressions Git** (fichiers retirés du dépôt, avec vérifications de contenu — ch. 07) ;
+- **emplacement de travail** : répertoire interne de la stack (`DATA_DIR/stacks/<environnement>/<stack>/`) ; pour une stack adoptée, **emplacement d'origine du Compose** (usage en place) ; pour une stack Git, copie **en surimpression** du répertoire source vers le répertoire de la stack — **sans effacer au préalable** (les données des volumes relatifs comme `./data` vivent dans ce répertoire et seraient détruites sinon), puis application des **suppressions Git** (fichiers retirés du dépôt, avec vérifications de contenu — ch. 07) ;
 - **variables** : cf. §7.2 ;
-- **staging distant** : pour Hawser (standard/edge), l'arborescence complète (compose, `.env`, fichiers annexes, fichiers du dépôt — binaire en base64, plafonds 10 Mo/fichier et 256 Mo total) est transmise à l'agent qui matérialise `STACKS_DIR/<stack>/` ; pour `direct`, copie facultative vers le `remote_stacks_dir` de l'environnement avec réécriture des binds relatifs (ch. 04 §9.3) ;
-- **exécution** : `docker compose up -d` avec options (voir §8.2) ; délai global configurable (`COMPOSE_TIMEOUT`, défaut 15 min) avec grâce de 5 s avant SIGKILL ;
+- **staging distant** : pour un environnement **remote shell SSH**, l'arborescence complète (compose, `.env`, fichiers annexes, fichiers du dépôt — binaires encodés, plafonds 10 Mo/fichier et 256 Mo total) est **transférée sur l'hôte distant via la session SSH**, qui matérialise `STACKS_DIR/<stack>/` ; pour `direct`, copie facultative vers le `remote_stacks_dir` de l'environnement avec réécriture des binds relatifs (ch. 04 §9.3) ;
+- **exécution** : `docker compose up -d` invoqué en sous-processus avec options (voir §8.2) ; délai global configurable (`COMPOSE_TIMEOUT`, défaut 15 min) avec grâce de 5 s avant SIGKILL ;
 - **traçabilité** : événement de stack (§12), notification `stack_deployed` / `stack_deploy_failed` (supprimée pour un déploiement issu d'une synchro Git — remplacée par les notifications `git_sync_*`, ch. 07), audit *(Enterprise)* ;
 - après un déploiement **avec pull**, les **mises à jour en attente** des conteneurs de la stack sont reconciliées (effacement des badges périmés — avec garde-fou de délai pour ne jamais pénaliser le déploiement réussi).
 
@@ -238,7 +234,7 @@ sequenceDiagram
 | `noBuildCache` | `--no-cache` (sans cache de build ; requiert `build`) | Reconstruction propre |
 | `forceRecreate` | `--force-recreate` (recréer les conteneurs même sans changement) | Forcer l'application d'un changement non détecté |
 
-Le **redéploiement** relit le Compose courant et les variables, puis rejoue le même flux — un composant dédié (`RedeployPopover`) permet de choisir les options à la volée. Les **stacks Git** ajoutent leurs options propres (reportées depuis leur configuration : `buildOnDeploy`, `noBuildCache`, `repullImages`, `forceRedeploy` — ch. 07).
+Le **redéploiement** relit le Compose courant et les variables, puis rejoue le même flux — un composant dédié de redéploiement permet de choisir les options à la volée. Les **stacks Git** ajoutent leurs options propres (reportées depuis leur configuration : `buildOnDeploy`, `noBuildCache`, `repullImages`, `forceRedeploy` — ch. 07).
 
 ### 8.3 Cycle de vie : démarrage, arrêt, arrêt complet
 
@@ -251,9 +247,9 @@ Actions unitaires (`POST /api/stacks/[name]/…`, toutes en flux SSE de progress
 | Redémarrer (`restart`) | `docker compose restart` | Arrêt + démarrage des services. |
 | Arrêt complet (`down`) | `docker compose down` | Arrête **et supprime** les conteneurs et réseaux de la stack ; option **`removeVolumes`** pour supprimer aussi les volumes nommés. |
 
-- Les opérations de cycle de vie passent le même contexte de connexion que le déploiement (y compris le **transfert des fichiers pour Hawser** — les opérations start/stop/redémarrage/down réutilisent le transfert de l'arborescence pour garantir la présence des fichiers référencés, cf. ch. 04 §9.3) ;
+- Les opérations de cycle de vie passent le même contexte de connexion que le déploiement (y compris le **transfert des fichiers pour le remote shell SSH** — les opérations start/stop/redémarrage/down réutilisent le transfert de l'arborescence pour garantir la présence des fichiers référencés, cf. ch. 04 §9.3) ;
 - pour une stack Git, un **fichier d'override** (`.env.dockhand`) est utilisé pour superposer les variables de l'éditeur au `.env` du dépôt — évitant d'écraser les valeurs du dépôt ;
-- le **pull d'images** d'une stack peut être lancé isolément (`pullStackImages`) ainsi que le pull/mise à jour **d'un service** précis (`updateStackService`) — base du lien avec le ch. 08.
+- le **pull d'images** d'une stack peut être lancé isolément, ainsi que le pull/mise à jour **d'un service** précis — base du lien avec le ch. 08.
 
 ### 8.4 Diagramme d'états
 
@@ -275,7 +271,7 @@ stateDiagram-v2
 
 ## 9. Suppression protégée
 
-La suppression (`removeStack`, options : `force`, `removeVolumes`, `deleteFiles`) est encadrée par plusieurs **garde-fous** :
+La suppression (options : `force`, `removeVolumes`, `deleteFiles`) est encadrée par plusieurs **garde-fous** :
 
 1. **verrou par stack** (pas de suppression concurrente au déploiement) ;
 2. si un Compose existe : `docker compose down` d'abord (avec `removeVolumes` si demandé) — un échec du down **bloque** la suppression sauf si `force` ;
@@ -284,23 +280,23 @@ La suppression (`removeStack`, options : `force`, `removeVolumes`, `deleteFiles`
 5. suppression des enregistrements en base : **source de stack** (avec chemins), **variables** (y compris secrets), **stack Git** le cas échéant (avec désinscription de sa synchro et suppression de ses fichiers) ;
 6. suppression des **fichiers** — uniquement si `deleteFiles` — et sous conditions strictes (cf. §9.1).
 
-Une **prévisualisation de suppression** (`POST /api/stacks/[name]/delete-preview`) informe en amont : conteneurs, réseaux, volumes qui seront impactés, fichiers qui seront supprimés — l'interface demande une **confirmation explicite** (fenêtre dédiée `DeleteStackModal`).
+Une **prévisualisation de suppression** (`POST /api/stacks/[name]/delete-preview`) informe en amont : conteneurs, réseaux, volumes qui seront impactés, fichiers qui seront supprimés — l'interface demande une **confirmation explicite** (fenêtre de confirmation dédiée).
 
-### 9.1 Garde-fous de suppression de fichiers (#675)
+### 9.1 Garde-fous de suppression de fichiers
 
-- **Répertoire strictement imbriqué** : seuls des sous-répertoires **stricts** du répertoire des stacks (`DATA_DIR/stacks/.../`) peuvent être supprimés — jamais la racine elle-même ([`stack-delete-guard.ts`](../../src/lib/server/stack-delete-guard.ts:20)) : le contrôleur vérifie que le répertoire est un sous-répertoire strict **et** que son nom de base **correspond au nom de la stack** ;
+- **Répertoire strictement imbriqué** : seuls des sous-répertoires **stricts** du répertoire des stacks (`DATA_DIR/stacks/.../`) peuvent être supprimés — jamais la racine elle-même : le contrôleur vérifie que le répertoire est un sous-répertoire strict **et** que son nom de base **correspond au nom de la stack** ;
 - **stacks adoptées** : les fichiers hors du répertoire de données de Dockhand (chemin personnalisé sur l'hôte) sont **préservés** (Dockhand ne supprime pas les données des utilisateurs) ;
-- **staging distant `direct`** : la copie éventuellement présente sur l'hôte distant (`remote_stacks_dir/<stack>/`) n'est **jamais supprimée** — un résidu de Compose est jugé plus sûr qu'un `rm -rf` sur un répertoire pouvant contenir des données utilisateur ;
-- **staging Hawser** : l'agent ne supprime **que** les fichiers listés par Dockhand (contenu du répertoire de staging local : compose, `.env`, fichiers Git), chacun **vérifié par empreinte** côté agent ; le répertoire de stack distant n'est retiré que s'il ne reste rien d'autre dedans ;
+- **staging distant `direct`** : la copie éventuellement présente sur l'hôte distant (`remote_stacks_dir/<stack>/`) n'est **jamais supprimée** — un résidu de Compose est jugé plus sûr qu'une suppression récursive d'un répertoire pouvant contenir des données utilisateur ;
+- **staging remote shell SSH** : la suppression distante ne retire **que** les fichiers listés par Dockhand (contenu du répertoire de staging local : compose, `.env`, fichiers Git), chacun **vérifié par empreinte SHA-256** avant suppression sur l'hôte distant ; le répertoire de stack distant n'est retiré que s'il ne reste rien d'autre dedans ;
 - le mode **« retirer la stack sans supprimer les fichiers »** (`deleteFiles=false`) laisse Compose, `.env` et données sur disque.
 
 ## 10. Chemins de fichiers de stack et stacks adoptées
 
 - **Répertoire par défaut** : `DATA_DIR/stacks/<environnement>/<stack>/` — contient le Compose (nom standard détecté parmi `docker-compose.yaml`/`.yml`, `compose.yaml`/`.yml`), le `.env` éventuel et les fichiers annexes ; le **fichier d'override** `.env.dockhand` s'ajoute pour les stacks Git.
 - **Chemins personnalisés** : `composePath` et `envPath` mémorisés dans la source (stacks adoptées/importées à emplacement non standard) ; Dockhand opère **en place** (pas de copie) pour que les chemins relatifs du fichier continuent de se résoudre.
-- **Aides au cheminement** :
-  - `path-hints` / `getStackPathHints` : suggestions de localisation du Compose d'une stack découverte (répertoires candidats, chemins issus des labels des conteneurs) ;
-  - `validate-path` / `validateStackPath` : validation d'un chemin proposé (existence, droits, cohérence) ;
+- **Aides au cheminement** (endpoints dédiés) :
+  - `path-hints` : suggestions de localisation du Compose d'une stack découverte (répertoires candidats, chemins issus des labels des conteneurs) ;
+  - `validate-path` : validation d'un chemin proposé (existence, droits, cohérence) ;
   - `check-path-change` : contrôle **avant** un changement de chemin (impact sur les binds relatifs, avertissements) ;
   - `relocate` : **déplacement** contrôlé du répertoire d'une stack vers un nouvel emplacement (avec mise à jour de la source) ;
   - `base-path` / `default-path` / `scan` : gestion du chemin de base des stacks et **scan** de l'hôte pour proposer des stacks à adopter (conteneurs Compose existants).
@@ -324,14 +320,14 @@ La **bibliothèque de modèles** (ch. 14) fournit des stacks prêtes à l'emploi
 
 ### 13.1 Mises à jour d'images (renvoi ch. 08)
 
-- Les **mises à jour en attente** détectées pour les conteneurs d'une stack sont visibles au niveau de la stack et de ses services ; l'application passe par le **pull + redéploiement** (avec `pull: always`) ou par la mise à jour ciblée d'un service (`updateStackService`) ;
+- Les **mises à jour en attente** détectées pour les conteneurs d'une stack sont visibles au niveau de la stack et de ses services ; l'application passe par le **pull + redéploiement** (avec `pull: always`) ou par la mise à jour ciblée d'un service ;
 - après un déploiement avec pull, Dockhand **reconcilie** les indicateurs de mise à jour des conteneurs de la stack (les badges obsolètes disparaissent) ;
 - l'**auto-update** des conteneurs d'une stack suit les règles génériques par conteneur nommé (planification + critères de vulnérabilités) — le détail (détection digest/semver, critères, application groupée) fait l'objet du chapitre 08.
 
 ### 13.2 Intégration Git (renvoi ch. 07)
 
 - Une **stack Git** référence un chemin de dépôt (fichier Compose, `.env` du dépôt, répertoire de contexte) ; la synchronisation (manuelle, planifiée ou webhook signé) met à jour les fichiers **puis redéploie si le contenu a changé** ;
-- les fichiers synchronisés sont tracés dans un **manifeste** (chemin → empreinte SHA-256) qui sert de référence aux suppressions sûres lors des synchros suivantes et au nettoyage ;
+- les fichiers synchronisés sont tracés dans un **manifeste** (chemin → empreinte SHA-256, calculée via `hashlib`) qui sert de référence aux suppressions sûres lors des synchros suivantes et au nettoyage ;
 - le lien stack ↔ Git est porté par la source de stack (`sourceType: git`, rattachement dépôt/stack Git) ; la suppression d'une stack Git supprime ses fichiers synchronisés et désinscrit sa planification — le détail (credentials, webhooks, état de synchronisation) fait l'objet du chapitre 07.
 
 ## 14. Renvois vers les autres chapitres
@@ -341,13 +337,13 @@ La **bibliothèque de modèles** (ch. 14) fournit des stacks prêtes à l'emploi
 | 00 — Chapitrage | [`00-chapitrage.md`](00-chapitrage.md) | Sommaire de référence. |
 | 02 — Architecture fonctionnelle | [`02-architecture-fonctionnelle.md`](02-architecture-fonctionnelle.md) | Flux de déploiement de bout en bout, sous-processus `docker compose`. |
 | 03 — Concepts et entités | [`03-concepts-entites.md`](03-concepts-entites.md) | Source de stack, variables, événements, identité (nom + environnement). |
-| 04 — Environnements | [`04-environnements.md`](04-environnements.md) | `DOCKER_HOST` adapté, staging distant/edge, `remote_stacks_dir`, impact du renommage. |
+| 04 — Environnements | [`04-environnements.md`](04-environnements.md) | `DOCKER_HOST` adapté, staging distant et remote shell, `remote_stacks_dir`, impact du renommage. |
 | 05 — Gestion des conteneurs | [`05-conteneurs.md`](05-conteneurs.md) | Services vus comme conteneurs ; batch transverse ; recreate. |
-| 07 — Intégration Git | `07-integration-git.md` *(à rédiger, lot 2)* | Stacks Git, synchro, webhooks, manifeste des fichiers. |
-| 08 — Images et registres | `08-images-registres.md` *(à rédiger, lot 3)* | Détection de mises à jour, pull de stack, auto-update. |
-| 09 — Volumes, réseaux et maintenance | `09-volumes-reseaux-maintenance.md` *(à rédiger, lot 3)* | Graphe des réseaux d'environnement, volumes des stacks. |
-| 10 — Sécurité applicative | `10-securite-applicative.md` *(à rédiger, lot 3)* | Fournisseurs de secrets, injection au déploiement, clés injectées. |
-| 11 — Sauvegardes (bêta) | `11-sauvegardes.md` *(à rédiger, lot 3)* | Sauvegarde d'une stack, `stack-dir-listing`, redéploiement post-restauration *(flag)*. |
-| 13 — Observabilité | `13-observabilite.md` *(à rédiger, lot 4)* | Événements de stack, notifications, historique consultable. |
-| 14 — Automatisation | `14-automatisation-api.md` *(à rédiger, lot 5)* | Bibliothèque de modèles, planifications, API stacks. |
-| 15 — Administration | `15-administration-exploitation.md` *(à rédiger, lot 5)* | Réglages du validateur (sévérités), timeouts Compose. |
+| 07 — Intégration Git | [`07-git.md`](07-git.md) | Stacks Git, synchro, webhooks, manifeste des fichiers. |
+| 08 — Images et registres | [`08-images.md`](08-images.md) | Détection de mises à jour, pull de stack, auto-update. |
+| 09 — Volumes, réseaux et maintenance | [`09-volumes-reseaux.md`](09-volumes-reseaux.md) | Graphe des réseaux d'environnement (Vue Flow), volumes des stacks. |
+| 10 — Sécurité applicative | [`10-securite-applicative.md`](10-securite-applicative.md) | Fournisseurs de secrets, injection au déploiement, clés injectées. |
+| 11 — Sauvegardes (bêta) | [`11-sauvegardes.md`](11-sauvegardes.md) | Sauvegarde d'une stack, redéploiement post-restauration *(flag)*. |
+| 13 — Observabilité | [`13-observabilite.md`](13-observabilite.md) | Événements de stack, notifications, historique consultable. |
+| 14 — Automatisation | [`14-automatisation-api.md`](14-automatisation-api.md) | Bibliothèque de modèles, planifications, API stacks. |
+| 15 — Administration | [`15-administration-exploitation.md`](15-administration-exploitation.md) | Réglages du validateur (sévérités), timeouts Compose. |

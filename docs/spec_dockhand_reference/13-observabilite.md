@@ -3,11 +3,7 @@
 | Rubrique | Valeur |
 |---|---|
 | **Chapitre** | 13 — Observabilité : tableaux de bord, activité, audit, événements et notifications |
-| **Statut** | Rédigé (phase 2, lot 5/5) |
-| **Date de rédaction** | 21/08/2026 |
-| **Version du logiciel analysée** | Dockhand **1.0.43** (numéro issu de [`package.json`](../../package.json:4)) |
-| **Document de référence** | [`docs/spec/00-chapitrage.md`](00-chapitrage.md) |
-| **Sources principales** | [`src/routes/api/dashboard/stats/+server.ts`](../../src/routes/api/dashboard/stats/+server.ts:1), [`src/routes/api/dashboard/preferences/+server.ts`](../../src/routes/api/dashboard/preferences/+server.ts:1), [`src/lib/server/metrics-store.ts`](../../src/lib/server/metrics-store.ts:1), [`src/lib/server/metrics.ts`](../../src/lib/server/metrics.ts:1), [`src/routes/metrics/+server.ts`](../../src/routes/metrics/+server.ts:1), [`src/routes/api/events/+server.ts`](../../src/routes/api/events/+server.ts:1), [`src/routes/api/audit/`](../../src/routes/api/audit/+server.ts:1), [`src/lib/server/notifications/`](../../src/lib/server/notifications/index.ts:1), [`src/lib/server/db.ts`](../../src/lib/server/db.ts:959), [`src/lib/stores/events.ts`](../../src/lib/stores/events.ts:1), [`src/lib/stores/audit-events.ts`](../../src/lib/stores/audit-events.ts:1) |
+| **Document de référence** | [`00-chapitrage.md`](00-chapitrage.md) |
 
 ## Table des matières
 
@@ -19,7 +15,7 @@
 6. [Événements de conteneurs et flux d'activité](#6-événements-de-conteneurs-et-flux-dactivité)
 7. [Événements de stacks et historique](#7-événements-de-stacks-et-historique)
 8. [Journal d'audit *(Enterprise)*](#8-journal-daudit-enterprise)
-9. [Système d'événements temps réel côté interface (stores SSE)](#9-système-dévénements-temps-réel-côté-interface-stores-sse)
+9. [Système d'événements temps réel côté interface (stores Pinia)](#9-système-dévénements-temps-réel-côté-interface-stores-pinia)
 10. [Notifications : architecture des canaux](#10-notifications--architecture-des-canaux)
 11. [Matrice des types d'événements notifiables](#11-matrice-des-types-dévénements-notifiables)
 12. [Routage par environnement et règles anti-spam](#12-routage-par-environnement-et-règles-anti-spam)
@@ -30,9 +26,9 @@
 
 ## 1. Objet, périmètre et prérequis de lecture
 
-Ce chapitre décrit l'**observabilité fonctionnelle** de Dockhand : le tableau de bord personnalisable (tuiles d'environnement, statistiques agrégées, rafraîchissement continu), la collecte et l'historisation des **métriques d'hôtes** (CPU/mémoire via le collecteur Go), l'**export Prometheus**, le flux d'**activité des conteneurs** (collecte, historique, filtres), les **événements de stacks**, le **journal d'audit** *(Enterprise)* (contenu, consultation, diffusion temps réel), le système d'**événements temps réel** côté interface (stores consommant les flux SSE) et le dispositif de **notifications multi-canaux** (canaux supportés, configuration, test, routage par type d'événement et par environnement, règles anti-spam).
+Ce chapitre décrit l'**observabilité fonctionnelle** de Dockhand : le tableau de bord personnalisable (tuiles d'environnement, statistiques agrégées, rafraîchissement continu), la collecte et l'historisation des **métriques d'hôtes** (CPU/mémoire par la couche de collecte intégrée), l'**export Prometheus**, le flux d'**activité des conteneurs** (collecte, historique, filtres), les **événements de stacks**, le **journal d'audit** *(Enterprise)* (contenu, consultation, diffusion temps réel), le système d'**événements temps réel** côté interface (stores Pinia consommant les flux SSE) et le dispositif de **notifications multi-canaux** (canaux supportés, configuration, test, routage par type d'événement et par environnement, règles anti-spam).
 
-**Prérequis de lecture** : chapitre 02 (composants — collecteur Go, canaux SSE/WebSocket) et chapitre 03 §13 (entités `container_events`, `host_metrics`, `audit_logs`, `notification_settings`, `environment_notifications`).
+**Prérequis de lecture** : chapitre 02 (composants — couche de collecte intégrée, canaux SSE/WebSocket) et chapitre 03 §13 (entités `container_events`, `host_metrics`, `audit_logs`, `notification_settings`, `environment_notifications`).
 
 **Conventions** : mentions *(Enterprise)* / *(SMB)* pour le gating d'édition, *(flag)* pour les fonctions sous feature flag. Les permissions RBAC (`activity:view`, `notifications:*`, `audit_logs:view`, `environments:view`) et la portée par environnement s'appliquent aux routes concernées.
 
@@ -47,8 +43,7 @@ Trois plans d'observation complémentaires :
 ```mermaid
 flowchart TB
     subgraph Sources[ sources d observation ]
-        GO[Collecteur Go<br/>ping, stats, info, events]
-        HAWS[Agent Hawser edge<br/>metrics et container_event poussés]
+        COLLECT[Couche de collecte intégrée<br/>tâches asyncio + aiodocker<br/>ping, stats, info, events]
         ACTIONS[Actions utilisateur<br/>via API]
     end
 
@@ -56,7 +51,7 @@ flowchart TB
         CE[(container_events)]
         SE[(stack_events)]
         AUD[(audit_logs)]
-        RING[Tampon mémoire metrics-store<br/>360 points par environnement]
+        RING[Tampon mémoire de métriques<br/>360 points par environnement]
     end
 
     subgraph Diffusion[ diffusion ]
@@ -64,18 +59,16 @@ flowchart TB
         SSEAUD[SSE /api/audit/events<br/>audit]
         SSEDASH[SSE /api/dashboard/stats/stream]
         PROM[/metrics Prometheus<br/>flag EXPORT_METRICS/]
-        NOTIFY[Moteur de notifications<br/>SMTP et Apprise]
+        NOTIFY[Moteur de notifications<br/>aiosmtplib + apprise]
     end
 
-    UI[Interface - stores Svelte]
+    UI[Interface - stores Pinia]
     DEST[Canaux externes<br/>Discord, Slack, Telegram, ...]
 
-    GO --> CE
-    HAWS --> CE
-    GO --> RING
-    HAWS --> RING
+    COLLECT --> CE
+    COLLECT --> RING
     ACTIONS --> AUD
-    GO --> SSEACT
+    COLLECT --> SSEACT
     CE --> SSEACT
     SE --> SSEACT
     AUD --> SSEAUD
@@ -92,15 +85,15 @@ flowchart TB
 
 Principes transverses :
 
-- la **collecte d'arrière-plan est déléguée au collecteur Go** (ch. 02 §3.3) pour les environnements socket/direct/Hawser standard ; le mode **edge** reçoit ses métriques et événements **poussés par l'agent** (messages `metrics` et `container_event`, ch. 04 §7.6) ;
-- le serveur reste **responsable des écritures en base, de la diffusion SSE et des notifications** — le collecteur ne fait qu'observer ;
+- la **collecte d'arrière-plan est assurée par la couche de collecte intégrée** (tâches asyncio + aiodocker — ch. 02 §3.3) pour **tous les modes de connexion** (socket, socket-proxy, direct, remote shell SSH — dans ce dernier cas, les requêtes transitent par la connexion SSH de l'environnement) ;
+- le serveur reste **responsable des écritures en base, de la diffusion SSE (flux servis par sse-starlette) et des notifications** — la couche de collecte ne fait qu'observer ;
 - l'émission des notifications est **best-effort** : un échec d'envoi n'altère jamais l'issue de l'opération métier à l'origine de l'événement.
 
 ## 3. Tableau de bord personnalisable
 
 ### 3.1 Statistiques agrégées par environnement
 
-`GET /api/dashboard/stats?env=<id>` ([`src/routes/api/dashboard/stats/+server.ts`](../../src/routes/api/dashboard/stats/+server.ts:130)) construit, pour chaque environnement, une **tuile de statistiques** complète :
+`GET /api/dashboard/stats?env=<id>` construit, pour chaque environnement, une **tuile de statistiques** complète :
 
 | Bloc | Contenu fonctionnel |
 |---|---|
@@ -124,7 +117,7 @@ Comportements notables :
 
 ### 3.2 Préférences de disposition
 
-`GET/POST /api/dashboard/preferences` ([route](../../src/routes/api/dashboard/preferences/+server.ts:1)) persistent la personnalisation du tableau de bord sous une clé unique `dashboard_prefs` :
+`GET/POST /api/dashboard/preferences` persistent la personnalisation du tableau de bord sous une clé unique `dashboard_prefs` :
 
 | Préférence | Rôle |
 |---|---|
@@ -158,17 +151,16 @@ sequenceDiagram
 
 ### 4.1 Collecte
 
-- **Modes socket, direct, Hawser standard** : le collecteur Go interroge périodiquement chaque environnement (statistiques CPU/mémoire du daemon selon l'intervalle global `metricsCollectionInterval`, 10 s à 5 min — ch. 15) et remonte les points au serveur en JSON Lines (ch. 02 §3.3).
-- **Mode Hawser edge** : l'agent pousse ses mesures (messages `metrics` : CPU normalisé par le nombre de cœurs, mémoire totale/utilisée, disque, réseau, uptime — ch. 04 §7.6).
+- **Tous les modes de connexion** (socket, socket-proxy, direct, remote shell SSH) : la couche de collecte intégrée interroge périodiquement chaque environnement (statistiques CPU/mémoire du daemon selon l'intervalle global `metricsCollectionInterval`, 10 s à 5 min — ch. 15) — pour un environnement `remote-shell`, les requêtes Docker sont relayées à travers la connexion SSH (ch. 04).
 - L'option d'environnement `collectMetrics` (ch. 04 §9.1) active ou coupe la collecte ; à la réception, le serveur **stocke le point** et met à jour l'état en ligne.
 
 ### 4.2 Stockage : tampon circulaire en mémoire
 
-Les points de métriques vivent dans un **tampon circulaire en mémoire** ([`src/lib/server/metrics-store.ts`](../../src/lib/server/metrics-store.ts:1)) : **360 points par environnement** (une heure à 10 s d'intervalle, trois heures à 30 s), soit un encombrement borné (~576 Ko pour 16 environnements). Conséquences fonctionnelles :
+Les points de métriques vivent dans un **tampon circulaire en mémoire** : **360 points par environnement** (une heure à 10 s d'intervalle, trois heures à 30 s), soit un encombrement borné (~576 Ko pour 16 environnements). Conséquences fonctionnelles :
 
-- les **graphiques** du tableau de bord et la vue métriques lisent ce tampon (`getLatestMetric`, `getMetricsHistory`) — les dernières valeurs et l'historique court sont toujours disponibles sans requête Docker ;
+- les **graphiques** du tableau de bord et la vue métriques lisent ce tampon (dernier point, historique court) — les dernières valeurs sont toujours disponibles sans requête Docker ;
 - l'**historique long** n'est pas persisté : au redémarrage de l'instance, les courbes repartent de zéro (volatilité assumée) ;
-- la table `host_metrics` du schéma relationnel (ch. 03 §13.2) matérialise le modèle sur les versions antérieures ; la suppression d'un environnement **purge** son tampon mémoire et ses lignes.
+- le modèle relationnel conserve l'entité `host_metrics` (ch. 03 §13.2) ; la suppression d'un environnement **purge** son tampon mémoire et ses lignes.
 
 ### 4.3 Fraîcheur et affichage
 
@@ -179,7 +171,7 @@ Les points de métriques vivent dans un **tampon circulaire en mémoire** ([`src
 
 ### 5.1 Activation et accès
 
-L'endpoint **`/metrics`** (convention Prometheus) est livré éteint et activé par la variable d'environnement **`EXPORT_METRICS=true`** (lecture unique au démarrage — [`src/lib/server/metrics.ts`](../../src/lib/server/metrics.ts:36), [route](../../src/routes/metrics/+server.ts:24)) :
+L'endpoint **`/metrics`** (convention Prometheus) est livré éteint et activé par la variable d'environnement **`EXPORT_METRICS=true`** (lecture unique au démarrage) ; l'exposition est réalisée par la bibliothèque **prometheus-client** :
 
 | Contexte | Comportement |
 |---|---|
@@ -189,13 +181,13 @@ L'endpoint **`/metrics`** (convention Prometheus) est livré éteint et activé 
 
 ### 5.2 Familles de séries (préfixe `dockhand_`)
 
-Toutes les séries portent le préfixe `dockhand_` et sont rendues au **format d'exposition texte** de Prometheus ([src/lib/server/metrics.ts](../../src/lib/server/metrics.ts:53)) :
+Toutes les séries portent le préfixe `dockhand_` et sont rendues au **format d'exposition texte** de Prometheus (jauges déclarées via prometheus-client) :
 
 | Famille | Exemples de jauges | Étiquettes |
 |---|---|---|
 | **État Docker par environnement** | `env_up`, `containers`, `containers_health`, `container_restarts_total`, `updates_available`, `images_count`, `images_dangling`, `image_bytes`, `volumes_count`, `networks_count`, `stacks_count`, `vulnerabilities`, `images_scanned`, `container_events_total`, `container_events_today`, `container_events_by_action`, `scan_oldest_age_seconds`, `scan_avg_duration_seconds` | `env`, `env_id` (+ état/santé/action/sévérité selon la série ; `connection_type` pour `env_up`) |
 | **Ressources par environnement** | `env_cpu_percent`, `env_memory_used_bytes`, `env_memory_total_bytes` — **lues dans le tampon du §4**, aucune collecte Docker supplémentaire | `env`, `env_id` |
-| **Internes Dockhand** | `build_info`, `uptime_seconds`, `environments`, `users`, `registries`, `git_repositories`, `config_sets`, `api_tokens`, `schedule_executions`, `schedule_last_run_seconds`, `schedule_last_success_seconds`, `backup_last_success_seconds`, `backup_last_status`, `hawser_agents_connected`, `hawser_pending_requests`, `hawser_agent_info`, `jobs`, `scan_queue`, `vuln_cache_entries`, `scheduler_running`, `scheduler_active_jobs`, `database_size_bytes`, `database_info`, `database_rows`, `database_stat` + métriques de processus Node (prom-client) | diverses (`type`, `status`, `config_id`, `state`…) |
+| **Internes Dockhand** | `build_info`, `uptime_seconds`, `environments`, `users`, `registries`, `git_repositories`, `config_sets`, `api_tokens`, `schedule_executions`, `schedule_last_run_seconds`, `schedule_last_success_seconds`, `backup_last_success_seconds`, `backup_last_status`, `jobs`, `scan_queue`, `vuln_cache_entries`, `scheduler_running`, `scheduler_active_jobs`, `database_size_bytes`, `database_info`, `database_rows`, `database_stat` + métriques de processus du runtime Python (collecteur standard de prometheus-client) | diverses (`type`, `status`, `config_id`, `state`…) |
 
 Gardes de collecte : **cache de 15 s** par scrape (un intervalle de scrape serré ne martèle pas Docker), **délai global de 10 s** (un environnement lent ne bloque jamais le rendu), **concurrence limitée à 4 environnements** ; un environnement mort est **sauté, pas fatal** — la série `env_up` est émise à 0 d'office pour chaque environnement configuré afin que les alertes `dockhand_env_up == 0` puissent se déclencher.
 
@@ -207,19 +199,19 @@ L'export couvre trois usages : **supervision externe** de la flotte (états, res
 
 ### 6.1 Collecte et historisation
 
-Les événements Docker de cycle de vie (create, start, stop, die, kill, restart, pause, unpause, destroy, rename, update, oom, health_status) sont collectés en arrière-plan (mode **stream** ou **poll** global — ch. 04 §9.2) ou poussés par l'agent edge, puis **historisés** dans `container_events` (conteneur, image, action, attributs d'acteur, horodatage — ch. 03 §13.1) :
+Les événements Docker de cycle de vie (create, start, stop, die, kill, restart, pause, unpause, destroy, rename, update, oom, health_status) sont collectés en arrière-plan par la couche de collecte intégrée (mode **stream** ou **poll** global — ch. 04 §9.2, y compris à travers le remote shell SSH), puis **historisés** dans `container_events` (conteneur, image, action, attributs d'acteur, horodatage — ch. 03 §13.1) :
 
-- **filtrage des répétitions de sondes de santé** : seules les **transitions** healthy↔unhealthy sont conservées ([`isHealthTransition`](../../src/lib/server/subprocess-manager.ts:13)) — un conteneur sain re-sondé toutes les 30 s ne remplit pas la base ;
+- **filtrage des répétitions de sondes de santé** : seules les **transitions** healthy↔unhealthy sont conservées — un conteneur sain re-sondé toutes les 30 s ne remplit pas la base ;
 - la **rétention** est paramétrable (réglage global + tâche système « Container event cleanup », ch. 09 §11 et ch. 15) ;
 - l'option d'environnement `collectActivity` coupe la collecte pour un hôte donné.
 
 ### 6.2 Flux temps réel (SSE `/api/events`)
 
-`GET /api/events?env=<id>` ([route](../../src/routes/api/events/+server.ts:12)) diffuse **en direct** les événements Docker bruts de l'environnement :
+`GET /api/events?env=<id>` diffuse **en direct** les événements Docker bruts de l'environnement :
 
 - événements du flux : `connected` → `docker` (type, action, acteur, horodatages) → `heartbeat` toutes les 5 s (compatibilité reverse-proxy) → `error` à la perte de connexion ;
 - **couvre tous les types d'objets** (conteneur, image, volume, réseau) — c'est la source du surlignage des changements et des rafraîchissements d'inventaire ;
-- **environnements edge exclus** : les événements y arrivent par la WebSocket de l'agent (le store frontend bascule alors de mécanisme, §9) ; l'endpoint renvoie un événement d'erreur explicite dans ce cas ;
+- pour un environnement **remote shell**, les événements Docker sont relayés par la couche de collecte à travers la connexion SSH — l'endpoint SSE reste identique pour l'interface ;
 - sans paramètre `env`, un message `info` est émis et le flux se termine.
 
 ### 6.3 Consultation historique (page Activité)
@@ -246,7 +238,7 @@ Chaque opération significative sur une stack journalise un **événement de sta
 
 ### 8.1 Contenu et écriture
 
-Fonction **Enterprise exclusive** (SMB ne la débloque pas — ch. 12 §9.2) : chaque action utilisateur significative des chapitres métier (création/modification/suppression d'environnements, de stacks, de credentials, d'images, de volumes, de réseaux, de registres, de notifications, déclenchements de webhooks, prunes, déploiements…) journalise une entrée `audit_logs` via [`logAuditEvent`](../../src/lib/server/db.ts:3532) :
+Fonction **Enterprise exclusive** (SMB ne la débloque pas — ch. 12 §9.2) : chaque action utilisateur significative des chapitres métier (création/modification/suppression d'environnements, de stacks, de credentials, d'images, de volumes, de réseaux, de registres, de notifications, déclenchements de webhooks, prunes, déploiements…) journalise une entrée `audit_logs` via le service d'audit :
 
 | Champ | Contenu fonctionnel |
 |---|---|
@@ -259,7 +251,7 @@ Fonction **Enterprise exclusive** (SMB ne la débloque pas — ch. 12 §9.2) : c
 
 ### 8.2 Consultation
 
-`GET /api/audit` ([route](../../src/routes/api/audit/+server.ts:25)) — double garde : **licence Enterprise exigée** (403 sinon) et **permission `audit_logs:view`** (rôle système Admin uniquement — ch. 12 §8.3). Filtres supportés :
+`GET /api/audit` — double garde : **licence Enterprise exigée** (403 sinon) et **permission `audit_logs:view`** (rôle système Admin uniquement — ch. 12 §8.3). Filtres supportés :
 
 - **multi-sélection** : `usernames`, `entityTypes`, `actions` (listes séparées par virgules), avec support des formes unitaires historiques ;
 - `environmentId`, **libellés** d'environnement (`labels`), plage de dates (`fromDate`/`toDate`) ;
@@ -267,36 +259,35 @@ Fonction **Enterprise exclusive** (SMB ne la débloque pas — ch. 12 §9.2) : c
 
 ### 8.3 Diffusion temps réel
 
-Le flux **`GET /api/audit/events`** pousse chaque nouvelle entrée (`event: audit`) avec battements de cœur, réservé aux mêmes gardes *(Enterprise)*. La page Audit l'exploite pour un **journal vivant** (§9). Il n'existe pas de rétention dédiée à l'audit en 1.0.43 : la conservation suit le cycle de vie de la base (outils d'urgence du ch. 15 pour les purges globales).
+Le flux **`GET /api/audit/events`** pousse chaque nouvelle entrée (`event: audit`) avec battements de cœur, réservé aux mêmes gardes *(Enterprise)*. La page Audit l'exploite pour un **journal vivant** (§9). Il n'existe pas de rétention dédiée à l'audit : la conservation suit le cycle de vie de la base (outils d'urgence du ch. 15 pour les purges globales).
 
-## 9. Système d'événements temps réel côté interface (stores SSE)
+## 9. Système d'événements temps réel côté interface (stores Pinia)
 
-Le frontend centralise la consommation des flux dans des **stores Svelte** dédiés :
+Le frontend (Vue 3.5 / Pinia) centralise la consommation des flux dans des **stores Pinia dédiés, alimentés par les flux SSE/WebSocket** :
 
-| Store | Flux consommé | Rôle |
+| Store Pinia | Flux consommé | Rôle |
 |---|---|---|
-| [`src/lib/stores/events.ts`](../../src/lib/stores/events.ts:1) | `/api/events?env=` | Diffuse les événements Docker à tous les abonnés (`onDockerEvent`) : surlignage des changements, rafraîchissement des inventaires, activité temps réel |
-| [`src/lib/stores/audit-events.ts`](../../src/lib/stores/audit-events.ts:1) | `/api/audit/events` *(Enterprise)* | Journal d'audit vivant (`onAuditEvent`) |
-| [`src/lib/stores/dashboard.ts`](../../src/lib/stores/dashboard.ts:1) | `/api/dashboard/stats/stream` | Statistiques continues du tableau de bord |
-| [`src/lib/stores/environment.ts`](../../src/lib/stores/environment.ts:1) | — (REST) | Environnement sélectionné, auto-sélection, purge des périmés (ch. 04 §11) |
+| Store d'événements | `/api/events?env=` | Diffuse les événements Docker à tous les abonnés : surlignage des changements, rafraîchissement des inventaires, activité temps réel |
+| Store d'audit | `/api/audit/events` *(Enterprise)* | Journal d'audit vivant |
+| Store du tableau de bord | `/api/dashboard/stats/stream` | Statistiques continues du tableau de bord |
+| Store d'environnement | — (REST) | Environnement sélectionné, auto-sélection, purge des périmés (ch. 04 §11) |
 
 Comportements transverses des stores :
 
 - **reconnexion automatique** : jusqu'à **5 tentatives espacées de 3 s**, puis message d'erreur invitant à recharger ; tout succès réinitialise le compteur ;
-- **bascule edge** : pour un environnement Hawser edge, le store d'événements ne tente **pas** de SSE — les événements arrivent par la WebSocket de l'agent et sont injectés aux mêmes abonnés (l'état « connecté » est maintenu via l'autre mécanisme) ;
 - les battements (`heartbeat`) maintiennent les connexions à travers les reverse-proxys (émission toutes les 5 s côté serveur).
 
 ```mermaid
 sequenceDiagram
     participant F as Flux Docker
     participant S as Serveur - SSE
-    participant ST as Store events.ts
+    participant ST as Store d événements - Pinia
     participant V as Vues abonnées
 
     F-->>S: événement conteneur ou image
     S-->>ST: event docker au format mappé
-    ST->>ST: lastEvent et notification des abonnés
-    ST-->>V: onDockerEvent - surlignage et rafraîchissement
+    ST->>ST: dernier événement et notification des abonnés
+    ST-->>V: abonnements - surlignage et rafraîchissement
     Note over ST: perte de connexion - 5 reconnexions à 3 s puis message
 ```
 
@@ -308,10 +299,10 @@ Les canaux de notification sont configurables dans les réglages (permissions `n
 
 | Type stocké | Nature | Détail |
 |---|---|---|
-| `smtp` | Serveur de messagerie | Hôte, port, sécurité, identifiants (mot de passe **chiffré au repos**), expéditeur, destinataires, option de saut de vérification TLS |
-| `apprise` | **Multicanal Apprise** | Liste d'**URLs Apprise** ; chaque URL est routée vers son service selon son schéma |
+| `smtp` | Serveur de messagerie | Hôte, port, sécurité, identifiants (mot de passe **chiffré au repos**), expéditeur, destinataires, option de saut de vérification TLS — envoi assuré par **aiosmtplib** |
+| `apprise` | **Multicanal Apprise** | Liste d'**URLs Apprise** ; chaque URL est routée vers son service par la **bibliothèque Python apprise** selon son schéma |
 
-Le type `apprise` concentre ainsi **treize familles de services effectives**, routées par schéma d'URL ([`src/lib/server/notifications/index.ts`](../../src/lib/server/notifications/index.ts:73)) :
+Le type `apprise` concentre ainsi **treize familles de services effectives**, routées par schéma d'URL :
 
 | Service | Schémas d'URL | Service | Schémas d'URL |
 |---|---|---|---|
@@ -323,21 +314,21 @@ Le type `apprise` concentre ainsi **treize familles de services effectives**, ro
 | Webhook générique (JSON) | `json://`, `jsons://` | Workflows GitHub | `workflows://` |
 | Zabbix | `zabbix://`, `zabbixs://` | | |
 
-Au total, **quatorze canaux effectifs** (SMTP + les treize familles ci-dessus), chacun implémenté par un module dédié de [`src/lib/server/notifications/`](../../src/lib/server/notifications/index.ts:1) (`smtp.ts`, `discord.ts`, `slack.ts`, `mattermost.ts`, `telegram.ts`, `gotify.ts`, `ntfy.ts`, `bark.ts`, `signal.ts`, `apprise.ts`, `pushover.ts`, `generic-webhook.ts`, `workflows.ts`, `zabbix.ts`). L'ajout d'un service = un module + une entrée dans l'aiguillage par schéma ; le routeur ne connaît jamais le contenu d'une URL.
+Au total, **quatorze canaux effectifs** (SMTP + les treize familles ci-dessus) : l'acheminement multicanal est assuré par la **bibliothèque apprise**, qui route chaque URL selon son schéma, et par **aiosmtplib** pour SMTP. L'ajout d'un service = une URL supplémentaire dans la configuration du canal ; le routeur ne connaît jamais le contenu d'une URL.
 
 ### 10.2 Cycle de vie d'un canal
 
 - **Création/édition** (`/api/notifications`) : nom, type, configuration, **types d'événements** visés (à défaut : **tous**) ; le mot de passe SMTP est chiffré et jamais retourné en clair ;
-- **Test** (`testNotification`, permission `notifications:test`) : envoie une charge fixe (« Dockhand Test Notification ») sur le canal sauvegardé pour vérifier la livraison ;
+- **Test** (permission `notifications:test`) : envoie une charge fixe (« Dockhand Test Notification ») sur le canal sauvegardé pour vérifier la livraison ;
 - **Suppression** : les routages d'environnement liés disparaissent avec le canal.
 
 ### 10.3 Charge de notification et formats
 
-Chaque envoi véhicule une [`NotificationPayload`](../../src/lib/server/notifications/shared.ts:1) commune : **titre**, **message**, **type visuel** (`info` / `success` / `warning` / `error`), **type d'événement**, et enrichissement **environnement** (identifiant et nom) lorsque l'événement y est rattaché. Chaque module formate cette charge selon les usages du service concerné (sujet + corps du courriel SMTP, cartes Discord/Slack/Mattermost, Pushover sons/priorités, trapper Zabbix avec sévérité mappée, payload JSON du webhook générique…) — la sémantique (titre/message/type) reste identique partout. Les échecs d'URLs multiples d'un même canal Apprise sont **agrégés** (une URL défaillante ne masque pas les saines), et l'ensemble est **best-effort** : un échec d'envoi n'influence jamais l'opération métier émettrice.
+Chaque envoi véhicule une **charge de notification commune** : **titre**, **message**, **type visuel** (`info` / `success` / `warning` / `error`), **type d'événement**, et enrichissement **environnement** (identifiant et nom) lorsque l'événement y est rattaché. Chaque destination formate cette charge selon les usages du service concerné (sujet + corps du courriel SMTP, cartes Discord/Slack/Mattermost, sons/priorités Pushover, trapper Zabbix avec sévérité mappée, payload JSON du webhook générique…) — la sémantique (titre/message/type) reste identique partout. Les échecs d'URLs multiples d'un même canal Apprise sont **agrégés** (une URL défaillante ne masque pas les saines), et l'ensemble est **best-effort** : un échec d'envoi n'influence jamais l'opération métier émettrice.
 
 ## 11. Matrice des types d'événements notifiables
 
-Le catalogue exhaustif ([`NOTIFICATION_EVENT_TYPES`](../../src/lib/server/db.ts:959)) définit **41 types d'événements** répartis en 7 groupes, chacun qualifié par sa **portée** : `environment` (routable par environnement — configuré dans les routages `environment_notifications` **et** au niveau du canal) ou `system` (global — réglé **uniquement au niveau du canal**).
+Le catalogue exhaustif définit **41 types d'événements** répartis en 7 groupes, chacun qualifié par sa **portée** : `environment` (routable par environnement — configuré dans les routages `environment_notifications` **et** au niveau du canal) ou `system` (global — réglé **uniquement au niveau du canal**).
 
 ### 11.1 Cycle de vie des conteneurs (portée environment)
 
@@ -353,7 +344,7 @@ Le catalogue exhaustif ([`NOTIFICATION_EVENT_TYPES`](../../src/lib/server/db.ts:
 | `container_updated` | Image du conteneur mise à jour (signal émis par le flux de recréation, pas par l'événement Docker brut) |
 | `image_pulled` | Nouvelle image tirée |
 
-> Le mappage **action Docker → type notifiable** est une fonction pure ([`mapActionToEventType`](../../src/lib/server/notifications/events-core.ts:19)) : `start`→started, `stop`→stopped, `restart`→restarted, `die`/`kill`→exited, `oom`→oom, `health_status: unhealthy|healthy`→transitions, `pull`→image_pulled. Les actions non listées ne notifient pas.
+> Le mappage **action Docker → type notifiable** est une fonction pure : `start`→started, `stop`→stopped, `restart`→restarted, `die`/`kill`→exited, `oom`→oom, `health_status: unhealthy|healthy`→transitions, `pull`→image_pulled. Les actions non listées ne notifient pas.
 
 ### 11.2 Auto-update (portée environment)
 
@@ -393,10 +384,10 @@ Lecture de la matrice : **34 types à portée environment**, **7 à portée syst
 
 ### 12.1 Deux fonctions d'émission
 
-Le routeur ([`src/lib/server/notifications/index.ts`](../../src/lib/server/notifications/index.ts:187)) expose deux entrées :
+Le routeur de notifications expose deux entrées fonctionnelles :
 
-1. **`sendEnvironmentNotification`** — événement Docker d'un environnement : l'action est traduite en type notifiable (§11.1) ; les **routages actifs** de cet environnement pour ce type (`environment_notifications`, ch. 03 §13.4) reçoivent la charge enrichie du nom d'environnement ;
-2. **`sendEventNotification`** — événements applicatifs (auto-update, Git, stacks, sécurité, sauvegardes, système) : **avec** environnement → routages de cet environnement pour le type ; **sans** environnement (types system purs) → **tous les canaux globaux** dont la liste `eventTypes` couvre le type.
+1. **notification d'événement Docker d'un environnement** : l'action est traduite en type notifiable (§11.1) ; les **routages actifs** de cet environnement pour ce type (`environment_notifications`, ch. 03 §13.4) reçoivent la charge enrichie du nom d'environnement ;
+2. **notification d'événement applicatif** (auto-update, Git, stacks, sécurité, sauvegardes, système) : **avec** environnement → routages de cet environnement pour le type ; **sans** environnement (types system purs) → **tous les canaux globaux** dont la liste `eventTypes` couvre le type.
 
 ### 12.2 Routage par environnement
 
@@ -422,7 +413,7 @@ flowchart TB
 | Règle | Effet |
 |---|---|
 | **Label de conteneur** `dockhand.notify` | Coupe **toutes** les notifications du conteneur porteur (label lu dans les attributs d'acteur de l'événement — ch. 05 §3.2) |
-| **Conteneurs de scanners exclus** | Les images Grype/Trivy (conteneurs de scan éphémères) ne notifient jamais ([`SCANNER_IMAGE_PATTERNS`](../../src/lib/server/notifications/index.ts:174)) — éviterait un déluge à chaque scan |
+| **Conteneurs de scanners exclus** | Les images Grype/Trivy (conteneurs de scan éphémères) ne notifient jamais (motifs d'images de scanners exclus par le routeur) — éviterait un déluge à chaque scan |
 | **Transitions de santé uniquement** | Seules les bascules healthy↔unhealthy sont historisées et notifiées (§6.1) |
 | **Semver sans re-notification** | `newer_version_available` n'est émis que pour une **nouvelle** suggestion (comparaison au tag déjà signalé — ch. 08 §6.2) |
 | **Vulnérabilités hiérarchisées** | `vulnerability_any` seulement sans critique/haute ; rien à zéro vulnérabilité (ch. 10 §6.3) |
@@ -440,7 +431,7 @@ flowchart TB
 | Scan Prometheus martelant Docker | Cache 15 s, délai 10 s, concurrence 4 environnements, ressources lues dans le tampon mémoire |
 | `/metrics` exposé | Gated `EXPORT_METRICS=true` (404 sinon) ; session ou **Bearer** exigés quand l'auth est active (401 direct, jamais de redirection) |
 | Divulgation d'audit cross-environnement *(Enterprise)* | `audit_logs:view` (Admin seul en rôles système), filtres par environnement, portée RBAC sur l'activité |
-| Perte de flux temps réel derrière proxy | Battements SSE 5 s, reconnexion auto (5 × 3 s) côté stores, bascule WebSocket pour les environnements edge |
+| Perte de flux temps réel derrière proxy | Battements SSE 5 s, reconnexion auto (5 × 3 s) côté stores Pinia |
 | Environnement mort faussant l'observabilité | Tuiles dégradées explicites, `env_up=0` toujours émis, environnements morts sautés (jamais fatals) |
 | Échec de notification perturbant une opération | Émission **best-effort** — agrégation des erreurs multi-URLs, aucune influence sur l'issue métier |
 
@@ -449,9 +440,10 @@ flowchart TB
 | Chapitre | Lien | Pourquoi y aller |
 |---|---|---|
 | 00 — Chapitrage | [`00-chapitrage.md`](00-chapitrage.md) | Sommaire de référence. |
-| 02 — Architecture fonctionnelle | [`02-architecture-fonctionnelle.md`](02-architecture-fonctionnelle.md) | Collecteur Go, canaux SSE/WebSocket, flux de supervision de bout en bout (§8.1). |
+| 01 — Présentation générale | [`01-presentation-generale.md`](01-presentation-generale.md) | Positionnement, éditions/licence, feature flags. |
+| 02 — Architecture fonctionnelle | [`02-architecture-fonctionnelle.md`](02-architecture-fonctionnelle.md) | Couche de collecte intégrée, canaux SSE/WebSocket, flux de supervision de bout en bout (§8.1). |
 | 03 — Concepts et entités | [`03-concepts-entites.md`](03-concepts-entites.md) | Entités `container_events`, `host_metrics`, `audit_logs`, `notification_settings`, `environment_notifications`, `user_preferences`. |
-| 04 — Environnements | [`04-environnements.md`](04-environnements.md) | Options de collecte (`collectActivity`, `collectMetrics`, `highlightChanges`), modes stream/poll, événements/métriques poussés par l'agent edge, notifications en ligne/hors-ligne. |
+| 04 — Environnements | [`04-environnements.md`](04-environnements.md) | Options de collecte (`collectActivity`, `collectMetrics`, `highlightChanges`), modes stream/poll, relais par remote shell SSH, notifications en ligne/hors-ligne. |
 | 05 — Gestion des conteneurs | [`05-conteneurs.md`](05-conteneurs.md) | Labels `dockhand.hidden`/`dockhand.notify`, surlignage des changements, statistiques par conteneur (flux distinct). |
 | 06 — Stacks Compose | [`06-stacks.md`](06-stacks.md) | Événements de stack et statuts agrégés affichés dans le tableau de bord. |
 | 07 — Intégration Git | [`07-git.md`](07-git.md) | Événements `git_sync_*` notifiables, remplacement de `stack_deployed`. |
