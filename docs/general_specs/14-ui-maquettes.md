@@ -75,7 +75,7 @@ Inspiré de Cloudron (apps avec domaine) + Runtipi (statut et actions inline). V
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Légende :** action bar canonique Apps (chapitre 02) — `[🔗 Ouvrir]` en premier (action la plus courante), split-button `[⏵ Lifecycle ▾]` (Start/Stop/Restart/Pause), badge `⬆` si mise à jour disponible, RAM visible (critique sur RPi).
+**Légende :** action bar canonique Apps (chapitre 02) — `[🔗 Ouvrir]` en premier (action la plus courante), split-button `[⏵ Lifecycle ▾]` (Start/Stop/Restart/Pause), badge `⬆` si mise à jour disponible, RAM visible (critique sur RPi). Badge d'origine sur chaque carte — `Managé` (discret, défaut) / `Adopté` / `Externe` (lecture seule) — traduction UI de la colonne `origin` (matrice profil × origine, chapitre [03-modele-compute.md](03-modele-compute.md)).
 
 ## Écran 3 — Détail App
 

@@ -116,7 +116,7 @@ class ErrorResponse(BaseModel):
 ### Famille Apps — `/api/v1/apps/`
 
 ```
-GET    /                       # Lister les Apps (filtres: host_id, status, profile, name)
+GET    /                       # Lister les Apps (filtres: host_id, machine_id, status, profile, origin, name)
 POST   /                       # Créer une App (deploy depuis la marketplace ou manuel)
 GET    /{id}                   # Détails d'une App
 PUT    /{id}/config            # Modifier la configuration (formulaire)
@@ -139,7 +139,8 @@ Exemple illustratif — modèles de requête/réponse :
 class AppCreateRequest(BaseModel):
     name: str                          # ex. nextcloud
     profile: str                       # docker_container, docker_compose, helm_release, k8s_manifest
-    host_id: str
+    host_id: Optional[str]             # hébergement direct sur un Host…
+    machine_id: Optional[str]          # …ou App tournant dans une Machine (XOR avec host_id)
     marketplace_entry_id: Optional[str] = None
     configuration: Optional[dict] = None
 
@@ -148,12 +149,13 @@ class AppResponse(BaseModel):
     name: str
     profile: str
     status: str                # running, stopped, starting, stopping, updating, degraded, error, unknown
-    host_id: str
+    host_id: Optional[str]     # XOR avec machine_id (règle d'hébergement, chapitre 02)
+    machine_id: Optional[str]
     domain: Optional[str]
     current_version: Optional[str]
     available_version: Optional[str]
     backup_enabled: bool
-    adopted_from_discovered: bool
+    origin: str                # managed | adopted | external (matrice profil × origine, chapitre 03)
     created_at: str
 ```
 

@@ -24,8 +24,9 @@ erDiagram
     Organization ||--o{ UserOrganization : "contient"
     Organization ||--o{ Environment : "contient"
     Environment ||--o{ Host : "contient"
-    Host ||--o{ App : "héberge"
+    Host ||--o{ App : "héberge (direct)"
     Host ||--o{ Machine : "héberge"
+    Machine ||--o{ App : "héberge (dans la VM)"
     Stack ||--o{ Deployment : "crée"
     Deployment ||--o{ DeploymentEvent : "génère"
     User ||--o{ APIKey : "possède"
@@ -88,13 +89,14 @@ erDiagram
         string name
         string profile
         string status
-        uuid host_id FK
+        uuid host_id FK "si hébergement direct (XOR machine_id)"
+        uuid machine_id FK "si l'App tourne dans la Machine (XOR host_id)"
         uuid organization_id FK
         uuid environment_id FK
         string domain
         string current_version
         boolean backup_enabled
-        boolean adopted_from_discovered
+        string origin "managed | adopted | external"
         timestamp created_at
     }
 
@@ -109,7 +111,7 @@ erDiagram
         json hardware
         json os_info
         uuid template_id FK
-        boolean adopted_from_discovered
+        string origin "managed | adopted | external"
         timestamp created_at
     }
 
@@ -211,7 +213,8 @@ CREATE TABLE apps (
     icon VARCHAR(255),
     description TEXT,
     profile VARCHAR(30) NOT NULL,                 -- docker_container, docker_compose, helm_release, k8s_manifest, app_native_service
-    host_id TEXT NOT NULL REFERENCES hosts(id),   -- le Host qui l'héberge
+    host_id TEXT REFERENCES hosts(id),            -- le Host qui l'héberge (hébergement direct)
+    machine_id TEXT REFERENCES machines(id),      -- la Machine qui l'héberge (App dans le daemon Docker de la VM)
     organization_id TEXT NOT NULL REFERENCES organizations(id),
     environment_id TEXT REFERENCES environments(id),
     domain VARCHAR(255),                          -- domaine public si exposé
@@ -221,13 +224,21 @@ CREATE TABLE apps (
     backup_enabled BOOLEAN DEFAULT FALSE,
     last_backup_at TIMESTAMP,
     marketplace_entry_id TEXT,                    -- entrée marketplace d'origine
-    adopted_from_discovered BOOLEAN DEFAULT FALSE,
+    origin VARCHAR(10) NOT NULL DEFAULT 'managed', -- origine : managed | adopted | external (matrice profil × origine, chapitre 03)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(host_id, name)
+    -- Règle d'hébergement (chapitre 02) : exactement un des deux — host_id XOR machine_id
+    CHECK (
+        (host_id IS NOT NULL AND machine_id IS NULL)
+        OR (host_id IS NULL AND machine_id IS NOT NULL)
+    ),
+    UNIQUE(host_id, name),
+    UNIQUE(machine_id, name)
 );
 
 CREATE INDEX idx_apps_host ON apps(host_id);
+CREATE INDEX idx_apps_machine ON apps(machine_id);
+CREATE INDEX idx_apps_origin ON apps(origin);
 CREATE INDEX idx_apps_status ON apps(status);
 ```
 
@@ -240,14 +251,14 @@ CREATE TABLE machines (
     icon VARCHAR(255),
     description TEXT,
     profile VARCHAR(30) NOT NULL,                 -- vm_kvm, vm_lxd, vm_incus, vm_lxc, vm_virtualbox
-    host_id TEXT NOT NULL REFERENCES hosts(id),   -- le Host qui l'héberge
+    host_id TEXT NOT NULL REFERENCES hosts(id),   -- le Host qui l'héberge (obligatoire — règle d'hébergement, chapitre 02)
     organization_id TEXT NOT NULL REFERENCES organizations(id),
     environment_id TEXT REFERENCES environments(id),
     power_state VARCHAR(20) DEFAULT 'stopped',    -- statuts PowerState
     hardware TEXT DEFAULT '{}',                   -- JSON : CPU, RAM, disques, NICs
     os_info TEXT DEFAULT '{}',                    -- JSON : nom, version, architecture
     template_id TEXT,                             -- template d'origine (nullable)
-    adopted_from_discovered BOOLEAN DEFAULT FALSE,
+    origin VARCHAR(10) NOT NULL DEFAULT 'managed', -- origine : managed | adopted | external (matrice profil × origine, chapitre 03)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(host_id, name)
@@ -324,7 +335,25 @@ class HostProfile(str, Enum):
     HOST_PROXMOX       = "host_proxmox"
     HOST_KUBERNETES    = "host_kubernetes"
     HOST_REMOTE_DOCKER = "host_remote_docker"
+
+class WorkloadOrigin(str, Enum):
+    MANAGED  = "managed"    # déployé par WindFlow
+    ADOPTED  = "adopted"    # découvert puis adopté par WindFlow
+    EXTERNAL = "external"   # pré-existant, observé uniquement, jamais managé
 ```
+
+L'enum `WorkloadOrigin` porte l'**origine** d'un workload — deuxième axe de la matrice canonique « profil × origine » définie au chapitre [03-modele-compute.md](03-modele-compute.md). Il remplace l'ancien booléen `adopted_from_discovered` (voir [Rétro-compatibilité `adopted_from_discovered`](#rétro-compatibilité-adopted_from_discovered)).
+
+### Rétro-compatibilité `adopted_from_discovered`
+
+L'ancien booléen `adopted_from_discovered` (`apps`, `machines`) est remplacé par la colonne `origin`. Correspondance documentaire :
+
+| Ancienne valeur | `origin` correspondant |
+|---|---|
+| `adopted_from_discovered = FALSE` | `origin = 'managed'` (ou `'external'` si l'objet est resté non adopté — le booléen ne permettait pas de distinguer) |
+| `adopted_from_discovered = TRUE` | `origin = 'adopted'` |
+
+La valeur `'external'` est **nouvelle** : elle caractérise les objets pré-existants observés par WindFlow sans jamais être adoptés (lecture seule). Une migration Alembic simple réalise la bascule : `origin = CASE WHEN adopted_from_discovered THEN 'adopted' ELSE 'managed' END`, puis suppression de la colonne héritée.
 
 ## Statuts unifiés par famille
 
@@ -362,7 +391,7 @@ L'entité `Target` (colonne `type = local | ssh | proxmox`) est remplacée par l
 1. **Création de `hosts`** avec le schéma ci-dessus (profils canoniques à 4 valeurs).
 2. **Copie des lignes** de `targets` vers `hosts` avec correspondance de profils : `local` → `host_baremetal`, `ssh` → `host_baremetal` (accès SSH) ou `host_remote_docker` (si le Docker distant est le seul usage), `proxmox` → `host_proxmox`.
 3. **Reprise des colonnes** : `capabilities` → `hardware_info` + `installed_engines` (éclaté), `connection_config` conservé, `last_seen` → `last_scan_at`.
-4. **Mise à jour des clés étrangères** : `stacks.target_id` → `stacks.host_id` ; les nouvelles FK `apps.host_id` et `machines.host_id` sont peuplées depuis les objets Compute existants.
+4. **Mise à jour des clés étrangères** : `stacks.target_id` → `stacks.host_id` ; les FK `machines.host_id` (obligatoire) et `apps.host_id`/`apps.machine_id` (XOR, règle d'hébergement du chapitre 02) sont peuplées depuis les objets Compute existants — une App tournant dans le daemon Docker d'une VM est rattachée à sa Machine via `apps.machine_id`.
 5. **Suppression de `targets`** après validation (les lectures API passent par `/hosts`, cf. chapitre 09).
 
 Les migrations Alembic restent compatibles PostgreSQL + SQLite (voir [Compatibilité PostgreSQL et SQLite](#compatibilité-postgresql-et-sqlite)).
@@ -635,11 +664,15 @@ class App(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(100))
     profile: Mapped[AppProfile] = mapped_column(String(30))    # docker_compose, helm_release…
-    host_id: Mapped[str] = mapped_column(ForeignKey("hosts.id"))
+    host_id: Mapped[str | None] = mapped_column(ForeignKey("hosts.id"))       # hébergement direct…
+    machine_id: Mapped[str | None] = mapped_column(ForeignKey("machines.id")) # …ou App dans la VM
     status: Mapped[str] = mapped_column(String(20), default="unknown")
-    adopted_from_discovered: Mapped[bool] = mapped_column(Boolean, default=False)
+    origin: Mapped[WorkloadOrigin] = mapped_column(String(10), default="managed")
 
+    # Règle d'hébergement (chapitre 02) : exactement un des deux (XOR),
+    # contrainte CheckConstraint("…") au niveau table.
     host: Mapped["Host"] = relationship(back_populates="apps")
+    machine: Mapped["Machine"] = relationship(back_populates="apps")
 ```
 
 ## Compatibilité PostgreSQL et SQLite

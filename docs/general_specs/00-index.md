@@ -33,7 +33,7 @@ Cet index est le point d'entrée de la spécification générale de WindFlow : s
 
 | Chapitre | Périmètre |
 |---|---|
-| [03-modele-compute.md](03-modele-compute.md) | Taxonomie stack/discovered/standalone, vue Compute (Mode Infra), adoption, snapshots, bibliothèque d'images OS |
+| [03-modele-compute.md](03-modele-compute.md) | Taxonomie stack/discovered/standalone, **matrice canonique profil × origine (managed/adopted/external)**, vue Compute (Mode Infra), adoption, snapshots, bibliothèque d'images OS |
 | [05-stack-technologique.md](05-stack-technologique.md) | Choix techniques, backends VM (adapters), dépendances, CI Gitea Actions, correspondance spec ↔ technical_specs |
 | [07-authentification.md](07-authentification.md) | JWT, refresh tokens, clés API, brute-force, SSO via plugin Keycloak |
 | [08-rbac-permissions.md](08-rbac-permissions.md) | 4 rôles, matrice complète des permissions, RBAC par famille, gestion des utilisateurs, audit des permissions |

@@ -4,7 +4,7 @@
 
 ## Vue d'ensemble
 
-Ce chapitre spécifie la taxonomie des objets Compute (niveau de contrôle × technologie), la vue Compute du Mode Infra, la gestion des snapshots, la bibliothèque d'images OS, ainsi que le mécanisme de discovery/réconciliation et le wizard d'adoption. La vue Compute est exposée à l'utilisateur **en Mode Infra uniquement** : en Mode App, l'utilisateur manipule les trois familles (chapitre 02) et la technologie sous-jacente d'un workload est une métadonnée invisible. Les deux modes voient la même réalité technique sous-jacente, présentée à des niveaux d'abstraction différents.
+Ce chapitre spécifie la taxonomie des objets Compute (niveau de contrôle × technologie), la **matrice canonique « profil × origine »** qui l'affine, la vue Compute du Mode Infra, la gestion des snapshots, la bibliothèque d'images OS, ainsi que le mécanisme de discovery/réconciliation et le wizard d'adoption. La vue Compute est exposée à l'utilisateur **en Mode Infra uniquement** : en Mode App, l'utilisateur manipule les trois familles (chapitre 02) et la technologie sous-jacente d'un workload est une métadonnée invisible. Les deux modes voient la même réalité technique sous-jacente, présentée à des niveaux d'abstraction différents.
 
 ## Taxonomie des objets Compute
 
@@ -55,6 +55,53 @@ Objet créé directement depuis WindFlow, sans appartenir à une stack. WindFlow
 
 Proxmox n'est **pas** un backend de VM dans cette taxonomie : les VMs et LXC hébergés par un serveur Proxmox sont des Machines standard, pilotées via le Host `host_proxmox` (chapitre 02).
 
+## Matrice canonique « profil × origine »
+
+La taxonomie ci-dessus est affinée par un croisement canonique : l'axe **profil technique conteneur** (les 4 profils Apps `docker_container`, `docker_compose`, `helm_release`, `k8s_manifest`) × l'axe **origine** (qui a créé l'objet, quel contrôle WindFlow exerce-t-il). Cette matrice est la **référence unique** pour la sémantique des cellules, les niveaux de contrôle et les actions autorisées ; les autres chapitres y renvoient (colonne `origin` au chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md), badge d'origine au chapitre [14-ui-maquettes.md](14-ui-maquettes.md), définitions au chapitre [19-glossaire.md](19-glossaire.md)).
+
+### Axe origine — `managed` / `adopted` / `external`
+
+| Origine | Sémantique | Niveau de contrôle | Actions autorisées |
+|---|---|---|---|
+| **`managed`** | Déployé par WindFlow (stack ou standalone) | **Complet** — WindFlow est le source of truth | Cycle de vie complet : start/stop/restart, update, backup, config, suppression, actions de stack |
+| **`adopted`** | Découvert puis **adopté** par WindFlow (wizard d'adoption) | **Complet après adoption** — WindFlow devient source of truth | Cycle de vie complet, identique à `managed`, dès la fin du wizard (sans interruption de service) |
+| **`external`** | Pré-existant / à côté, **jamais managé** par WindFlow | **Lecture seule** — observation | Observation (logs, métriques, état) et **adoption uniquement** — jamais stop/remove/update direct |
+
+Articulation avec l'axe 1 (niveau de contrôle) : les objets `managed` correspondent aux stacks WindFlow et aux standalones ; les objets `external` sont les objets *discovered* **non adoptés** (section « Discovered » de la vue globale) ; le wizard d'adoption fait passer un objet de `external` à `adopted`. L'origine s'applique aussi aux Machines (`machines.origin`, chapitre 06) ; la matrice ci-dessous porte sur les 4 profils conteneurs.
+
+### La matrice
+
+| Profil \ Origine | `managed` | `adopted` | `external` |
+|---|---|---|---|
+| **`docker_container`** | Container créé par WindFlow — cycle de vie complet | Container pré-existant importé — cycle complet après adoption | Container à côté — observation + adoption uniquement |
+| **`docker_compose`** | Stack Compose déployée par WindFlow — cycle complet + actions de stack | Composition détectée importée — cycle complet + actions de stack | Composition détectée — observation + adoption uniquement |
+| **`helm_release`** | Release déployée par WindFlow — cycle complet (upgrade, rollback) | Release pré-existante importée — cycle complet | Release existante — observation + adoption uniquement |
+| **`k8s_manifest`** | Manifests appliqués par WindFlow — cycle complet (re-apply, scale) | Manifests pré-existants importés — cycle complet | Workload existant — observation + adoption uniquement |
+
+Chaque cellule se lit : `(profil, origine)` → sémantique, niveau de contrôle et actions autorisées. Le **niveau de contrôle ne dépend que de l'origine** (complet / complet après adoption / lecture seule) ; le **profil** détermine la traduction des actions en opérations natives (mapping des verbes, chapitre [02-familles-workloads.md](02-familles-workloads.md)).
+
+### Détection de l'origine par runtime
+
+L'origine est déterminée par le scan de discovery (voir [Discovery et réconciliation](#discovery-et-réconciliation)) à partir de marqueurs par runtime :
+
+| Runtime | Marqueurs → `managed` | Marqueurs → `external` |
+|---|---|---|
+| **Docker** (containers) | Label `windflow.managed=true` posé par WindFlow à la création | Tout container sans labels WindFlow ; label `com.docker.compose.project` sans projet connu → composition candidate |
+| **Compose** | Projet compose connu de WindFlow **et** labels WindFlow sur ses containers | Projet compose (`com.docker.compose.project`) non enregistré ; fichier `compose.yaml` détecté sur le Host sans trace WindFlow |
+| **Kubernetes / Helm** | Namespace dédié WindFlow (convention : `windflow`) ; release avec annotation Helm `windflow.io/managed=true` | Tout workload / release dans un namespace existant sans annotation `windflow.io/managed` |
+
+Une fois l'objet adopté, l'origine `adopted` est portée en base (`origin`) — la détection runtime ne sert plus qu'à la réconciliation (dérive entre l'état attendu et l'état observé).
+
+### Implications UI
+
+- **Filtres croisés** : les filtres « Niveau de contrôle » et « Technologie » de la vue Compute ([Filtres disponibles](#filtres-disponibles)) se combinent avec l'origine — chaque cellule de la matrice est adressable (ex. « Compose × `external` » = les compositions adoptables).
+- **Badge d'origine** : chaque carte App porte un badge d'origine — `Managé` (discret, défaut), `Adopté` (visible), `Externe` (visible, avec mention lecture seule). Le badge est la traduction UI de la colonne `origin` (chapitre 06) ; il ne remplace pas la pastille de statut.
+- **Actions conditionnées** : les actions d'une carte dérivent de la cellule `(profil × origine)` — une App `external` n'expose pas les boutons Lifecycle/Supprimer, uniquement l'observation et « Adopter ».
+
+### Lecture depuis le modèle de données
+
+La matrice se lit directement depuis le schéma (chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)) : l'axe profil est la colonne `profile` (`apps.profile`), l'axe origine est la colonne `origin` (`apps.origin`, `machines.origin` — enum `WorkloadOrigin` : `managed | adopted | external`). La cellule d'un objet vaut `(profile, origin)`. L'ancien booléen `adopted_from_discovered` est remplacé par `origin` (correspondance documentée au chapitre 06).
+
 ## Vue Compute (Mode Infra)
 
 ### Structure de l'interface
@@ -102,7 +149,7 @@ La vue globale affiche les objets Compute en trois sections ordonnées :
 
 La vue globale expose des filtres combinables :
 
-- **Niveau de contrôle** : Stacks WindFlow / Discovered / Standalone ;
+- **Niveau de contrôle** : Stacks WindFlow / Discovered / Standalone — combinable avec l'origine (`managed` / `adopted` / `external`, voir [Matrice canonique « profil × origine »](#matrice-canonique-profil--origine)) ;
 - **Technologie** : Docker / Compose / Helm / VM KVM / LXD / LXC / Incus ;
 - **Host** : filtrer par Host (local, nas-server, pi4-home, k3s-cluster…) ;
 - **Statut** : running / stopped / paused / exited / suspended ;
@@ -286,7 +333,7 @@ L'adoption d'un objet discovered suit un wizard en 3 étapes :
 - si les volumes existants sont préservés tels quels ou re-déclarés dans WindFlow ;
 - si les réseaux existants sont préservés ou recréés.
 
-**Étape 3 — Validation.** WindFlow génère la définition de stack (fichier Compose ou configuration Machine) correspondant à l'état actuel, l'affiche pour relecture, et l'utilisateur confirme. L'objet passe de `discovered` à `managed` **sans interruption de service**.
+**Étape 3 — Validation.** WindFlow génère la définition de stack (fichier Compose ou configuration Machine) correspondant à l'état actuel, l'affiche pour relecture, et l'utilisateur confirme. L'objet passe d'`external` (discovered non adopté) à `adopted` — cycle de vie complet dès la fin du wizard — **sans interruption de service** (matrice [profil × origine](#matrice-canonique-profil--origine)).
 
 L'adoption des services système d'un Host (profil `app_native_service`) suit le même principe et est décrite au chapitre [02-familles-workloads.md](02-familles-workloads.md). Le parcours utilisateur complet est détaillé dans [../user-guide/adoption.md](../user-guide/adoption.md), et l'écran d'adoption au chapitre [14-ui-maquettes.md](14-ui-maquettes.md).
 

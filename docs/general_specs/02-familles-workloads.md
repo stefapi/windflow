@@ -65,7 +65,7 @@ Un Host est différent d'une App ou d'une Machine parce qu'il **n'est pas déplo
 
 ### La hiérarchie
 
-### Diagramme — Hiérarchie Host → Apps + Machines
+### Diagramme — Hiérarchie d'hébergement Host → Apps + Machines
 
 ```mermaid
 flowchart TB
@@ -73,13 +73,15 @@ flowchart TB
     Sys["Services système du Host: nginx.service, postgresql.service, samba.service"]
     Apps["Apps container-based: nextcloud en compose, monitoring en helm, pihole en docker"]
     Machines["Machines VM-based: ubuntu-dev en KVM, pfsense-router en KVM, k3s-node-1 en LXC"]
+    AppsInVM["Apps dans la Machine ubuntu-dev: dev-postgres, dev-redis - docker daemon dans la VM"]
 
     Host --- Sys
-    Host -- héberge --> Apps
-    Host -- héberge --> Machines
+    Host -- "héberge (1..*)" --> Apps
+    Host -- "héberge (1..*)" --> Machines
+    Machines -- "héberge (0..*)" --> AppsInVM
 ```
 
-Chaque App et chaque Machine est hébergée par un et un seul Host à un instant donné. Les services système (systemd sur le Host) sont gérés **dans le détail du Host**, pas dans une famille à part. Ils peuvent être adoptés comme Apps avec le profil `app_native_service` pour apparaître dans la liste Apps (voir [Services système](#services-système--mode-adoption)).
+La règle d'hébergement canonique est : une **Machine** est hébergée par un et un seul **Host** ; une **App** est hébergée par un et un seul hôte, qui est soit un **Host**, soit une **Machine** — exactement un des deux. Un Host peut héberger une ou plusieurs Machines et/ou Apps ; une Machine peut héberger une ou plusieurs Apps. Deux cas d'usage canoniques : le conteneur posé directement sur une machine physique (App → Host) et le conteneur dans un Docker daemon tournant **dans** une VM (App → Machine, chaîne `Host → Machine → App`). La règle complète est détaillée en section [Hiérarchie d'hébergement](#hiérarchie-dhébergement). Les services système (systemd sur le Host) sont gérés **dans le détail du Host**, pas dans une famille à part. Ils peuvent être adoptés comme Apps avec le profil `app_native_service` pour apparaître dans la liste Apps (voir [Services système](#services-système--mode-adoption)).
 
 ## La grammaire UI partagée
 
@@ -128,7 +130,7 @@ Chaque famille a son ensemble d'onglets canoniques, dans un ordre cohérent (Ape
 
 **Onglets Apps** — `Aperçu | Logs | Console | Métriques | Sauvegardes | Config` — plus en Mode Infra : `Composants techniques | Manifest`.
 
-**Onglets Machines** — `Aperçu | Console VNC | Métriques | Disques | Réseau | Snapshots | Hardware` — plus en Mode Infra : `Définition libvirt (XML)`.
+**Onglets Machines** — `Aperçu | Console VNC | Métriques | Disques | Réseau | Snapshots | Hardware` — plus l'onglet conditionnel `Apps hébergées` (uniquement si un moteur container est détecté dans la Machine) ; plus en Mode Infra : `Définition libvirt (XML)`.
 
 **Onglets Hosts** — `Aperçu | Apps déployées | Machines hébergées | Services système | Métriques | Stockage | Réseau | Config` — plus en Mode Infra : `Moteurs installés | Scan & Diagnostics`.
 
@@ -349,7 +351,7 @@ class HostAdapter(WorkloadAdapter):
     async def list_engines(self) -> list[InstalledEngine]: ...  # Docker, libvirt, k8s…
 
     @abstractmethod
-    async def list_apps_hosted(self) -> list[App]: ...          # Apps déployées
+    async def list_apps_hosted(self) -> list[App]: ...          # Apps déployées directement sur ce Host
 
     @abstractmethod
     async def list_machines_hosted(self) -> list[Machine]: ...
@@ -426,7 +428,7 @@ class WorkloadAdapter(ABC):
     async def get_technical_components(self) -> list[TechnicalComponent]: ...
 ```
 
-Les spécialisations ajoutent les verbes propres à chaque famille : `start/stop/restart/update/backup/configure/stream_logs/open_console` pour `AppAdapter` ; `power_on/power_off/reboot/pause/suspend/take_snapshot/restore_snapshot/get_hardware/set_hardware/open_vnc/open_serial/backup_disk` pour `MachineAdapter` ; `open_ssh/get_hardware_info/list_engines/list_apps_hosted/list_machines_hosted/list_system_services/install_package/reboot/update_os/stream_journal` pour `HostAdapter`.
+Les spécialisations ajoutent les verbes propres à chaque famille : `start/stop/restart/update/backup/configure/stream_logs/open_console` pour `AppAdapter` ; `power_on/power_off/reboot/pause/suspend/take_snapshot/restore_snapshot/get_hardware/set_hardware/open_vnc/open_serial/backup_disk/list_apps_hosted` pour `MachineAdapter` ; `open_ssh/get_hardware_info/list_engines/list_apps_hosted/list_machines_hosted/list_system_services/install_package/reboot/update_os/stream_journal` pour `HostAdapter`.
 
 Le contrat complet (types de retour, sémantique des erreurs) est spécifié au chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md) pour les entités et [09-api.md](09-api.md) pour l'exposition REST des verbes.
 
@@ -503,28 +505,43 @@ Le toggle `[🔧 Voir les composants techniques]` dans le menu `[⋯ Plus]` d'un
 - **Machine** → ajoute l'onglet « Définition libvirt (XML) » et révèle l'hyperviseur exact
 - **Host** → ajoute les onglets « Moteurs installés » et « Scan & Diagnostics »
 
-## Hiérarchie Hosts → Apps + Machines
+## Hiérarchie d'hébergement
 
 ### Relation d'hébergement
 
-Chaque App et chaque Machine est **hébergée par un et un seul Host** à un instant donné. Cette relation est exposée :
+Règle canonique (une seule, sans exception) :
 
-- dans la card de l'App/Machine : `Sur : nas-server` ;
-- dans le détail de l'App/Machine : header avec le Host cliquable ;
-- dans le détail du Host : onglets « Apps déployées » et « Machines hébergées ».
+- Une **Machine** est hébergée par **un et un seul Host** (`machines.host_id` obligatoire, chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)).
+- Une **App** est hébergée par **un et un seul hôte**, qui est soit un **Host**, soit une **Machine** : exactement un des deux, jamais aucun, jamais les deux (`apps.host_id` XOR `apps.machine_id`).
+- Un **Host** peut héberger une ou plusieurs Machines et/ou Apps (cardinalité `1..*` côté hôte).
+- Une **Machine** peut héberger une ou plusieurs Apps (cardinalité `1..*` côté hôte).
+
+Cas d'usage canoniques :
+
+- **Conteneur sur machine physique** — l'App est posée directement sur le Host (ex. `pihole` sur `nas-server`) → `apps.host_id`.
+- **Conteneur dans une VM** — le Docker daemon tourne **dans** une Machine (ex. `dev-postgres` dans la VM `ubuntu-dev`) → `apps.machine_id`. La chaîne d'hébergement complète est alors `Host → Machine → App`.
+
+La profondeur d'imbrication s'arrête à un niveau : une Machine n'héberge jamais une autre Machine. La virtualisation imbriquée (VM dans VM) se représente par l'identité duale « Machine-as-Host » (chapitre [14-ui-maquettes.md](14-ui-maquettes.md), Écran 12) : la VM y est enregistrée comme Host **uniquement** pour héberger des Machines filles et pour l'administration — ses Apps restent rattachées à la Machine.
+
+Cette relation est exposée :
+
+- dans la card de l'App/Machine : `Sur : nas-server` (Host) ou `Sur : ubuntu-dev (Machine)` ;
+- dans le détail de l'App/Machine : header avec l'hôte cliquable ;
+- dans le détail du Host : onglets « Apps déployées » et « Machines hébergées » ;
+- dans le détail d'une Machine : onglet « Apps hébergées » (conditionnel — uniquement si un moteur container est détecté dans la Machine).
 
 ### Filtres et vues croisées
 
-La liste Apps a un filtre `Sur quel Host ?` qui permet de voir uniquement les Apps sur un Host donné. Idem pour la liste Machines. Inversement, depuis le détail d'un Host, on accède directement aux Apps/Machines hébergées.
+La liste Apps a un filtre `Sur quel Host ?` qui cible l'hôte direct de l'App (Host ou Machine) ; le détail d'un Host expose en outre, dans son onglet « Apps déployées », les Apps hébergées par ses Machines. Idem pour la liste Machines. Inversement, depuis le détail d'un Host ou d'une Machine hôte, on accède directement aux Apps hébergées.
 
-### Migration entre Hosts
+### Migration entre hôtes
 
 Cas particuliers :
-- **Une App docker_container/docker_compose** peut être migrée vers un autre Host Docker (export volumes + redéploiement).
+- **Une App docker_container/docker_compose** peut être migrée vers un autre hôte Docker — Host ou Machine (export volumes + redéploiement).
 - **Une App helm_release** ne se « migre » pas (elle est liée au cluster k8s qui est un Host).
-- **Une Machine KVM** peut être migrée vers un autre Host KVM (live migration ou cold migration selon la configuration).
+- **Une Machine KVM** peut être migrée vers un autre Host KVM (live migration ou cold migration selon la configuration) ; ses Apps hébergées suivent la Machine.
 
-Ces opérations apparaissent dans `[⋯ Plus]`, section « Avancé ». Les dépendances logicielles (Docker, libvirt) requises côté Host sont vérifiées avant migration via `list_engines`.
+Ces opérations apparaissent dans `[⋯ Plus]`, section « Avancé ». Les dépendances logicielles (Docker, libvirt) requises côté hôte sont vérifiées avant migration via `list_engines`.
 
 ## Voir aussi
 

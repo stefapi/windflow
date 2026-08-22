@@ -21,7 +21,7 @@ Le modèle à trois familles est spécifié au chapitre [02-familles-workloads.m
 | **WorkloadAdapter** | Pattern qui traduit les verbes universels d'une famille en opérations natives du profil (`AppAdapter`, `MachineAdapter`, `HostAdapter` et leurs spécialisations). | [02-familles-workloads.md](02-familles-workloads.md) |
 | **Verbes universels** | Actions canoniques exposées dans l'UI par famille (ex. Apps : Ouvrir, Démarrer/Arrêter/Redémarrer, Mettre à jour, Sauvegarder, Configurer, Logs, Console). | [02-familles-workloads.md](02-familles-workloads.md) |
 | **ContextualAction** | Action spécifique au profil, exposée dans le menu `[⋯ Plus]` et organisée en cinq sections (Cycle de vie, Configuration, Données, Avancé, Dangereux). | [02-familles-workloads.md](02-familles-workloads.md) |
-| **Relation d'hébergement** | Chaque App et chaque Machine est hébergée par un et un seul Host à un instant donné ; exposée dans les cards, détails et filtres « Sur quel Host ? ». | [02-familles-workloads.md](02-familles-workloads.md) |
+| **Relation d'hébergement** | Une Machine est hébergée par un et un seul Host. Une App est hébergée par un et un seul hôte — soit un Host (conteneur posé directement sur le substrat), soit une Machine (conteneur dans le daemon Docker de la VM) — exactement un des deux (`apps.host_id` XOR `apps.machine_id`). Un Host comme une Machine peut héberger plusieurs Apps. Exposée dans les cards, détails et filtres « Sur quel Host ? ». | [02-familles-workloads.md](02-familles-workloads.md) |
 | **Migration** | Déplacement d'une App ou d'une Machine vers un autre Host (export volumes + redéploiement, live/cold migration KVM), via `[⋯ Plus]` → Avancé. | [02-familles-workloads.md](02-familles-workloads.md) |
 
 ### Profils canoniques par famille
@@ -50,9 +50,19 @@ Spécifiés au chapitre [03-modele-compute.md](03-modele-compute.md).
 | Terme | Définition |
 |---|---|
 | **Stack WindFlow** | Environnement nommé regroupant des objets Compute liés fonctionnellement (containers Compose, releases Helm, Machines, ou mélange). WindFlow en est le source of truth. |
-| **Discovered** | Objet détecté lors du scan d'un Host mais non créé par WindFlow (container orphelin, composition Compose, release Helm, VM libvirt/LXD/Incus). Lecture seule tant qu'il n'est pas adopté. |
+| **Discovered** | Objet détecté lors du scan d'un Host mais non créé par WindFlow (container orphelin, composition Compose, release Helm, VM libvirt/LXD/Incus). Lecture seule tant qu'il n'est pas adopté — c'est l'observation à l'état `external`. |
 | **Standalone** | Objet créé depuis WindFlow sans appartenir à une stack. Peut être promu en stack à tout moment. |
-| **Adoption** | Action qui importe un objet discovered dans le giron managé de WindFlow (wizard d'adoption) ; s'applique aussi aux services systemd devenant Apps (`app_native_service`). |
+| **Adoption** | Action qui importe un objet discovered dans le giron managé de WindFlow (wizard d'adoption) ; l'objet passe d'`external` à `adopted` (cycle de vie complet sans interruption de service) ; s'applique aussi aux services systemd devenant Apps (`app_native_service`). |
+
+### Origine d'un workload (`managed` / `adopted` / `external`)
+
+Deuxième axe de la **matrice canonique « profil × origine »** spécifiée au chapitre [03-modele-compute.md](03-modele-compute.md) ; portée en base par la colonne `origin` (enum `WorkloadOrigin`, chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)).
+
+| Terme | Définition | Spécifié au |
+|---|---|---|
+| **Origine (`managed`)** | Workload déployé par WindFlow (stack ou standalone). Contrôle complet : cycle de vie, update, backup, suppression. | [03-modele-compute.md](03-modele-compute.md) |
+| **Origine (`adopted`)** | Workload découvert puis adopté par WindFlow via le wizard. Contrôle complet dès la fin de l'adoption, sans interruption de service. | [03-modele-compute.md](03-modele-compute.md) |
+| **Origine (`external`)** | Workload pré-existant à côté, jamais managé. Lecture seule : observation et adoption uniquement — jamais stop/remove/update direct. | [03-modele-compute.md](03-modele-compute.md) |
 | **Discovery / réconciliation** | Scan périodique des Hosts qui détecte les objets discovered et réconcilie l'état observé avec l'état connu. |
 | **Snapshot** | Capture de l'état complet d'une Machine (mémoire + disques) ; verbe canonique Machines, action contextuelle pour les Apps. |
 
