@@ -290,6 +290,17 @@ Les services core et les plugins communiquent via un bus d'événements simple. 
 
 La **liste canonique des événements** (nommage `domaine.action_passé`, ex. `deployment.succeeded`, `host.offline`) est définie au chapitre [11-plugins.md](11-plugins.md) et référencée par les chapitres 09 et 17.
 
+### Collecte et historique court des métriques Hosts
+
+Les métriques Hosts (CPU, RAM, disque, température) alimentent le widget Système du dashboard (Écran 1), l'onglet Métriques du détail Host et l'endpoint `GET /hosts/{id}/metrics` (chapitre [09-api.md](09-api.md)). Leur stratégie de stockage est délibérément minimale :
+
+- **Tampon circulaire en mémoire**, borné à ~360 points par Host (environ 30 minutes à un point toutes les 5 s) — les points anciens sont écrasés, rien n'est jamais écrit en base ;
+- **CPU normalisé** par le nombre de cœurs du Host (0-100 % quel que soit le matériel) ;
+- **Mémoire hors cache** : la RAM exposée exclut le cache/buffers reclaimable (sinon un Linux sain affiche ~95 % « utilisé ») ;
+- **Non-persistance assumée**, cohérente avec la cible RPi : pas de base de séries temporelles dans le core. L'historique long et l'alerting passent par le plugin Prometheus (export des métriques, chapitre [12-marketplace.md](12-marketplace.md)).
+
+Le tampon vit dans le process API et se repeuple après un redémarrage : une fenêtre vide est acceptable — les métriques sont un signal d'observation, pas une donnée d'audit.
+
 ## Résilience et fiabilité
 
 ### Stratégies adaptées au contexte

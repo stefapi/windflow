@@ -133,6 +133,7 @@ POST   /{id}/actions/{action_id}  # Exécuter une ContextualAction
 GET    /{id}/logs              # Logs (WebSocket)
 GET    /{id}/console           # Console interactive (WebSocket)
 GET    /{id}/graph             # Graphe de dépendances de l'App (nodes/edges normalisés)
+POST   /batch-update           # Mettre à jour un groupe d'Apps (séquentiel, progression WebSocket)
 ```
 
 Exemple illustratif — modèles de requête/réponse :
@@ -159,6 +160,38 @@ class AppResponse(BaseModel):
     backup_enabled: bool
     origin: str                # managed | adopted | external (matrice profil × origine, chapitre 03)
     created_at: str
+```
+
+#### Mise à jour groupée (batch update)
+
+Applique le verbe **Mettre à jour** (recreate à configuration préservée, chapitre [02-familles-workloads.md](02-familles-workloads.md)) à un ensemble d'Apps **séquentiellement**, avec suivi de progression **par WebSocket** :
+
+**Requête :**
+
+```json
+{
+    "app_ids": ["app_nextcloud", "app_pihole", "app_baserow"]
+}
+```
+
+**Réponse :** un job groupé — `{"data": {"batch_id": "batch_7f2a", "total": 3}}` — dont la progression est diffusée sur `WS /ws/batch/{batch_id}` (section [WebSocket](#websocket)).
+
+**Déroulement :**
+
+- **séquentiel** : les Apps sont traitées une à une (pas de tempête d'appels Docker) ; **un échec n'interrompt pas la suite** — l'App en échec est rapportée et la file continue ;
+- **sauts de sûreté** par App : container porteur du label `windflow.update=false`, image à digest épinglé → `skipped`, sans appel registre ;
+- par App : **pull** de la nouvelle image (étape `pulling`), puis recreate sécurisé (`stopping` → `removing` → `creating` → `starting`) avec **rollback automatique** en cas d'échec (chapitre 02) ;
+- chaque App réussie voit sa « mise à jour en attente » **effacée** (chapitre [03-modele-compute.md](03-modele-compute.md)) ;
+- événement terminal `complete` avec résumé `{total, succeeded, failed, skipped}`.
+
+**Messages du flux** (même enveloppe `type`/`data` que les autres canaux WebSocket) :
+
+```json
+{"type": "start", "data": {"batch_id": "batch_7f2a", "total": 3}}
+{"type": "progress", "data": {"batch_id": "batch_7f2a", "app_id": "app_nextcloud", "step": "pulling", "current": 1, "total": 3}}
+{"type": "progress", "data": {"batch_id": "batch_7f2a", "app_id": "app_nextcloud", "step": "done", "current": 1, "total": 3}}
+{"type": "progress", "data": {"batch_id": "batch_7f2a", "app_id": "app_pihole", "step": "failed", "message": "pull: tag introuvable", "current": 2, "total": 3}}
+{"type": "complete", "data": {"batch_id": "batch_7f2a", "total": 3, "succeeded": 2, "failed": 1, "skipped": 0}}
 ```
 
 ### Famille Machines — `/api/v1/machines/`
@@ -286,6 +319,66 @@ GET    /{id}/versions          # Historique des versions
 GET    /{id}/deployments       # Historique des déploiements
 ```
 
+#### Validation Compose — `POST /{id}/validate`
+
+Valide une stack Compose **sans la déployer** : analyse du YAML parsé + confrontation à l'**état réel du Host**. Le moteur de règles est **auto-déclaré** — chaque règle porte un code, une description, un groupe et une sévérité par défaut ; une règle qui échoue à l'exécution est **isolée** sans faire échouer les autres, et chaque violation est complétée par la sévérité effective (par défaut ou personnalisée).
+
+**Catalogue des règles (20) :**
+
+| Code | Vérification | Sévérité par défaut | Catégorie |
+|---|---|---|---|
+| `NO_SERVICES` | Le fichier ne définit aucun service | `error` | Structure |
+| `DUPLICATE_HOST_PORT` | Deux services de la stack publient le même port hôte | `error` | Réseau |
+| `CROSS_STACK_PORT_COLLISION` | Un port hôte déjà utilisé par un autre container du Host (collision cross-stack) | `error` | État réel |
+| `DB_PORT_ON_ALL_INTERFACES` | Un service de base de données/cache publie sur toutes les interfaces | `warning` | Réseau |
+| `DEPENDS_ON_UNDEFINED` | `depends_on` référence un service non défini | `error` | Structure |
+| `UNDEFINED_NETWORK_REF` | Un service utilise un réseau non déclaré au niveau supérieur | `error` | Structure |
+| `UNDEFINED_VOLUME_REF` | Montage d'un volume nommé non déclaré au niveau supérieur | `error` | Structure |
+| `CONTAINER_NAME_COLLISION` | `container_name` déjà utilisé par un container du Host | `error` | État réel |
+| `MISSING_EXTERNAL_RESOURCE` | Un réseau/volume externe n'existe pas sur le Host | `error` | État réel |
+| `LATEST_TAG` | Image avec `:latest` ou sans tag (reproductibilité) | `warning` | Bonnes pratiques |
+| `PRIVILEGED_CONTAINER` | Service en mode privilégié (accès Host complet) | `warning` | Sécurité |
+| `DOCKER_SOCKET_MOUNT` | Montage du socket Docker | `warning` | Sécurité |
+| `OBSOLETE_VERSION_KEY` | Clé `version:` obsolète en tête de fichier | `info` | Bonnes pratiques |
+| `UNKNOWN_SERVICE_KEY` | Clé de service ressemblant à une faute de frappe d'une vraie clé Compose | `warning` | Structure |
+| `UNKNOWN_TOP_LEVEL_KEY` | Clé de premier niveau ressemblant à une faute de frappe | `warning` | Structure |
+| `SECRET_IN_ENVIRONMENT` | Valeur d'aspect secret codée en dur dans `environment:` au lieu d'un secret/variable | `warning` | Sécurité |
+| `HOST_NETWORK_MODE` | `network_mode: host` (pas d'isolation réseau) | `warning` | Sécurité |
+| `WRITABLE_ROOT_MOUNT` | Chemin hôte sensible monté en écriture (compromission potentielle du Host) | `error` | Sécurité |
+| `CAP_ADD_DANGEROUS` | Capacité Linux quasi-privilégiée ajoutée (`SYS_ADMIN`, `NET_ADMIN`…) | `warning` | Sécurité |
+| `MISSING_RESTART_POLICY` | Absence de politique de redémarrage (ne reviendra pas après un reboot du Host) | `info` | Bonnes pratiques |
+
+**Confrontation à l'état réel du Host :** les règles de catégorie « État réel » croisent le Compose avec l'inventaire runtime du Host cible — ports hôte déjà publiés par d'autres containers (**collisions cross-stack** : deux stacks différentes ne peuvent pas réserver le même port), `container_name` déjà pris, ressources `external:` (réseaux, volumes) existantes ou non. Une collision avec un container **arrêté** compte : le nom et le port restent réservés.
+
+**Réponse :** la validation est **informative** — elle ne bloque pas le déploiement (les bloqueurs effectifs restent les erreurs Docker/Compose elles-mêmes). La réponse est une liste de violations avec leur sévérité effective :
+
+```json
+{
+    "data": {
+        "valid": false,
+        "violations": [
+            {
+                "rule": "LATEST_TAG",
+                "severity": "warning",
+                "service": "api",
+                "message": "Image 'api:latest' sans version épinglée",
+                "location": {"line": 14, "key": "services.api.image"}
+            },
+            {
+                "rule": "CROSS_STACK_PORT_COLLISION",
+                "severity": "error",
+                "service": "web",
+                "message": "Le port hôte 8080 est déjà publié par le container 'traefik' (stack web)"
+            }
+        ]
+    }
+}
+```
+
+Chaque violation porte la sévérité (`info` | `warning` | `error`), le service concerné, un message explicatif et sa position dans le fichier quand elle est déterminable. `valid` est un résumé pratique (aucune violation de sévérité `error`).
+
+**Personnalisation des sévérités :** chaque règle peut être **désactivée** ou voir sa sévérité modifiée dans les réglages de validation ; ces préférences sont persistées et appliquées à chaque validation — la sévérité rapportée est toujours la **sévérité effective** (personnalisée si définie, sinon celle par défaut du catalogue).
+
 ### Snapshots — `/api/v1/compute/snapshots/`
 
 ```
@@ -309,6 +402,17 @@ POST   /{id}/upload            # Uploader un fichier dans le volume
 GET    /{id}/download/{path}   # Télécharger un fichier
 ```
 
+#### Prune des volumes — sémantique protégée
+
+`POST /prune` supprime les volumes **inutilisés et non protégés** d'un Host :
+
+- **« Inutilisé » = sans aucun utilisateur, y compris un container arrêté** — un volume monté par un container arrêté reste **utilisé** (sémantique alignée sur Docker) ; seuls les volumes qu'aucun container, actif ou arrêté, ne monte sont éligibles ;
+- **liste protégée par convention de nommage** : les volumes dont le nom commence par **`windflow-plugin-*`** sont **épargnés** (caches des plugins — bases de vulnérabilités des scanners, state des helpers). Ces volumes nommés sont inutilisés entre deux exécutions : un prune non filtré les détruirait et forcerait un re-téléchargement coûteux à chaque cycle ;
+- **suppression unitaire, sans force** : chaque volume éligible est supprimé individuellement ; un volume devenu utilisé entre la liste et la suppression échoue et est **passé** — un volume récalcitrant n'interrompt jamais la file ;
+- **rapport explicite** : la réponse rapporte les volumes **supprimés**, les volumes **épargnés** (protégés) et les **échecs** passés ; l'espace libéré n'est **pas fabriqué** (l'API Docker ne fournit pas la taille par volume — aucune valeur inventée).
+
+La même sémantique protégée s'applique au prune d'images (section Images ci-dessous).
+
 ### Networks — `/api/v1/compute/networks/`
 
 ```
@@ -324,8 +428,46 @@ DELETE /{id}                   # Supprimer un network
 GET    /                       # Lister les images (filtre: host_id)
 POST   /pull                   # Pull une image
 DELETE /{id}                   # Supprimer une image
-POST   /prune                  # Supprimer les images non utilisées
+POST   /prune                  # Supprimer les images non utilisées (voir Prune des images)
+POST   /check-updates          # Vérifier les mises à jour disponibles (digest/semver, sans pull)
+GET    /check-updates          # Lire le dernier résultat de vérification (cache, sans effet de bord)
+GET    /pending-updates        # Lister les mises à jour en attente (filtres: host_id, stack_id, type, status)
+POST   /pending-updates/{id}/skip  # Marquer une suggestion semver comme ignorée (statut skipped)
 ```
+
+#### Détection de mises à jour d'images
+
+- `POST /check-updates` déclenche la vérification **sans pull** (comparaison de digest + suggestion semver — mécanisme détaillé au chapitre [03-modele-compute.md](03-modele-compute.md)) pour les containers éligibles d'un Host (`?host_id=`) ou de tous les Hosts. L'opération est un job : la réponse retourne un `batch_id` et la progression par container est diffusée sur `WS /ws/batch/{batch_id}` (étapes `checking` → `done` / `failed` / `skipped` par container). À l'issue, les lignes « mise à jour en attente » sont **réinitialisées puis reconstruites** en fusionnant les deux signaux.
+- `GET /check-updates` retourne le **dernier résultat connu** (cache), sans relancer de vérification.
+- `GET /pending-updates` liste les mises à jour en attente — **source des colonnes `current_version`/`available_version`** du modèle de données (chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)) et du badge ⬆ des cartes Apps (chapitre [14-ui-maquettes.md](14-ui-maquettes.md), Écran 2) :
+
+```json
+{
+    "data": [
+        {
+            "id": "pu_012",
+            "host_id": "host_nas",
+            "container": {"id": "c_ab12", "name": "nextcloud-app"},
+            "image": "nextcloud:29",
+            "current": "sha256:6f3a…",
+            "available": "sha256:c81e…",
+            "type": "digest",
+            "status": "pending",
+            "checked_at": "2026-08-22T08:00:00Z"
+        }
+    ]
+}
+```
+
+- `POST /pending-updates/{id}/skip` marque une suggestion semver `skipped` — une suggestion semver est **purement indicative et jamais auto-appliquée**. L'application d'une mise à jour passe par le verbe **Mettre à jour** (recreate à configuration préservée, chapitre [02-familles-workloads.md](02-familles-workloads.md)) — unitaire ou groupée ([Mise à jour groupée (batch update)](#mise-à-jour-groupée-batch-update)).
+
+#### Prune des images
+
+`POST /prune` supprime les images inutilisées (`?dangling=true` par défaut — images sans tag uniquement ; `dangling=false` — toutes les images inutilisées) :
+
+- **« Inutilisé » = non référencée par un container, y compris arrêté** — même sémantique que les volumes (section [Volumes](#volumes--apiv1computevolumes)) ;
+- les images des **plugins** (helpers, scanners) sont **épargnées** — convention de nommage `windflow-plugin-*` (identique à la liste protégée des volumes) ;
+- la réponse rapporte les images **supprimées**, les images **épargnées** (protégées) et l'**espace réellement libéré** tel que rapporté par le daemon — aucune valeur fabriquée.
 
 ### Graphe de dépendances — `/api/v1/compute/graph`
 
@@ -504,10 +646,13 @@ WS /ws/ssh/{host_id}?token=<jwt>               # Session SSH Host
 WS /ws/logs/{app_id}?token=<jwt>               # Streaming logs App
 WS /ws/journal/{host_id}?token=<jwt>           # Journal système Host
 WS /ws/deploy/{deployment_id}?token=<jwt>      # Événements de déploiement
+WS /ws/batch/{batch_id}?token=<jwt>            # Progression des opérations groupées (batch update, check-updates)
 WS /ws/events?token=<jwt>                      # Événements système globaux
 ```
 
 Le canal `/ws/terminal` est réservé aux containers ; les consoles de Machines passent par `/ws/console` et les sessions Hosts par `/ws/ssh`.
+
+Le canal `/ws/batch` diffuse la progression des **opérations groupées** (mise à jour groupée multi-Apps, vérification de mises à jour) : messages `start` (total), `progress` (étape courante par élément), `complete` (résumé) et `error` en échec global — même enveloppe `type`/`data` que les autres canaux.
 
 **Format des messages WebSocket :**
 

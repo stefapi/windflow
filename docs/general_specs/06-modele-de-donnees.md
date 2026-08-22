@@ -33,6 +33,8 @@ erDiagram
     User ||--o{ RefreshToken : "possède"
     User ||--o{ AuditLog : "crée"
     Plugin ||--o{ PluginConfig : "a"
+    SSHKey ||--o{ Host : "authentifie"
+    Host ||--o{ HostSSHFingerprint : "porte"
 
     User {
         uuid id PK
@@ -198,6 +200,29 @@ erDiagram
         string ip_address
         timestamp created_at
     }
+
+    SSHKey {
+        uuid id PK
+        string name UK
+        string key_type
+        string public_key
+        string private_key_encrypted
+        string fingerprint
+        timestamp last_used_at
+        timestamp created_at
+    }
+
+    HostSSHFingerprint {
+        uuid id PK
+        uuid host_id FK
+        string hostname
+        int port
+        string key_type
+        string fingerprint
+        boolean accepted
+        timestamp accepted_at
+        timestamp created_at
+    }
 ```
 
 ## Entités workloads (familles)
@@ -281,6 +306,7 @@ CREATE TABLE hosts (
     organization_id TEXT NOT NULL REFERENCES organizations(id),
     environment_id TEXT NOT NULL REFERENCES environments(id),
     connection_config TEXT DEFAULT '{}',          -- JSON chiffré : SSH config, API endpoint, kubeconfig
+    ssh_key_id TEXT REFERENCES ssh_keys(id),      -- clé SSH réutilisable (profils à accès SSH ; voir SSHKey)
     hardware_info TEXT DEFAULT '{}',              -- JSON : CPU, RAM, disques, interfaces
     installed_engines TEXT DEFAULT '[]',          -- JSON : moteurs détectés (Docker, libvirt, k8s…)
     status VARCHAR(20) DEFAULT 'unknown',         -- online, offline, unreachable, scanning
@@ -483,6 +509,52 @@ CREATE TABLE environments (
 CREATE INDEX idx_environments_org ON environments(organization_id);
 ```
 
+## Entités d'accès distant (SSH)
+
+### SSHKey — clé SSH réutilisable
+
+Clé SSH partagée par plusieurs Hosts (les Hosts distants référencent l'entité via `hosts.ssh_key_id` au lieu d'embarquer une clé chacun dans `connection_config`). Les règles de sécurité (chiffrement, affichage unique, empreintes known_hosts) sont spécifiées au chapitre [15-securite.md](15-securite.md) § Hosts distants (SSH).
+
+```sql
+CREATE TABLE ssh_keys (
+    id TEXT PRIMARY KEY,
+    name VARCHAR(100) UNIQUE NOT NULL,           -- nom d'affichage unique
+    key_type VARCHAR(20) NOT NULL DEFAULT 'ssh-ed25519',  -- ssh-ed25519 recommandé, ssh-rsa accepté
+    public_key TEXT NOT NULL,                    -- consultable (déploiement authorized_keys)
+    private_key_encrypted TEXT NOT NULL,         -- chiffrée via le SecretManager (chapitre 15)
+    fingerprint VARCHAR(100) NOT NULL,           -- empreinte stable (identification dans les listes)
+    last_used_at TIMESTAMP,                      -- mise à jour à chaque session réussie
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_ssh_keys_fingerprint ON ssh_keys(fingerprint);
+```
+
+**Relations :** `ssh_keys` ← `hosts.ssh_key_id` — suppression refusée si des Hosts l'utilisent encore (ou déréférencement explicite à `NULL`), jamais de suppression silencieuse.
+
+### HostSSHFingerprint — empreinte d'hôte (known_hosts)
+
+Empreinte SSH attendue d'un serveur distant (équivalent known_hosts), vérifiée à chaque connexion — acceptation explicite à la première connexion, blocage en cas de divergence (anti-MITM, chapitre [15-securite.md](15-securite.md)).
+
+```sql
+CREATE TABLE host_ssh_fingerprints (
+    id TEXT PRIMARY KEY,
+    host_id TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+    hostname VARCHAR(255) NOT NULL,              -- adresse de connexion
+    port INTEGER NOT NULL DEFAULT 22,
+    key_type VARCHAR(20) NOT NULL,               -- algorithme de clé d'hôte (ssh-ed25519…)
+    fingerprint VARCHAR(100) NOT NULL,           -- empreinte attendue
+    accepted BOOLEAN DEFAULT FALSE,              -- TRUE après acceptation explicite
+    accepted_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(host_id, hostname, port, key_type)
+);
+
+CREATE INDEX idx_host_ssh_fp_host ON host_ssh_fingerprints(host_id);
+```
+
+**Contrainte UNIQUE** `(host_id, hostname, port, key_type)` : une empreinte par serveur et par algorithme de clé d'hôte — un même Host peut présenter plusieurs empreintes (multi-algorithmes) sans collision.
+
 ## Entités Compute (stacks et déploiements)
 
 Les stacks sont les environnements nommés d'objets Compute managés, définies au chapitre 03.
@@ -547,6 +619,35 @@ CREATE TABLE deployment_events (
 CREATE INDEX idx_deploy_events_deployment ON deployment_events(deployment_id);
 CREATE INDEX idx_deploy_events_created ON deployment_events(created_at);
 ```
+
+## Entités d'automatisation (tâches planifiées)
+
+### ScheduledTaskExecution — exécution d'une tâche planifiée
+
+La table `scheduled_tasks` (définition des tâches du scheduler core : action, déclencheur, paramètres) est spécifiée au chapitre [17-automatisation-workflows.md](17-automatisation-workflows.md). Chaque exécution d'une tâche — par cron, par événement ou manuelle — est **matérialisée** dans `scheduled_task_executions`, avec son statut, son déclencheur, ses horodatages et son journal.
+
+```sql
+CREATE TABLE scheduled_task_executions (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES scheduled_tasks(id) ON DELETE CASCADE,  -- tâche exécutée
+    status VARCHAR(10) NOT NULL DEFAULT 'queued',  -- queued, running, success, failed, skipped
+    triggered_by VARCHAR(10) NOT NULL,             -- cron, event, manual
+    started_at TIMESTAMP,                          -- début d'exécution effective (running)
+    finished_at TIMESTAMP,                         -- clôture (success, failed ou skipped)
+    duration_seconds INTEGER,                      -- durée d'exécution (calculée à la clôture)
+    error TEXT,                                    -- message d'erreur si failed
+    logs TEXT,                                     -- journal horodaté ligne à ligne (horodatages ISO 8601, stockage UTC)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- création de la ligne (mise en file)
+);
+
+CREATE INDEX idx_scheduled_exec_task ON scheduled_task_executions(task_id);
+CREATE INDEX idx_scheduled_exec_status ON scheduled_task_executions(status);
+CREATE INDEX idx_scheduled_exec_started ON scheduled_task_executions(started_at);
+```
+
+**Sémantique des statuts** — `queued` (en file), `running` (en cours), `success`, `failed`, et `skipped` : une exécution **sautée** par le verrou d'anti-chevauchement (l'exécution précédente tourne encore) reste tracée. Au démarrage du scheduler, les lignes orphelines `queued`/`running` sont marquées `failed` (récupération après crash — chapitre [17-automatisation-workflows.md](17-automatisation-workflows.md)).
+
+**Relations et exploitation** — `scheduled_task_executions.task_id` → `scheduled_tasks.id` (la suppression d'une tâche emporte son historique en cascade). Cet historique alimente l'écran Activité (chapitre [14-ui-maquettes.md](14-ui-maquettes.md)) et l'alerte « 3 échecs répétés » du scheduler ; il est purgé par le job système de rétention (chapitre [17-automatisation-workflows.md](17-automatisation-workflows.md)). L'index sur `started_at` sert aux requêtes de rétention et d'historique.
 
 ## Entités plugins
 
@@ -726,12 +827,15 @@ Les plugins simples stockent leur configuration dans la table `plugin_configs` (
 | `stacks` | Stack | Groupes de services Docker Compose |
 | `deployments` | Deployment | Historique des déploiements |
 | `deployment_events` | DeploymentEvent | Événements détaillés par déploiement |
+| `scheduled_task_executions` | ScheduledTaskExecution | Historique des exécutions des tâches planifiées (statut, déclencheur, durées, journaux) |
 | `plugins` | Plugin | Plugins installés |
 | `plugin_configs` | PluginConfig | Configuration clé/valeur des plugins |
 | `api_keys` | APIKey | Clés API pour l'authentification non-interactive |
 | `refresh_tokens` | RefreshToken | Tokens de rafraîchissement JWT |
 | `audit_logs` | AuditLog | Journal d'audit |
-| | **Total** | **15 tables core** |
+| `ssh_keys` | SSHKey | Clés SSH réutilisables (authentification des Hosts distants) |
+| `host_ssh_fingerprints` | HostSSHFingerprint | Empreintes known_hosts des serveurs distants |
+| | **Total** | **18 tables core** |
 
 Les plugins ajoutent leurs propres tables si nécessaire (préfixées `plugin_{name}_*`).
 
@@ -743,3 +847,5 @@ Les plugins ajoutent leurs propres tables si nécessaire (préfixées `plugin_{n
 - [08-rbac-permissions.md](08-rbac-permissions.md) — rôles et table `user_organizations`
 - [09-api.md](09-api.md) — exposition REST des entités et conventions de pagination
 - [11-plugins.md](11-plugins.md) — manifest, tables préfixées et cycle de vie des plugins
+- [15-securite.md](15-securite.md) — règles de sécurité des clés SSH réutilisables et des empreintes known_hosts
+- [17-automatisation-workflows.md](17-automatisation-workflows.md) — scheduler core, sémantique des exécutions (`scheduled_task_executions`) et jobs de maintenance planifiée

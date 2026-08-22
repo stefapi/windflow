@@ -197,6 +197,77 @@ Sept verbes définissent l'expérience App. Sémantique universelle, implémenta
 | Logs | `docker logs` | `compose logs` | `kubectl logs --all` | `kubectl logs --all` |
 | Console | `exec sh` | `exec sh` (service principal) | `exec` pod | `exec` pod |
 
+### Sémantique de mise à jour / recreate
+
+Le verbe **Mettre à jour** repose sur un invariant : **aucune configuration n'est perdue**. Pour les profils conteneurs, la mise à jour est une **recréation à configuration préservée** (*recreate*) : le nouveau container est créé en retransmettant à l'identique la configuration inspectée de l'ancien (Config/HostConfig), seule l'image change. Les autres profils traduisent le verbe par leur mécanisme natif (`helm upgrade`, re-apply — cf. [Mapping par profil App](#mapping-par-profil-app)).
+
+Étapes du recreate sécurisé :
+
+1. **Capture de l'ancienne image avant le pull** — la configuration de l'image courante (env, labels, CMD par défaut) est inspectée **avant** de tirer la nouvelle : après un pull, l'ancien tag peut être détagué et ne plus être inspectable. Cette capture est le **prérequis du rebase** (ci-dessous) et du **rollback** ;
+2. **Pull** de la nouvelle image ;
+3. **Arrêt** (si le container tourne), **renommage** en `<nom>-old` pour libérer le nom, **déconnexion des réseaux** (libère les IP statiques) ;
+4. **Création** du nouveau container (passthrough de l'inspection, image remplacée), reconnexion des réseaux additionnels, **démarrage** si l'ancien tournait ;
+5. **Suppression de l'ancien** container ;
+6. **Rollback automatique** en cas d'échec à une étape : renommage restauré, réseaux reconnectés avec leurs réglages d'origine, redémarrage si nécessaire — l'App revient à son état d'avant mise à jour sans intervention (c'est le rollback annoncé par le verbe dans le tableau ci-dessus).
+
+**Rebase par valeur des env/labels/cmd.** La configuration d'un container aplatit à la création les valeurs par défaut de l'image (env, labels, CMD) avec les choix de l'utilisateur ; au moment de recréer avec une nouvelle image, il faut distinguer ce qui doit **suivre la nouvelle image** de ce qui doit être **préservé**. La fusion s'opère **par valeur** :
+
+| Clé (env / label / cmd) | Comportement au recreate |
+|---|---|
+| Valeur actuelle **identique** à celle de l'ancienne image | L'utilisateur ne l'a pas touchée → prend la valeur de la **nouvelle** image |
+| Valeur **différente** de celle de l'ancienne image | Choix explicite de l'utilisateur → **conservée** |
+| Absente de l'ancienne image | Ajout de l'utilisateur → **conservée** |
+
+Même logique pour `Cmd`/`Entrypoint` : la commande « cuite » par l'ancienne image suit la nouvelle image, un `command:` utilisateur survit.
+
+**Secrets masqués (`***`).** L'inspection masque les valeurs d'aspect secret (`*_PASSWORD`, `*_TOKEN`, `*_KEY`…) ; à l'édition, le formulaire renvoie `***` pour les valeurs inchangées et le backend **résout ces placeholders** en relisant les valeurs réelles du container courant avant la recréation — l'utilisateur édite les autres champs sans jamais réimporter les secrets.
+
+**Effet sur les mises à jour en attente.** Une recréation réussie efface la « mise à jour en attente » du container (chapitre [03-modele-compute.md](03-modele-compute.md)) ; la mise à jour groupée multi-Apps et son flux de progression WebSocket sont spécifiées au chapitre [09-api.md](09-api.md).
+
+### Sémantique du verbe Sauvegarder
+
+Le verbe **Sauvegarder** est **universel et indépendant du backend** : la sémantique décrite ici s'applique identiquement que les snapshots soient produits par le plugin Restic ou le plugin Borg (chapitre [12-marketplace.md](12-marketplace.md)). Le backend est un détail d'implémentation ; les invariants de sûreté, la taxonomie d'erreurs et le cloisonnement sont portés par le core.
+
+#### Invariants de sûreté
+
+1. **Rétention jamais destructive par défaut** — une nouvelle configuration de sauvegarde garde **tous** les snapshots jusqu'à configuration explicite de rétention ; une rétention absente, vide ou illisible se dégrade en « aucune rétention ». Une erreur de configuration ne peut pas silencieusement supprimer des sauvegardes.
+2. **Jamais « tout effacer »** — avant d'appliquer une rétention, un passage à blanc (*dry-run*) est analysé : si la politique supprimerait **tous** les snapshots du groupe (keep = 0), la purge est **refusée** — une politique qui ne garde rien est toujours une erreur. La rétention d'une configuration ne touche jamais les snapshots d'une autre (ciblage par tags, ci-dessous).
+3. **Restauration à confirmation explicite** — restaurer « sur place » écrase les volumes vivants de l'App : la demande exige une **confirmation explicite** (`confirmOverwrite`) et un **écrasement déclaré** ; une restauration ne peut jamais écraser silencieusement des données vivantes. Les modes « nouveau chemin » et « clone » (nouveau nom + recréation/redéploiement) évitent l'écrasement.
+4. **Validation avant succès** — un snapshot n'est déclaré réussi qu'après vérification de sa lisibilité ; aucun snapshot fantôme ou partiel n'atteint la rétention.
+
+#### Arrêt / redémarrage du scope applicatif
+
+Une sauvegarde peut arrêter le **scope applicatif** (l'App, ou le sous-ensemble de ses services concerné) pendant l'instantané pour garantir la cohérence (`stopBeforeBackup`) :
+
+- le **redémarrage est lié au même périmètre** que l'arrêt — aucun chemin d'exécution ne peut le sauter ;
+- un **échec de redémarrage** est **surfacé** (avertissement + notification + code `STOPPED_RESTART_FAILED`), jamais silencieux et **jamais compensé** par un rollback — les données sont déjà sauvegardées, c'est à l'opérateur de démarrer le service ;
+- une cible **arrêtée mais existante** se sauvegarde ; une cible **supprimée** mène à un refus explicite (« ne pas sauvegarder rien »).
+
+#### Taxonomie d'erreurs fermée
+
+Chaque exécution (sauvegarde, restauration) se termine par un statut explicite (`success` | `warning` | `error` | `cancelled`) et, en cas d'échec, un **code machine fermé** — l'UI affiche un message humain, l'automatisation branche sur le code :
+
+| Code | Signification | Action utilisateur |
+|---|---|---|
+| `VALIDATION` | Erreur de configuration/saisie | Corriger la configuration |
+| `REPO_LOCKED` | Dépôt verrouillé (transitoire) | Réessayer plus tard |
+| `REPO_NOT_INITIALIZED` | Dépôt non initialisé | Initialiser le dépôt |
+| `WRONG_PASSWORD` | Mot de passe du dépôt incorrect | Vérifier les identifiants de la destination |
+| `RUNTIME` | Runtime d'exécution injoignable / erreur d'API | Vérifier le moteur du Host |
+| `NETWORK` | Réseau/transport (transitoire) | Vérifier la connectivité |
+| `BACKEND` | Le backend de sauvegarde (restic/borg) a échoué | Consulter les journaux de l'exécution |
+| `INTEGRITY` | Artefact incomplet/inutilisable | Le cas grave — réexécuter la sauvegarde |
+| `CANCELLED` | Annulation utilisateur | — |
+| `STOPPED_RESTART_FAILED` | Données saines mais un service arrêté n'a pas redémarré | Démarrer le service manuellement |
+| `CONCURRENCY` | Conflit de verrous internes (cible ou dépôt occupé) | Attendre la fin de l'opération en cours |
+| `UNKNOWN` | Non classé | Consulter les journaux |
+
+#### Cloisonnement par tags d'instance
+
+Chaque snapshot porte des **tags stables** : `windflow.instance=<uuid>` (identité d'installation) et `windflow.configid=<id>` (configuration de sauvegarde). La **liste et la rétention ne considèrent que les snapshots de l'instance** : deux instances WindFlow partageant un même dépôt ne se marchent pas dessus, et la rétention d'une configuration ne touche jamais les snapshots d'une autre. Toutes les décisions de portée n'utilisent **que** ces identifiants stables, jamais les noms normalisés (deux noms qui normalisent identiquement ne peuvent pas croiser leurs rétentions).
+
+Les planifications de sauvegarde (cron) sont inscrites au **scheduler core** et exécutées par les workers Celery ; l'exposition REST du verbe (`POST /apps/{id}/backup`, `POST /apps/{id}/restore`) est spécifiée au chapitre [09-api.md](09-api.md).
+
 ### Hiérarchie des adapters App
 
 Exemple illustratif — spécialisations de `AppAdapter` pour la famille Apps :

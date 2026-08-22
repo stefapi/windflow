@@ -24,10 +24,10 @@ Cet index est le point d'entrée de la spécification générale de WindFlow : s
 | Chapitre | Périmètre |
 |---|---|
 | [01-vision.md](01-vision.md) | Vision, objectifs, proposition de valeur, cas d'usage, différenciateurs, métriques de succès, standards |
-| [02-familles-workloads.md](02-familles-workloads.md) | **Modèle directeur** : familles Apps/Machines/Hosts, grammaire UI, verbes universels, WorkloadAdapter, Mode App/Mode Infra |
-| [04-architecture.md](04-architecture.md) | Monolithe modulaire, frontière core/plugins, profils de déploiement, services core, résilience, performance |
-| [06-modele-de-donnees.md](06-modele-de-donnees.md) | Schéma unifié : comptes/organisations, entités App/Machine/Host, stacks/déploiements, plugins, audit ; migration `targets` → `hosts` |
-| [09-api.md](09-api.md) | API unifiée : `/apps`, `/machines`, `/hosts` en surface principale, `/compute/*` en Mode Infra, endpoints transverses, WebSocket, erreurs, rate limiting |
+| [02-familles-workloads.md](02-familles-workloads.md) | **Modèle directeur** : familles Apps/Machines/Hosts, grammaire UI, verbes universels, WorkloadAdapter, Mode App/Mode Infra ; sémantique des verbes Sauvegarder et Mettre à jour/recreate |
+| [04-architecture.md](04-architecture.md) | Monolithe modulaire, frontière core/plugins, profils de déploiement, services core, résilience, performance, collecte des métriques Hosts |
+| [06-modele-de-donnees.md](06-modele-de-donnees.md) | Schéma unifié : comptes/organisations, entités App/Machine/Host, stacks/déploiements, plugins, audit, clés SSH, exécutions de tâches ; migration `targets` → `hosts` |
+| [09-api.md](09-api.md) | API unifiée : `/apps`, `/machines`, `/hosts` en surface principale, `/compute/*` en Mode Infra, endpoints transverses, WebSocket, erreurs, rate limiting ; validation Compose (catalogue de règles), mises à jour d'images (check/pending), batch update, prunes protégés |
 
 ### Chapitres fonctionnels (vague 2 — publiée)
 
@@ -38,13 +38,13 @@ Cet index est le point d'entrée de la spécification générale de WindFlow : s
 | [07-authentification.md](07-authentification.md) | JWT, refresh tokens, clés API, brute-force, SSO via plugin Keycloak |
 | [08-rbac-permissions.md](08-rbac-permissions.md) | 4 rôles, matrice complète des permissions, RBAC par famille, gestion des utilisateurs, audit des permissions |
 | [10-cli-tui.md](10-cli-tui.md) | Référence CLI/TUI unique, grammaire normalisée (groupes au pluriel, `windflow admin backup`) |
-| [11-plugins.md](11-plugins.md) | Système de plugins : manifest, Plugin Manager, **liste canonique des événements**, hooks, extension API/UI, guide dev |
-| [12-marketplace.md](12-marketplace.md) | Marketplace 3 onglets, registres, **catalogue officiel des plugins** (compte canonique 20+) |
+| [11-plugins.md](11-plugins.md) | Système de plugins : manifest, Plugin Manager, **liste canonique des événements**, hooks (dont gates pre-deploy), extension API/UI, guide dev |
+| [12-marketplace.md](12-marketplace.md) | Marketplace 3 onglets, registres, **catalogue officiel des plugins** (compte canonique 20+), spec du plugin Git (GitOps), sources de templates externes (format Portainer) |
 | [13-ui-principes.md](13-ui-principes.md) | Principes UX, analyse concurrentielle synthétique, navigation (sidebars Mode App/Infra), direction esthétique |
-| [14-ui-maquettes.md](14-ui-maquettes.md) | Les 26 écrans maquettés (familles, marketplace, Hosts, adoption, console, plugins, activité, graphe de dépendances, éditeur de composition, Vue Compute, Settings, Login/SSO, vues listes Mode Infra, Assistant IA) |
-| [15-securite.md](15-securite.md) | SecretManager, Docker socket, réseau, audit trail, sécurité des plugins, checklists |
-| [16-deploiement.md](16-deploiement.md) | Installation léger/standard/dev, mise à jour, sauvegarde/restauration, dépannage |
-| [17-automatisation-workflows.md](17-automatisation-workflows.md) | Scheduler core + workflows en plugins (arbitrage D2 : n8n/Node-RED, pas de moteur intégré) |
+| [14-ui-maquettes.md](14-ui-maquettes.md) | Les 26 écrans maquettés (familles, marketplace, Hosts, adoption, console, plugins, activité, graphe de dépendances, éditeur de composition, Vue Compute, Settings, Login/SSO, vues listes Mode Infra, Assistant IA) + piste d'évolution E1 (vue Réseaux éditable) |
+| [15-securite.md](15-securite.md) | SecretManager, Docker socket, réseau, audit trail, sécurité des plugins, clés SSH réutilisables + known_hosts, résolveur de secrets (point d'extension), checklists |
+| [16-deploiement.md](16-deploiement.md) | Installation léger/standard/dev, mise à jour, sauvegarde/restauration, dépannage, **récupération d'urgence** (instance verrouillée) |
+| [17-automatisation-workflows.md](17-automatisation-workflows.md) | Scheduler core + workflows en plugins (arbitrage D2 : n8n/Node-RED, pas de moteur intégré) ; exécutions tracées (anti-chevauchement, fuseaux), maintenance planifiée, contrat de notifications (routage, anti-spam) |
 | [18-plugins-ia.md](18-plugins-ia.md) | Plugins IA Ollama/LiteLLM : génération de compose, diagnostic, chat assistant |
 
 ### Transversal (vague 3 — publiée)

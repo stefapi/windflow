@@ -79,6 +79,60 @@ Le `SECRET_KEY` est la clé maître de l'instance. Sa compromission compromet to
 
 Pour les besoins avancés (rotation automatique, secrets dynamiques par service, audit des accès aux secrets), le plugin Vault (chapitre [12-marketplace.md](12-marketplace.md)) remplace le `SecretManager` natif par une intégration HashiCorp Vault complète.
 
+### Résolveur de secrets (point d'extension)
+
+Le **résolveur de secrets** est le point d'extension par lequel les plugins de gestion de secrets (Vault en premier, tout autre backend pouvant en implémenter le contrat) injectent des valeurs sensibles dans les stacks au déploiement — **sans jamais les écrire dans un fichier**. Le `SecretManager` natif reste la voie pour les simples variables chiffrées en base (`stacks.env_vars_encrypted`).
+
+#### Contrat d'interface
+
+Un backend résolveur implémente trois méthodes :
+
+```python
+class SecretResolver(Protocol):
+    """Contrat d'un backend résolveur de secrets (plugin vault & co)."""
+
+    def is_reference(self, value: str) -> bool:
+        """Détecte si une valeur est une référence au format du backend."""
+
+    async def resolve(self, reference: str) -> str:
+        """Résout une référence unique vers la valeur du secret."""
+
+    async def resolve_bulk(self, selector: str) -> dict[str, str]:
+        """Extraction en masse : toutes les paires clé/valeur d'un sélecteur."""
+```
+
+Chaque backend déclare ses **capacités** (`supports_references`, `supports_bulk`) ; une opération non supportée lève une erreur explicite. Les échecs de résolution **individuels** (référence introuvable) sont journalisés et passent — la valeur reste littérale ; les échecs de transport/authentification font échouer le déploiement.
+
+#### Syntaxe de référence dans les stacks
+
+Dans les variables d'environnement des stacks, une valeur **référence** au format du backend est résolue au déploiement. Syntaxe Vault :
+
+```
+vault://chemin/vers/secret#clé
+```
+
+Exemple : `DB_PASSWORD=vault:///kv/prod/nextcloud#db_password` est remplacé par la valeur du secret `db_password` du chemin KV `kv/prod/nextcloud`. La détection de ce qui compte comme référence est propre au backend (`is_reference`).
+
+#### Résolution au déploiement
+
+Deux modes, appliqués au moment du déploiement (pipeline du chapitre [03-modele-compute.md](03-modele-compute.md)) :
+
+1. **Interpolation de références** — chaque variable dont la valeur est une référence (`vault://…`) est remplacée par le secret réel ;
+2. **Extraction en masse** — tous les secrets sous un sélecteur (p.ex. un chemin KV Vault) sont récupérés en paires clé/valeur et injectés comme variables.
+
+Les valeurs résolues sont **promues secrets** et transmises à Compose par **environnement de processus**.
+
+#### Invariants
+
+- **Jamais écrit dans un fichier** : les valeurs résolues passent par l'environnement de processus du `docker compose up` — jamais dans le `.env`, jamais dans un override, jamais sur disque (le plugin Git applique la même règle à son fichier d'override `.env.windflow`, chapitre [12-marketplace.md](12-marketplace.md)) ;
+- **masqué à l'affichage** : partout ailleurs (édition de stack, inspection de containers, journaux), la valeur apparaît comme `***` ;
+- **traçabilité des clés injectées** : les **noms** des clés injectées au dernier déploiement sont tracés (jamais les valeurs) pour alimenter le masquage — y compris les clés de container liées par interpolation (un `MYSQL_PASSWORD=${db_secret}` dans le Compose masque `MYSQL_PASSWORD` si `db_secret` est un secret) ;
+- **liaison conditionnée à une permission** : lier un fournisseur de secrets à une stack exige la permission **Secrets** en plus de la permission Stacks — un utilisateur « stacks seul » ne peut pas lier un coffre pour en exfiltrer les secrets via l'inspection de containers (chapitre [08-rbac-permissions.md](08-rbac-permissions.md)).
+
+#### Garde anti-SSRF
+
+Les coordonnées du backend sont contrôlées : **loopback et IP de métadonnées cloud bloquées**, LAN autorisé (un coffre auto-hébergé y vit légitimement) ; les sélecteurs de chemin sont assainis (pas de traversée `..`).
+
 ## Authentification et RBAC — synthèse
 
 Résumé des mesures ; le détail est dans les chapitres dédiés :
@@ -139,13 +193,14 @@ WindFlow expose par défaut le port **80** (frontend Nginx) et le port **8080** 
 
 ### Hosts distants (SSH)
 
-Les connexions aux Hosts distants utilisent SSH avec authentification par clé. Les clés sont stockées chiffrées en base (`hosts.connection_config`, déchiffrées via le `SecretManager`).
+Les connexions aux Hosts distants utilisent SSH avec authentification par clé. La clé est une **entité réutilisable** `ssh_keys` (section ci-dessous) référencée par le Host — la partie privée est stockée chiffrée en base (déchiffrée via le `SecretManager` uniquement en mémoire, pour l'établissement des sessions).
 
 ```python
 # Connexion SSH sécurisée
 async def connect_to_host(host: Host) -> SSHConnection:
-    key_data = secret_manager.decrypt(host.connection_config["ssh_key"])
-    pkey = paramiko.RSAKey.from_private_key(StringIO(key_data))
+    key = await ssh_keys.get(host.ssh_key_id)          # entité réutilisable
+    key_data = secret_manager.decrypt(key.private_key_encrypted)
+    pkey = paramiko.Ed25519Key.from_private_key(StringIO(key_data))
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.RejectPolicy())  # Pas d'auto-accept
     client.connect(
@@ -158,6 +213,28 @@ async def connect_to_host(host: Host) -> SSHConnection:
 ```
 
 **Recommandation** : créer un utilisateur dédié (`deploy`) sur les Hosts distants avec uniquement les permissions nécessaires (Docker, libvirt selon les besoins). Ne pas utiliser root.
+
+#### Clés SSH réutilisables
+
+Les clés SSH sont des entités **partagées par plusieurs Hosts** (évite une clé par Host dans `hosts.connection_config`) :
+
+- **Génération** côté serveur (UI admin ou CLI), algorithme **ed25519 recommandé** ; l'**import** d'une clé existante (avec ou sans passphrase) est également possible ;
+- la **clé privée est affichée/importable une seule fois** à la création, puis stockée **chiffrée au repos** (AES-256 via le `SecretManager`) — seule l'empreinte et la clé publique restent consultables (pour déploiement dans l'`authorized_keys` de l'hôte distant) ;
+- **Suppression** refusée si des Hosts l'utilisent encore (ou avec déréférencement explicite) — jamais de suppression silencieuse.
+
+Schéma et contraintes de l'entité : chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md) § `ssh_keys`.
+
+#### Empreintes d'hôtes (known_hosts) et anti-MITM
+
+Chaque Host distant porte son entrée **known_hosts** (empreinte attendue du serveur SSH, table `host_ssh_fingerprints` — chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)) :
+
+- **première connexion** : l'empreinte est présentée à l'administrateur pour **acceptation explicite** ; le test de connexion ne l'ajoute **jamais** silencieusement à known_hosts ;
+- **divergence d'empreinte** : la connexion est **bloquée** avec un message explicite (hôte reconfiguré ou tentative d'usurpation / MITM) — l'administrateur doit réaccepter délibérément la nouvelle empreinte.
+
+#### Compteur d'échecs et backoff anti-tempête
+
+- les **échecs d'authentification SSH sont comptés par hôte cible** avec refroidissement progressif (protection contre les tentatives répétées) ; un succès efface l'historique d'échecs ;
+- **anti-tempête de reconnexion** : les tentatives de réétablissement de session sont limitées par une fenêtre glissante avec refroidissement progressif (**30 s → 60 s → 120 s → 300 s**) par Host ; une session **stable pendant 5 minutes** réinitialise le compteur.
 
 ## Audit trail
 
@@ -225,9 +302,9 @@ Les mécanismes techniques (isolation, intégrité, chiffrement des secrets plug
 
 ## Sécurité via plugins (optionnel)
 
-- **Plugin Trivy** — scan des images Docker avant et après déploiement, dashboard de vulnérabilités par sévérité, blocage optionnel des déploiements critiques.
+- **Plugin Trivy** — scan des images Docker avant et après déploiement, dashboard de vulnérabilités par sévérité, blocage optionnel des déploiements critiques via la gate pre-deploy (chapitre [11-plugins.md](11-plugins.md) § Hooks de déploiement).
 - **Plugin Authelia** — 2FA (TOTP, WebAuthn) devant les services exposés via le reverse proxy. Complémentaire au plugin Traefik.
-- **Plugin Vault** — HashiCorp Vault pour la rotation automatique, les secrets dynamiques et l'audit des accès. Remplace le `SecretManager` natif.
+- **Plugin Vault** — HashiCorp Vault pour la rotation automatique, les secrets dynamiques et l'audit des accès. Remplace le `SecretManager` natif — implémente le contrat [Résolveur de secrets](#résolveur-de-secrets-point-dextension).
 - **Plugin Keycloak** — SSO complet (LDAP/AD, OIDC, SAML) et 2FA sur le login WindFlow lui-même (chapitre [07-authentification.md](07-authentification.md)).
 
 ## Checklists de sécurité
@@ -244,6 +321,7 @@ Les mécanismes techniques (isolation, intégrité, chiffrement des secrets plug
 - [ ] Reverse proxy avec HTTPS (plugin Traefik ou Caddy)
 - [ ] Utilisateurs avec le rôle minimum nécessaire
 - [ ] Hosts distants avec un utilisateur SSH dédié (pas root)
+- [ ] Empreintes des Hosts distants validées explicitement à la première connexion (known_hosts)
 - [ ] Backups réguliers (plugin Restic ou procédure du chapitre [16-deploiement.md](16-deploiement.md))
 - [ ] Mise à jour régulière de WindFlow et des plugins
 - [ ] Plugin Trivy installé pour scanner les images

@@ -4,7 +4,7 @@
 
 ## Vue d'ensemble
 
-Ce chapitre est la **référence unique** du système de plugins : types de plugins, manifest, Plugin Manager et cycle de vie, système d'événements (liste canonique), extension de l'API et de l'UI, guide de développement et conventions. La frontière core/plugins est spécifiée au chapitre [04-architecture.md](04-architecture.md) ; les registres, la marketplace et le catalogue officiel des plugins au chapitre [12-marketplace.md](12-marketplace.md) ; la sécurité des plugins est détaillée au chapitre [15-securite.md](15-securite.md).
+Ce chapitre est la **référence unique** du système de plugins : types de plugins, manifest, Plugin Manager et cycle de vie, système d'événements (liste canonique), hooks de déploiement (gates), extension de l'API et de l'UI, guide de développement et conventions. La frontière core/plugins est spécifiée au chapitre [04-architecture.md](04-architecture.md) ; les registres, la marketplace et le catalogue officiel des plugins au chapitre [12-marketplace.md](12-marketplace.md) ; la sécurité des plugins est détaillée au chapitre [15-securite.md](15-securite.md).
 
 ## Philosophie
 
@@ -329,6 +329,93 @@ class TraefikHooks(PluginHooks):
 
 En mode standard (avec Redis), les événements passent par Redis Pub/Sub. En mode léger (sans Redis), un bus en mémoire basé sur `asyncio.Queue` prend le relais. L'interface est identique pour les plugins — qui n'ont pas à connaître le mode de déploiement.
 
+## Hooks de déploiement (gates)
+
+Les hooks d'événements (`@on_event`) sont **asynchrones et non bloquants** : ils réagissent après coup et ne peuvent pas refuser une action. Le **hook pre-deploy** (gate) est le point d'extension complémentaire pour les décisions bloquantes : il permet à un plugin d'**approuver ou de refuser un déploiement** avant que les containers ne soient créés.
+
+### Moment d'exécution
+
+La hook s'exécute dans le pipeline de déploiement, **après résolution d'image** et **avant création des containers** — le plugin connaît donc les images exactes (tag + digest) qu'il évalue :
+
+```
+résolution des images (tag → digest)
+        │
+        ▼
+pre-deploy gates (plugins, synchrones)  ── refus ──▶  déploiement annulé
+        │ approbation
+        ▼
+création / recréation des containers
+```
+
+La gate s'applique à tous les chemins de déploiement, manuels et automatiques : déploiement de stack, verbe **Mettre à jour** (recréation à configuration préservée, chapitre [02-familles-workloads.md](02-familles-workloads.md)), mise à jour groupée `batch-update` et vérification `check-updates` (chapitre [09-api.md](09-api.md)), synchro Git (plugin `git`, chapitre [12-marketplace.md](12-marketplace.md)).
+
+### Contrat d'entrée / sortie
+
+**Entrée** — contexte transmis au hook :
+
+| Champ | Contenu |
+|---|---|
+| `deployment_id` | Identifiant du déploiement en cours |
+| `target` | Entité déployée (stack ou App : id, nom, host cible) |
+| `images` | Liste des images **résolues** : nom, tag, digest |
+| `trigger` | `manual` \| `scheduled` \| `webhook` \| `batch` |
+
+**Sortie** — le hook rend une décision explicite :
+
+| Décision | Effet |
+|---|---|
+| `approve()` | Déploiement autorisé, pipeline poursuivi |
+| `deny(reason)` | Déploiement **refusé** : annulé avant toute création de container, raison horodatée |
+
+### Comportements par défaut
+
+- **Aucun plugin n'implémente la gate** → le déploiement suit son cours (le core ne bloque jamais par défaut) ;
+- **timeout** (défaut 300 s, configurable) → refus prudent `GATE_TIMEOUT` : on ne déploie pas ce qu'on n'a pas pu évaluer ; un plugin non critique peut déclarer `on_timeout: approve` ;
+- un refus s'exprime comme un échec de déploiement classique : événement `deployment.failed` (données : code `GATE_DENIED`, plugin, raison), progression WebSocket et lignes `deployment_events` associées — les canaux existants (chapitre [09-api.md](09-api.md)) servent de rapport, sans canal dédié.
+
+### Déclaration dans le manifest
+
+```yaml
+# ===== Hooks de déploiement (gate) =====
+deploy_hooks:
+  pre_deploy:
+    handler: extensions/gates.py:pre_deploy   # module:fonction
+    timeout: 300                              # secondes
+    on_timeout: deny                          # deny | approve
+```
+
+### Exemple illustratif — plugin Trivy
+
+```python
+# extensions/gates.py
+from windflow.plugins.gates import DeployContext, GateDecision
+
+async def pre_deploy(ctx: DeployContext) -> GateDecision:
+    """Refuse le déploiement selon le critère de blocage configuré."""
+    criteria = config.get("block_criteria", "never")   # never par défaut
+    if criteria == "never":
+        return GateDecision.approve()
+    for image in ctx.images:
+        report = await trivy.scan(image.digest)
+        if blocked(report, criteria):
+            return GateDecision.deny(
+                reason=f"{image.name} : {describe(report, criteria)}"
+            )
+    return GateDecision.approve()
+```
+
+La configuration type du plugin `trivy` expose la **matrice de critères de blocage** :
+
+| Critère | Blocage quand |
+|---|---|
+| `never` (défaut) | Jamais |
+| `any` | Toute vulnérabilité |
+| `critical_high` | ≥ 1 critique **ou** haute |
+| `critical` | ≥ 1 critique |
+| `more_than_current` | Total de la nouvelle image **supérieur** au total de l'image courante |
+
+Précisions opérationnelles (la fiche du plugin vit au chapitre [12-marketplace.md](12-marketplace.md)) : sur le chemin des mises à jour, le scan porte sur l'**image candidate avant recréation** via un **flux protégé par tag temporaire** — la nouvelle image est tirée puis scannée sous un tag temporaire `<tag>-windflow-pending` ; en cas de refus, **l'image candidate est supprimée** et le container reste sur l'ancienne image ; en cas d'approbation, le tag original est restauré et la recréation effectuée. L'image du scanner est **épinglée par version** (jamais `:latest` — le scanner lui-même ne doit pas devenir un vecteur de chaîne d'approvisionnement) et son cache de bases de vulnérabilités vit dans un volume `windflow-plugin-trivy-*` protégé du prune (chapitre [09-api.md](09-api.md)).
+
 ## Extension de l'API
 
 Les extension/hybrid plugins ajoutent des endpoints sous `/api/v1/plugins/{name}/` (liste d'exemples au chapitre [09-api.md](09-api.md)). Les routes sont enregistrées dynamiquement au chargement du plugin et automatiquement :
@@ -438,6 +525,7 @@ Résumé — le détail est au chapitre [15-securite.md](15-securite.md) § Séc
 - **Isolation** : les service plugins tournent dans des containers isolés ; les extension/hybrid plugins s'exécutent dans le process core et exigent une confiance élevée.
 - **Intégrité** : chaque package est vérifié par checksum SHA-256 au téléchargement ; les plugins officiels seront signés.
 - **Secrets** : les valeurs de configuration `password` sont chiffrées en base, jamais exposées dans les logs ni les réponses API.
+- **Secrets externes** : les plugins de gestion de secrets (Vault…) implémentent le contrat « résolveur de secrets » du chapitre [15-securite.md](15-securite.md) — injection par environnement de processus, valeurs jamais écrites dans un fichier.
 - **Permissions** : les routes injectées héritent de l'authentification JWT et du RBAC du core.
 
 ## Résumé des conventions
@@ -457,6 +545,7 @@ Résumé — le détail est au chapitre [15-securite.md](15-securite.md) § Séc
 | Network | `windflow-plugin-{name}` (si isolé) |
 | Préfixe API | `/api/v1/plugins/{name}/` |
 | Préfixe routes UI | `/plugins/{name}/` |
+| Gate pre-deploy | `deploy_hooks.pre_deploy` — décision synchrone `approve`/`deny` avant création des containers |
 
 ## Voir aussi
 

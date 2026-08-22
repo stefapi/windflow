@@ -162,7 +162,10 @@ windflow hosts add nas-server \
   --host 192.168.1.50 \
   --user deploy \
   --key ~/.ssh/id_ed25519 \
+  --key-id deploy-key \
   --env production
+# (--key importe un fichier local ; --key-id référence une clé SSH
+#  réutilisable enregistrée — chapitre 15)
 ```
 
 Autres profils d'ajout — un par profil canonique :
@@ -333,6 +336,8 @@ windflow admin info
 ```
 
 Les procédures complètes de backup/restore sont au chapitre [16-deploiement.md](16-deploiement.md) ; les actions auditées au chapitre [15-securite.md](15-securite.md).
+
+À noter : `windflow admin user create` suppose une instance **fonctionnelle et authentifiée**. Pour un scénario d'instance verrouillée (admin oublié, refresh tokens expirés), les commandes `windflow admin recovery *` s'exécutent via `docker exec` sans authentification — voir « Récupération d'urgence » au chapitre [16-deploiement.md](16-deploiement.md).
 
 ## Interface TUI
 

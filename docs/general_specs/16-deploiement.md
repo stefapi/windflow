@@ -341,6 +341,33 @@ docker compose exec -it windflow-api windflow admin create \
   --username admin --email admin@example.com
 ```
 
+### Récupération d'urgence (instance verrouillée)
+
+Scénarios couverts : compte admin oublié, mot de passe admin perdu, tous les refresh tokens expirés, unique Super Admin exclu par erreur. Les commandes d'urgence s'exécutent via `docker exec` **directement dans le container `windflow-api`**, sans passer par l'API authentifiée — elles opèrent sur la base en direct et inscrivent chaque opération au journal d'audit (chapitre [15-securite.md](15-securite.md)). En mode léger, préfixer avec `-f docker-compose.light.yml`.
+
+```bash
+# Lister les utilisateurs (aucune authentification requise)
+docker compose exec -T windflow-api windflow admin recovery list-users
+
+# Créer un admin de secours (mot de passe généré, affiché une seule fois)
+docker compose exec -it windflow-api windflow admin recovery create-admin \
+  --username rescue --email rescue@example.com
+
+# Réinitialiser le mot de passe d'un utilisateur
+docker compose exec -it windflow-api windflow admin recovery reset-password \
+  --username admin
+
+# Révoquer toutes les sessions et refresh tokens d'un utilisateur
+docker compose exec -T windflow-api windflow admin recovery clear-sessions \
+  --username admin
+```
+
+Règles de sûreté :
+
+- `create-admin` **ajoute** un compte de secours, il ne remplace ni ne rétrograde jamais un Super Admin existant — la protection du dernier Super Admin reste applicable (chapitre [08-rbac-permissions.md](08-rbac-permissions.md)) ;
+- chaque commande affiche un résumé de l'opération (compte ciblé, action, horodatage) et le journalise ;
+- ces commandes nécessitent un accès shell à la machine hôte : leur sécurité est celle de l'hôte (SSH/sudo), pas celle de WindFlow — à utiliser en dernier recours, pas en routine d'administration.
+
 ## Voir aussi
 
 - [04-architecture.md](04-architecture.md) — profils de déploiement et empreintes (référence unique)

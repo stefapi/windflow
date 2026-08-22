@@ -4,7 +4,7 @@
 
 ## Vue d'ensemble
 
-Ce chapitre présente les **26 écrans** de l'interface WindFlow, renumérotés et nettoyés de tout vestige. Chaque maquette est un bloc ASCII avec sa légende ; la grammaire UI (squelette, action bars, onglets canoniques) et la navigation de référence sont définies aux chapitres [02-familles-workloads.md](02-familles-workloads.md) et [13-ui-principes.md](13-ui-principes.md) — ce chapitre montre des instances concrètes. Les Écrans 20 et 21 sont rendus avec Vue Flow (chapitre [05-stack-technologique.md](05-stack-technologique.md)). Les Écrans 22 à 25 complètent le Mode Infra (Vue Compute, vues listes Stacks/Volumes/Networks/Images) et les écrans transverses (Settings, Login/SSO) ; l'Écran 26 est le contrat d'intégration UI des plugins IA (page apportée par un plugin, pas un écran core). Valeurs d'exemple cohérentes : Apps `nextcloud`, `gitea`, `jellyfin` ; Machines `ubuntu-dev`, `pfsense-router` ; Hosts `nas-server`, `pi4-home`, `k3s-cluster`, `prox-home`.
+Ce chapitre présente les **26 écrans** de l'interface WindFlow, renumérotés et nettoyés de tout vestige. Chaque maquette est un bloc ASCII avec sa légende ; la grammaire UI (squelette, action bars, onglets canoniques) et la navigation de référence sont définies aux chapitres [02-familles-workloads.md](02-familles-workloads.md) et [13-ui-principes.md](13-ui-principes.md) — ce chapitre montre des instances concrètes. Les Écrans 20 et 21 sont rendus avec Vue Flow (chapitre [05-stack-technologique.md](05-stack-technologique.md)). Les Écrans 22 à 25 complètent le Mode Infra (Vue Compute, vues listes Stacks/Volumes/Networks/Images) et les écrans transverses (Settings, Login/SSO) ; l'Écran 26 est le contrat d'intégration UI des plugins IA (page apportée par un plugin, pas un écran core). Une piste d'évolution — Écran E1, vue Réseaux éditable — est maquettée en fin de chapitre et ne renumérote pas les écrans livrés. Valeurs d'exemple cohérentes : Apps `nextcloud`, `gitea`, `jellyfin` ; Machines `ubuntu-dev`, `pfsense-router` ; Hosts `nas-server`, `pi4-home`, `k3s-cluster`, `prox-home`.
 
 ## Écran 1 — Dashboard (homepage)
 
@@ -977,6 +977,34 @@ Vues listes du bloc « Compute (technique) » de la sidebar Mode Infra (chapitre
 
 **Légende :** contrat d'intégration UI d'une page apportée par un plugin. Sans plugin IA installé, la page n'existe pas — l'entrée « Assistant IA » de la section Plugins de la sidebar (chapitre [13-ui-principes.md](13-ui-principes.md)) est ajoutée dynamiquement. Le chrome de la page est standard WindFlow (sidebar, header) ; le contenu est rendu par l'extension UI du plugin via les endpoints `/plugins/ai/*` (chapitres [18-plugins-ia.md](18-plugins-ia.md) et [09-api.md](09-api.md)). L'encart « Contexte accessible » explicite le périmètre : contexte de l'instance oui, secrets jamais. Les suggestions sont accompagnées d'actions de navigation/copy — **rien n'est exécuté ni déployé automatiquement**. Cette maquette sert de contrat de référence pour toute page plugin ; les autres pages plugins (Domaines, Monitoring, Backups) ne sont volontairement pas maquettées.
 
+## Écran E1 (piste d'évolution) — Réseaux : vue infra éditable
+
+**Piste d'évolution, non comptée dans les 26 écrans livrés.** Vue Vue Flow des networks et containers d'un Host, **éditable** — à distinguer du Graphe de dépendances (Écran 20, lecture seule) et de l'Éditeur de composition (Écran 21, round-trip compose) : ici les liens représentent les connexions réseau réelles, manipulables à chaud. Point d'entrée : onglet Networks de la vue listes Mode Infra (Écran 25) → bascule `[🕸 Vue infra]`.
+
+```
+┌─ Réseaux : nas-server ──────────────────────────────────────────────────────┐
+│  Host : [▼ nas-server]        [⊞ Réorganiser (dagre)]  [💾 Positions]  [⋯]  │
+│                                                                             │
+│   ┌───────────────────┐          ┌──────────────┐                           │
+│   │ 🌐 windflow_prod  │────┬────▶│ ☁️ nextcloud  │         ┌──────────┐      │
+│   │ bridge · 3 conn.  │    │     │ 🟢 Managé     │         │ Minimap ▢│      │
+│   └───────────────────┘    │     └──────────────┘         └──────────┘      │
+│                            ├────▶┌──────────────┐                           │
+│   ┌───────────────────┐    │     │ 🐙 gitea      │                           │
+│   │ 🌐 monitoring     │────┤     │ 🟢 Managé     │                           │
+│   │ bridge · 2 conn.  │    │     └──────────────┘                           │
+│   └───────────────────┘    └────▶┌──────────────┐                           │
+│                                  │ 📊 grafana    │  [Adopter] (Externe)      │
+│                                  │ 🟢 Externe    │                           │
+│                                  └──────────────┘                           │
+│                                                                             │
+│  💡 Glisser un lien container → network = docker network connect à chaud ;  │
+│     supprimer un lien = disconnect (confirmation en environnement prod).    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Légende :** nœuds = networks (driver, nombre de connexions) et containers (badge d'origine `Managé`/`Adopté`/`Externe`, statut runtime) ; création/suppression de liens mappées sur `connect`/`disconnect` à chaud via l'API réseaux (chapitre [09-api.md](09-api.md)), avec confirmation avant toute déconnexion ; **positions des nœuds persistées** par Host (sauvegarde implicite — la disposition survit aux rechargements), disposition automatique dagre disponible en action (chapitre [05-stack-technologique.md](05-stack-technologique.md)). Les nœuds `Externe` offrent le bouton `[Adopter]` (wizard Écran 14). La persistance des positions réutilise le même mécanisme que celui applicable à l'Éditeur de composition (Écran 21).
+
 ## Récapitulatif des écrans
 
 | # | Écran | Famille | Mode | Inspiré de | Point saillant |
@@ -1007,6 +1035,7 @@ Vues listes du bloc « Compute (technique) » de la sidebar Mode Infra (chapitre
 | 24 | Login / SSO | — | — | spécifique WindFlow | Auth JWT native + bouton SSO apporté par le plugin Keycloak |
 | 25 | Vues listes Mode Infra (Stacks · Volumes · Networks · Images) | toutes | Infra | Portainer | Maquette de référence + variantes par onglet |
 | 26 | Assistant IA (page plugin) | — | App/Infra | spécifique WindFlow | Contrat d'intégration plugin : chat, contexte sans secrets, zéro auto-exécution |
+| E1 *(évolution)* | Réseaux — vue infra éditable | toutes | Infra | Portainer + Écrans 20/21 WindFlow | connect/disconnect à chaud, positions persistées |
 
 L'onboarding (wizard de premier lancement) est décrit au chapitre [13-ui-principes.md](13-ui-principes.md) ; les variantes mobile/tablette également.
 

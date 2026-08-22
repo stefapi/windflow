@@ -251,6 +251,55 @@ Les images Docker (registres OCI) et les images OS (qcow2 / ISO) sont deux regis
 - **Images Docker** : pull depuis un registre (Docker Hub, ghcr.io, registre privé), listing local, détection des images dangling, nettoyage ;
 - **Images OS** : stockage local sur le Host, téléchargement depuis les sources officielles, vérification de signature SHA-256.
 
+### Détection de mises à jour d'images
+
+Au-delà de l'inventaire, WindFlow assure un **suivi des mises à jour d'images** reposant sur un **double mécanisme** :
+
+| Aspect | Digest | Semver |
+|---|---|---|
+| Cible | Images à tag flottant (`nginx:latest`) ou toute image de registre | Images épinglées par version (`app:1.24.0`) |
+| Méthode | Digest du manifeste distant comparé aux `RepoDigests` locaux, **sans pull** | Liste des tags du registre, comparaison sémantique |
+| Signification | **Mise à jour réelle appliquable** (même référence, nouveau contenu) | **Suggestion** purement indicative d'une nouvelle version publiée |
+| Application | Manuelle (unitaire ou groupée) via le recreate du chapitre 02 | **Jamais auto-appliquée** — action humaine uniquement ; statut `skipped` si ignorée |
+
+**Comparaison de digest sans pull.** La vérification interroge le registre (requête HEAD sur le manifeste du tag) et le compare aux empreintes locales. Deux règles éliminent les faux positifs :
+
+- **épinglage par digest** (`repo@sha256:…`) : jamais signalé — l'épinglage est un verrou volontaire ;
+- **faux positif multi-arch** : le digest de tête du registre est celui de l'**index** ; une image locale identifiée par le digest **enfant par architecture** ne correspond jamais à l'index alors qu'elle est à jour — WindFlow vérifie l'appartenance du digest local aux enfants de l'index avant de déclarer une mise à jour.
+
+Les tags flottants (`latest`) court-circuitent la vérification semver (aucun appel registre).
+
+### Mises à jour en attente
+
+L'entité **« mise à jour en attente »** (une ligne par container, unicité Host + container) cumule les deux signaux :
+
+| Champ | Signification |
+|---|---|
+| `container` | Container concerné (id, nom) et référence d'image courante (`current`) |
+| `current` / `available` | Référence courante et référence disponible (digest pour `type=digest`, tag pour `type=semver`) |
+| `type` | `digest` \| `semver` — nature du signal |
+| `status` | `pending` \| `skipped` — `skipped` marque une suggestion semver ignorée par l'utilisateur |
+| `checked_at` | Fraîcheur du contrôle |
+
+Cycle de vie : la vérification (manuelle ou planifiée, scheduler core + Celery) **réinitialise** puis **reconstruit** les lignes en fusionnant les deux signaux ; une ligne est **effacée** à la recréation réussie du container (recreate, chapitre [02-familles-workloads.md](02-familles-workloads.md)) ou à sa suppression. C'est cette entité qui alimente les colonnes `current_version` / `available_version` du modèle de données (chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)) et le badge ⬆ « mise à jour disponible » des cartes Apps (chapitre [14-ui-maquettes.md](14-ui-maquettes.md), Écran 2).
+
+### Réconciliation après redéploiement de stack
+
+Un redéploiement de stack **avec pull** recrée les containers avec de **nouveaux identifiants**, orphelins pour les lignes en attente (clé = ancien identifiant). La règle de réconciliation efface une ligne **uniquement si le container prouve** qu'il tourne la plus récente image locale de son tag :
+
+- container vivant introuvable par nom → ligne orpheline, effacée ;
+- container vivant mais hors de la stack concernée → **conservé** (pas à nous) ;
+- identifiant d'image du container = plus récent identifiant local du tag → à jour, effacée ;
+- sinon (pull échoué, image `build:`, tag non résolvable) → **conservé** — toute ambiguïté préserve le signal plutôt que de masquer une mise à jour réelle.
+
+Un garde-fou de délai évite que la réconciliation ne retarde ou ne fasse échouer le redéploiement lui-même.
+
+### Label d'exclusion
+
+Un container portant le label **`windflow.update=false`** est **exclu de la détection et de l'application des mises à jour** (prioritaire sur tout état interne). Les conteneurs utilitaires internes de WindFlow (helpers, sidecars) sont exclus de fait, ainsi que les images à digest épinglé. Le label garantit qu'aucune mise à jour non voulue ne sera proposée ou appliquée à un workload que l'utilisateur a choisi de geler.
+
+Les endpoints correspondants (`check-updates`, `pending-updates`) sont spécifiés au chapitre [09-api.md](09-api.md).
+
 ## Gestion des snapshots
 
 ### Concept
@@ -364,7 +413,7 @@ Une stack WindFlow expose des actions globales en plus des actions par composant
 
 - **Démarrer la stack** : démarre tous les composants dans l'ordre de dépendance ;
 - **Arrêter la stack** : arrête tous les composants dans l'ordre inverse ;
-- **Redéployer la stack** : pull les nouvelles images, recrée les containers modifiés (rolling ou stop-and-start selon configuration) ;
+- **Redéployer la stack** : pull les nouvelles images, recrée les containers modifiés (rolling ou stop-and-start selon configuration) ; après un redéploiement **avec pull**, les mises à jour en attente des containers de la stack sont réconciliées (voir [Réconciliation après redéploiement de stack](#réconciliation-après-redéploiement-de-stack)) ;
 - **Mettre à jour depuis Git** : pull la branche configurée et redéploie si des changements sont détectés (plugin Git) ;
 - **Éditer la stack** : ouvre l'éditeur de configuration (Compose YAML ou formulaire assisté) ;
 - **Dupliquer la stack** : crée une copie avec un nouveau nom (utile pour créer un environnement staging depuis prod) ;
