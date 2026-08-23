@@ -1,472 +1,176 @@
-# Architecture Modulaire WindFlow
+# Architecture modulaire — briques d'infrastructure optionnelles & profils compose
 
-## 📋 Vue d'Ensemble
+> **Statut** : Spécification technique · Partiellement implémenté (fichiers compose et cibles `make` livrés ; `scripts/enable-extension.sh` et `make enable-workers` divergents — voir § Activation)
+> **Périmètre** : Mécanisme réel d'activation des briques d'infrastructure optionnelles de l'instance WindFlow (profils Docker Compose), inventaire des fichiers compose du dépôt, et distinction avec les Plugins.
+> **Référence de fond** : [general_specs — ch. 04 architecture](../general_specs/04-architecture.md) · [ch. 05 stack technologique](../general_specs/05-stack-technologique.md) · [ch. 11 plugins](../general_specs/11-plugins.md) · [ch. 16 déploiement](../general_specs/16-deploiement.md)
+> **Dernière mise à jour** : 2026-08-23 — **refondu vague 4** ([PLAN-REFONTE-TECHNICAL-SPECS.md](../../PLAN-REFONTE-TECHNICAL-SPECS.md))
 
-WindFlow adopte une **architecture modulaire extensible** permettant de démarrer avec un système minimal et d'activer progressivement les fonctionnalités avancées selon les besoins.
+> **Terminologie** : vocabulaire canonique du glossaire ([19-glossaire.md](../general_specs/19-glossaire.md)). Le mot « extension » est réservé au **type de plugin extension** (ch. 11) ; les services d'infrastructure activables via profils Compose sont appelés **briques d'infrastructure optionnelles** — voir l'encadré [Distinction briques compose ↔ Plugins](#distinction-briques-compose-et-plugins).
 
-### Philosophie
+## Vue d'ensemble
 
-- **Démarrage ultra-rapide** : Installation minimale fonctionnelle en < 5 minutes
-- **Extensions optionnelles** : Activation à la demande des fonctionnalités avancées
-- **Zéro overhead** : Seuls les services activés consomment des ressources
-- **Production-ready** : Architecture scalable dès le départ
+Le déploiement de WindFlow suit le principe des profils de ressources du chapitre [04-architecture.md](../general_specs/04-architecture.md) (référence unique : léger / standard / complet) : un **core léger fixe** auquel l'opérateur ajoute des **briques d'infrastructure optionnelles** via des profils Docker Compose. Seuls les services activés consomment des ressources. Ce document décrit le mécanisme **réellement livré** dans le dépôt (fichiers compose, cibles `make`, script) ; les principes d'architecture et le rôle des services métier vivent dans general_specs (ch. 04 et 05) et ne sont pas répétés ici.
 
----
+## Stack de base réelle (`docker-compose.minimal.yml`)
 
-## 🏗️ Architecture Globale
+Le cœur livré correspond au **profil léger** : 3 conteneurs, < 512 Mo RAM, démarrage < 2 minutes — SQLite embarqué, cache local, secrets fichier, auth JWT, aucun service externe.
 
+| Service | Image | Port | Routage Traefik |
+|---|---|---|---|
+| `traefik` | `traefik:v2.11` | 80, 443, 8080 (dashboard) | `traefik.localhost` |
+| `windflow-api` | build `infrastructure/docker/Dockerfile.api` | 8000 (interne) | ``Host(`localhost`) && PathPrefix(`/api`)`` |
+| `windflow-frontend` | build `infrastructure/docker/Dockerfile.frontend` | 80 (interne) | ``Host(`localhost`)`` (priorité 1) |
+
+Extrait réel — [`docker-compose.minimal.yml`](../../docker-compose.minimal.yml) (service `windflow-api`) :
+
+```yaml
+    environment:
+      # Configuration minimale - SQLite embedded
+      DATABASE_TYPE: sqlite
+      DATABASE_URL: sqlite:///./data/windflow.db
+      CACHE_TYPE: local
+      SECRETS_TYPE: file
+      AUTH_TYPE: jwt
+
+      # Configuration application
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-please}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ENVIRONMENT: minimal
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        WINDFLOW PLATFORM                         │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                   │
-│  ┌─────────────────┐  ┌──────────────────────────────────────┐ │
-│  │   CORE MINIMAL  │  │      EXTENSIONS OPTIONNELLES         │ │
-│  │   (Obligatoire) │  │         (À la demande)               │ │
-│  ├─────────────────┤  ├──────────────────────────────────────┤ │
-│  │ • API FastAPI   │  │ • Monitoring (Prometheus + Grafana)  │ │
-│  │ • PostgreSQL    │  │ • Logging (ELK Stack)                │ │
-│  │ • Redis         │  │ • Secrets (HashiCorp Vault)          │ │
-│  │ • Nginx         │  │ • SSO (Keycloak)                     │ │
-│  │ • Frontend      │  │ • IA (LiteLLM + Ollama)              │ │
-│  │              │  │ • Orchestration (Kubernetes/Swarm)   │ │
-│  └─────────────────┘  └──────────────────────────────────────┘ │
-│                                                                   │
-└─────────────────────────────────────────────────────────────────┘
+
+```yaml
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`localhost`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=web"
+      - "traefik.http.services.api.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.api-stripprefix.stripprefix.prefixes=/api"
 ```
 
----
+Le socket Docker (`/var/run/docker.sock`) est monté dans l'API ; les données SQLite vivent dans le volume `windflow_data` (bind `./data/windflow`), les logs dans `windflow_logs`.
 
-## 🎯 Core Minimal (docker-compose.minimal.yml)
+*État actuel (implémenté)* vs *Cible (general_specs ch. 04)* : le mode léger canonique prévoit un worker Celery (1 process) à côté de l'API — le compose minimal actuel n'en définit pas (le worker n'existe que dans `docker-compose.prod.yml`) ; et la frontière cible place le reverse proxy côté Plugins (ch. 04), alors que Traefik est ici inclus au core compose. Écarts d'état, sans incidence sur le mécanisme décrit ici.
 
-### Services Inclus
+## Briques d'infrastructure optionnelles (`docker-compose.extensions.yml`)
 
-#### 1. **API Backend (FastAPI)**
-- **Port** : 8000
-- **Rôle** : API REST principale
-- **Dépendances** : PostgreSQL, Redis
-- **Configuration** : `infrastructure/docker/Dockerfile.api`
+Cinq profils Compose sont réellement définis, à combiner avec le compose minimal :
 
-#### 2. **PostgreSQL**
-- **Port** : 5432
-- **Rôle** : Base de données relationnelle
-- **Volumes** : `postgres-data`
-- **Configuration** : Migrations Alembic automatiques
+| Profil | Services ajoutés | Images | Accès |
+|---|---|---|---|
+| `database` | `windflow-postgres` | `postgres:15-alpine` | `localhost:${POSTGRES_PORT:-5432}` (non routé Traefik) |
+| `cache` | `windflow-redis` | `redis:7-alpine` | `localhost:${REDIS_PORT:-6379}` (mot de passe, maxmemory 256 Mo) |
+| `secrets` | `windflow-vault` | `hashicorp/vault:1.15` (mode dev) | `http://vault.localhost` |
+| `sso` | `windflow-keycloak` + `windflow-keycloak-db` | `quay.io/keycloak/keycloak:23.0` + `postgres:15-alpine` | `http://keycloak.localhost` (admin/${KEYCLOAK_PASSWORD:-admin123}) |
+| `monitoring` | `windflow-prometheus` + `windflow-grafana` | `prom/prometheus:v2.48.0` + `grafana/grafana:10.2.2` | `http://prometheus.localhost` · `http://grafana.localhost` (admin/${GRAFANA_PASSWORD:-admin123}) |
 
-#### 3. **Redis**
-- **Port** : 6379
-- **Rôle** : Cache, sessions, message broker
-- **Volumes** : `redis-data`
-- **Persistance** : AOF + RDB
+Extrait réel — [`docker-compose.extensions.yml`](../../docker-compose.extensions.yml) (brique `database`) :
 
-#### 4. **Frontend (Vue.js 3)**
-- **Port** : 80 (via Nginx)
-- **Rôle** : Interface utilisateur web
-- **Build** : Production optimisée
-- **Configuration** : `infrastructure/docker/Dockerfile.frontend`
+```yaml
+  windflow-postgres:
+    image: postgres:15-alpine
+    container_name: windflow-postgres
+    restart: unless-stopped
+    profiles: ["database"]
+    environment:
+      POSTGRES_DB: windflow
+      POSTGRES_USER: windflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-windflow123}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/init-scripts:/docker-entrypoint-initdb.d:ro
+    networks:
+      - windflow-network
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+```
 
-#### 5. **Nginx (Reverse Proxy)**
-- **Port** : 8080 → Frontend, 8080/api → Backend
-- **Rôle** : Load balancer, SSL termination
-- **Configuration** : `infrastructure/docker/nginx.conf`
+Chaque brique a son volume dédié (`postgres_data`, `redis_data`, `vault_data`, `keycloak_db_data`, `prometheus_data`, `grafana_data`) ; les briques ne dépendent pas les unes des autres, sauf `sso` qui embarque sa propre base (`windflow-keycloak-db`, indépendante du profil `database`). Les configurations montées vivent sous `infrastructure/docker/` (`prometheus.yml`, `prometheus-rules/`, `grafana/dashboards/`, `grafana/provisioning/`, `vault-config/`, `init-scripts/`).
 
-### Caractéristiques
+⚠️ **Non implémenté / divergent** : il n'existe **aucun** profil compose `logging` (ELK), `ai`, `kubernetes` ni `swarm` dans le dépôt — ces briques citées par d'anciens documents n'ont jamais été livrées (arbitrage general_specs : pas de self-hosting K8s de WindFlow, ch. 04 ; IA = plugins `ollama`/`litellm`, ch. 18).
 
-- **RAM requise** : ~1.5 GB
-- **CPU requis** : 2 cores
-- **Temps de démarrage** : ~30 secondes
-- **Taille images** : ~800 MB total
+## Activation & désactivation
 
-### Installation
+Le mécanisme fiable et livré est le **Makefile** :
 
 ```bash
-# Démarrage minimal
-docker compose -f docker-compose.minimal.yml up -d
-
-# Accès
-# Frontend: http://localhost:8080
-# API: http://localhost:8080/api
-# API Docs: http://localhost:8080/api/docs
+make minimal            # core léger (docker-compose.minimal.yml)
+make enable-database    # + PostgreSQL   (idem: enable-cache, enable-secrets,
+make enable-monitoring  # + Prometheus+Grafana   enable-sso)
+make disable-monitoring # compose down du profil (volume conservé)
+make dev-full           # core + database + cache + monitoring
+make prod               # docker-compose.prod.yml
+make status | logs | stop | restart
 ```
 
----
+Chaque cible `enable-*` lance `docker compose -f docker-compose.minimal.yml -f docker-compose.extensions.yml --profile <profil> up -d` ; le réseau `windflow-network` est créé au besoin.
 
-## 🧩 Extensions Disponibles
+⚠️ **Écarts connus (vérifiés dans le dépôt)** :
+- `make enable-workers` active les profils `cache` + `workers`, mais **aucun service `profiles: ["workers"]` n'est défini** dans `docker-compose.extensions.yml` — la cible ne démarre aucun worker. Les workers Celery ne sont définis que dans `docker-compose.prod.yml` (service `windflow-worker`, image `Dockerfile.worker`).
+- [`scripts/enable-extension.sh`](../../scripts/enable-extension.sh) est livré mais **désynchronisé** : il pilote des extensions `monitoring`/`logging`/`vault`/`sso`/`ai`/`kubernetes`/`swarm` via des variables `ENABLE_*` dans `.env` et appelle `--profile vault` (le profil réel s'appelle `secrets`), sur base `docker-compose.yml` (simple redirecteur d'aide) ; les profils `logging`, `ai`, `kubernetes`, `swarm` n'existent pas. Les variables `ENABLE_*` ne sont lues par aucun fichier compose. **Voie recommandée : les cibles `make`.**
 
-### Extension : Monitoring (Prometheus + Grafana)
+## Variables d'environnement
 
-**Activation** :
-```bash
-./scripts/enable-extension.sh monitoring
-```
+Les variables réellement lues par les compose (avec défauts) : `SECRET_KEY`, `LOG_LEVEL` (core) ; `POSTGRES_PASSWORD`, `POSTGRES_PORT` ; `REDIS_PASSWORD`, `REDIS_PORT` ; `VAULT_TOKEN`, `VAULT_PORT` ; `KEYCLOAK_ADMIN`, `KEYCLOAK_PASSWORD`, `KEYCLOAK_DB_PASSWORD` ; `GRAFANA_USER`, `GRAFANA_PASSWORD`. Modèles fournis : [`env.example`](../../env.example) et [`.env.prod.example`](../../.env.prod.example) (production : `DOMAIN`, `ACME_EMAIL`, `LLM_*`, S3 de backup…).
 
-**Services ajoutés** :
-- **Prometheus** (9090) : Collecte de métriques
-- **Grafana** (3000) : Visualisation et dashboards
-- **Node Exporter** : Métriques système
-- **cAdvisor** : Métriques containers
+## Fichiers compose du dépôt
 
-**Dashboards inclus** :
-- `windflow-system-overview.json` : Vue d'ensemble système
-- `windflow-deployments.json` : Métriques de déploiements
+| Fichier (racine) | Rôle réel |
+|---|---|
+| [`docker-compose.yml`](../../docker-compose.yml) | Redirecteur d'aide (service factice `windflow-help`) — ne déploie rien |
+| [`docker-compose.minimal.yml`](../../docker-compose.minimal.yml) | Core léger réel : traefik + api (SQLite) + frontend |
+| [`docker-compose.extensions.yml`](../../docker-compose.extensions.yml) | Briques optionnelles — 5 profils compose |
+| [`docker-compose-dev.yml`](../../docker-compose-dev.yml) | Développement : postgres, redis, vault, api :8000, frontend :3000, **nginx** :80/443, prometheus :9090, grafana :3001 |
+| [`docker-compose.prod.yml`](../../docker-compose.prod.yml) | Production : traefik v3 + Let's Encrypt, postgres, redis, vault (mode fichier), api ×2, worker ×2, frontend ×2, prometheus, grafana, node-exporter, cAdvisor, backup, loki, promtail |
+| [`redis-compose.yaml`](../../redis-compose.yaml) | Utilitaire Redis isolé (hors mécanisme des profils) |
 
-**Ressources** :
-- RAM : +500 MB
-- CPU : +0.5 core
+⚠️ **Écart de nommage connu** : le chapitre [16-déploiement.md](../general_specs/16-deploiement.md) référence `docker-compose.light.yml` (profil léger) et `docker-compose.yml` (profil standard) — le dépôt livre `docker-compose.minimal.yml` (même fonction) et un `docker-compose.yml` redirecteur ; la stack « standard » complète vit en pratique dans `docker-compose.prod.yml`. Convergence à planifier (tracée dans le plan de refonte).
 
----
+## Distinction briques compose et Plugins
 
-### Extension : Logging (ELK Stack)
+| | Briques d'infrastructure (profils compose) | Plugins (ch. 11-12) |
+|---|---|---|
+| **Nature** | Services d'infrastructure pour l'**instance WindFlow elle-même** (BD, cache, secrets, SSO, monitoring) | Packages applicatifs installables **dans** WindFlow |
+| **Activation** | Par l'opérateur, au niveau Docker (`make enable-*`) | Par l'utilisateur, via le Plugin Manager / marketplace |
+| **Définition** | Entrées `services:` + `profiles:` dans un fichier compose | Manifest, types service/extension/hybride, hooks lifecycle |
+| **Référence** | Ce document | [11-plugins.md](../general_specs/11-plugins.md) · [12-marketplace.md](../general_specs/12-marketplace.md) |
 
-**Activation** :
-```bash
-./scripts/enable-extension.sh logging
-```
+*État actuel (implémenté)* vs *Cible (general_specs ch. 04)* : la frontière cible classe plusieurs de ces fonctions côté Plugins (reverse proxy Traefik, monitoring, SSO, bases de données, IA — ch. 04) ; les compose actuels les traitent en briques d'infrastructure d'instance. Les deux mécanismes coexistent : compose = déployer l'instance, plugins = étendre l'application. En particulier, **l'IA n'est pas une brique compose** : elle passe par les plugins `ollama` et `litellm` du catalogue (ch. 12 ; [18-plugins-ia.md](../general_specs/18-plugins-ia.md)), le backend consommant `LLM_PROVIDER`/`LLM_MODEL`/`LLM_BASE_URL` (définis dans `docker-compose.prod.yml`).
 
-**Services ajoutés** :
-- **Elasticsearch** (9200) : Stockage des logs
-- **Logstash** (5000) : Ingestion et transformation
-- **Kibana** (5601) : Interface de visualisation
-- **Filebeat** : Collecteur de logs
-
-**Fonctionnalités** :
-- Centralisation de tous les logs applicatifs
-- Recherche full-text
-- Alerting sur patterns
-- Retention configurable
-
-**Ressources** :
-- RAM : +2 GB
-- CPU : +1 core
-- Disque : ~10 GB/jour (selon verbosité)
-
----
-
-### Extension : Secrets Management (HashiCorp Vault)
-
-**Activation** :
-```bash
-./scripts/enable-extension.sh vault
-```
-
-**Services ajoutés** :
-- **Vault** (8200) : Gestion centralisée des secrets
-
-**Fonctionnalités** :
-- Rotation automatique des secrets
-- Audit trail complet
-- Intégration avec Kubernetes/Docker Swarm
-- Chiffrement des secrets au repos
-
-**Configuration** :
-```bash
-# Initialisation
-vault operator init
-vault operator unseal
-
-# Configuration policies
-vault policy write windflow-api /vault-config/policies/api.hcl
-```
-
-**Ressources** :
-- RAM : +256 MB
-- CPU : +0.2 core
-
----
-
-### Extension : SSO (Keycloak)
-
-**Activation** :
-```bash
-./scripts/enable-extension.sh sso
-```
-
-**Services ajoutés** :
-- **Keycloak** (8180) : Identity Provider
-- **PostgreSQL Keycloak** : Base de données dédiée
-
-**Fonctionnalités** :
-- Single Sign-On (SSO)
-- Intégration LDAP/Active Directory
-- OAuth2 / OpenID Connect
-- Multi-tenancy
-
-**Ressources** :
-- RAM : +800 MB
-- CPU : +0.5 core
-
----
-
-### Extension : Intelligence Artificielle (LiteLLM + Ollama)
-
-**Activation** :
-```bash
-./scripts/enable-extension.sh ai
-```
-
-**Services ajoutés** :
-- **LiteLLM** (4000) : Proxy multi-provider
-- **Ollama** (11434) : LLM local (optionnel)
-
-**Fonctionnalités** :
-- Génération intelligente de configurations
-- Optimisation automatique des déploiements
-- Résolution de conflits
-- Suggestions de sécurité
-
-**Providers supportés** :
-- OpenAI (GPT-4, GPT-3.5)
-- Anthropic (Claude)
-- Ollama (Llama 2, Mistral, etc.)
-- Cohere, Hugging Face, etc.
-
-**Ressources** :
-- LiteLLM : +128 MB RAM
-- Ollama (avec modèle 7B) : +8 GB RAM, GPU recommandé
-
----
-
-### Extension : Orchestration Kubernetes
-
-**Activation** :
-```bash
-./scripts/enable-extension.sh kubernetes
-```
-
-**Composants ajoutés** :
-- Helm charts pour déploiement K8s
-- Opérateur WindFlow (CRD)
-- Service Mesh (Istio - optionnel)
-- Horizontal Pod Autoscaler
-
-**Fonctionnalités** :
-- Déploiement multi-cluster
-- Auto-scaling avancé
-- Rolling updates
-- Blue-green deployments
-
----
-
-### Extension : Docker Swarm
-
-**Activation** :
-```bash
-./scripts/enable-extension.sh swarm
-```
-
-**Fonctionnalités** :
-- Orchestration en cluster
-- Load balancing natif
-- Service discovery
-- Rolling updates
-
----
-
-## 📁 Structure des Fichiers
+## Arborescence réelle du dépôt
 
 ```
 windflow/
-├── docker-compose.minimal.yml      # Core minimal
-├── docker-compose.yml              # Core + Extensions courantes
-├── docker-compose.extensions.yml   # Définitions extensions
-├── docker-compose.dev.yml          # Surcharges développement
-├── docker-compose.prod.yml         # Configuration production
-│
-├── scripts/
-│   ├── install.sh                  # Installation minimale
-│   └── enable-extension.sh         # Activation extensions
-│
-├── infrastructure/
-│   ├── docker/                     # Dockerfiles et configs
-│   ├── kubernetes/                 # Manifests K8s
-│   ├── helm/                       # Charts Helm
-│   └── terraform/                  # Infrastructure as Code
-│
-├── backend/
-│   └── app/
-│       ├── core/                   # Code core obligatoire
-│       └── extensions/             # Code extensions optionnelles
-│           ├── monitoring/
-│           ├── ai/
-│           └── ...
-│
-└── doc/
-    ├── ARCHITECTURE-MODULAIRE.md   # Ce document
-    ├── EXTENSIONS-GUIDE.md         # Guide extensions détaillé
-    └── ...
+├── docker-compose*.yml             # Compose (voir tableau ci-dessus) + redis-compose.yaml
+├── Makefile                        # minimal / dev-full / prod, enable-*, disable-*
+├── env.example / .env.prod.example # Modèles de configuration
+├── backend/app/                    # API FastAPI : models/, schemas/, services/, tasks/, middleware/, core/
+├── cli/                            # CLI Python (commands/, services/)
+├── frontend/                       # Web UI Vue 3 + TypeScript
+├── infrastructure/docker/          # Dockerfile.{api,frontend,worker}, traefik/, grafana/,
+│                                   #   prometheus.yml, prometheus-alerts.yml, nginx.conf
+├── scripts/                        # install.sh, enable-extension.sh
+├── stacks_definitions/             # Catalogue interne de stacks (YAML — voir STACK-DEFINITIONS.md)
+└── docs/
+    ├── general_specs/              # Référence de fond (le QUOI)
+    └── technical_specs/            # Ce corpus (le COMMENT)
 ```
 
----
+Il n'existe ni `backend/app/extensions/`, ni `infrastructure/{kubernetes,helm,terraform}/`, ni répertoire `doc/` (les anciennes sections qui les décrivaient étaient fictives ; les specs vivent dans `docs/technical_specs/`).
 
-## 🔧 Gestion des Extensions
+## Migration entre configurations
 
-### Script enable-extension.sh
+- **Activer à chaud** : `make enable-<brique>` — le core continue de tourner, la brique rejoint le réseau `windflow-network`.
+- **Désactiver** : `make disable-<brique>` (`compose down` du profil ; le volume dédié est conservé — une réactivation retrouve les données).
+- **Retour au core** : `make stop && make minimal` (ou `make restart`).
+- ⚠️ **SQLite → PostgreSQL** : aucun chemin de migration de données n'est livré (`scripts/` ne contient que `install.sh` et `enable-extension.sh`) ; les deux modes utilisent des stockages disjoints (`windflow_data` vs `postgres_data`).
 
-```bash
-#!/bin/bash
-# Usage: ./scripts/enable-extension.sh <extension> [--remove]
+## Voir aussi
 
-EXTENSION=$1
-ACTION=${2:---add}
-
-case $EXTENSION in
-    monitoring)
-        docker compose -f docker-compose.yml -f docker-compose.extensions.yml \
-            --profile monitoring up -d
-        ;;
-    logging)
-        docker compose -f docker-compose.yml -f docker-compose.extensions.yml \
-            --profile logging up -d
-        ;;
-    vault)
-        docker compose -f docker-compose.yml -f docker-compose.extensions.yml \
-            --profile vault up -d
-        ;;
-    # ... autres extensions
-esac
-```
-
-### Fichier .env pour Extensions
-
-```bash
-# Extensions activées
-WINDFLOW_EXTENSIONS=monitoring,vault
-
-# Monitoring
-ENABLE_PROMETHEUS=true
-ENABLE_GRAFANA=true
-GRAFANA_ADMIN_PASSWORD=changeme
-
-# Logging
-ENABLE_ELK=false
-ELASTICSEARCH_MEMORY=2g
-
-# IA
-ENABLE_AI=true
-LLM_PROVIDER=ollama
-OLLAMA_MODEL=llama2:7b
-
-# Secrets
-ENABLE_VAULT=true
-VAULT_TOKEN=changeme
-```
-
----
-
-## 🔄 Migration d'un Déploiement
-
-### De Minimal vers Full
-
-```bash
-# 1. Backup de la configuration actuelle
-docker compose ps > running_services.txt
-cp .env .env.backup
-
-# 2. Mise à jour de .env
-echo "WINDFLOW_EXTENSIONS=monitoring,logging,ai" >> .env
-
-# 3. Activation progressive
-./scripts/enable-extension.sh monitoring
-./scripts/enable-extension.sh logging
-./scripts/enable-extension.sh ai
-
-# 4. Vérification
-docker compose ps
-```
-
-### De Full vers Minimal
-
-```bash
-# Désactivation des extensions
-docker compose --profile monitoring down
-docker compose --profile logging down
-
-# Retour au minimal
-docker compose -f docker-compose.minimal.yml up -d
-```
-
----
-
-## 🎯 Cas d'Usage Recommandés
-
-### 1. Développement Local
-```bash
-# Minimal + hot-reload
-docker-compose.minimal.yml + docker-compose.dev.yml
-Extensions: monitoring (optionnel)
-```
-
-### 2. Staging/Tests
-```bash
-# Complet sans IA
-docker-compose.yml
-Extensions: monitoring, logging, vault
-```
-
-### 3. Production PME
-```bash
-# Complet avec IA
-docker-compose.yml + docker-compose.prod.yml
-Extensions: monitoring, logging, vault, ai
-Orchestration: Docker Swarm
-```
-
-### 4. Production Enterprise
-```bash
-# Kubernetes avec toutes extensions
-Helm charts + Istio
-Extensions: monitoring, logging, vault, sso, ai
-Orchestration: Kubernetes multi-cluster
-```
-
----
-
-## 📊 Comparaison des Configurations
-
-| Configuration | RAM | CPU | Temps Démarrage | Services | Coût Cloud/Mois |
-|---------------|-----|-----|-----------------|----------|-----------------|
-| **Minimal** | 1.5 GB | 2 cores | 30s | 6 | ~$30 |
-| **Standard** | 3 GB | 4 cores | 60s | 10 | ~$60 |
-| **Full** | 8 GB | 8 cores | 120s | 18 | ~$150 |
-| **Enterprise** | 16+ GB | 16+ cores | Variable | 25+ | ~$500+ |
-
----
-
-## 🔐 Sécurité par Extension
-
-### Core Minimal
-- ✅ HTTPS (Let's Encrypt)
-- ✅ JWT Authentication
-- ✅ RBAC basique
-- ✅ Rate limiting
-- ✅ Input validation
-
-### + Vault
-- ✅ Secrets rotation automatique
-- ✅ Chiffrement au repos
-- ✅ Audit trail secrets
-
-### + SSO
-- ✅ Multi-factor authentication
-- ✅ Session management avancé
-- ✅ Intégration LDAP/AD
-
-### + Monitoring
-- ✅ Détection d'anomalies
-- ✅ Alerting proactif
-- ✅ Audit trail complet
-
----
-
-## 📚 Ressources Complémentaires
-
-- [Guide d'Installation Rapide](../README.md#installation-rapide)
-- [Guide des Extensions](./EXTENSIONS-GUIDE.md)
-- [Guide CI/CD](./CI-CD-GUIDE.md)
-- [Spécifications Techniques](general_specs/README.md)
-
----
-
-**Dernière mise à jour** : 02/10/2025  
-**Version** : 1.0  
-**Auteur** : Équipe WindFlow
+- [04-architecture.md](../general_specs/04-architecture.md) — profils de déploiement (référence unique), frontière core/plugins
+- [16-deploiement.md](../general_specs/16-deploiement.md) — procédures d'installation et profils
+- [11-plugins.md](../general_specs/11-plugins.md) · [12-marketplace.md](../general_specs/12-marketplace.md) — système de plugins et catalogue
+- [05-stack-technologique.md](../general_specs/05-stack-technologique.md) — SQLite/PostgreSQL, Traefik
+- [README.md](../../README.md) du dépôt (démarrage) · [DOCKER-ENVIRONMENTS.md](../../DOCKER-ENVIRONMENTS.md) (environnements Docker)
+- [STACK-DEFINITIONS.md](STACK-DEFINITIONS.md) · [CI-CD-GUIDE.md](CI-CD-GUIDE.md) — fichiers techniques liés

@@ -1,21 +1,39 @@
-# Guide CI/CD WindFlow - Gitea Actions
+# Guide CI/CD WindFlow — Gitea Actions
 
-**Date de création :** 10/01/2025  
-**Dernière mise à jour :** 10/01/2025
+> **Statut** : Spécification technique · Partiellement implémenté (workflows et cibles `make ci-*` livrés ; jobs `deploy-*` de `ci.yml` = notifications seulement ; multi-arch et SonarQube déclarés mais non activés sur ce dépôt — voir §3 et §8)
+> **Périmètre** : Runbook CI/CD Gitea Actions et équivalent local via Makefile (workflows, jobs, images, dépannage).
+> **Référence de fond** : [general_specs — ch. 05 stack technologique](../general_specs/05-stack-technologique.md) · [ch. 16 déploiement](../general_specs/16-deploiement.md)
+> **Dernière mise à jour** : 2026-08-23 — **refondu vague 6** ([PLAN-REFONTE-TECHNICAL-SPECS.md](../../PLAN-REFONTE-TECHNICAL-SPECS.md)) · traçabilité : R9, R10, P4, G31-G35
 
-## Vue d'Ensemble
+Ce document décrit le **COMMENT** du CI/CD (workflows réels du dépôt, cibles Makefile, jobs). Les choix de fond — outillage cible, principe multi-arch, profils de déploiement — sont définis aux chapitres [05](../general_specs/05-stack-technologique.md) et [16](../general_specs/16-deploiement.md) et ne sont pas repris ici. Le CI est **Gitea Actions** (répertoire `.gitea/workflows/`), pas GitHub Actions ni GitLab CI.
 
-WindFlow utilise **Gitea Actions** pour l'intégration continue et le déploiement automatisé. Ce guide explique comment utiliser le pipeline CI/CD à la fois dans Gitea et en local via Makefile.
+## Sommaire
 
-## Architecture CI/CD
+1. [Vue d'ensemble](#1-vue-densemble)
+2. [Architecture du pipeline](#2-architecture-du-pipeline)
+3. [Inventaire réel des workflows](#3-inventaire-réel-des-workflows)
+4. [Outillage lint réel vs cible ruff (G31)](#4-outillage-lint-réel-vs-cible-ruff-g31)
+5. [Configuration Gitea (runner, secrets)](#5-configuration-gitea-runner-secrets)
+6. [Pipeline local `make ci-*`](#6-pipeline-local-make-ci-)
+7. [Détails des jobs](#7-détails-des-jobs)
+8. [Multi-arch (G33)](#8-multi-arch-g33)
+9. [Monitoring et rapports](#9-monitoring-et-rapports)
+10. [Dépannage](#10-dépannage)
+11. [Bonnes pratiques](#11-bonnes-pratiques)
+12. [Table des commandes](#12-table-des-commandes)
+13. [Intégration IDE et hooks Git](#13-intégration-ide-et-hooks-git)
 
-### Pipeline Gitea Actions
+---
 
-Le pipeline est défini dans `.gitea/workflows/ci.yml` et s'exécute automatiquement sur :
-- **Push** sur les branches `main` et `develop`
-- **Pull Requests** vers les branches `main` et `develop`
+## 1. Vue d'ensemble
 
-### Jobs du Pipeline
+WindFlow utilise **Gitea Actions** pour l'intégration continue et le build des images. Chaque vérification du pipeline est reproductible en local via les cibles `make ci-*` du [`Makefile`](../../Makefile) — le CI ne doit jamais être une boîte noire : **toujours exécuter `make ci-quick` avant de pusher**.
+
+L'outillage effectivement branché aujourd'hui (backend) : **Black, isort, Flake8, Pylint, Bandit, mypy, Safety** ; frontend : **ESLint, Stylelint (css-check), vue-tsc (typecheck), Vitest, pnpm audit**. Voir §4 pour l'écart avec la cible `ruff` du ch. 05.
+
+## 2. Architecture du pipeline
+
+Le workflow principal [`ci.yml`](../../.gitea/workflows/ci.yml) se déclenche sur **push** et **pull request** vers `main` et `develop` :
 
 ```
 ┌─────────────────┐     ┌─────────────────┐
@@ -23,536 +41,249 @@ Le pipeline est défini dans `.gitea/workflows/ci.yml` et s'exécute automatique
 │   (Python)      │     │  (TypeScript)   │
 └────────┬────────┘     └────────┬────────┘
          │                       │
-         ├───────────┬───────────┤
-         │           │           │
-         ▼           ▼           ▼
-   ┌─────────┐ ┌─────────┐ ┌─────────┐
-   │  Test   │ │  Test   │ │Security │
-   │ Backend │ │Frontend │ │  Audit  │
-   └────┬────┘ └────┬────┘ └─────────┘
-        │           │
-        └─────┬─────┘
-              ▼
-      ┌───────────────┐
-      │  Build Docker │
-      │    Images     │
-      └───────┬───────┘
-              │
-              ▼
-      ┌───────────────┐
-      │    Deploy     │
-      │  (Dev/Stage)  │
-      └───────────────┘
+         ▼                       ▼
+    ┌─────────┐            ┌─────────┐
+    │  Test   │            │  Test   │
+    │ Backend │            │Frontend │
+    └────┬────┘            └────┬────┘
+         │                      │
+         └──────────┬───────────┘
+                    ▼
+          ┌───────────────┐     ┌─────────────┐
+          │  Build Docker │     │  Security   │
+          │    Images     │     │   Audit     │
+          └───────┬───────┘     └──────┬──────┘
+                  └──────────┬─────────┘
+                             ▼
+                    ┌───────────────┐
+                    │ Deploy (dev / │
+                    │   staging)    │
+                    └───────────────┘
 ```
 
-## Configuration Gitea
+Points factuels importants (état actuel du code) :
 
-### 1. Activer Gitea Actions
+- `build-docker` ne s'exécute que sur **push** vers `main`/`develop` (pas sur les PR) ;
+- `security-audit` tourne **en parallèle** des builds, sans dépendance ;
+- les jobs `deploy-dev` / `deploy-staging` de `ci.yml` ne font aujourd'hui qu'afficher une **notification** (echo) — le déploiement réel vit dans [`deploy.yml`](../../.gitea/workflows/deploy.yml) (§3) ;
+- Pylint (`--fail-under=8.0 || true`), Bandit et Safety sont en mode **non bloquant** dans `ci.yml` (rapport généré, job non échoué) ; Black, isort, Flake8 et le seuil coverage 80 % sont **bloquants**.
 
-Dans votre instance Gitea, assurez-vous que les Actions sont activées :
+## 3. Inventaire réel des workflows
+
+Le répertoire [`.gitea/workflows/`](../../.gitea/workflows/) contient **5 workflows** (les 4 additionnels n'étaient pas documentés avant cette refonte — R10/G34) :
+
+| Workflow | Déclencheurs | Contenu |
+|---|---|---|
+| [`ci.yml`](../../.gitea/workflows/ci.yml) | push/PR `main`, `develop` | Pipeline complet : lint backend/frontend → tests (PG 15 + Redis 7 en services) → build images locales → security audit → jobs deploy (notifications ⚠️) |
+| [`test.yml`](../../.gitea/workflows/test.yml) | push/PR `main`, `develop` | `backend-tests` (flake8 bloquant ; pylint, mypy `continue-on-error` ; cache venv Poetry), `frontend-tests` (cache pnpm, Vitest + coverage), `integration-tests` (stack `docker compose` réelle + health check sur `:8080/health`) ; upload Codecov `continue-on-error` |
+| [`build.yml`](../../.gitea/workflows/build.yml) | push `main`/`develop` + tags `v*`, PR `main` | Build **et push registre** (login `GITEA_TOKEN`) des 3 images via `docker/build-push-action@v5`, tags `docker/metadata-action` (branch, semver, sha, `latest`), **`platforms: linux/amd64,linux/arm64`**, cache GHA, job `build-summary` qui agrège |
+| [`quality-gates.yml`](../../.gitea/workflows/quality-gates.yml) | push/PR + `schedule` dimanche 00:00 | `sonarqube` (scan + quality gate `continue-on-error`), `code-quality` (Black/isort/Flake8/Pylint/Bandit), `dependency-check` (Safety + pnpm audit), `coverage-check` (rejoue les tests, seuil 80 % explicite), `docker-security-scan` (Trivy sur l'image API, SARIF), `quality-summary` |
+| [`deploy.yml`](../../.gitea/workflows/deploy.yml) | `workflow_run` après « Tests »/« Build Docker Images » + `workflow_dispatch` | Déploiement SSH réel (`webfactory/ssh-agent`) : dev (branche `develop`), staging (`main`, backup `pg_dump` + smoke tests), production (**manuel uniquement**, maintenance mode + backup + smoke tests) ; notifications Slack `continue-on-error` |
+
+> **⚠️ À adapter à votre instance** : `build.yml` référence `REGISTRY: gitea.yourdomain.com` et `deploy.yml` des URLs `*.windflow.example.com` — ces workflows sont des gabarits à configurer (secrets, hôtes) avant activation réelle. Les URLs/secrets sont listés en §5.
+
+**Chevauchement assumé** : `ci.yml` et `test.yml` recouvrent en partie les mêmes vérifications (lint + tests backend/frontend), et `ci.yml`/`build.yml` buildent tous deux les images (localement vs avec push registre). C'est l'état actuel du dépôt ; une convergence (un seul pipeline d'entrée) est souhaitable — tracée pour la Roadmap.
+
+## 4. Outillage lint réel vs cible ruff (G31)
+
+> **⚠️ Écart connu (G31)** : le [ch. 05](../general_specs/05-stack-technologique.md) fixe la cible « ruff (remplace flake8 + isort) et ruff-format via pre-commit ». **Ruff n'est pas branché aujourd'hui** : `ruff = "^0.15.13"` figure dans les dev-dépendances de [`pyproject.toml`](../../pyproject.toml) (et un `.ruff_cache/` existe), mais il n'y a **aucune section `[tool.ruff]`**, aucun appel à ruff dans le [`Makefile`](../../Makefile) ni dans les workflows. La migration est à inscrire au backlog — tracée ici.
+
+Outillage **réellement actif** (source : Makefile + workflows) :
+
+| Outil | Rôle | Bloquant ? | Config |
+|---|---|---|---|
+| Black | Formatage | Oui (`--check`) | défaut |
+| isort | Imports | Oui (`--check-only`) | `[tool.isort]` profile black ([`pyproject.toml`](../../pyproject.toml)) |
+| Flake8 | Lint PEP 8 | Oui | [`.flake8`](../../.flake8) (`ignore = E501,E402,W503,E203,E712`) |
+| Pylint | Qualité | Non (`|| true` / `--exit-zero`) | [`.pylintrc`](../../.pylintrc) (`fail-under=10.0`) ; seuil 8.0 passé en argument Makefile/CI |
+| Bandit | Sécurité | Non (rapport JSON) | `-ll` en local |
+| mypy | Typage | Non (`continue-on-error`) | `[tool.mypy]` + overrides |
+| Safety | Dépendances Python | Non (`|| true`) | — |
+| ESLint / Stylelint / vue-tsc | Lint frontend | ESLint+CSS+TS bloquants dans `ci.yml` ; `continue-on-error` dans `test.yml` | [`frontend/package.json`](../../frontend/package.json) scripts |
+
+Frontend : `pnpm lint-check`, `pnpm css-check`, `pnpm typecheck`, `pnpm test:ci`, `pnpm audit --audit-level=moderate`.
+
+## 5. Configuration Gitea (runner, secrets)
+
+### 5.1 Activer Gitea Actions et le runner
 
 ```ini
-# app.ini
+# app.ini (instance Gitea)
 [actions]
 ENABLED = true
-# DEFAULT_ACTIONS_URL = https://github.com  # Optionnel: pour utiliser des actions de GitHub
-# Gitea supporte nativement les actions hébergées localement
 ```
 
-### 2. Configurer un Runner
-
-Installer et démarrer un Gitea Actions runner :
-
 ```bash
-# Télécharger le runner
-wget -O act_runner https://dl.gitea.com/act_runner/0.2.6/act_runner-0.2.6-linux-amd64
-chmod +x act_runner
-
-# Enregistrer le runner
+# Enregistrer et démarrer un runner (act_runner)
 ./act_runner register --no-interactive \
-  --instance https://votre-gitea.com \
+  --instance https://votre-gitea.example.com \
   --token VOTRE_RUNNER_TOKEN \
   --name windflow-runner
-
-# Démarrer le runner
 ./act_runner daemon
 ```
 
-### 3. Secrets Gitea
+### 5.2 Secrets requis par workflow
 
-Configurez les secrets dans les paramètres du repository :
+| Workflow | Secrets | Usage |
+|---|---|---|
+| `build.yml` | `GITEA_TOKEN` | Login au registre de conteneurs (push des images) |
+| `deploy.yml` | `DEV_/STAGING_/PROD_SSH_PRIVATE_KEY`, `*_SERVER_HOST`, `*_SERVER_USER`, `*_DEPLOY_PATH` | Déploiement SSH par environnement |
+| `deploy.yml` | `SLACK_WEBHOOK` | Notifications de déploiement |
+| `quality-gates.yml` | `SONAR_TOKEN`, `SONAR_HOST_URL` | Analyse SonarQube |
+| `test.yml` | `CODECOV_TOKEN` (si utilisé) | Upload coverage |
 
-| Secret | Description | Requis |
-|--------|-------------|--------|
-| `DOCKER_USERNAME` | Username Docker Hub | Optionnel |
-| `DOCKER_PASSWORD` | Password Docker Hub | Optionnel |
-| `DEPLOY_KEY` | Clé SSH déploiement | Optionnel |
+## 6. Pipeline local `make ci-*`
 
-## Utilisation du Pipeline
-
-### Push sur Branches
-
-Le pipeline s'exécute automatiquement :
+Les cibles `ci-*` du [`Makefile`](../../Makefile) rejouent les mêmes vérifications que le CI, localement :
 
 ```bash
-# Sur develop (tests + build)
-git checkout develop
-git add .
-git commit -m "feat: nouvelle fonctionnalité"
-git push origin develop
-
-# Sur main (tests + build + deploy staging)
-git checkout main
-git merge develop
-git push origin main
+make ci-quick   # lint backend + frontend seulement
+make ci-full    # lint + tests + security (backend + frontend)
 ```
 
-### Pull Requests
-
-Lors de la création d'une PR, le pipeline vérifie :
-- ✅ Qualité du code (lint)
-- ✅ Tests unitaires et d'intégration
-- ✅ Sécurité (audits)
-- ✅ Build Docker
-
-## Exécution Locale avec Makefile
-
-Pour exécuter les mêmes vérifications en local **avant de pusher** :
-
-### Commandes Rapides
+Workflow recommandé :
 
 ```bash
-# Vérification rapide (lint uniquement)
+# 1. Branche de feature
+git checkout -b feature/ma-nouvelle-feature && make setup
+
+# 2. Pendant le développement (itératif)
 make ci-quick
 
-# Pipeline complet local
+# 3. Avant de commit/push
 make ci-full
+
+# 4. PR dans Gitea → le pipeline automatique s'exécute
 ```
 
-### Commandes Individuelles
+## 7. Détails des jobs
 
-#### Lint
+### 7.1 `lint-backend` (ci.yml)
 
-```bash
-# Lint backend (Black, isort, Flake8, Pylint)
-make ci-lint-backend
+Vérifie le code Python : **Black** (`--check`), **isort** (`--check-only`), **Flake8**, **Pylint** (`--fail-under=8.0 || true` — non bloquant), **Bandit** (rapport `bandit-report.json` uploadé en artifact). Échoue si : code mal formaté, erreurs Flake8.
 
-# Lint frontend (ESLint, CSS, TypeScript)
-make ci-lint-frontend
+### 7.2 `lint-frontend` (ci.yml)
+
+**ESLint** (`pnpm lint-check`), **Stylelint** (`pnpm css-check`), **vue-tsc** (`pnpm typecheck`). Python 3.11 / Node 20 / pnpm 9 partout.
+
+### 7.3 `test-backend` (ci.yml)
+
+Services **PostgreSQL 15** + **Redis 7-alpine** (health checks). `pytest backend/tests/` avec `--cov=backend --cov-report=xml,html,term` et **`--cov-fail-under=80`** (bloquant — [ci.yml:167](../../.gitea/workflows/ci.yml)). Artifacts : `coverage.xml`, `htmlcov/`.
+
+> **Cible general_specs** : couverture > 85 % ([ch. 05](../general_specs/05-stack-technologique.md)) ; le seuil CI actuel est 80 % (G32).
+
+### 7.4 `test-frontend` (ci.yml)
+
+Vitest via `pnpm test:ci` ; artifact `frontend/coverage/`.
+
+### 7.5 `build-docker` (ci.yml) & `build.yml`
+
+Trois images, une par Dockerfile d'[`infrastructure/docker/`](../../infrastructure/docker/) : `windflow/api` ([Dockerfile.api](../../infrastructure/docker/Dockerfile.api)), `windflow/worker` ([Dockerfile.worker](../../infrastructure/docker/Dockerfile.worker)), `windflow/frontend` ([Dockerfile.frontend](../../infrastructure/docker/Dockerfile.frontend)).
+
+- `ci.yml` : build local seulement, tags `:${{ github.sha }}` et `:latest` ;
+- `build.yml` : build + **push** vers le registre, tags `metadata-action` (branch, `vX.Y.Z` sur tags, `{{branch}}-{{sha}}`, `latest` sur la branche par défaut), **multi-arch amd64/arm64**, cache GHA.
+
+### 7.6 `security-audit` (ci.yml) & `dependency-check`/`docker-security-scan` (quality-gates.yml)
+
+**Safety** (dépendances Python, `|| true`), **pnpm audit** (`--audit-level=moderate`, `|| true`), **Trivy** sur l'image API (format SARIF, artifact). Non bloquants à ce jour.
+
+### 7.7 Jobs `deploy-*`
+
+Voir §3 (`deploy.yml` = déploiement SSH réel avec backup/maintenance/smoke tests ; jobs `deploy-*` de `ci.yml` = simples notifications ⚠️). Le détail des procédures de déploiement (install, mise à jour, sauvegarde) relève du [ch. 16](../general_specs/16-deploiement.md) — non dupliqué ici.
+
+## 8. Multi-arch (G33)
+
+Le principe fondateur est **amd64 + arm64** (compatibilité ARM/Raspberry Pi — [ch. 04](../general_specs/04-architecture.md), [ch. 05](../general_specs/05-stack-technologique.md)). État réel :
+
+- **Build** : couvert — `build.yml` passe `platforms: linux/amd64,linux/arm64` aux trois images (extrait réel) :
+
+```yaml
+# .gitea/workflows/build.yml (extrait, job build-api)
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./infrastructure/docker/Dockerfile.api
+          push: ${{ github.event_name != 'pull_request' }}
+          platforms: linux/amd64,linux/arm64
 ```
 
-#### Tests
+- **Tests** : ⚠️ **non couverts** — aucun workflow n'utilise la matrice `arch: [amd64, arm64]` illustrée au ch. 05 ; les jobs tournent sur `ubuntu-latest` (amd64) uniquement. Comblement à planifier (backlog).
+
+## 9. Monitoring et rapports
+
+- **Onglet Actions** du dépôt Gitea : logs par job, téléchargement des artifacts (coverage, `bandit-report.json`, rapports Safety/npm audit/Trivy SARIF).
+- **Coverage local** : `make backend-test-coverage` (ouvre `htmlcov/index.html`), `coverage report --show-missing` pour les fichiers non couverts.
+- **Notifications** : à configurer côté Gitea (profil → notifications) ; les workflows `deploy.yml` notifient aussi via Slack (`SLACK_WEBHOOK`, `continue-on-error`).
+
+## 10. Dépannage
+
+### Pipeline bloqué / runner indisponible
 
 ```bash
-# Tests backend avec coverage
-make ci-test-backend
+./act_runner list        # vérifier les runners actifs
+./act_runner daemon &    # (re)démarrer un runner
+```
 
-# Tests frontend
+### Tests qui échouent
+
+```bash
+make ci-test-backend     # reproduire localement (même seuil coverage 80 %)
 make ci-test-frontend
 ```
 
-#### Sécurité
+### Build Docker échoue
 
 ```bash
-# Audit sécurité backend (Bandit, Safety)
-make ci-security-backend
-
-# Audit sécurité frontend (npm audit)
-make ci-security-frontend
+make ci-build-docker     # build local des 3 images
+docker build -f infrastructure/docker/Dockerfile.api .   # une seule image
 ```
 
-#### Build Docker
+### Coverage insuffisant
 
 ```bash
-# Build toutes les images Docker
-make ci-build-docker
+make backend-test-coverage
+coverage report --show-missing   # identifier les fichiers non couverts
 ```
 
-### Workflow de Développement Recommandé
+## 11. Bonnes pratiques
 
-```bash
-# 1. Avant de commencer à coder
-git checkout -b feature/ma-nouvelle-feature
-make setup
+1. **`make ci-quick` avant chaque push, `make ci-full` avant chaque PR** — le CI ne doit jamais découvrir une erreur reproduisible localement.
+2. **Commits atomiques** suivant la convention Conventional Commits (validée par le hook Git — §13) : `feat(api): …`, `fix(frontend): …`.
+3. **PR de qualité** : description claire, tests pour toute nouvelle fonctionnalité, coverage maintenu ≥ 80 %, documentation à jour.
+4. **En cas d'échec CI** : consulter les logs Gitea Actions → reproduire en `make ci-*` → corriger → re-tester → pusher la correction.
 
-# 2. Pendant le développement (itératif)
-# ... modifications de code ...
-make ci-quick  # Vérification rapide
-
-# 3. Avant de commit
-make ci-full   # Vérification complète
-
-# 4. Commit et push
-git add .
-git commit -m "feat: ma nouvelle feature"
-git push origin feature/ma-nouvelle-feature
-
-# 5. Créer la Pull Request dans Gitea
-# Le pipeline automatique s'exécute
-```
-
-## Détails des Jobs
-
-### Job: Lint Backend
-
-**Durée :** ~2 minutes  
-**Services :** Aucun
-
-Vérifie la qualité du code Python :
-
-- **Black** : Formatage automatique du code
-- **isort** : Organisation des imports
-- **Flake8** : Analyse statique (PEP 8)
-- **Pylint** : Qualité de code (score minimum 8.0/10)
-- **Bandit** : Détection vulnérabilités sécurité
-
-**Échec si :** Code mal formaté, erreurs Flake8, score Pylint < 8.0
-
-### Job: Lint Frontend
-
-**Durée :** ~1-2 minutes  
-**Services :** Aucun
-
-Vérifie la qualité du code TypeScript/Vue :
-
-- **ESLint** : Linting JavaScript/TypeScript
-- **Stylelint** : Linting CSS/SCSS
-- **TypeScript** : Vérification des types
-
-**Échec si :** Erreurs ESLint, erreurs CSS, erreurs TypeScript
-
-### Job: Test Backend
-
-**Durée :** ~3-5 minutes  
-**Services :** PostgreSQL 15, Redis 7
-
-Exécute les tests backend avec coverage :
-
-- Tests unitaires (`pytest`)
-- Coverage minimum 80% requis
-- Génération rapports HTML et XML
-
-**Artifacts :**
-- `coverage.xml` - Rapport coverage
-- `htmlcov/` - Rapport HTML interactif
-
-**Échec si :** Tests échouent, coverage < 80%
-
-### Job: Test Frontend
-
-**Durée :** ~2-3 minutes  
-**Services :** Aucun
-
-Exécute les tests frontend :
-
-- Tests unitaires Vitest
-- Tests composants Vue
-- Coverage automatique
-
-**Artifacts :**
-- `frontend/coverage/` - Rapports coverage
-
-**Échec si :** Tests échouent
-
-### Job: Build Docker
-
-**Durée :** ~5-10 minutes  
-**Services :** Aucun
-
-Build des images Docker :
-
-- `windflow/api` - Backend FastAPI
-- `windflow/worker` - Celery workers
-- `windflow/frontend` - Interface Vue.js
-
-**Tags créés :**
-- `:latest` - Dernière version
-- `:<commit-sha>` - Version spécifique
-
-**Échec si :** Build Docker échoue
-
-### Job: Security Audit
-
-**Durée :** ~2 minutes  
-**Services :** Aucun
-
-Audits de sécurité :
-
-- **Safety** : Vulnérabilités dépendances Python
-- **npm audit** : Vulnérabilités dépendances NPM
-
-**Échec si :** Vulnérabilités critiques détectées (optionnel)
-
-### Job: Deploy
-
-**Durée :** Variable  
-**Services :** Variables
-
-Déploiement automatique :
-
-- **develop** → Environnement de développement
-- **main** → Environnement de staging
-
-## Monitoring et Rapports
-
-### Visualisation dans Gitea
-
-1. Accédez à l'onglet **Actions** du repository
-2. Sélectionnez un workflow run
-3. Consultez les logs de chaque job
-4. Téléchargez les artifacts (rapports coverage, sécurité)
-
-### Rapports de Coverage
-
-Les rapports de coverage sont générés à chaque exécution :
-
-```bash
-# Backend - Afficher le rapport local
-make backend-coverage
-
-# Frontend - Ouvrir dans navigateur
-open frontend/coverage/index.html
-```
-
-### Notifications
-
-Configurez les notifications Gitea pour être alerté :
-- ✅ Pipeline réussi
-- ❌ Pipeline échoué
-- ⚠️ Avertissements sécurité
-
-## Optimisation et Performance
-
-### Cache des Dépendances
-
-Le pipeline utilise le cache pour accélérer les builds :
-
-- **Poetry** : Cache des packages Python
-- **pnpm** : Cache des packages Node.js
-- **Docker layers** : Cache des layers Docker
-
-### Parallélisation
-
-Les jobs s'exécutent en parallèle quand possible :
-- Lint backend et frontend en parallèle
-- Tests backend et frontend en parallèle
-
-### Durées Moyennes
-
-| Job | Durée Moyenne | Durée Maximum |
-|-----|---------------|---------------|
-| Lint Backend | 2 min | 3 min |
-| Lint Frontend | 1 min | 2 min |
-| Test Backend | 4 min | 6 min |
-| Test Frontend | 2 min | 3 min |
-| Security Audit | 1 min | 2 min |
-| Build Docker | 8 min | 15 min |
-| **TOTAL** | **18 min** | **31 min** |
-
-## Dépannage
-
-### Pipeline Bloqué
-
-```bash
-# Vérifier les runners actifs
-./act_runner list
-
-# Redémarrer un runner
-./act_runner daemon &
-```
-
-### Tests qui Échouent
-
-```bash
-# Reproduire localement
-make ci-test-backend  # ou ci-test-frontend
-
-# Voir les logs détaillés
-make backend-test -- -vv  # Mode très verbose
-```
-
-### Build Docker Échoue
-
-```bash
-# Tester le build localement
-make docker-build-backend
-
-# Nettoyer le cache Docker
-docker system prune -a
-```
-
-### Coverage Insuffisant
-
-```bash
-# Générer rapport détaillé
-make backend-coverage
-
-# Identifier les fichiers non couverts
-coverage report --show-missing
-```
-
-## Bonnes Pratiques
-
-### 1. Exécuter CI en Local Avant de Pusher
-
-```bash
-# TOUJOURS exécuter avant un push
-make ci-full
-```
-
-### 2. Commits Atomiques
-
-Respectez la convention Conventional Commits :
-
-```bash
-# ✅ Bon
-git commit -m "feat(api): add user authentication endpoint"
-git commit -m "fix(frontend): resolve button alignment issue"
-git commit -m "docs: update API documentation"
-
-# ❌ Mauvais
-git commit -m "changes"
-git commit -m "work in progress"
-```
-
-### 3. Pull Requests de Qualité
-
-- Description claire des changements
-- Tests ajoutés pour les nouvelles fonctionnalités
-- Coverage maintenu > 80%
-- Documentation mise à jour
-
-### 4. Gestion des Échecs
-
-Si le pipeline échoue :
-
-1. **Consulter les logs** dans Gitea Actions
-2. **Reproduire localement** avec `make ci-*`
-3. **Corriger le problème**
-4. **Re-tester localement**
-5. **Pusher la correction**
-
-## Commandes Makefile Complètes
-
-### Vue d'Ensemble
-
-```bash
-# Afficher toutes les commandes disponibles
-make help
-
-# Afficher uniquement les commandes CI
-make help | grep "CI:"
-```
-
-### Commandes CI Disponibles
+## 12. Table des commandes
 
 | Commande | Description |
-|----------|-------------|
+|---|---|
 | `make ci-quick` | Lint rapide (backend + frontend) |
-| `make ci-full` | Pipeline complet (lint + test + security) |
-| `make ci-lint-backend` | Lint backend uniquement |
-| `make ci-lint-frontend` | Lint frontend uniquement |
-| `make ci-test-backend` | Tests backend avec coverage |
-| `make ci-test-frontend` | Tests frontend |
-| `make ci-security-backend` | Audit sécurité backend |
-| `make ci-security-frontend` | Audit sécurité frontend |
-| `make ci-build-docker` | Build images Docker localement |
+| `make ci-full` | Pipeline complet local (lint + tests + security) |
+| `make ci-lint-backend` | Black, isort, Flake8, Pylint (seuil 8.0, non bloquant) |
+| `make ci-lint-frontend` | ESLint + css-check + typecheck |
+| `make ci-test-backend` | Tests backend, coverage (seuil 80 %) |
+| `make ci-test-frontend` | Tests frontend (Vitest) |
+| `make ci-security-backend` | Bandit + Safety (non bloquants) |
+| `make ci-security-frontend` | pnpm audit (`--audit-level=moderate`, non bloquant) |
+| `make ci-build-docker` | Build local des 3 images Docker |
+| `make help` | Liste de toutes les cibles |
 
-## Intégration avec les Outils de Développement
+## 13. Intégration IDE et hooks Git
 
-### Pre-commit Hooks
+### Hooks Git (réels)
 
-Les hooks pre-commit exécutent automatiquement le lint :
+Le dépôt utilise **husky comme répertoire de hooks** (`git config core.hooksPath .husky`, via `dev/scripts/setup_git_hooks.sh`). À ce jour, un seul hook est livré — **`commit-msg`** — qui valide le **message de commit** via [`dev/scripts/validate_commit_msg.py`](../../dev/scripts/validate_commit_msg.py) (Conventional Commits). ⚠️ Contrairement à une pratique répandue, **aucun lint de code ne tourne au commit** : la qualité passe par `make ci-*` et le CI.
 
-```bash
-# Installer les hooks
-make setup
+### IDE
 
-# Les hooks s'exécutent automatiquement à chaque commit
-git commit -m "feat: nouvelle feature"
-# → Lint automatique avant commit
-```
-
-### IDE Integration
-
-#### PyCharm
-
-1. Ouvrir **Settings → Tools → External Tools**
-2. Ajouter un outil externe :
-   - Name: `WindFlow CI Quick`
-   - Program: `make`
-   - Arguments: `ci-quick`
-   - Working directory: `$ProjectFileDir$`
-
-#### VS Code
-
-Ajouter dans `.vscode/tasks.json` :
-
-```json
-{
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "WindFlow: CI Quick Check",
-      "type": "shell",
-      "command": "make ci-quick",
-      "group": "test",
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
-      }
-    },
-    {
-      "label": "WindFlow: Full CI Pipeline",
-      "type": "shell",
-      "command": "make ci-full",
-      "group": "test",
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
-      }
-    }
-  ]
-}
-```
-
-## Évolution et Maintenance
-
-### Mise à Jour du Pipeline
-
-Pour modifier le pipeline :
-
-1. Éditer `.gitea/workflows/ci.yml`
-2. Tester localement avec les commandes `make ci-*`
-3. Commiter et pusher
-4. Vérifier l'exécution dans Gitea Actions
-
-### Ajout de Nouveaux Jobs
-
-Template pour ajouter un nouveau job :
-
-```yaml
-new-job:
-  name: 🎯 Nouveau Job
-  runs-on: ubuntu-latest
-  needs: [job-prerequis]  # Optionnel
-  steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-    
-    - name: 🔧 Votre étape
-      run: |
-        echo "Commandes à exécuter"
-```
-
-### Maintenance Régulière
-
-- **Hebdomadaire** : Vérifier les mises à jour des actions Gitea
-- **Mensuel** : Mettre à jour les dépendances de sécurité
-- **Trimestriel** : Optimiser les temps d'exécution du pipeline
+- **VS Code** : tâche shell `make ci-quick` (à ajouter dans `.vscode/tasks.json` si souhaité) ;
+- **PyCharm** : External Tool → Program `make`, Arguments `ci-quick`, Working directory `$ProjectFileDir$`.
 
 ---
 
-**Document maintenu par :** Équipe DevOps WindFlow  
-**Support :** devops@windflow.dev  
-**Documentation Gitea Actions :** https://docs.gitea.com/usage/actions/overview
+## Voir aussi
+
+- [Ch. 05 — Stack technologique](../general_specs/05-stack-technologique.md) — outillage cible (ruff), couverture cible, multi-arch
+- [Ch. 16 — Déploiement](../general_specs/16-deploiement.md) — procédures d'installation/mise à jour (référence)
+- [Ch. 04 — Architecture](../general_specs/04-architecture.md) — principe multi-arch fondateur, profils de déploiement
+- [ARCHITECTURE-MODULAIRE.md](ARCHITECTURE-MODULAIRE.md) — profils compose et cibles `make` d'infrastructure
