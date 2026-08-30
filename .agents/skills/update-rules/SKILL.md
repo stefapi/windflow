@@ -10,9 +10,9 @@ Cette skill analyse le **code source réel** du projet (backend, frontend, CLI) 
 ## Usage
 
 Utilise cette skill quand :
-- Du nouveau code a été ajouté et les `.clinerules` n'ont pas été mis à jour
+- Du nouveau code a été ajouté et les `.roo/rules` n'ont pas été mis à jour
 - On vient de finaliser un boilerplate et on veut synchroniser la documentation
-- Les `.clinerules` semblent obsolètes ou inexacts par rapport au code réel
+- Les `.roo/rules` semblent obsolètes ou inexacts par rapport au code réel
 - On veut un audit rapide de la cohérence documentation ↔ code
 
 **Exemples de déclenchements :**
@@ -20,7 +20,7 @@ Utilise cette skill quand :
 - `update-rules backend`
 - `update-rules frontend`
 - `update-rules cli`
-- `mets à jour les clinerules en fonction du code`
+- `mets à jour les roo/rules en fonction du code`
 - `synchronise les règles avec le code actuel`
 
 ## Périmètre
@@ -33,7 +33,7 @@ Utilise cette skill quand :
 
 Si aucun composant n'est précisé, la skill analyse **tous les composants présents**.
 
-## Fichiers `.clinerules` concernés
+## Fichiers `.roo/rules` concernés
 
 | Fichier | Contenu                                                              | Composants sources |
 |---------|----------------------------------------------------------------------|-------------------|
@@ -47,7 +47,7 @@ Si aucun composant n'est précisé, la skill analyse **tous les composants prés
 | `50-dev-workflow.md` | Makefile (cibles), `.env.sample`, CI pipeline, structure open-source | all |
 | `55-project-structure.md` | Organisation des répertoires cibles   | all |
 
-**Fichiers `.clinerules` NON modifiés par cette skill :**
+**Fichiers `.roo/rules` NON modifiés par cette skill :**
 - `00-project-context.md` — contexte projet haut niveau, invariant
 - `01-Project-management.md` — règles de gestion de backlog, invariant
 
@@ -223,9 +223,9 @@ Extraire :
 
 ---
 
-## Phase 3 : Lecture des `.clinerules` actuels
+## Phase 3 : Lecture des `.roo/rules` actuels
 
-Lire tous les fichiers `.clinerules/` concernés (liste à la Phase 1) pour identifier leur contenu actuel.
+Lire tous les fichiers `.roo/rules/` concernés (liste à la Phase 1) pour identifier leur contenu actuel.
 
 **Objectif :** Préparer le diff entre les faits extraits (Phase 2) et la documentation actuelle.
 
@@ -233,14 +233,14 @@ Lire tous les fichiers `.clinerules/` concernés (liste à la Phase 1) pour iden
 
 ## Phase 4 : Identification des divergences
 
-Pour chaque fichier `.clinerules/`, comparer les faits extraits avec le contenu documenté.
+Pour chaque fichier `.roo/rules/`, comparer les faits extraits avec le contenu documenté.
 
 ### Types de divergences
 
 | Type | Description | Exemple |
 |------|-------------|---------|
-| **Manquant** | Technologie/outil présent dans le code, absent des `.clinerules` | `structlog` utilisé mais non documenté dans `45-observability.md` |
-| **Obsolète** | Information dans les `.clinerules` qui ne correspond plus au code | Python 3.11 documenté mais pyproject.toml dit 3.13+ |
+| **Manquant** | Technologie/outil présent dans le code, absent des `.roo/rules` | `structlog` utilisé mais non documenté dans `45-observability.md` |
+| **Obsolète** | Information dans les `.roo/rules` qui ne correspond plus au code | Python 3.11 documenté mais pyproject.toml dit 3.13+ |
 | **Inexact** | Information partiellement incorrecte | Seuil de couverture 70% documenté mais configuré à 85% dans pytest |
 | **Manque de détail** | Information présente mais incomplète | Mention de Ruff sans lister les rules actives |
 
@@ -446,8 +446,8 @@ Quel est le rôle de `nom-lib` dans le projet ?
 |-----------|--------|
 | `pyproject.toml` non lisible | Informer, sauter l'analyse backend |
 | `package.json` non lisible | Informer, sauter l'analyse frontend |
-| Fichier `.clinerules` absent | Créer le fichier avec un contenu minimal |
-| Divergence sur un fichier `.clinerules` non modifiable | Informer l'utilisateur sans modifier |
+| Fichier `.roo/rules` absent | Créer le fichier avec un contenu minimal |
+| Divergence sur un fichier `.roo/rules` non modifiable | Informer l'utilisateur sans modifier |
 | Erreur pendant la mise à jour | Rollback partiel, informer l'utilisateur |
 
 ---
@@ -457,7 +457,7 @@ Quel est le rôle de `nom-lib` dans le projet ?
 - [ ] Tous les composants présents ont été analysés
 - [ ] Toutes les divergences ont été identifiées et présentées
 - [ ] L'utilisateur a confirmé les mises à jour
-- [ ] Tous les fichiers `.clinerules` concernés ont été mis à jour
+- [ ] Tous les fichiers `.roo/rules` concernés ont été mis à jour
 - [ ] Aucune information intentionnelle n'a été supprimée
 - [ ] Le récapitulatif final a été présenté
 

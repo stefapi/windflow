@@ -5,7 +5,7 @@ description: Génère un boilerplate complet à partir d'une description libre, 
 
 # create-boilerplate
 
-Cette skill génère un **squelette de projet prêt à être développé** à partir d'une description libre fournie par l'utilisateur. Elle conduit un **interview structuré** pour cerner précisément le besoin, génère la **structure, la configuration et l'outillage** appropriés en respectant les conventions du projet, puis synchronise les `.clinerules` via `update-rules`.
+Cette skill génère un **squelette de projet prêt à être développé** à partir d'une description libre fournie par l'utilisateur. Elle conduit un **interview structuré** pour cerner précisément le besoin, génère la **structure, la configuration et l'outillage** appropriés en respectant les conventions du projet, puis synchronise les `.roo/rules` via `update-rules`.
 
 > ⚠️ **Règle fondamentale — Boilerplate ≠ Fonctionnel**
 >
@@ -44,9 +44,9 @@ Utilise cette skill quand :
 1. **Interview avant de coder** : conduire une analyse structurée avant toute génération
 2. **Pas de liste prédéfinie** : l'IA interprète la demande à partir du texte libre
 3. **Questions ciblées et groupées** : poser toutes les questions pertinentes en une seule fois, regroupées par thème
-4. **Référence aux `.clinerules`** : toujours lire et respecter les principes du projet
+4. **Référence aux `.roo/rules`** : toujours lire et respecter les principes du projet
 5. **Structure uniquement** : les fichiers de code source sont des stubs vides ou minimaux — pas d'implémentation fonctionnelle
-6. **Synchronisation finale** : appeler `update-rules` en fin de génération pour garantir la cohérence des `.clinerules`
+6. **Synchronisation finale** : appeler `update-rules` en fin de génération pour garantir la cohérence des `.roo/rules`
 7. **Standards du marché** : utiliser les meilleures pratiques et patterns reconnus pour chaque technologie
 
 ---
@@ -66,9 +66,9 @@ Analyser le texte fourni par l'utilisateur pour extraire :
 | **Environnements** | Dev uniquement, ou dev + staging + prod ? |
 | **Niveau de maturité** | Prototype rapide ou production-ready ? |
 
-### 0.2 Consultation des `.clinerules` existants
+### 0.2 Consultation des `.roo/rules` existants
 
-Lire les fichiers `.clinerules/` pour identifier :
+Lire les fichiers `.roo/rules/` pour identifier :
 - La stack déjà en place (éviter les doublons, respecter les conventions)
 - Les outils déjà décidés (ne pas redemander ce qui est déjà arbitré)
 - Les contraintes non-négociables (sécurité, observabilité, etc.)
@@ -95,7 +95,7 @@ Vérifier les fichiers existants pour éviter les conflits :
 
 ## Phase 1 : Interview structuré
 
-Sur la base de l'analyse (Phase 0), formuler **toutes les questions pertinentes en une seule fois**, regroupées par thème. Ne pas poser de questions pour ce qui est déjà arbitré dans les `.clinerules` ou évident dans la demande.
+Sur la base de l'analyse (Phase 0), formuler **toutes les questions pertinentes en une seule fois**, regroupées par thème. Ne pas poser de questions pour ce qui est déjà arbitré dans les `.roo/rules` ou évident dans la demande.
 
 ### Format de l'interview
 
@@ -161,9 +161,9 @@ Pour les éléments déjà définis dans les `.clinerules`, je n'ai pas re-posé
 ```
 
 **Règles de l'interview :**
-- **Ne pas demander** ce qui est déjà dans les `.clinerules` (stack par défaut, conventions, etc.)
+- **Ne pas demander** ce qui est déjà dans les `.roo/rules` (stack par défaut, conventions, etc.)
 - **Ne pas demander** par politesse — n'inclure que les questions dont la réponse change concrètement la génération
-- **Proposer des options concrètes** avec des valeurs par défaut suggérées quand pertinent (ex: « PostgreSQL recommandé selon les `.clinerules`, autre choix ? »)
+- **Proposer des options concrètes** avec des valeurs par défaut suggérées quand pertinent (ex: « PostgreSQL recommandé selon les `.roo/rules`, autre choix ? »)
 - **Organiser par thème** — jamais une liste plate de questions sans structure
 - **Un seul round de questions** — formuler toutes les questions d'un coup, pas en plusieurs aller-retours
 
@@ -292,22 +292,22 @@ Ces fichiers doivent contenir **uniquement la structure — pas d'implémentatio
 
 ---
 
-## Phase 7 : Synchronisation des `.clinerules` via `update-rules`
+## Phase 7 : Synchronisation des `.roo/rules` via `update-rules`
 
 Après la génération de tous les fichiers, déclencher automatiquement la skill **`update-rules`** sur les composants concernés :
 
 ```
-## Synchronisation des .clinerules
+## Synchronisation des .roo/rules
 
 Le boilerplate a été généré. Je lance maintenant `update-rules` pour synchroniser
-les `.clinerules` avec le code réel créé.
+les `.roo/rules` avec le code réel créé.
 
 Composants à analyser : [backend / frontend / cli — selon ce qui a été généré]
 ```
 
 **La skill `update-rules` se charge de :**
 - Lire les fichiers de configuration réellement créés (`pyproject.toml`, `package.json`, etc.)
-- Comparer avec les `.clinerules` actuels
+- Comparer avec les `.roo/rules` actuels
 - Identifier les divergences (technologies ajoutées, seuils de couverture configurés, nouvelles cibles Makefile, etc.)
 - Présenter le rapport de divergences
 - Appliquer les mises à jour confirmées
@@ -321,7 +321,7 @@ Composants à analyser : [backend / frontend / cli — selon ce qui a été gén
 Après génération et synchronisation, effectuer les vérifications possibles :
 
 - [ ] Tous les fichiers déclarés ont été créés
-- [ ] Les `.clinerules` sont cohérents et à jour (via `update-rules`)
+- [ ] Les `.roo/rules` sont cohérents et à jour (via `update-rules`)
 - [ ] Le `.env.sample` contient toutes les nouvelles variables
 - [ ] Le Makefile contient les nouvelles cibles (si applicable)
 - [ ] Pas de conflit avec les fichiers existants
@@ -336,7 +336,7 @@ Après génération et synchronisation, effectuer les vérifications possibles :
 | Demande trop floue | Conduire l'interview structuré (Phase 1) |
 | Technologie non reconnue | Demander des précisions, proposer des alternatives connues |
 | Fichier existant risque d'être écrasé | Avertir l'utilisateur, proposer un merge plutôt qu'un overwrite |
-| Dépendance en conflit avec `.clinerules` | Avertir et demander confirmation avant de diverger |
+| Dépendance en conflit avec `.roo/rules` | Avertir et demander confirmation avant de diverger |
 | Impossible de déterminer la structure | Présenter 2-3 options et laisser l'utilisateur choisir |
 | Erreur pendant la génération | Annuler les modifications partielles, informer l'utilisateur |
 | `update-rules` détecte des divergences non attendues | Présenter le rapport et demander confirmation avant d'appliquer |
@@ -350,7 +350,7 @@ Après génération et synchronisation, effectuer les vérifications possibles :
 - [ ] Tous les fichiers boilerplate sont créés : config complets, code source en stubs (Phase 6)
 - [ ] Aucune logique métier n'a été implémentée (uniquement la structure et la configuration)
 - [ ] `update-rules` a été exécuté sur les composants concernés (Phase 7)
-- [ ] Les `.clinerules` sont synchronisés avec le code réel
+- [ ] Les `.roo/rules` sont synchronisés avec le code réel
 - [ ] Le `.env.sample` est complété avec les nouvelles variables
 - [ ] Le `Makefile` est complété avec les nouvelles cibles (si applicable)
 - [ ] Pas de conflit avec les fichiers existants
@@ -367,7 +367,7 @@ Après génération et synchronisation, effectuer les vérifications possibles :
 **Phase 0 — Analyse :**
 - Type : Frontend SPA
 - Stack précisée : Vue 3 + UnoCSS + Element Plus
-- Contraintes implicites : TypeScript (`.clinerules`), Vite (`.clinerules`)
+- Contraintes implicites : TypeScript (`.roo/rules`), Vite (`.roo/rules`)
 - Questions nécessaires : routing ? state management ? auth ? tests ? environnements Docker ?
 
 **Phase 1 — Interview :**
@@ -400,7 +400,7 @@ Après génération et synchronisation, effectuer les vérifications possibles :
 - `frontend/.prettierrc` — Prettier
 - `frontend/env.d.ts` — Types env
 
-**Phase 7 — `update-rules` :** Synchronisation des `.clinerules` sur le composant `frontend`.
+**Phase 7 — `update-rules` :** Synchronisation des `.roo/rules` sur le composant `frontend`.
 
 ---
 
@@ -411,7 +411,7 @@ Après génération et synchronisation, effectuer les vérifications possibles :
 **Phase 0 — Analyse :**
 - Type : Backend API REST
 - Stack précisée : FastAPI + PostgreSQL + Redis
-- Conventions implicites : SQLAlchemy 2.0 async, Pydantic v2, Uvicorn (`.clinerules`)
+- Conventions implicites : SQLAlchemy 2.0 async, Pydantic v2, Uvicorn (`.roo/rules`)
 - Questions nécessaires : auth JWT ? agents IA ? message bus ? observabilité ?
 
 **Phase 1 — Interview :**
@@ -444,7 +444,7 @@ Après génération et synchronisation, effectuer les vérifications possibles :
 - `backend/alembic.ini` — Config Alembic
 - `backend/tests/` — Tests pytest
 
-**Phase 7 — `update-rules` :** Synchronisation des `.clinerules` sur le composant `backend`.
+**Phase 7 — `update-rules` :** Synchronisation des `.roo/rules` sur le composant `backend`.
 
 ---
 

@@ -1,0 +1,62 @@
+# STORY-103 : SecretManager AES/Fernet — chiffrement au repos des credentials cibles et env vars de stacks (P0-4)
+
+**Statut :** TODO
+**Epic Parent :** EPIC-011 — P0 : Sécurité bloquante
+**Item plan :** P0-4 (rapport d'écart A6 + B3 + C12 partiel, §4/§7 critique n°1) — ampleur **L**
+
+## Description
+
+En tant qu'administrateur sécurité de WindFlow, je veux que toutes les données sensibles stockées en base soient chiffrées au repos (AES-256 via Fernet, clé dérivée du `SECRET_KEY`), afin que la compromission du fichier de base de données ne révèle ni credentials d'accès aux cibles (mots de passe SSH/sudo, clés privées) ni variables d'environnement sensibles des stacks.
+
+**Problème constaté** ([`backend_status.md`](../../docs/backend_status.md) §6.2, §14) : le modèle [`Target`](../../backend/app/models/target.py) stocke ses `credentials` en **JSON en clair** dans la base ; les variables sensibles des stacks ne sont pas non plus chiffrées. Le `SecretManager` spécifié (15-securite.md § Chiffrement des secrets) n'existe dans aucun module — c'est le **MANQUANT critique n°1** du rapport d'écart (A6). La spec est formelle : « Toutes les données sensibles stockées en base… sont chiffrées avec AES-256 via Fernet » (hosts.connection_config, stacks.env_vars_encrypted…), ce qui correspond aujourd'hui aux champs `Target.credentials` et aux variables d'environnement des stacks.
+
+## Contexte technique
+
+*(à remplir par analyse-story)*
+
+Contraintes de conception posées par le plan (à respecter par l'analyse) :
+- **Nouveau service** `backend/app/services/secret_manager.py` ou `core/secret_manager.py` (le plan cite `core/secret_manager.py` — arbitrage localisation à trancher par analyse-story), implémentant la classe `SecretManager` de la spec (PBKDF2HMAC, salt `windflow-secrets-v1`, 480 000 itérations, clé dérivée du `SECRET_KEY`) ;
+- **Conçu sans migration de schéma** : le contenu JSON est chiffré, pas la structure (le champ reste texte) — pas de dépendance à Alembic (P1-1) ;
+- **Migration par double lecture** : ancienne ligne en clair → lue puis **ré-encryptée au premier accès** ; backup de base préalable documenté ; procédure de rotation de clé maîtresse (plan §7.1) ;
+- **Clé via env** : `SECRET_KEY` / variable dédiée dans [`config.py`](../../backend/app/config.py:15) — interaction avec STORY-101 (le secret dev par défaut doit devenir impossible en prod) ;
+- Services écrits/lecteurs des credentials à couvrir : [`target_service.py`](../../backend/app/services/target_service.py:30), exécution distante ([`commands.py`](../../backend/app/services/commands.py:167) — `SSHCommandExecutor` consomme les credentials), rendu/déploiement des variables de stacks ([`background_tasks.py`](../../backend/app/tasks/background_tasks.py:24), [`stack_service.py`](../../backend/app/services/stack_service.py:19)) ;
+- Ne jamais logger de secrets (masquage `***` déjà pratiqué par [`adoption_service.py`](../../backend/app/services/adoption_service.py:230)) ; les valeurs déchiffrées ne vivent qu'en mémoire ;
+- Schéma cible : prérequis logique des entités `ssh_keys`/empreintes (06-modele-de-donnees.md) qui arriveront en P1-9 — le SecretManager est leur fondation.
+
+## Critères d'acceptation (AC)
+
+- [ ] AC 1 : Le `SecretManager` est implémenté conforme à la spec (15-securite.md) : `SecretManager(master_key)` avec dérivation PBKDF2HMAC (salt `windflow-secrets-v1`, 480 000 itérations, SHA-256) et méthodes `encrypt(str) -> str` / `decrypt(str) -> str` — **test unitaire round-trip** : chiffre → déchiffre → valeur initiale ; texte chiffré ≠ texte clair ; échec de déchiffrement avec une mauvaise clé maîtresse lève une erreur explicite.
+- [ ] AC 2 : Toute **écriture** de `Target.credentials` (création/modification de cible) passe par le SecretManager et stocke du JSON chiffré ; toute **lecture** (déploiement, scan, health-check, exécution SSH/sudo) déchiffre à la volée — les flux existants fonctionnent à l'identique pour l'utilisateur (non-régression des déploiements et du scan, garde-fous §2.G).
+- [ ] AC 3 : Les variables d'environnement sensibles des stacks sont chiffrées au repos (équivalent `env_vars_encrypted` de la spec) et déchiffrées uniquement en mémoire au moment du rendu/déploiement — jamais écrites sur disque (`.env`/override) ni loggées ; l'API et l'UI ne renvoient jamais la valeur en clair (masquage `***` dans les réponses/aperçus).
+- [ ] AC 4 : **Migration des données existantes par double lecture** : une ligne ancienne stockée en clair est lue avec succès puis **ré-encryptée au premier accès** ; test de migration dédié (fixture avec credential clair → accès → relecture chiffrée) ; documentation de la procédure (backup préalable, rotation de clé maîtresse).
+- [ ] AC 5 : Critère de done absolu du plan : après exécution sur une base existante, **0 credential lisible en base** ; tests écrits et passants (round-trip, double lecture, non-exposition API, non-régression déploiement) — `make lint` + `make backend-test` verts ; couverture ≥ 80 % sur le nouveau module (chemin critique sécurité, viser 95 % — rules 35).
+
+## Références spécification
+
+- [`docs/general_specs/15-securite.md`](../../docs/general_specs/15-securite.md) § Chiffrement des secrets → « SecretManager (référence unique) » (code de référence AES-256/Fernet, PBKDF2HMAC, salt `windflow-secrets-v1`, « ce qui est chiffré » : `stacks.env_vars_encrypted`, `hosts.connection_config`, `plugin_configs.value` si `encrypted`), § « Protection du SECRET_KEY », § Vue d'ensemble → Principes (« les secrets sont chiffrés ») ;
+- [`docs/general_specs/05-stack-technologique.md`](../../docs/general_specs/05-stack-technologique.md) § Chiffrement des secrets (core) — « une seule version, salt `windflow-secrets-v1` » ;
+- [`docs/general_specs/06-modele-de-donnees.md`](../../docs/general_specs/06-modele-de-donnees.md) § `ssh_keys` / empreintes d'hôtes (prérequis logique : la clé privée SSH est « stockée chiffrée au repos AES-256 via le SecretManager » — 15-securite.md § Clés SSH réutilisables) ;
+- [`docs/backend_status.md`](../../docs/backend_status.md) §6.2 (`Target` : credentials JSON), §14.2/§14.3 ;
+- [`docs/backend_remediation_plan.md`](../../docs/backend_remediation_plan.md) §4 Vague P0 — item P0-4, §2.A — item A6, §2.B — item B3, §2.C — item C12 (partiel), §7.1 (mitigations compatibilité données).
+
+## Dépendances
+
+- Aucune en P0 (autonome — conçu sans migration de schéma).
+- **Inter-vagues (chaînes critiques du plan §5)** : STORY-103 est le prérequis de **P1-9** (SSH keys + empreintes, EPIC-012) et de **P2-3** (plugins réels, `plugin_configs` chiffré si `encrypted`, EPIC-013) ; alimente aussi P2-13 (recreate masquage secrets). Toute dérive de périmètre vers `plugin_configs` complet relève de P2-3 (C12) — hors périmètre ici.
+- Cohérence à assurer avec STORY-101 (clé maîtresse via env, refus des valeurs dev en prod).
+
+## Sous-stories
+
+*(section réservée — STORY-103 ampleur L : découpe possible par `analyse-story`/`split-story`, plage STORY-105+ disponible)*
+
+## État d'avancement technique
+
+*(à remplir par analyse-story)*
+
+## Tâches d'implémentation détaillées
+
+*(à remplir par analyse-story)*
+
+## Tests à écrire
+
+*(à remplir par analyse-story)*
