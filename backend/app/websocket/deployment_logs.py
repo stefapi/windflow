@@ -11,10 +11,9 @@ from datetime import datetime
 from fastapi import HTTPException, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
 
-from ..auth.jwt import decode_access_token
 from ..database import db as database
 from ..models.deployment import Deployment
-from ..services.user_service import UserService
+from ..models.user import User
 from .connection_managers import manager
 
 logger = logging.getLogger(__name__)
@@ -48,18 +47,24 @@ async def verify_deployment_access(deployment_id: str, user, db) -> Deployment:
     return deployment
 
 
-async def deployment_logs_websocket_endpoint(websocket: WebSocket, deployment_id: str):
+async def deployment_logs_websocket_endpoint(
+    websocket: WebSocket, deployment_id: str, user: User
+):
     """
     Stream deployment logs in real-time.
 
     Connect to a specific deployment's log stream for real-time monitoring.
 
     Authentication:
-    Authentication is performed via query parameter: ?token=JWT_TOKEN
+    Authentication is performed via query parameter: ?token=JWT_TOKEN and is
+    enforced by the `get_current_user_ws` dependency **before** the handshake
+    (refused with 1008 if the token is absent, invalid, expired or the user
+    is inactive). In development mode (DISABLE_AUTH=true), the first superadmin
+    is auto-logged in.
 
     Connection Flow:
     1. Client connects with deployment ID and token in query string
-    2. Server validates token and user permissions
+    2. Server validates token and user permissions (refuses handshake on failure)
     3. Server verifies user has access to the deployment
     4. Server sends initial deployment status
     5. Client receives real-time log updates as they occur
@@ -80,31 +85,12 @@ async def deployment_logs_websocket_endpoint(websocket: WebSocket, deployment_id
     - User must belong to the same organization as the deployment
     - Superadmins can access all deployments
     """
-    # Extract token from query parameters manually
-    token = websocket.query_params.get("token")
-
-    # Accepter la connexion d'abord (requis par le protocole WebSocket)
+    # Accepter la connexion (l'authentification a déjà été validée par la
+    # dépendance get_current_user_ws lors du handshake)
     await websocket.accept()
 
-    # Authentifier après acceptation
-    if not token:
-        await websocket.close(code=1008, reason="Authentication required")
-        return
-
-    # Vérifier le token et récupérer l'utilisateur
-    token_data = decode_access_token(token)
-    if token_data is None or token_data.user_id is None:
-        await websocket.close(code=1008, reason="Invalid token")
-        return
-
-    # Créer une session manuellement pour l'authentification
+    # Vérifier l'accès au déploiement (RBAC organisation)
     async with database.session() as db:
-        user = await UserService.get_by_id(db, token_data.user_id)
-        if user is None or not user.is_active:
-            await websocket.close(code=1008, reason="User not found or inactive")
-            return
-
-        # Vérifier l'accès au déploiement
         try:
             deployment = await verify_deployment_access(deployment_id, user, db)
         except HTTPException as e:

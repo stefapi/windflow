@@ -64,6 +64,9 @@ C'est l'epic qui fait passer WindFlow du « sympa pour tester » au « fiable po
 - [ ] STORY-343 : Plugin Restic — restore sélectif depuis l'UI
 
 ### Kubernetes basique (Phase 3 — optionnel)
+
+> **Note (renvoi croisé) :** les STORY-351→354 n'ont jamais été créées. Le support Kubernetes (modèle Compute complet : entité Cluster, Apps cluster-scoped `helm_release`/`k8s_manifest`, adapters K8s/Helm) est désormais porté par [EPIC-015](EPIC-015-compute-clusters-apps-k8s.md), créée suite à l'arbitrage F4 du plan de remédiation backend. Les intentions ci-dessous restent listées pour historique.
+
 - [ ] STORY-351 : Connexion clusters Kubernetes (kubeconfig)
 - [ ] STORY-352 : Déploiement manifests YAML et Helm charts
 - [ ] STORY-353 : Dashboard cluster — pods, deployments, services, logs

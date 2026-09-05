@@ -12,10 +12,9 @@ from datetime import datetime
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from ..auth.jwt import decode_access_token
+from ..auth.dependencies import authenticate_ws_first_message
 from ..database import db as database
 from ..schemas.websocket_events import WebSocketEventType
-from ..services.user_service import UserService
 
 # Import depuis le package websocket
 from . import (
@@ -84,59 +83,19 @@ async def general_websocket_endpoint(websocket: WebSocket):
     authenticated = False
 
     try:
-        # Attendre le premier message d'authentification avec timeout
-        logger.info("Waiting for authentication message...")
-        try:
-            data = await asyncio.wait_for(
-                websocket.receive_text(),
-                timeout=30.0,  # 30 secondes timeout pour le debug
-            )
-            logger.info(f"Received data from client: {data}")
-        except asyncio.TimeoutError:
-            logger.warning("WebSocket authentication timeout - no message received")
-            await websocket.close(code=1008, reason="Authentication timeout")
+        # Authentification « JWT au premier message » (timeout 30 s, close 1008).
+        # Helper centralisé — gère également le mode dev DISABLE_AUTH (auto-login
+        # superadmin). Retourne None si l'authentification a échoué (connexion
+        # déjà fermée par le helper).
+        user = await authenticate_ws_first_message(websocket)
+        if user is None:
             return
 
-        try:
-            message = json.loads(data)
-        except json.JSONDecodeError:
-            await websocket.close(code=1008, reason="Invalid JSON format")
-            return
-
-        # Vérifier si c'est un message d'authentification
-        logger.info(f"Received first message: {message}")
-        if message.get("type") != "auth" or "token" not in message:
-            logger.warning(f"Invalid authentication message: {message}")
-            await websocket.close(
-                code=1008, reason="Authentication required as first message"
-            )
-            return
-
-        token = message["token"]
-        logger.info(f"Authenticating with token length: {len(token)}")
-
-        # Vérifier le token et récupérer l'utilisateur
-        token_data = decode_access_token(token)
-        logger.info(f"Token decoded: {token_data is not None}")
-        if token_data is None or token_data.user_id is None:
-            logger.error("Invalid token - could not decode token")
-            await websocket.close(code=1008, reason="Invalid token - could not decode")
-            return
+        # Authentification réussie
+        authenticated = True
 
         # Créer une session qui restera ouverte pendant toute la connexion
         async with database.session() as db:
-            user = await UserService.get_by_id(db, token_data.user_id)
-            logger.info(
-                f"User found: {user is not None}, active: {user.is_active if user else 'N/A'}"
-            )
-            if user is None or not user.is_active:
-                logger.error(f"User not found or inactive: {token_data.user_id}")
-                await websocket.close(code=1008, reason="User not found or inactive")
-                return
-
-            # Authentification réussie
-            authenticated = True
-
             # Créer le contexte pour les plugins avec la session DB disponible
             plugin_context = PluginContext(
                 db=db,  # Session disponible pour toute la durée de la connexion

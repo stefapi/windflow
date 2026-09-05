@@ -12,16 +12,17 @@ from typing import Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from ..auth.jwt import decode_access_token
-from ..database import db as database
+from ..models.user import User
 from ..services.docker_client_service import get_docker_client
-from ..services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
 
 async def container_logs_websocket_endpoint(
-    websocket: WebSocket, container_id: str, tail: int = 100
+    websocket: WebSocket,
+    container_id: str,
+    tail: int = 100,
+    user: Optional[User] = None,
 ):
     """
     Stream Docker container logs in real-time.
@@ -29,7 +30,11 @@ async def container_logs_websocket_endpoint(
     Connect to stream logs from a specific Docker container.
 
     Authentication:
-    Authentication is performed via query parameter: ?token=JWT_TOKEN
+    Authentication is performed via query parameter: ?token=JWT_TOKEN and is
+    enforced by the `get_current_user_ws` dependency **before** the handshake
+    (refused with 1008 if the token is absent, invalid, expired or the user
+    is inactive). In development mode (DISABLE_AUTH=true), the first superadmin
+    is auto-logged in.
 
     Query Parameters:
     - token: JWT token for authentication
@@ -50,29 +55,9 @@ async def container_logs_websocket_endpoint(
     Client Messages:
     - Heartbeat: Send "ping" to keep connection alive
     """
-    # Extract token from query parameters
-    token = websocket.query_params.get("token")
-    tail = int(websocket.query_params.get("tail", "100"))
-
-    # Accepter la connexion
+    # Accepter la connexion (l'authentification a déjà été validée par la
+    # dépendance get_current_user_ws lors du handshake)
     await websocket.accept()
-
-    # Authentifier
-    if not token:
-        await websocket.close(code=1008, reason="Authentication required")
-        return
-
-    token_data = decode_access_token(token)
-    if token_data is None or token_data.user_id is None:
-        await websocket.close(code=1008, reason="Invalid token")
-        return
-
-    # Vérifier l'utilisateur
-    async with database.session() as db:
-        user = await UserService.get_by_id(db, token_data.user_id)
-        if user is None or not user.is_active:
-            await websocket.close(code=1008, reason="User not found or inactive")
-            return
 
     # Récupérer le client Docker
     try:

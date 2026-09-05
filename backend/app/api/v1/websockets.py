@@ -6,8 +6,10 @@ La logique métier a été déplacée dans backend/app/websocket/ pour une
 meilleure organisation et maintenabilité.
 """
 
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, Depends, WebSocket
 
+from ...auth.dependencies import get_current_user_ws
+from ...models.user import User
 from ...websocket.container_logs import container_logs_websocket_endpoint
 from ...websocket.container_stats import container_stats_websocket_endpoint
 from ...websocket.deployment_logs import deployment_logs_websocket_endpoint
@@ -61,18 +63,25 @@ async def general_websocket(websocket: WebSocket):
 
 
 @router.websocket("/deployments/{deployment_id}/logs", name="deployment_logs_websocket")
-async def deployment_logs_websocket(websocket: WebSocket, deployment_id: str):
+async def deployment_logs_websocket(
+    websocket: WebSocket,
+    deployment_id: str,
+    user: User = Depends(get_current_user_ws),
+):
     """
     Stream deployment logs in real-time.
 
     Connect to a specific deployment's log stream for real-time monitoring.
 
     Authentication:
-    Authentication is performed via query parameter: ?token=JWT_TOKEN
+    Authentication is performed via query parameter: ?token=JWT_TOKEN.
+    The handshake is **refused** (close code 1008) if the token is absent,
+    invalid, expired or the user is inactive. In development mode
+    (DISABLE_AUTH=true), the first superadmin is auto-logged in.
 
     Connection Flow:
     1. Client connects with deployment ID and token in query string
-    2. Server validates token and user permissions
+    2. Server validates token and user permissions (refuses handshake on failure)
     3. Server verifies user has access to the deployment
     4. Server sends initial deployment status
     5. Client receives real-time log updates as they occur
@@ -93,7 +102,7 @@ async def deployment_logs_websocket(websocket: WebSocket, deployment_id: str):
     - User must belong to the same organization as the deployment
     - Superadmins can access all deployments
     """
-    await deployment_logs_websocket_endpoint(websocket, deployment_id)
+    await deployment_logs_websocket_endpoint(websocket, deployment_id, user)
 
 
 @router.websocket("/terminal/{container_id}", name="container_terminal_websocket")
@@ -106,7 +115,9 @@ async def container_terminal_websocket(
     Provides bidirectional streaming for command execution in containers.
 
     Authentication:
-    First message must be: {"type": "auth", "token": "JWT_TOKEN"}
+    First message must be: {"type": "auth", "token": "JWT_TOKEN"}.
+    In development mode (DISABLE_AUTH=true), the token is ignored and the
+    first superadmin is auto-logged in (the auth message is still required).
 
     Security:
     - RBAC: User must have access to the deployment containing the container
@@ -133,7 +144,10 @@ async def container_terminal_websocket(
     "/docker/containers/{container_id}/logs", name="docker_container_logs_websocket"
 )
 async def docker_container_logs_websocket(
-    websocket: WebSocket, container_id: str, tail: int = 100
+    websocket: WebSocket,
+    container_id: str,
+    tail: int = 100,
+    user: User = Depends(get_current_user_ws),
 ):
     """
     Stream Docker container logs in real-time.
@@ -141,7 +155,10 @@ async def docker_container_logs_websocket(
     Connect to stream logs from a specific Docker container.
 
     Authentication:
-    Authentication is performed via query parameter: ?token=JWT_TOKEN
+    Authentication is performed via query parameter: ?token=JWT_TOKEN.
+    The handshake is **refused** (close code 1008) if the token is absent,
+    invalid, expired or the user is inactive. In development mode
+    (DISABLE_AUTH=true), the first superadmin is auto-logged in.
 
     Query Parameters:
     - token: JWT token for authentication
@@ -162,20 +179,27 @@ async def docker_container_logs_websocket(
     Client Messages:
     - Heartbeat: Send "ping" to keep connection alive
     """
-    await container_logs_websocket_endpoint(websocket, container_id, tail)
+    await container_logs_websocket_endpoint(websocket, container_id, tail, user)
 
 
 @router.websocket(
     "/docker/containers/{container_id}/stats", name="docker_container_stats_websocket"
 )
-async def docker_container_stats_websocket(websocket: WebSocket, container_id: str):
+async def docker_container_stats_websocket(
+    websocket: WebSocket,
+    container_id: str,
+    user: User = Depends(get_current_user_ws),
+):
     """
     Stream Docker container stats in real-time.
 
     Connect to stream stats from a specific Docker container.
 
     Authentication:
-    Authentication is performed via query parameter: ?token=JWT_TOKEN
+    Authentication is performed via query parameter: ?token=JWT_TOKEN.
+    The handshake is **refused** (close code 1008) if the token is absent,
+    invalid, expired or the user is inactive. In development mode
+    (DISABLE_AUTH=true), the first superadmin is auto-logged in.
 
     Query Parameters:
     - token: JWT token for authentication
@@ -195,4 +219,4 @@ async def docker_container_stats_websocket(websocket: WebSocket, container_id: s
     Client Messages:
     - Heartbeat: Send "ping" to keep connection alive
     """
-    await container_stats_websocket_endpoint(websocket, container_id)
+    await container_stats_websocket_endpoint(websocket, container_id, user)

@@ -500,7 +500,8 @@ Conventions respectées : PK en `String(36)` UUID, `created_at/updated_at`, snak
 | `get_current_user()` | OAuth2 Bearer ; en mode `disable_auth` retourne le premier superadmin (500 s'il n'existe pas) |
 | `get_current_active_user()` | Vérifie `is_active` (403) |
 | `require_superuser()` | 403 si non superadmin — alias `get_current_superadmin` |
-| `get_current_user_ws()` | Auth WebSocket par query param `?token=` — retourne `None` sans token : **les endpoints WS acceptent des connexions non authentifiées** (comportement assumé dans la docstring) |
+| `get_current_user_ws()` | Auth WebSocket par query param `?token=` — **stricte** : sans token, token invalide/expiré ou utilisateur inactif, le handshake est refusé (`WebSocketException` 1008). Gère `DISABLE_AUTH` (auto-login superadmin). Utilisée par les 3 canaux dédiés (`deployments/logs`, `containers/logs`, `containers/stats`) |
+| `authenticate_ws_first_message()` | Auth « JWT au premier message » centralisée (timeout 30 s via `WS_AUTH_TIMEOUT_SECONDS`, close 1008, callback `on_failure` pour l'audit) — utilisée par les canaux général et terminal (STORY-100) |
 
 ### 7.3 RBAC réel
 
@@ -688,7 +689,7 @@ Organizations (API), users (API), **websocket (aucun test)**, schedules, discove
 
 | Constat | Détail |
 |---------|--------|
-| WS auth tolérante | `get_current_user_ws()` retourne `None` sans token — connexions anonymes acceptées |
+| ~~WS auth tolérante~~ **résolu (STORY-100)** | `get_current_user_ws()` est désormais stricte (refus handshake 1008) et câblée sur les 3 canaux dédiés ; auth « premier message » centralisée via `authenticate_ws_first_message()` sur général/terminal ; tests `test_ws_auth.py` (42 cas) |
 | Rate limiting effectif conditionnel | Sans `RATE_LIMIT_STORAGE_URL`, tous les limiteurs sont des no-op ([`rate_limit.py`](backend/app/core/rate_limit.py:43)) |
 | Logout stateless | Pas de blacklist de tokens serveur ([`auth.py`](backend/app/api/v1/auth.py:391)) |
 

@@ -349,6 +349,20 @@ n'est émis par personne (§10.1).
 L'authentification WebSocket est **implémentée** (X8/R4/R5 résolus) — les « TODO/Phase 5 » des versions
 antérieures de ce document sont obsolètes. Deux mécanismes selon le canal :
 
+Depuis la STORY-100 (remédiation P0-1), l'authentification est **stricte et centralisée** :
+
+- **Canaux dédiés** (`/deployments/{id}/logs`, `/docker/containers/{id}/logs|stats`) : la dépendance
+  [`get_current_user_ws()`](../../backend/app/auth/dependencies.py) refuse le **handshake** (close 1008)
+  si le token `?token=` est absent, invalide, expiré ou si l'utilisateur est inactif — l'auth inline
+  dupliquée a été supprimée des handlers.
+- **Canaux général et terminal** : l'auth « premier message » est portée par le helper centralisé
+  `authenticate_ws_first_message()` (timeout `WS_AUTH_TIMEOUT_SECONDS` = 30 s, close 1008, callback
+  `on_failure` pour l'audit terminal).
+- **Mode dev `DISABLE_AUTH=true`** : auto-login du premier superadmin sur les 5 canaux (le premier message
+  d'auth reste requis sur général/terminal) ; sans superadmin en base, la connexion est refusée.
+- Tests de sécurité : [`test_ws_auth.py`](../../backend/tests/unit/test_websocket/test_ws_auth.py)
+  (42 cas — refus sans token / token invalide / expiré / user inactif / accept valide / disable_auth).
+
 ### 7.1 Canal général et terminal : JWT au premier message
 
 La connexion est acceptée, puis le client **doit** envoyer `{"type": "auth", "token": "<JWT>"}` dans les

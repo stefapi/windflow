@@ -1,6 +1,6 @@
 # EPIC-011 : P0 — Sécurité bloquante (remédiation backend)
 
-**Statut :** TODO
+**Statut :** IN_PROGRESS
 **Priorité :** Haute
 
 ## Vision
@@ -34,7 +34,7 @@ Chaque item P0 du plan de remédiation devient une story :
 
 ## Liste des Stories liées
 
-- [ ] STORY-100 : Auth WebSocket obligatoire — refus des connexions sans token valide sur les 5 canaux (P0-1)
+- [x] STORY-100 : Auth WebSocket obligatoire — refus des connexions sans token valide sur les 5 canaux (P0-1)
 - [ ] STORY-101 : Garde-fou de démarrage — refus des secrets dev par défaut en production (P0-2)
 - [ ] STORY-102 : Rate limiting effectif sans Redis — fallback mémoire + warning (P0-3)
 - [ ] STORY-103 : SecretManager AES/Fernet — chiffrement au repos des credentials cibles et env vars de stacks (P0-4)

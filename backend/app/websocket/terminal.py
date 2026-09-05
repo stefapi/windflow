@@ -14,11 +14,10 @@ from typing import Optional
 from fastapi import WebSocket
 from sqlalchemy import select
 
-from ..auth.jwt import decode_access_token
+from ..auth.dependencies import authenticate_ws_first_message
 from ..database import db as database
 from ..models.deployment import Deployment
 from ..services.terminal_service import ExecSession, TerminalService
-from ..services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -159,88 +158,26 @@ async def container_terminal_websocket_endpoint(
     exec_id = None
 
     try:
-        # Attendre le message d'authentification (30s timeout)
-        try:
-            data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-        except asyncio.TimeoutError:
+        # Authentification « JWT au premier message » (timeout 30 s, close 1008).
+        # Helper centralisé — gère également le mode dev DISABLE_AUTH (auto-login
+        # superadmin). Le callback on_failure préserve l'audit trail terminal.
+        async def _audit_auth_failure(reason_detail: str, token_hint: str) -> None:
             await log_terminal_audit(
-                "unknown",
-                "unknown",
-                container_id,
-                "connect",
-                False,
-                "Authentication timeout",
+                "unknown", "unknown", container_id, "connect", False, reason_detail
             )
-            await websocket.send_json(
-                {"type": "error", "message": "Authentication timeout"}
-            )
-            await websocket.close(code=1008)
-            return
+            try:
+                await websocket.send_json({"type": "error", "message": reason_detail})
+            except Exception:
+                pass
 
-        # Parser le message d'auth
-        try:
-            message = json.loads(data)
-        except json.JSONDecodeError:
-            await log_terminal_audit(
-                "unknown",
-                "unknown",
-                container_id,
-                "connect",
-                False,
-                "Invalid JSON format",
-            )
-            await websocket.send_json(
-                {"type": "error", "message": "Invalid JSON format"}
-            )
-            await websocket.close(code=1008)
-            return
-
-        # Vérifier le type de message
-        if message.get("type") != "auth" or "token" not in message:
-            await log_terminal_audit(
-                "unknown",
-                "unknown",
-                container_id,
-                "connect",
-                False,
-                "Authentication required as first message",
-            )
-            await websocket.send_json(
-                {"type": "error", "message": "Authentication required as first message"}
-            )
-            await websocket.close(code=1008)
-            return
-
-        # Valider le token JWT
-        token = message["token"]
-        token_data = decode_access_token(token)
-
-        if token_data is None or token_data.user_id is None:
-            await log_terminal_audit(
-                "unknown", "unknown", container_id, "connect", False, "Invalid token"
-            )
-            await websocket.send_json({"type": "error", "message": "Invalid token"})
-            await websocket.close(code=1008)
+        ws_user = await authenticate_ws_first_message(
+            websocket, on_failure=_audit_auth_failure
+        )
+        if ws_user is None:
             return
 
         # Vérifier l'utilisateur et ses permissions (RBAC)
         async with database.session() as db:
-            ws_user = await UserService.get_by_id(db, token_data.user_id)
-            if ws_user is None or not ws_user.is_active:
-                await log_terminal_audit(
-                    str(token_data.user_id),
-                    "unknown",
-                    container_id,
-                    "connect",
-                    False,
-                    "User not found or inactive",
-                )
-                await websocket.send_json(
-                    {"type": "error", "message": "User not found or inactive"}
-                )
-                await websocket.close(code=1008)
-                return
-
             # RBAC: Vérifier que l'utilisateur a accès au déploiement contenant ce container
             stmt = select(Deployment).where(Deployment.container_id == container_id)
             result = await db.execute(stmt)

@@ -3,7 +3,7 @@
 ## 📋 BACKLOG
 
 ### EPIC-011 : P0 — Sécurité bloquante (remédiation backend)
-- [ ] STORY-100 : Auth WebSocket obligatoire — refus des connexions sans token valide sur les 5 canaux (P0-1)
+- [ ] STORY-101 : Garde-fou de démarrage — refus des secrets dev par défaut en production (P0-2)
 - [ ] STORY-101 : Garde-fou de démarrage — refus des secrets dev par défaut en production (P0-2)
 - [ ] STORY-102 : Rate limiting effectif sans Redis — fallback mémoire + warning (P0-3)
 - [ ] STORY-103 : SecretManager AES/Fernet — chiffrement au repos des credentials cibles et env vars de stacks (P0-4)
@@ -47,6 +47,8 @@
 - [ ] STORY-253 : Mise à jour documentaire post-remédiation — `backend_status.md`, rules `.roo`, CHANGELOG (P3-5)
 - [ ] STORY-254 : Revue finale de conformité — audit specs ↔ code et tableau de conformité final (clôture du plan)
 
+### EPIC-015 : Compute — Clusters Kubernetes & Apps cluster-scoped
+
 ## 🏗️ IN PROGRESS
 
 _(vide)_
@@ -60,4 +62,6 @@ _(vide)_
 _(vide)_
 
 ## ✅ DONE
+
+- [x] STORY-100 : Auth WebSocket obligatoire — refus des connexions sans token valide sur les 5 canaux (P0-1)
 
