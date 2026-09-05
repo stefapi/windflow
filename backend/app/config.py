@@ -6,9 +6,10 @@ avec support SQLite par défaut et PostgreSQL optionnel.
 """
 
 import json
+import logging
 from typing import List, Optional, Union
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -214,10 +215,23 @@ class Settings(BaseSettings):
     log_format: str = Field(default="json", pattern="^(json|text)$")
 
     # Initial Admin User (pour seeding de la base de données)
-    admin_email: str = "admin@windflow.dev"
-    admin_username: str = "admin"
-    admin_password: str = "changeme123"
-    admin_full_name: str = "Administrator"
+    # Alias SUPERADMIN_* : nommage documenté dans env.example / .env.prod.example
+    admin_email: str = Field(
+        default="admin@windflow.dev",
+        validation_alias=AliasChoices("admin_email", "SUPERADMIN_EMAIL"),
+    )
+    admin_username: str = Field(
+        default="admin",
+        validation_alias=AliasChoices("admin_username", "SUPERADMIN_USERNAME"),
+    )
+    admin_password: str = Field(
+        default="changeme123",
+        validation_alias=AliasChoices("admin_password", "SUPERADMIN_PASSWORD"),
+    )
+    admin_full_name: str = Field(
+        default="Administrator",
+        validation_alias=AliasChoices("admin_full_name", "SUPERADMIN_FULL_NAME"),
+    )
     default_org_name: str = "Default Organization"
     default_org_slug: str = "default"
 
@@ -310,3 +324,111 @@ class Settings(BaseSettings):
 
 # Instance globale des settings
 settings = Settings()
+
+
+# ============================================================================
+# GARDE-FOU DE DÉMARRAGE — secrets de développement interdits en production
+# (STORY-101 / P0-2 : refuser les valeurs dev prédictibles en production)
+# ============================================================================
+
+# Valeurs de secret JWT connues comme étant de développement (défaut code +
+# valeur documentée dans env.example). Jamais acceptées en production.
+DEV_JWT_SECRET_VALUES: frozenset[str] = frozenset(
+    {
+        "dev-secret-key-change-in-production-please-use-a-long-random-string-minimum-32-characters",
+        "dev-jwt-secret-key-change-in-production",
+    }
+)
+
+# Mot de passe admin de développement (seeding par défaut).
+DEV_ADMIN_PASSWORD = "changeme123"
+
+# Longueur minimale acceptée pour le mot de passe admin en production.
+MIN_ADMIN_PASSWORD_LENGTH: int = 16
+
+# Logger dédié au garde-fou (aucune valeur de secret n'y est jamais écrite).
+_guard_logger = logging.getLogger("windflow.production_guard")
+
+
+def validate_production_secrets(config: "Settings") -> List[str]:
+    """
+    Collecte les violations de secrets de développement en production.
+
+    Fonction pure : retourne la liste des messages de violation (vide = OK).
+    Aucun contrôle hors environnement ``production`` (dev/test inchangés).
+
+    Les messages nomment les variables d'environnement concernées et la marche
+    à suivre — **jamais la valeur des secrets**.
+
+    Args:
+        config: Instance de Settings à vérifier.
+
+    Returns:
+        Liste de messages de violation (vide si conforme).
+    """
+    if not config.is_production:
+        return []
+
+    violations: List[str] = []
+
+    if config.jwt_secret_key in DEV_JWT_SECRET_VALUES:
+        violations.append(
+            "JWT_SECRET_KEY conserve une valeur de développement connue "
+            "(forgabilité des tokens). Générez une clé forte : "
+            "`openssl rand -hex 32` et définissez JWT_SECRET_KEY."
+        )
+
+    if config.admin_password == DEV_ADMIN_PASSWORD:
+        violations.append(
+            "ADMIN_PASSWORD (alias SUPERADMIN_PASSWORD) conserve le mot de passe "
+            "de développement 'changeme123' (prise de contrôle immédiate). "
+            "Définissez un mot de passe fort et unique."
+        )
+    elif len(config.admin_password) < MIN_ADMIN_PASSWORD_LENGTH:
+        violations.append(
+            f"ADMIN_PASSWORD (alias SUPERADMIN_PASSWORD) est trop court "
+            f"(< {MIN_ADMIN_PASSWORD_LENGTH} caractères). Définissez un mot de "
+            "passe d'au moins 16 caractères."
+        )
+
+    if config.disable_auth:
+        violations.append(
+            "DISABLE_AUTH=true est interdit en production (contourne "
+            "l'authentification JWT). Définissez DISABLE_AUTH=false."
+        )
+
+    return violations
+
+
+def enforce_production_secrets(config: "Settings") -> None:
+    """
+    Refuse le démarrage si des secrets de développement sont détectés en production.
+
+    À appeler au startup **avant** toute connexion DB ou exposition réseau :
+    lève ``RuntimeError`` avec la liste consolidée des variables concernées
+    et la marche à suivre (les valeurs des secrets ne sont jamais exposées).
+
+    Args:
+        config: Instance de Settings à vérifier.
+
+    Raises:
+        RuntimeError: Si au moins un secret de développement est détecté
+            en environnement production.
+    """
+    violations = validate_production_secrets(config)
+    if not violations:
+        return
+
+    _guard_logger.critical(
+        "Refus de démarrage : %d secret(s) de développement détecté(s) en "
+        "production — variables concernées : %s",
+        len(violations),
+        "; ".join(v.split("(")[0].strip() for v in violations),
+    )
+    raise RuntimeError(
+        "Refus de démarrage : "
+        f"{len(violations)} secret(s) de développement détecté(s) en production.\n"
+        + "\n".join(f"  - {violation}" for violation in violations)
+        + "\nCorrigez les variables d'environnement listées ci-dessus puis "
+        "redémarrez. Aucune exposition de l'API n'a eu lieu."
+    )

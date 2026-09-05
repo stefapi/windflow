@@ -89,7 +89,9 @@ async def seed_database(session: AsyncSession) -> None:
             print("  - Target: localhost non créée (voir détails)")
         for message in target_messages:
             print(f"    • {message}")
-        print(f"  - Mot de passe par défaut: {settings.admin_password}")
+        print(
+            "  - Mot de passe admin: configuré via ADMIN_PASSWORD/SUPERADMIN_PASSWORD"
+        )
         print("  ⚠️  IMPORTANT: Changez le mot de passe admin en production!")
 
         # Charger les définitions de stacks

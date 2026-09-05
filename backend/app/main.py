@@ -27,7 +27,7 @@ from pydantic import ValidationError
 from scalar_fastapi import get_scalar_api_reference
 
 from .api.v1 import api_router
-from .config import settings
+from .config import enforce_production_secrets, settings
 from .database import db
 from .middleware import (
     correlation_middleware,
@@ -49,9 +49,7 @@ logging.basicConfig(
 
 # Force SQLAlchemy engine logger to respect configured LOG_LEVEL
 # This prevents SQLAlchemy from using its own handler at INFO level when echo=True
-logging.getLogger("sqlalchemy.engine").setLevel(
-    getattr(logging, settings.log_level)
-)
+logging.getLogger("sqlalchemy.engine").setLevel(getattr(logging, settings.log_level))
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +70,11 @@ async def lifespan(app: FastAPI):
     - Close Redis connections
     """
     # === STARTUP ===
+    # Garde-fou sécurité (STORY-101 / P0-2) : refuser le démarrage AVANT toute
+    # connexion DB ou exposition réseau si des secrets de développement sont
+    # détectés en production (jwt_secret dev, admin changeme123, disable_auth).
+    enforce_production_secrets(settings)
+
     logger.info("=" * 60)
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
     logger.info(f"Environment: {settings.environment}")
