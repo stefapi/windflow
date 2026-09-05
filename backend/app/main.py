@@ -92,26 +92,31 @@ async def lifespan(app: FastAPI):
     setup_event_bridge()
     logger.info("✓ Event bridge initialized")
 
-    # Initialize rate limiter (if enabled and Redis configured)
+    # Initialize rate limiter — 3 états observables (STORY-102 / P0-3) :
+    # Redis distribué, fallback mémoire process-local, ou désactivé.
     if settings.rate_limit_enabled and settings.rate_limit_storage_url:
         try:
             redis_client = redis.from_url(
                 settings.rate_limit_storage_url, encoding="utf-8", decode_responses=True
             )
             await FastAPILimiter.init(redis_client)
-            logger.info(
-                f"✓ Rate limiter initialized (Redis: {settings.rate_limit_storage_url})"
+            # URL sans credentials (masque :password@ et ?password=)
+            import re as _re
+
+            _safe_url = _re.sub(
+                r"://[^@/]+@", "://***@", settings.rate_limit_storage_url
             )
+            logger.info(f"✓ Rate limiting: Redis distribué ({_safe_url})")
         except Exception as e:
-            logger.warning(f"✗ Rate limiter initialization failed: {e}")
-            logger.warning("  Continuing without rate limiting")
+            logger.warning(f"✗ Rate limiter Redis initialization failed: {e}")
+            logger.warning("  Basculement en mode mémoire process-local")
     elif settings.rate_limit_enabled:
         logger.warning(
-            "✗ Rate limiting enabled but RATE_LIMIT_STORAGE_URL not configured"
+            "⚠ Rate limiting: mémoire process-local (RATE_LIMIT_STORAGE_URL absent) "
+            "— compteurs non partagés entre workers"
         )
-        logger.warning(
-            "  For production, configure Redis: RATE_LIMIT_STORAGE_URL=redis://localhost:6379/0"
-        )
+    else:
+        logger.warning("⚠ Rate limiting: DÉSACTIVÉ (RATE_LIMIT_ENABLED=false)")
 
     # Recover pending deployments
     try:

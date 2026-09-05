@@ -1,20 +1,46 @@
 """
-Tests d'intégration pour le rate limiting.
+Tests d'intégration pour le rate limiting (STORY-102 / P0-3).
 
-Vérifie que le système de rate limiting est correctement configuré:
-- Rate limiter conditionnel (activé/désactivé)
-- No-op limiter quand Redis n'est pas configuré
-- Configuration des endpoints avec rate limiting
+Vérifie que le système de rate limiting est correctement configuré :
+- Sans Redis : les limiteurs sont EFFECTIFS en mémoire process-local
+  (429 au-delà du seuil, plus de no-op silencieux) ;
+- Les endpoints protégés sont bien décorés ;
+- Aliases et dépendances restent des callables.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
+from fastapi import HTTPException
 from httpx import AsyncClient
+
+from app.core import rate_limit
+from app.core.rate_limit import _memory_limiter, conditional_rate_limiter
+
+
+@pytest.fixture(autouse=True)
+def _memory_mode():
+    """Force le mode mémoire (enabled sans URL) et isole le store."""
+    _memory_limiter.reset()
+    rate_limit._memory_warning_emitted = False
+    with patch.object(rate_limit.settings, "rate_limit_enabled", True), patch.object(
+        rate_limit.settings, "rate_limit_storage_url", None
+    ):
+        yield
+    _memory_limiter.reset()
+    rate_limit._memory_warning_emitted = False
+
+
+def _mock_request(host: str = "127.0.0.1", path: str = "/api/v1/auth/login"):
+    request = MagicMock()
+    request.client.host = host
+    request.url.path = path
+    return request
 
 
 @pytest.mark.asyncio
-async def test_rate_limit_disabled_allows_requests(client: AsyncClient):
-    """Test that requests pass through when rate limiting is disabled."""
-    # By default in test environment, rate limiting is disabled (no Redis)
+async def test_rate_limit_health_allows_requests(client: AsyncClient):
+    """/health n'est pas décorée : les requêtes passent (pas de 429)."""
     response = await client.get("/health")
     # Health may return 503 if DB is not connected in test, but should not be 429
     assert response.status_code in (200, 503)
@@ -22,59 +48,51 @@ async def test_rate_limit_disabled_allows_requests(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_rate_limit_no_429_without_redis(client: AsyncClient):
-    """Test that no 429 responses occur when Redis is not configured."""
-    # Make multiple rapid requests - should all succeed without Redis
-    for _ in range(20):
-        response = await client.get("/health")
-        assert response.status_code != 429
+async def test_memory_limiter_429_kicks_in_without_redis():
+    """Sans Redis, la dépendance seuil 5 refuse la 6e requête (429)."""
+    limiter = conditional_rate_limiter(5, 60)
+    request = _mock_request()
+
+    for _ in range(5):
+        await limiter(request)  # autorisés
+
+    with pytest.raises(HTTPException) as exc_info:
+        await limiter(request)
+    assert exc_info.value.status_code == 429
 
 
 @pytest.mark.asyncio
-async def test_rate_limit_headers_not_present_without_redis(client: AsyncClient):
-    """Test that rate limit headers are absent when rate limiting is disabled."""
-    response = await client.get("/health")
-
-    # Without Redis-backed rate limiting, X-RateLimit headers should not be present
-    assert "X-RateLimit-Limit" not in response.headers
-    assert "X-RateLimit-Remaining" not in response.headers
+async def test_memory_limiter_retry_after_header_present():
+    """Le 429 du mode mémoire embarque Retry-After (AC 2)."""
+    limiter = conditional_rate_limiter(3, 60)
+    request = _mock_request()
+    for _ in range(3):
+        await limiter(request)
+    with pytest.raises(HTTPException) as exc_info:
+        await limiter(request)
+    assert exc_info.value.headers == {"Retry-After": "60"}
 
 
 @pytest.mark.asyncio
-async def test_conditional_rate_limiter_returns_noop():
-    """Test that conditional_rate_limiter returns no-op when disabled."""
-    from app.core.rate_limit import conditional_rate_limiter
-
+async def test_conditional_rate_limiter_returns_memory_dependency():
+    """Sans URL + enabled → dépendance mémoire effective (ex no-op)."""
     limiter = conditional_rate_limiter(10, 60)
-
-    # Should be a callable (either RateLimiter or no-op function)
     assert callable(limiter)
+    # Sous le seuil : aucune exception
+    request = _mock_request()
+    await limiter(request)
 
 
 @pytest.mark.asyncio
-async def test_conditional_rate_limiter_noop_allows_request():
-    """Test that no-op rate limiter allows all requests."""
-    from unittest.mock import MagicMock
-
-    from app.core.rate_limit import conditional_rate_limiter
-
-    limiter = conditional_rate_limiter(10, 60)
-
-    # Create a mock request
-    mock_request = MagicMock()
-    mock_request.url = "http://test/api/v1/test"
-    mock_request.client = MagicMock()
-    mock_request.client.host = "127.0.0.1"
-
-    # The no-op limiter should not raise any exception
-    if hasattr(limiter, "__call__"):
-        try:
-            result = await limiter(mock_request)
-            # Should return None (no-op)
-            assert result is None
-        except TypeError:
-            # RateLimiter may have different signature - that's OK
-            pass
+async def test_conditional_rate_limiter_blocks_over_threshold():
+    """Au-delà du seuil, la dépendance mémoire lève 429 (ex allows_request)."""
+    limiter = conditional_rate_limiter(2, 60)
+    request = _mock_request()
+    await limiter(request)
+    await limiter(request)
+    with pytest.raises(HTTPException) as exc_info:
+        await limiter(request)
+    assert exc_info.value.status_code == 429
 
 
 @pytest.mark.asyncio
@@ -124,13 +142,17 @@ async def test_organization_endpoints_have_rate_limiting(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_multiple_rapid_requests_without_rate_limit(client: AsyncClient):
-    """Test that rapid requests succeed when rate limiting is disabled."""
-    responses = []
-    for _ in range(15):
-        response = await client.get("/health")
-        responses.append(response)
+async def test_multiple_rapid_requests_low_threshold_memory_mode():
+    """Mode mémoire seuil 3 : 3 requêtes OK puis 429 (ex test no_rate_limit)."""
+    limiter = conditional_rate_limiter(3, 60)
+    request = _mock_request()
 
-    # No request should be rate-limited (429)
-    rate_limited = sum(1 for r in responses if r.status_code == 429)
-    assert rate_limited == 0, f"Expected no rate-limited requests, got {rate_limited}"
+    results = []
+    for _ in range(4):
+        try:
+            await limiter(request)
+            results.append("ok")
+        except HTTPException as e:
+            results.append(f"429:{e.status_code}")
+
+    assert results == ["ok", "ok", "ok", "429:429"]

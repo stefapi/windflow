@@ -27,6 +27,23 @@ from app.services.user_service import UserService
 pytest_plugins = ("pytest_asyncio",)
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limit_store():
+    """
+    Réinitialise le limiteur mémoire entre chaque test (STORY-102).
+
+    Le store étant module-level (process-local), les tests d'API qui
+    bombardent des endpoints décorés (ex. logins via `authenticated_client`)
+    dépasseraient sinon le quota de la fenêtre glissante et recevraient 429
+    au-delà du 5e test du process. Chaque test repart d'un état vide.
+    """
+    from app.core import rate_limit as _rate_limit_module
+
+    _rate_limit_module._memory_limiter.reset()
+    yield
+    _rate_limit_module._memory_limiter.reset()
+
+
 @pytest.fixture(scope="session")
 def event_loop() -> Generator:
     """

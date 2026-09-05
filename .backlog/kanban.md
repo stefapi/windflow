@@ -3,7 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-011 : P0 — Sécurité bloquante (remédiation backend)
-- [ ] STORY-102 : Rate limiting effectif sans Redis — fallback mémoire + warning (P0-3)
 - [ ] STORY-103 : SecretManager AES/Fernet — chiffrement au repos des credentials cibles et env vars de stacks (P0-4)
 - [ ] STORY-104 : Protection brute-force du login — compteur par username, blocage temporaire (P0-5)
 
@@ -63,4 +62,5 @@ _(vide)_
 
 - [x] STORY-100 : Auth WebSocket obligatoire — refus des connexions sans token valide sur les 5 canaux (P0-1)
 - [x] STORY-101 : Garde-fou de démarrage — refus des secrets dev par défaut en production (P0-2)
+- [x] STORY-102 : Rate limiting effectif sans Redis — fallback mémoire + warning (P0-3)
 
