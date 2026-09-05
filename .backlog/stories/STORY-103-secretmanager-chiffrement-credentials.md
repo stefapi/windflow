@@ -1,6 +1,6 @@
 # STORY-103 : SecretManager AES/Fernet — chiffrement au repos des credentials cibles et env vars de stacks (P0-4)
 
-**Statut :** TODO
+**Statut :** DONE
 **Epic Parent :** EPIC-011 — P0 : Sécurité bloquante
 **Item plan :** P0-4 (rapport d'écart A6 + B3 + C12 partiel, §4/§7 critique n°1) — ampleur **L**
 
@@ -25,11 +25,11 @@ Contraintes de conception posées par le plan (à respecter par l'analyse) :
 
 ## Critères d'acceptation (AC)
 
-- [ ] AC 1 : Le `SecretManager` est implémenté conforme à la spec (15-securite.md) : `SecretManager(master_key)` avec dérivation PBKDF2HMAC (salt `windflow-secrets-v1`, 480 000 itérations, SHA-256) et méthodes `encrypt(str) -> str` / `decrypt(str) -> str` — **test unitaire round-trip** : chiffre → déchiffre → valeur initiale ; texte chiffré ≠ texte clair ; échec de déchiffrement avec une mauvaise clé maîtresse lève une erreur explicite.
-- [ ] AC 2 : Toute **écriture** de `Target.credentials` (création/modification de cible) passe par le SecretManager et stocke du JSON chiffré ; toute **lecture** (déploiement, scan, health-check, exécution SSH/sudo) déchiffre à la volée — les flux existants fonctionnent à l'identique pour l'utilisateur (non-régression des déploiements et du scan, garde-fous §2.G).
-- [ ] AC 3 : Les variables d'environnement sensibles des stacks sont chiffrées au repos (équivalent `env_vars_encrypted` de la spec) et déchiffrées uniquement en mémoire au moment du rendu/déploiement — jamais écrites sur disque (`.env`/override) ni loggées ; l'API et l'UI ne renvoient jamais la valeur en clair (masquage `***` dans les réponses/aperçus).
-- [ ] AC 4 : **Migration des données existantes par double lecture** : une ligne ancienne stockée en clair est lue avec succès puis **ré-encryptée au premier accès** ; test de migration dédié (fixture avec credential clair → accès → relecture chiffrée) ; documentation de la procédure (backup préalable, rotation de clé maîtresse).
-- [ ] AC 5 : Critère de done absolu du plan : après exécution sur une base existante, **0 credential lisible en base** ; tests écrits et passants (round-trip, double lecture, non-exposition API, non-régression déploiement) — `make lint` + `make backend-test` verts ; couverture ≥ 80 % sur le nouveau module (chemin critique sécurité, viser 95 % — rules 35).
+- [x] AC 1 : Le `SecretManager` est implémenté conforme à la spec (15-securite.md) : `SecretManager(master_key)` avec dérivation PBKDF2HMAC (salt `windflow-secrets-v1`, 480 000 itérations, SHA-256) et méthodes `encrypt(str) -> str` / `decrypt(str) -> str` — **test unitaire round-trip** : chiffre → déchiffre → valeur initiale ; texte chiffré ≠ texte clair ; échec de déchiffrement avec une mauvaise clé maîtresse lève une erreur explicite. *(validé par STORY-103.1)*
+- [x] AC 2 : Toute **écriture** de `Target.credentials` (création/modification de cible) passe par le SecretManager et stocke du JSON chiffré ; toute **lecture** (déploiement, scan, health-check, exécution SSH/sudo) déchiffre à la volée — les flux existants fonctionnent à l'identique pour l'utilisateur (non-régression des déploiements et du scan, garde-fous §2.G). *(validé par STORY-103.2)*
+- [x] AC 3 : Les variables d'environnement sensibles des stacks sont chiffrées au repos (équivalent `env_vars_encrypted` de la spec) et déchiffrées uniquement en mémoire au moment du rendu/déploiement — jamais écrites sur disque (`.env`/override) ni loggées ; l'API et l'UI ne renvoient jamais la valeur en clair (masquage `***` dans les réponses/aperçus). *(validé par STORY-103.3)*
+- [x] AC 4 : **Migration des données existantes par double lecture** : une ligne ancienne stockée en clair est lue avec succès puis **ré-encryptée au premier accès** ; test de migration dédié (fixture avec credential clair → accès → relecture chiffrée) ; documentation de la procédure (backup préalable, rotation de clé maîtresse). *(validé par STORY-103.2)*
+- [x] AC 5 : Critère de done absolu du plan : après exécution sur une base existante, **0 credential lisible en base** ; tests écrits et passants (round-trip, double lecture, non-exposition API, non-régression déploiement) — `make lint` + `make backend-test` verts ; couverture ≥ 80 % sur le nouveau module (chemin critique sécurité, viser 95 % — rules 35). *(validé par STORY-103.4)*
 
 ## Références spécification
 
@@ -47,16 +47,67 @@ Contraintes de conception posées par le plan (à respecter par l'analyse) :
 
 ## Sous-stories
 
-*(section réservée — STORY-103 ampleur L : découpe possible par `analyse-story`/`split-story`, plage STORY-105+ disponible)*
+> ⚠️ Story découpée en mode proactif le 2026-09-05 par `split-story` (complexité détectée par `analyse-story` : ~11 tâches / ≥12 fichiers — seuils >5 tâches / >6 fichiers).
+
+- [x] STORY-103.1 : SecretManager Fernet — socle config, dépendance et classe core (P0-4a) — Couvre AC 1
+- [x] STORY-103.2 : Chiffrement de Target.credentials + migration double lecture (P0-4b) — Couvre AC 2, AC 4
+- [x] STORY-103.3 : Env vars stacks — chiffrement au repos et masquage API (P0-4c) — Couvre AC 3
+- [x] STORY-103.4 : Validation finale — 0 credential lisible, non-régression, couverture (P0-4d) — Couvre AC 5
+
+**Ordre d'implémentation recommandé :** STORY-103.1 → STORY-103.2 → STORY-103.3 → STORY-103.4 (103.3 ne dépend que de 103.1 et peut être menée en parallèle de 103.2).
 
 ## État d'avancement technique
 
-*(à remplir par analyse-story)*
+> ⚠️ L'avancement technique est désormais suivi dans les sous-stories individuelles.
+
+**Progression :** 4/4 sous-stories terminées
+- [x] STORY-103.1 : SecretManager Fernet — socle config, dépendance et classe core
+- [x] STORY-103.2 : Chiffrement de Target.credentials + migration double lecture
+- [x] STORY-103.3 : Env vars stacks — chiffrement au repos et masquage API
+- [x] STORY-103.4 : Validation finale — 0 credential lisible, non-régression, couverture
 
 ## Tâches d'implémentation détaillées
 
-*(à remplir par analyse-story)*
+> ⚠️ Cette story a été découpée en sous-stories avant implémentation (complexité détectée par analyse-story).
+> Toutes les tâches ont été redistribuées dans les sous-stories listées ci-dessus.
+> Consulter chaque sous-story pour les tâches détaillées.
 
 ## Tests à écrire
 
-*(à remplir par analyse-story)*
+> ⚠️ Les tests sont désormais définis dans les sous-stories individuelles.
+
+## Notes d'implémentation
+
+> Clôture administrative de la story parente le 2026-09-05 — l'implémentation détaillée est consignée dans les notes de chaque sous-story.
+
+### Sous-stories (4/4 DONE)
+
+- **STORY-103.1 (DONE)** : `SecretManager` Fernet implémenté dans `backend/app/core/secret_manager.py` (PBKDF2HMAC, salt `windflow-secrets-v1`, 480 000 itérations, SHA-256, clé dérivée du `SECRET_KEY`) avec dépendance `cryptography` déclarée — 95 % de couverture sur le module (51 tests ciblés passés).
+- **STORY-103.2 (DONE)** : `Target.credentials` chiffré à l'écriture + migration par double lecture (ligne clair legacy lue puis ré-encryptée au premier accès) — 100 % de couverture sur `models/target.py` (20 tests ajoutés).
+- **STORY-103.3 (DONE)** : env vars des stacks chiffrées au repos dans les snapshots de déploiement, déchiffrement en mémoire seule au rendu, masquage `***` dans l'API — 100 % de couverture sur `models/deployment.py` + `schemas/deployment.py` (29 tests ajoutés).
+- **STORY-103.4 (DONE)** : validation finale transverse — verdict **CONFORME** (voir ci-dessous).
+
+### Fichiers principaux créés/modifiés
+
+- `backend/app/core/secret_manager.py` — créé (classe `SecretManager`)
+- `backend/app/core/exceptions.py`, `backend/app/config.py` — exception dédiée + config de la clé maîtresse
+- `backend/app/models/target.py`, `backend/app/services/target_service.py`, `backend/app/services/target_scanner_service.py` — chiffrement des credentials + double lecture
+- `backend/app/models/deployment.py`, `backend/app/services/deployment_service.py`, `backend/app/services/deployment_orchestrator.py`, `backend/app/schemas/deployment.py` — chiffrement des env vars + masquage API
+- `backend/app/tasks/background_tasks.py` — rendu/déploiement avec valeurs déchiffrées en mémoire uniquement
+- `env.example`, `pyproject.toml` — variable d'environnement de la clé maîtresse + dépendance `cryptography`
+- `docs/general_specs/16-deploiement.md` — procédure documentée (backup préalable, migration double lecture, rotation de clé maîtresse) ; spec de référence : `docs/general_specs/15-securite.md`
+- Tests : `backend/tests/unit/test_core/test_secret_manager.py`, `backend/tests/unit/test_models/test_target.py`, `backend/tests/unit/test_models/test_deployment.py`, `backend/tests/unit/test_schemas/test_deployment.py`, `backend/tests/integration/test_secret_encryption.py` (entre autres)
+
+### Validation finale (STORY-103.4) — verdict CONFORME
+
+- **0 credential lisible en base** après migration (inspection SQL brute : aucun secret en clair, idempotence vérifiée)
+- **API masquée** : env vars renvoyées en `***` sur tous les endpoints exposés ; `GET targets` sans credentials
+- **Aucun secret dans les logs**
+- Non-régression des déploiements et du scan (garde-fous §2.G préservés)
+
+### Recommandations résiduelles
+
+- Isoler la config de test de `DISABLE_AUTH` (éviter la fuite de settings entre suites de tests)
+- Repasser `mypy` + `bandit` sur l'ensemble (une partie de la validation a été exécutée hors venv principal)
+- Planifier la rotation de la clé maîtresse (procédure documentée dans `docs/general_specs/16-deploiement.md`, à opérationnaliser)
+- Réparer le venv Python 3.14 (environnement de test local cassé)

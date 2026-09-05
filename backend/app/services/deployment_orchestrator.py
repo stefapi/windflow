@@ -388,6 +388,8 @@ class DeploymentOrchestrator:
                         # Relancer le déploiement
                         logger.info(f"Relance du déploiement {deployment.id}")
 
+                        # STORY-103.3 : le snapshot en base est chiffré au
+                        # repos — relire via l'accès déchiffré (en mémoire).
                         await cls.start_deployment(
                             deployment_id=deployment.id,
                             stack_id=deployment.stack_id,
@@ -395,7 +397,7 @@ class DeploymentOrchestrator:
                             user_id=str(
                                 deployment.organization_id
                             ),  # Utiliser l'org comme user_id
-                            configuration=deployment.variables,
+                            configuration=deployment.decrypted_variables,
                         )
 
                         stats["retried"] += 1

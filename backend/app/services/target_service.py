@@ -17,7 +17,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..enums.target import CapabilityType, TargetStatus
-from ..models.target import Target
+from ..models.target import Target, encrypt_credentials_for_storage
 from ..models.target_capability import TargetCapability
 from ..schemas.target import TargetCreate, TargetUpdate
 
@@ -79,8 +79,10 @@ class TargetService:
         if organization_id:
             payload["organization_id"] = organization_id
 
-        # Credentials → dict JSON
-        payload["credentials"] = target_data.credentials.to_storage_dict()
+        # Credentials → dict JSON chiffré via SecretManager (STORY-103.2)
+        payload["credentials"] = encrypt_credentials_for_storage(
+            target_data.credentials.to_storage_dict()
+        )
 
         # extra_metadata → metadata column
         if target_data.extra_metadata is not None:
@@ -105,14 +107,20 @@ class TargetService:
         if not update_data:
             return target
 
-        # Handle credentials merge
+        # Handle credentials merge — déchiffrement transparent (STORY-103.2) :
+        # la fusion s'effectue sur les credentials en clair, le résultat est
+        # ré-encrypté avant persistance.
         if "credentials" in update_data:
             update_data["credentials"] = TargetService._merge_credentials(
-                existing=target.credentials or {},
+                existing=target.decrypted_credentials,
                 update_schema=target_data.credentials,
             )
             if update_data["credentials"] is None:
                 del update_data["credentials"]
+            else:
+                update_data["credentials"] = encrypt_credentials_for_storage(
+                    update_data["credentials"]
+                )
 
         for key, value in update_data.items():
             setattr(target, key, value)

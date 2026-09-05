@@ -220,6 +220,104 @@ docker compose -f docker-compose.light.yml exec -T windflow-api alembic upgrade 
 
 Les mises à jour de plugins se gèrent séparément (`windflow plugins update --all`, chapitre [10-cli-tui.md](10-cli-tui.md)).
 
+## Chiffrement au repos des credentials cibles (SecretManager)
+
+Depuis STORY-103, les credentials d'accès aux cibles (mots de passe SSH/sudo, clés privées) stockés dans la colonne `targets.credentials` sont **chiffrés au repos** (AES-256 via Fernet, clé dérivée de `SECRET_ENCRYPTION_KEY` — voir [15-securite.md](15-securite.md)). Cette section décrit la procédure opérationnelle : backup préalable, migration des données existantes et rotation de la clé maîtresse.
+
+### Backup préalable (obligatoire avant toute mise à jour)
+
+La migration étant progressive, un backup complet de la base **et** du fichier `.env` (qui contient la clé maîtresse) est requis avant la mise à jour :
+
+```bash
+# 1. Backup complet (base + configuration incluant la clé maîtresse)
+windflow admin backup create --output /backup/windflow-pre-encryption.tar.gz
+
+# 2. Copie de sécurité du .env (contient SECRET_ENCRYPTION_KEY)
+cp /opt/windflow/.env /backup/windflow-env-$(date +%Y%m%d).bak
+
+# 3. Vérifier l'intégrité du backup (doit lister la base + la configuration)
+tar -tzf /backup/windflow-pre-encryption.tar.gz
+```
+
+### Migration des données existantes (double lecture)
+
+La migration vers le format chiffré est **progressive, sans fenêtre d'indisponibilité et sans script dédié** :
+
+1. Au démarrage de la nouvelle version, les lignes existantes restent en clair dans la base — aucune migration bloquante n'est exécutée.
+2. À la **première lecture** d'une ligne encore en clair (déploiement, scan, health-check, réponse API exposant `auth_method`/`username`/`has_sudo`), celle-ci est déchiffrée n/a — lue telle quelle, puis **ré-encryptée et re-persistance** dans la même transaction que l'opération métier.
+3. Les **nouvelles écritures** (création/modification de cible) stockent directement le format chiffré.
+4. La migration est donc terminée quand toutes les cibles ont été accédées au moins une fois ; les credentials vides (`{}`) restent tels quels (aucun secret à protéger).
+
+Vérifier l'avancement (les lignes migrées contiennent un token Fernet, préfixe `gAAAA`) :
+
+```bash
+# SQLite
+sqlite3 /var/lib/windflow/windflow.db \
+  "SELECT COUNT(*) FROM targets WHERE credentials LIKE '%gAAAA%'"
+# PostgreSQL
+docker compose exec -T postgres psql -U windflow -d windflow -c \
+  "SELECT COUNT(*) FROM targets WHERE credentials::text LIKE '%gAAAA%';"
+```
+
+En cas de restauration d'un backup antérieur à la migration, les lignes en clair seront migrées à nouveau au fil des accès (le mécanisme de double lecture est permanent).
+
+### Rotation de la clé maîtresse
+
+La rotation ré-encrypte les credentials **entièrement en mémoire**, sans jamais écrire de secret en clair sur disque. Le principe : une bascule unique (déchiffrement avec l'ancienne clé → ré-encryption avec la nouvelle) exécutée pendant que l'API est arrêtée, puis activation de la nouvelle clé.
+
+```bash
+cd /opt/windflow
+
+# 1. Backup complet AVANT rotation (obligatoire — voir section précédente)
+windflow admin backup create --output /backup/windflow-pre-rotation.tar.gz
+cp .env /backup/windflow-env-pre-rotation.bak
+
+# 2. Arrêter l'API pour éviter toute écriture concurrente pendant la bascule
+docker compose stop windflow-api
+
+# 3. Générer la nouvelle clé (en mémoire de shell, jamais écrite en clair sur disque)
+OLD_KEY=$(grep '^SECRET_ENCRYPTION_KEY=' .env | cut -d= -f2)
+NEW_KEY=$(openssl rand -hex 32)
+
+# 4. Bascule one-shot : chaque credential chiffré est déchiffré avec l'ancienne
+#    clé puis ré-encrypté avec la nouvelle, en mémoire du process uniquement.
+#    Les lignes legacy en clair ne sont pas touchées : la double lecture les
+#    migrera directement avec la nouvelle clé au premier accès.
+docker compose run --rm -e OLD_KEY -e NEW_KEY windflow-api python -c "
+import asyncio, json, os
+from sqlalchemy import select
+from app.core.secret_manager import SecretManager
+from app.database import AsyncSessionLocal, db
+from app.models.target import Target
+
+async def rotate():
+    old = SecretManager(os.environ['OLD_KEY'])
+    new = SecretManager(os.environ['NEW_KEY'])
+    await db.connect()
+    async with AsyncSessionLocal() as session:
+        targets = (await session.execute(select(Target))).scalars().all()
+        for t in targets:
+            token = (t.credentials or {}).get('_encrypted')
+            if token and SecretManager.is_encrypted(token):
+                plain = json.loads(old.decrypt(token))
+                t.credentials = {'_encrypted': new.encrypt(json.dumps(plain))}
+        await session.commit()
+asyncio.run(rotate())
+"
+
+# 5. Activer la nouvelle clé et redémarrer
+sed -i "s|^SECRET_ENCRYPTION_KEY=.*|SECRET_ENCRYPTION_KEY=${NEW_KEY}|" .env
+docker compose up -d
+unset OLD_KEY NEW_KEY
+```
+
+> **Note :** le snippet ci-dessus est un exemple représentatif — la commande exacte d'un script `scripts/rotate-master-key.sh` livré avec l'installation prime sur ce extrait.
+
+**Points d'attention :**
+- Ne perdez **jamais** l'ancienne clé avant d'avoir vérifié la bascule (étape 4) — sinon les credentials deviennent indéchiffrables (`SecretDecryptionError` à l'accès).
+- La procédure ne nécessite à aucun moment d'écrire un secret en clair sur disque : la bascule se fait en mémoire du process.
+- Les credentials indéchiffrables (clé perdue) rendent la cible inutilisable pour SSH/scan : il faut ressaisir les credentials via l'API/UI.
+
 ## Sauvegarde et restauration
 
 ### Sauvegarde via la CLI (grammaire normalisée)

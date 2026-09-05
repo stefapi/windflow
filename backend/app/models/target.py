@@ -2,8 +2,9 @@
 Modèle Target pour gestion des serveurs cibles de déploiement.
 """
 
+import json
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from sqlalchemy import JSON, Boolean, DateTime
@@ -11,6 +12,7 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from ..core.secret_manager import SecretManager, get_secret_manager
 from ..database import Base
 from ..enums.target import TargetStatus, TargetType
 
@@ -18,6 +20,49 @@ if TYPE_CHECKING:
     from .deployment import Deployment
     from .organization import Organization
     from .target_capability import TargetCapability
+
+# Clé unique du dict opaque stocké en colonne ``credentials`` : la valeur
+# est un token Fernet (préfixe ``gAAAA``) englobant tout le JSON chiffré.
+_CREDENTIALS_CIPHERTEXT_KEY: str = "_encrypted"
+
+
+def encrypt_credentials_for_storage(plain: dict[str, Any]) -> dict[str, str]:
+    """Chiffre un dict de credentials pour stockage JSON en base (STORY-103.2).
+
+    Le dict est sérialisé en JSON compact puis chiffré en un **token Fernet
+    unique** : la colonne ne contient aucune valeur en clair et ne divulgue
+    pas la structure des credentials (une seule chaîne opaque).
+
+    Args:
+        plain: Credentials en clair (jamais loggés).
+
+    Returns:
+        Dict opaque ``{"_encrypted": "<token Fernet>"}``.
+    """
+    payload = json.dumps(plain, separators=(",", ":"), sort_keys=True)
+    return {_CREDENTIALS_CIPHERTEXT_KEY: get_secret_manager().encrypt(payload)}
+
+
+def decrypt_credentials_from_storage(stored: dict[str, Any]) -> dict[str, Any]:
+    """Déchiffre les credentials stockés (double lecture, STORY-103.2).
+
+    Args:
+        stored: Valeur de la colonne ``credentials``.
+
+    Returns:
+        Credentials en clair (dict, éventuellement vide).
+
+    Raises:
+        SecretDecryptionError: Si le ciphertext est illisible (mauvaise
+            clé maîtresse ou donnée corrompue/altérée).
+    """
+    token = stored.get(_CREDENTIALS_CIPHERTEXT_KEY)
+    if not isinstance(token, str) or not SecretManager.is_encrypted(token):
+        # Donnée legacy en clair (pas de préfixe ``gAAAA``) → lue telle
+        # quelle ; la migration est gérée par ``Target.decrypted_credentials``.
+        return stored
+    decoded = json.loads(get_secret_manager().decrypt(token))
+    return decoded if isinstance(decoded, dict) else {}
 
 
 class Target(Base):
@@ -46,7 +91,9 @@ class Target(Base):
         SQLEnum(TargetType), nullable=False, default=TargetType.DOCKER
     )
 
-    # Credentials (chiffrés en production avec Vault)
+    # Credentials SSH — chiffrés au repos via le SecretManager (STORY-103.2) :
+    # format opaque ``{"_encrypted": "<token Fernet>"}`` ; les lignes legacy
+    # en clair sont migrées (ré-encryptées) à la première lecture.
     credentials: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     # Statut
@@ -86,18 +133,55 @@ class Target(Base):
         index=True,
     )
 
-    # Propriétés dérivées (depuis credentials JSON) pour la réponse API
+    # ─── Credentials : accès déchiffré + migration double lecture ──
+
+    @property
+    def decrypted_credentials(self) -> dict[str, Any]:
+        """Credentials en clair — déchiffrement transparent (STORY-103.2).
+
+        Double lecture :
+
+        - colonne chiffrée (token Fernet détecté via le préfixe ``gAAAA``)
+          → déchiffrement à la volée ;
+        - ligne legacy en clair → lue telle quelle, puis **ré-encryptée au
+          premier accès** : la réassignation de ``self.credentials`` marque
+          la colonne *dirty* pour SQLAlchemy, la migration est donc persistée
+          par le commit de l'appelant (idempotent : un ciphertext n'est
+          jamais re-chiffré).
+
+        Les lignes avec credentials vides (``{}``) ne sont pas migrées :
+        il n'y a aucun secret à protéger.
+
+        Returns:
+            Credentials en clair (dict, éventuellement vide). Ne vit
+            qu'en mémoire — ne jamais logger.
+
+        Raises:
+            SecretDecryptionError: Si le ciphertext est illisible (mauvaise
+                clé maîtresse ou donnée corrompue/altérée).
+        """
+        stored = self.credentials
+        if not isinstance(stored, dict) or not stored:
+            return {}
+        token = stored.get(_CREDENTIALS_CIPHERTEXT_KEY)
+        if isinstance(token, str) and SecretManager.is_encrypted(token):
+            return decrypt_credentials_from_storage(stored)
+        # Ligne legacy en clair → ré-encryptage au premier accès.
+        self.credentials = encrypt_credentials_for_storage(stored)
+        return stored
+
+    # Propriétés dérivées (depuis credentials déchiffrés) pour la réponse API
     @property
     def auth_method(self) -> str | None:
-        return (self.credentials or {}).get("auth_method")
+        return (self.decrypted_credentials or {}).get("auth_method")
 
     @property
     def username(self) -> str | None:
-        return (self.credentials or {}).get("username")
+        return (self.decrypted_credentials or {}).get("username")
 
     @property
     def has_sudo(self) -> bool:
-        creds = self.credentials or {}
+        creds = self.decrypted_credentials or {}
         return bool(creds.get("sudo_enabled") and creds.get("sudo_user"))
 
     # Timestamps

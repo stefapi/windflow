@@ -12,7 +12,11 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..helper.template_renderer import TemplateRenderer
-from ..models.deployment import Deployment, DeploymentStatus
+from ..models.deployment import (
+    Deployment,
+    DeploymentStatus,
+    encrypt_variables_for_storage,
+)
 from ..models.stack import Stack
 from ..schemas.deployment import DeploymentCreate, DeploymentUpdate
 from .deployment_events import deployment_events
@@ -176,7 +180,8 @@ class DeploymentService:
 
     @staticmethod
     async def count_by_organization(
-        db: AsyncSession, organization_id: str,
+        db: AsyncSession,
+        organization_id: str,
     ) -> int:
         """Compte le nombre total de déploiements d'une organisation."""
         from sqlalchemy import func
@@ -291,13 +296,17 @@ class DeploymentService:
                 stack.template, rendered_variables
             )
 
-        # 5. Créer le déploiement avec statut initial PENDING
+        # 5. Créer le déploiement avec statut initial PENDING.
+        # STORY-103.3 : les valeurs sensibles des snapshots sont chiffrées
+        # au repos (clé conservée, valeur = token Fernet) ; le rendu/exécution
+        # consomme les valeurs en clair en mémoire via les propriétés
+        # déchiffrées — jamais écrites sur disque ni loggées.
         deployment_dict = {
             "name": deployment_name,
             "stack_id": deployment_data.stack_id,
             "target_id": deployment_data.target_id,
-            "config": config,
-            "variables": rendered_variables,
+            "config": encrypt_variables_for_storage(config),
+            "variables": encrypt_variables_for_storage(rendered_variables),
             "rendered_target_parameters": rendered_target_parameters,
             "organization_id": organization_id,
             "status": DeploymentStatus.PENDING,
@@ -316,7 +325,11 @@ class DeploymentService:
         await db.commit()
         await db.refresh(deployment)
 
-        # Lancer la tâche asynchrone avec l'orchestrateur
+        # Lancer la tâche asynchrone avec l'orchestrateur.
+        # NOTE (STORY-103.3) : ``configuration`` reste en clair ici — il
+        # s'agit d'une référence en mémoire consommée par le rendu, pas
+        # d'une écriture sur disque ; la colonne chiffrée sert de source
+        # pour les relances (retry/recovery) via ``decrypted_variables``.
         await DeploymentOrchestrator.start_deployment(
             deployment_id=str(deployment.id),
             stack_id=str(deployment.stack_id),
@@ -867,13 +880,16 @@ class DeploymentService:
             await db.commit()
             await db.refresh(deployment)
 
-            # Lancer la tâche avec l'orchestrateur
+            # Lancer la tâche avec l'orchestrateur.
+            # STORY-103.3 : la relance relit le snapshot en base — les
+            # valeurs sensibles y sont chiffrées, on passe donc par l'accès
+            # déchiffré (en mémoire uniquement).
             await DeploymentOrchestrator.start_deployment(
                 deployment_id=str(deployment.id),
                 stack_id=str(deployment.stack_id),
                 target_id=str(deployment.target_id),
                 user_id=str(user_id) if user_id else "system",
-                configuration=deployment.variables or {},
+                configuration=deployment.decrypted_variables or {},
             )
 
             logger.info(

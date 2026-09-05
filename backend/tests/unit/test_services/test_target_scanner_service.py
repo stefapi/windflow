@@ -8,8 +8,8 @@ and new detector methods (LXC, LXD, Incus, containerd, OCI tools).
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Optional
-from unittest.mock import AsyncMock
+from typing import Optional
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -853,3 +853,82 @@ class TestSocketStorage:
         assert len(scan_result.discovered_sockets) == 2
         assert "docker" in scan_result.discovered_sockets
         assert "lxd" in scan_result.discovered_sockets
+
+
+# ---------------------------------------------------------------------------
+# Credentials chiffrés — lecture déchiffrée au scan (STORY-103.2)
+# ---------------------------------------------------------------------------
+
+class TestScanReadsDecryptedCredentials:
+    """Le scan consomme les credentials déchiffrés, jamais la colonne brute."""
+
+    @pytest.fixture(autouse=True)
+    def _fresh_secret_manager(self):
+        """Instance SecretManager isolée par test."""
+        from app.core.secret_manager import reset_secret_manager
+
+        reset_secret_manager()
+        yield
+        reset_secret_manager()
+
+    def _make_target(self, credentials: dict):
+        from app.models.target import Target
+
+        return Target(
+            name="scan-target",
+            host="localhost",
+            credentials=credentials,
+            organization_id="org-scan",
+        )
+
+    async def test_scan_reads_decrypted_credentials(self) -> None:
+        """_execute_full_scan reçoit les credentials déchiffrés (mock executor)."""
+        from app.models.target import encrypt_credentials_for_storage
+
+        clear = {
+            "auth_method": "password",
+            "username": "deploy",
+            "password": "ScanPass123",
+            "sudo_enabled": True,
+            "sudo_user": "root",
+            "sudo_password": "SudoPass456",
+        }
+        target = self._make_target(encrypt_credentials_for_storage(clear))
+
+        scanner = TargetScannerService()
+        with patch.object(
+            TargetScannerService, "_full_scan_localhost", new_callable=AsyncMock
+        ) as mock_scan:
+            await scanner._execute_full_scan(target, is_localhost=True)
+
+        mock_scan.assert_awaited_once()
+        args = mock_scan.call_args.args
+        # Signature : (credentials, sudo_user, sudo_password, sudo_enabled)
+        assert args[0] == clear
+        assert args[1] == "root"
+        assert args[2] == "SudoPass456"
+        assert args[3] is True
+
+    async def test_scan_migrates_legacy_clear_row(self) -> None:
+        """Ligne legacy claire : le scan la lit, puis la ré-encrypte (dirty)."""
+        from app.core.secret_manager import SecretManager
+
+        clear = {
+            "auth_method": "password",
+            "username": "legacy",
+            "password": "LegacyPass789",
+            "sudo_enabled": False,
+        }
+        target = self._make_target(dict(clear))
+
+        scanner = TargetScannerService()
+        with patch.object(
+            TargetScannerService, "_full_scan_localhost", new_callable=AsyncMock
+        ) as mock_scan:
+            await scanner._execute_full_scan(target, is_localhost=True)
+
+        mock_scan.assert_awaited_once()
+        assert mock_scan.call_args.args[0] == clear
+        # Ré-encryptage au premier accès : la colonne est désormais chiffrée.
+        token = target.credentials.get("_encrypted")
+        assert isinstance(token, str) and SecretManager.is_encrypted(token)

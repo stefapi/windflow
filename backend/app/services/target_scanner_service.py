@@ -163,7 +163,10 @@ class TargetScannerService:
         Returns:
             Tuple (scan_result, access_profile, standard_caps, elevated_caps).
         """
-        credentials = target.credentials or {}
+        # Accès déchiffré (STORY-103.2) : double lecture — si la ligne est
+        # encore en clair (legacy), elle est ré-encryptée ici (dirty) et la
+        # migration est persistée par le commit de ``_persist_scan``.
+        credentials = target.decrypted_credentials
         sudo_user = credentials.get("sudo_user")
         sudo_password = credentials.get("sudo_password")
         sudo_enabled = credentials.get("sudo_enabled", False)

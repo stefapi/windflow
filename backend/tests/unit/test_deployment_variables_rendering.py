@@ -1,4 +1,9 @@
-"""Test pour valider que les variables avec macros sont rendues avant stockage."""
+"""Test pour valider que les variables avec macros sont rendues avant stockage.
+
+STORY-103.3 : les valeurs sensibles sont chiffrées au repos dans la colonne
+``variables`` — les invariants de rendu se vérifient via l'accès métier
+déchiffré (``deployment.decrypted_variables``), jamais sur la colonne brute.
+"""
 
 from unittest.mock import AsyncMock, patch
 
@@ -89,22 +94,24 @@ class TestDeploymentVariablesRendering:
             db_session, deployment_data, organization_id="test-org", user_id="test-user"
         )
 
-        # Vérifier que les variables stockées ont les macros RENDUES
-        assert "db_password" in deployment.variables
-        assert "db_user" in deployment.variables
+        # STORY-103.3 : accès métier déchiffré (les valeurs sensibles sont
+        # chiffrées dans la colonne, les invariants restent vérifiables).
+        rendered = deployment.decrypted_variables
+        assert "db_password" in rendered
+        assert "db_user" in rendered
 
         # Le mot de passe NE DOIT PAS être la macro brute
-        assert deployment.variables["db_password"] != "{{ generate_password(24) }}"
+        assert rendered["db_password"] != "{{ generate_password(24) }}"
 
         # Le mot de passe doit avoir la bonne longueur
-        assert len(deployment.variables["db_password"]) == 24
+        assert len(rendered["db_password"]) == 24
 
         # Le mot de passe doit être une chaîne non vide
-        assert isinstance(deployment.variables["db_password"], str)
-        assert len(deployment.variables["db_password"]) > 0
+        assert isinstance(rendered["db_password"], str)
+        assert len(rendered["db_password"]) > 0
 
         # L'utilisateur doit être la valeur par défaut
-        assert deployment.variables["db_user"] == "postgres"
+        assert rendered["db_user"] == "postgres"
 
     @patch(
         "app.services.deployment_orchestrator.DeploymentOrchestrator.start_deployment",
@@ -163,10 +170,13 @@ class TestDeploymentVariablesRendering:
             db_session, deployment_data, organization_id="test-org", user_id="test-user"
         )
 
-        # Vérifier que la variable utilisateur a été utilisée
-        assert deployment.variables["app_secret"] == user_secret
+        # Vérifier que la variable utilisateur a été utilisée (via l'accès
+        # déchiffré — STORY-103.3 : la colonne stocke un token Fernet)
+        assert deployment.decrypted_variables["app_secret"] == user_secret
         # Et PAS le default généré
-        assert deployment.variables["app_secret"] != "{{ generate_secret(32) }}"
+        assert (
+            deployment.decrypted_variables["app_secret"] != "{{ generate_secret(32) }}"
+        )
 
     @patch(
         "app.services.deployment_orchestrator.DeploymentOrchestrator.start_deployment",
@@ -221,10 +231,11 @@ class TestDeploymentVariablesRendering:
             db_session, deployment_data, organization_id="test-org", user_id="test-user"
         )
 
-        # Vérifier que tous les mots de passe ont été générés
-        admin_pwd = deployment.variables["admin_password"]
-        user_pwd = deployment.variables["user_password"]
-        api_key = deployment.variables["api_key"]
+        # Vérifier que tous les mots de passe ont été générés (accès déchiffré)
+        rendered = deployment.decrypted_variables
+        admin_pwd = rendered["admin_password"]
+        user_pwd = rendered["user_password"]
+        api_key = rendered["api_key"]
 
         # Aucun ne doit être une macro brute
         assert admin_pwd != "{{ generate_password(16) }}"

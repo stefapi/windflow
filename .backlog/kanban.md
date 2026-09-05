@@ -3,7 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-011 : P0 — Sécurité bloquante (remédiation backend)
-- [ ] STORY-103 : SecretManager AES/Fernet — chiffrement au repos des credentials cibles et env vars de stacks (P0-4)
 - [ ] STORY-104 : Protection brute-force du login — compteur par username, blocage temporaire (P0-5)
 
 ### EPIC-012 : P1 — Socle structurant (remédiation backend)
@@ -60,6 +59,11 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] STORY-103 : SecretManager AES/Fernet — chiffrement au repos des credentials cibles et env vars de stacks (P0-4)
+- [x] STORY-103.1 : SecretManager Fernet — socle config, dépendance et classe core (P0-4a)
+- [x] STORY-103.2 : Chiffrement de Target.credentials + migration double lecture (P0-4b)
+- [x] STORY-103.3 : Env vars stacks — chiffrement au repos et masquage API (P0-4c)
+- [x] STORY-103.4 : Validation finale — 0 credential lisible, non-régression, couverture (P0-4d)
 - [x] STORY-100 : Auth WebSocket obligatoire — refus des connexions sans token valide sur les 5 canaux (P0-1)
 - [x] STORY-101 : Garde-fou de démarrage — refus des secrets dev par défaut en production (P0-2)
 - [x] STORY-102 : Rate limiting effectif sans Redis — fallback mémoire + warning (P0-3)

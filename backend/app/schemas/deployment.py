@@ -4,13 +4,55 @@ Schemas Pydantic V2 pour l'entité Deployment.
 Validation stricte avec type hints obligatoires selon backend.md.
 Chaque modèle inclut model_config avec exemples et json_schema_extra
 pour une documentation OpenAPI complète.
+
+STORY-103.3 : masquage API — les valeurs des variables sensibles des
+snapshots (``config`` / ``variables``) ne sont JAMAIS renvoyées en clair
+par l'API : elles sont remplacées par ``***`` dans les réponses, que la
+valeur en base soit chiffrée (token Fernet) ou non (donnée legacy).
 """
 
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# Masque renvoyé à la place de toute valeur sensible (pattern plugin.py).
+MASKED_VALUE: str = "***"
+
+
+def _mask_sensitive_values(
+    values: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Masque les valeurs sensibles d'un snapshot de variables.
+
+    Une valeur est masquée si :
+    - son nom matche l'heuristique de sensibilité (PASSWORD, SECRET, TOKEN,
+      API_KEY, PRIVATE, CREDENTIAL, AUTH_KEY, ACCESS_KEY) ; ou
+    - c'est un ciphertext Fernet (préfixe ``gAAAA`` — snapshot chiffré au
+      repos dont la clé serait de facto sensible).
+
+    Args:
+        values: Snapshot ``config``/``variables`` (valeur brute en base).
+
+    Returns:
+        Copie du dict avec les valeurs sensibles remplacées par ``***``,
+        ou l'entrée inchangée si None/vide.
+    """
+    from app.core.secret_manager import SecretManager
+    from app.models.deployment import is_sensitive_variable
+
+    if not values:
+        return values
+    masked: Dict[str, Any] = {}
+    for key, value in values.items():
+        if isinstance(value, str) and (
+            is_sensitive_variable(key) or SecretManager.is_encrypted(value)
+        ):
+            masked[key] = MASKED_VALUE
+        else:
+            masked[key] = value
+    return masked
 
 
 class DeploymentStatus(str, Enum):
@@ -251,6 +293,16 @@ class DeploymentResponse(BaseModel):
         description="Date de mise à jour",
         json_schema_extra={"example": "2026-01-02T22:35:00Z"},
     )
+
+    # STORY-103.3 : masquage API — aucune valeur sensible (déchiffrée ou
+    # non) ne quitte jamais le backend en clair.
+    @field_validator("config", "variables", mode="after")
+    @classmethod
+    def _mask_sensitive_snapshot_values(
+        cls, value: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """Remplace les valeurs sensibles par ``***`` dans les réponses."""
+        return _mask_sensitive_values(value)
 
 
 class DeploymentListResponse(BaseModel):

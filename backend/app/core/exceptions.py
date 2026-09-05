@@ -38,8 +38,28 @@ class CommandExecutionError(WindFlowException):
             f"La commande '{command}' a échoué avec le code {exit_status}. "
             f"Stderr : {self.stderr}"
         )
-        super().__init__(message, details={
-            "command": command,
-            "exit_status": exit_status,
-            "stderr": self.stderr,
-        })
+        super().__init__(
+            message,
+            details={
+                "command": command,
+                "exit_status": exit_status,
+                "stderr": self.stderr,
+            },
+        )
+
+
+class SecretEncryptionError(WindFlowException):
+    """Levée lorsqu'une opération de chiffrement de secret échoue.
+
+    Le message ne contient jamais de matériel cryptographique
+    (ni clé maîtresse, ni valeur chiffrée/déchiffrée).
+    """
+
+
+class SecretDecryptionError(WindFlowException):
+    """Levée lorsqu'une opération de déchiffrement de secret échoue.
+
+    Typiquement : mauvaise clé maîtresse, ciphertext corrompu ou
+    altéré (Fernet invalide la signature HMAC). Le message ne
+    contient jamais de matériel cryptographique.
+    """

@@ -29,14 +29,23 @@ class Settings(BaseSettings):
     database_pool_recycle: int = 3600
 
     # JWT Authentication
-    jwt_secret_key: str = (
-        "dev-secret-key-change-in-production-please-use-a-long-random-string-minimum-32-characters"
-    )
+    jwt_secret_key: str = "dev-secret-key-change-in-production-please-use-a-long-random-string-minimum-32-characters"
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = (
         15  # Short-lived access tokens for better security
     )
     jwt_refresh_token_expire_days: int = 7  # Longer refresh tokens for better UX
+
+    # Clé maîtresse de chiffrement des secrets au repos (STORY-103.1)
+    # Optionnelle : si vide, la clé maîtresse dérive de jwt_secret_key
+    # (aucune nouvelle variable obligatoire en dev). Le SecretManager
+    # (AES-256/Fernet, PBKDF2HMAC) consomme `master_encryption_key`.
+    secret_encryption_key: Optional[str] = Field(
+        default=None,
+        description="Master key for at-rest secret encryption (Fernet). "
+        "Falls back to jwt_secret_key when unset. Generate with: "
+        "`openssl rand -hex 32`",
+    )
 
     # Keycloak SSO (optionnel - désactivé par défaut)
     keycloak_enabled: bool = False
@@ -269,6 +278,13 @@ class Settings(BaseSettings):
 
     # Helper methods
     @property
+    def master_encryption_key(self) -> str:
+        """Resolve the master key used by the SecretManager (Fernet)."""
+        if self.secret_encryption_key:
+            return self.secret_encryption_key
+        return self.jwt_secret_key
+
+    @property
     def is_production(self) -> bool:
         """Check if running in production."""
         return self.environment == "production"
@@ -376,6 +392,18 @@ def validate_production_secrets(config: "Settings") -> List[str]:
             "JWT_SECRET_KEY conserve une valeur de développement connue "
             "(forgabilité des tokens). Générez une clé forte : "
             "`openssl rand -hex 32` et définissez JWT_SECRET_KEY."
+        )
+
+    # STORY-103.1 : la clé maîtresse de chiffrement des secrets, si une
+    # valeur dédiée est fournie, doit elle aussi être forte en production
+    # (une valeur dev connue exposerait tous les secrets au repos).
+    if config.secret_encryption_key and config.secret_encryption_key in (
+        DEV_JWT_SECRET_VALUES
+    ):
+        violations.append(
+            "SECRET_ENCRYPTION_KEY conserve une valeur de développement "
+            "connue (déchiffrement possible de tous les secrets au repos). "
+            "Générez une clé forte : `openssl rand -hex 32`."
         )
 
     if config.admin_password == DEV_ADMIN_PASSWORD:

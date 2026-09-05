@@ -39,7 +39,14 @@ async def deploy_stack_async(
         stack_id: ID de la stack à déployer
         target_id: ID de la cible de déploiement
         user_id: ID de l'utilisateur qui lance le déploiement
-        configuration: Configuration du déploiement
+        configuration: Configuration du déploiement. Depuis STORY-103.3,
+            le snapshot en base est chiffré au repos : les valeurs
+            sensibles ne sont déchiffrées qu'en mémoire (via
+            ``Deployment.decrypted_variables``) au moment du rendu — elles
+            ne sont jamais loggées ni écrites dans un ``.env``/override.
+            Les fichiers compose générés sur la cible contiennent les
+            valeurs rendues (nécessaires à l'exécution des conteneurs) —
+            voir la note d'implémentation de STORY-103.3.
 
     Returns:
         Résultat du déploiement avec statut et détails

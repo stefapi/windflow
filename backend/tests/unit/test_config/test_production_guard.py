@@ -147,3 +147,35 @@ class TestValidateProductionSecrets:
         assert len(password) == 16
         config = _prod_settings(admin_password=password)
         assert validate_production_secrets(config) == []
+
+    def test_derived_secret_key_rejected_in_production(self):
+        """STORY-103.1 : SECRET_ENCRYPTION_KEY = valeur dev → violation.
+
+        Une clé maîtresse de chiffrement prédictible exposerait tous les
+        secrets au repos : même garde-fou que JWT_SECRET_KEY.
+        """
+        config = _prod_settings(
+            secret_encryption_key="dev-jwt-secret-key-change-in-production"
+        )
+        violations = validate_production_secrets(config)
+        assert len(violations) == 1
+        assert "SECRET_ENCRYPTION_KEY" in violations[0]
+
+    def test_strong_derived_secret_key_accepted_in_production(self):
+        """STORY-103.1 : SECRET_ENCRYPTION_KEY forte → pas de faux positif."""
+        config = _prod_settings(secret_encryption_key="f" * 64)
+        assert validate_production_secrets(config) == []
+
+    def test_no_secret_encryption_key_is_covered_by_jwt_guard(self):
+        """STORY-103.1 : fallback JWT → couvert par le garde-fou JWT existant.
+
+        Sans valeur dédiée, la clé maîtresse dérive de jwt_secret_key : si
+        celui-ci est une valeur dev, la violation JWT existe déjà (pas de
+        doublon de message).
+        """
+        config = _prod_settings(
+            jwt_secret_key="dev-jwt-secret-key-change-in-production"
+        )
+        violations = validate_production_secrets(config)
+        assert len(violations) == 1
+        assert "JWT_SECRET_KEY" in violations[0]
