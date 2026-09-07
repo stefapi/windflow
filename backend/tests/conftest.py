@@ -44,6 +44,23 @@ def _reset_rate_limit_store():
     _rate_limit_module._memory_limiter.reset()
 
 
+@pytest.fixture(autouse=True)
+def _reset_bruteforce_store():
+    """
+    Réinitialise le store brute-force entre chaque test (STORY-104).
+
+    Miroir de `_reset_rate_limit_store` : le singleton `bruteforce_protector`
+    est process-level ; les logins réussis des fixtures `authenticated_client`
+    / `admin_client` resetent déjà le compteur, mais la fixture protège
+    surtout les suites d'échecs volontaires (tests de blocage).
+    """
+    from app.core.bruteforce_protection import bruteforce_protector
+
+    bruteforce_protector.reset_all()
+    yield
+    bruteforce_protector.reset_all()
+
+
 @pytest.fixture(scope="session")
 def event_loop() -> Generator:
     """

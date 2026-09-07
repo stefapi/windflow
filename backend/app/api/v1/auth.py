@@ -2,6 +2,8 @@
 Routes d'authentification JWT.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...auth.dependencies import get_current_active_user
 from ...auth.jwt import create_token_pair, decode_refresh_token
 from ...config import settings
+from ...core.bruteforce_protection import bruteforce_protector
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
@@ -20,6 +23,8 @@ from ...schemas.user import (
     UserResponse,
 )
 from ...services.user_service import UserService
+
+logger = logging.getLogger("windflow.auth")
 
 router = APIRouter()
 
@@ -51,6 +56,7 @@ Authenticate a user and generate JWT tokens.
 - Automatic password hash upgrade if needed
 - Account status verification
 - Rate limiting to prevent brute force attacks
+- Progressive account lockout after repeated failures (5 attempts / 10 min, 5 min lockout)
 
 **No Authentication Required** - This is the login endpoint
 """,
@@ -125,11 +131,32 @@ Authenticate a user and generate JWT tokens.
             "content": {"application/json": {"example": {"detail": "Inactive user"}}},
         },
         429: {
-            "description": "Rate limit exceeded",
+            "description": (
+                "Too many requests — either the per-IP rate limit (5/min) or the "
+                "brute-force lockout (`TOO_MANY_ATTEMPTS`, `Retry-After` header "
+                "indicating the remaining lockout duration in seconds)"
+            ),
+            "headers": {
+                "Retry-After": {
+                    "description": "Seconds to wait before retrying",
+                    "schema": {"type": "integer"},
+                }
+            },
             "content": {
                 "application/json": {
-                    "example": {
-                        "detail": "Too Many Requests. Maximum 5 login attempts per minute."
+                    "examples": {
+                        "rate_limited": {
+                            "summary": "Per-IP rate limit exceeded",
+                            "value": {
+                                "detail": "Too Many Requests. Maximum 5 login attempts per minute."
+                            },
+                        },
+                        "too_many_attempts": {
+                            "summary": "Brute-force lockout (per-username counter)",
+                            "value": {
+                                "detail": "TOO_MANY_ATTEMPTS: too many failed login attempts, try again later"
+                            },
+                        },
                     }
                 }
             },
@@ -151,7 +178,8 @@ async def login(
     session: AsyncSession = Depends(get_db),
 ):
     """User authentication and JWT token generation."""
-    # Mode développement : auto-login avec credentials vides
+    # Mode développement : auto-login avec credentials vides — hors comptage
+    # brute-force (aucun username fourni, AC 4)
     if settings.disable_auth and not form_data.username and not form_data.password:
         user = await UserService.get_first_superadmin(session)
         if user is None:
@@ -160,6 +188,24 @@ async def login(
                 detail="No superadmin user found in database for development mode",
             )
     else:
+        client_ip = request.client.host if request.client else "unknown"
+
+        # Protection brute-force (STORY-104) : rejet précoce si le username est
+        # bloqué — AVANT tout lookup DB (compteur par username, pas par IP seule)
+        key = form_data.username.strip().lower()
+        locked, retry_after = await bruteforce_protector.is_locked_out(key)
+        if locked:
+            logger.warning(
+                "user.login_failed username=%s ip=%s reason=locked_out",
+                form_data.username,
+                client_ip,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="TOO_MANY_ATTEMPTS: too many failed login attempts, try again later",
+                headers={"Retry-After": str(retry_after)},
+            )
+
         # Récupérer l'utilisateur
         user = await UserService.get_by_username(session, form_data.username)
         if not user:
@@ -169,6 +215,15 @@ async def login(
         if not user or not await UserService.verify_and_update_user(
             session, user, form_data.password
         ):
+            # Échec de credentials : compté dans le compteur brute-force —
+            # aussi si l'utilisateur n'existe pas (anti-énumération : le 429 ne
+            # doit pas devenir un oracle d'existence de compte)
+            await bruteforce_protector.register_failure(key)
+            logger.warning(
+                "user.login_failed username=%s ip=%s reason=invalid_credentials",
+                form_data.username,
+                client_ip,
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
@@ -176,9 +231,15 @@ async def login(
             )
 
         if not user.is_active:
+            # NON compté : le mot de passe était correct, ce n'est pas un signal
+            # de force brute (décision documentée STORY-104)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
             )
+
+        # Login réussi : réinitialisation du compteur d'échecs du username
+        await bruteforce_protector.reset(key)
+        logger.info("user.login username=%s ip=%s", form_data.username, client_ip)
 
     # Créer la paire de tokens JWT
     token_data = {

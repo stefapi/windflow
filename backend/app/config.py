@@ -196,6 +196,22 @@ class Settings(BaseSettings):
         description="Redis URL for distributed rate limiting (e.g., redis://localhost:6379/0)",
     )
 
+    # === Protection brute-force du login ===
+    # Compteur d'échecs PAR USERNAME (distinct du rate limit volumétrique par IP)
+    # — cf. docs/general_specs/07-authentification.md § Protection brute-force.
+    auth_max_attempts: int = Field(
+        default=5,
+        description="Failed login attempts per username before lockout (brute-force protection)",
+    )
+    auth_lockout_seconds: int = Field(
+        default=300,
+        description="Lockout duration in seconds after too many failed logins",
+    )
+    auth_attempt_window_seconds: int = Field(
+        default=600,
+        description="Sliding window in seconds counting failed login attempts",
+    )
+
     # === Performance ===
     enable_timing_middleware: bool = Field(
         default=True, description="Enable request timing middleware"
