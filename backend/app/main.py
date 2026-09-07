@@ -80,9 +80,10 @@ async def lifespan(app: FastAPI):
     logger.info(f"Environment: {settings.environment}")
     logger.info("=" * 60)
 
-    # Database initialization
+    # Database initialization — schéma par migrations Alembic uniquement
+    # (STORY-120.2 : plus aucun create_all nu au démarrage)
     await db.connect()
-    await db.create_tables()
+    await db.run_migrations()
     await db.seed_tables()
     logger.info("✓ Database initialized")
 

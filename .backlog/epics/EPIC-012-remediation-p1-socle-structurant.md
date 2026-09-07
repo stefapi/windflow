@@ -54,7 +54,7 @@ Chaque item P1 du plan de remédiation devient une story (certains items XL/L so
 
 ## Liste des Stories liées
 
-- [ ] STORY-120 : Alembic — baseline du schéma existant et `upgrade head` au démarrage à la place de `create_all` (P1-1)
+- [x] STORY-120 : Alembic — baseline du schéma existant et `upgrade head` au démarrage à la place de `create_all` (P1-1)
 - [ ] STORY-121 : Modèle `user_organizations` — association utilisateur ↔ organisation avec rôle (P1-2, partie modèle)
 - [ ] STORY-122 : Dépendances RBAC `require_role(...)` — hiérarchie, cache TTL 300 s et protections d'escalade sur les ~110 endpoints (P1-2, application)
 - [ ] STORY-123 : Refresh tokens révocables — table, rotation et logout invalidant (P1-3, partie refresh)

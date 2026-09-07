@@ -2,20 +2,24 @@
 Configuration pytest pour les tests WindFlow backend.
 
 Fournit les fixtures pour:
-- Base de données de test (SQLite in-memory)
+- Base de données de test (schéma appliqué par les migrations Alembic —
+  STORY-120.2 : plus aucun ``create_all`` nu)
 - Sessions async SQLAlchemy
 - Client de test FastAPI
 - Utilisateurs de test
 """
 
 import asyncio
+import shutil
+from pathlib import Path
 from typing import AsyncGenerator, Generator
 
 import pytest
+from alembic import command as alembic_command
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.database import Base, get_db
+from app.database import get_alembic_config, get_db
 from app.main import app
 from app.models.organization import Organization
 from app.models.stack import Stack
@@ -73,31 +77,68 @@ def event_loop() -> Generator:
     loop.close()
 
 
-@pytest.fixture(scope="function")
-async def test_db_engine():
+@pytest.fixture(scope="session")
+async def _migrated_schema_template(tmp_path_factory) -> Path:
+    """Applique les migrations Alembic sur une base SQLite template (une fois
+    par session).
+
+    STORY-120.2 : le schéma de test provient **exclusivement des migrations**
+    (``alembic upgrade head``) — plus aucun ``Base.metadata.create_all`` nu.
+
+    Une base **fichier** (et non ``:memory:``) est requise : le
+    ``backend/alembic/env.py`` construit son propre engine depuis
+    ``settings.database_url`` ; une base en mémoire serait une base vide
+    distincte pour ce runner. L'URL des settings est ponctuellement
+    redirigée vers le fichier template, puis restaurée.
+
+    Yields:
+        Path: Chemin de la base SQLite template (schéma complet versionné).
     """
-    Crée un moteur de base de données SQLite en mémoire pour les tests.
+    from app.config import settings as app_settings
+
+    template_path = tmp_path_factory.mktemp("windflow-schema") / "template.db"
+
+    original_url = app_settings.database_url
+    app_settings.database_url = f"sqlite+aiosqlite:///{template_path}"
+    try:
+        # env.py exécute asyncio.run() : délégué à un thread sans boucle active
+        await asyncio.to_thread(alembic_command.upgrade, get_alembic_config(), "head")
+    finally:
+        app_settings.database_url = original_url
+
+    return template_path
+
+
+@pytest.fixture(scope="function")
+async def test_db_engine(_migrated_schema_template: Path, tmp_path: Path):
+    """
+    Crée un moteur de base de données SQLite isolé pour le test.
+
+    Le schéma est obtenu par copie du template migré (migrations Alembic
+    uniquement — STORY-120.2), garantissant une isolation complète par test
+    sans aucun ``create_all``.
+
+    Args:
+        _migrated_schema_template: Base template migrée une fois par session
+        tmp_path: Répertoire temporaire unique par test
 
     Yields:
         AsyncEngine: Moteur de base de données de test
     """
-    # Base de données SQLite en mémoire pour isolation complète
+    db_path = tmp_path / "test.db"
+    shutil.copy2(_migrated_schema_template, db_path)
+
     engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
+        f"sqlite+aiosqlite:///{db_path}",
         connect_args={"check_same_thread": False},
         echo=False,
     )
 
-    # Créer toutes les tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
     yield engine
 
-    # Cleanup
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    # Cleanup : suppression du fichier = isolation garantie (pas de drop_all)
     await engine.dispose()
+    db_path.unlink(missing_ok=True)
 
 
 @pytest.fixture(scope="function")

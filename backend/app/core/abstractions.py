@@ -27,8 +27,8 @@ class DatabaseManager(ABC):
         """Ferme la connexion à la base de données."""
 
     @abstractmethod
-    async def create_tables(self) -> None:
-        """Crée les tables de la base de données."""
+    async def run_migrations(self) -> None:
+        """Applique les migrations du schéma de base de données."""
 
     @abstractmethod
     @asynccontextmanager  # type: ignore[arg-type,misc]

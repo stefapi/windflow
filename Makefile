@@ -320,8 +320,16 @@ purge: clean ## 🧹 Remove everything for a fresh environment
 	rm -rf ./dev/data 2>/dev/null || true
 	$(POETRY) env remove --all
 
-migrate: ## 🗃️ Generate database migration
-	$(POETRY) run $(ALEMBIC) revision --autogenerate -m "migration_to_be_named"
+MIGRATION_MESSAGE ?= migration_to_be_named
+
+migrate: ## 🗃️ Generate database migration (alembic revision --autogenerate)
+	$(POETRY) run $(ALEMBIC) -c alembic.ini revision --autogenerate -m "$(MIGRATION_MESSAGE)"
+
+migrate-upgrade: ## 🗃️ Apply database migrations (alembic upgrade head)
+	$(POETRY) run $(ALEMBIC) -c alembic.ini upgrade head
+
+migrate-stamp: ## 🗃️ Stamp existing database with baseline revision (alembic stamp baseline)
+	$(POETRY) run $(ALEMBIC) -c alembic.ini stamp baseline
 
 format: backend-format frontend-format cli-format ## 🧺 Format all code (backend, frontend and CLI)
 

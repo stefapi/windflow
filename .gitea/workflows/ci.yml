@@ -176,6 +176,97 @@ jobs:
             htmlcov/
 
   # ============================================================================
+  # DATABASE MIGRATIONS (SQLite + PostgreSQL)
+  # ============================================================================
+  migrations:
+    name: 🗃️ Database Migrations (SQLite + PostgreSQL)
+    runs-on: ubuntu-latest
+    needs: [lint-backend]
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: windflow_migrations
+          POSTGRES_USER: windflow
+          POSTGRES_PASSWORD: windflow123
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5433:5432
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: 📚 Install dependencies
+        run: poetry install --with dev
+
+      - name: 🗃️ Run migrations on fresh SQLite database
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///./dev/data/ci_migrations.db
+        run: |
+          mkdir -p ./dev/data
+          poetry run alembic -c alembic.ini upgrade head
+          poetry run python -c "
+          from sqlalchemy import create_engine, inspect
+          engine = create_engine('sqlite:///./dev/data/ci_migrations.db')
+          tables = set(inspect(engine).get_table_names())
+          expected = {
+              'users', 'organizations', 'targets', 'stacks', 'stack_versions',
+              'deployments', 'plugins', 'plugin_hook_logs', 'scheduled_tasks',
+              'target_capabilities', 'alembic_version',
+          }
+          missing = expected - tables
+          assert not missing, f'SQLite: tables manquantes: {missing}'
+          print(f'SQLite OK: {len(tables)} tables creees par les migrations')
+          "
+
+      - name: 🗃️ Run migrations on fresh PostgreSQL database
+        env:
+          DATABASE_URL: postgresql+asyncpg://windflow:windflow123@localhost:5433/windflow_migrations
+        run: |
+          poetry run alembic -c alembic.ini upgrade head
+          poetry run python -c "
+          import asyncio
+          import asyncpg
+
+          async def check():
+              conn = await asyncpg.connect(
+                  'postgresql://windflow:windflow123@localhost:5433/windflow_migrations'
+              )
+              try:
+                  rows = await conn.fetch(
+                      \"SELECT tablename FROM pg_tables WHERE schemaname = 'public'\"
+                  )
+              finally:
+                  await conn.close()
+              tables = {row['tablename'] for row in rows}
+              expected = {
+                  'users', 'organizations', 'targets', 'stacks', 'stack_versions',
+                  'deployments', 'plugins', 'plugin_hook_logs', 'scheduled_tasks',
+                  'target_capabilities', 'alembic_version',
+              }
+              missing = expected - tables
+              assert not missing, f'PostgreSQL: tables manquantes: {missing}'
+              print(f'PostgreSQL OK: {len(tables)} tables creees par les migrations')
+
+          asyncio.run(check())
+          "
+
+  # ============================================================================
   # TEST FRONTEND
   # ============================================================================
   test-frontend:

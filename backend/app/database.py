@@ -2,12 +2,20 @@
 Configuration de la base de données avec SQLAlchemy 2.0 async.
 
 Support SQLite par défaut et PostgreSQL optionnel selon l'architecture modulaire.
+
+Le schéma est appliqué exclusivement par les migrations Alembic
+(STORY-120.2) : plus aucun ``create_all`` nu au démarrage.
 """
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, AsyncGenerator
 
-from sqlalchemy import text
+from alembic import command as alembic_command
+from alembic.config import Config as AlembicConfig
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -18,6 +26,41 @@ from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import StaticPool
 
 from .config import settings
+from .core.exceptions import WindFlowException
+
+logger = logging.getLogger(__name__)
+
+# Racine du repo depuis ce fichier (backend/app/database.py → parents[2]).
+# Identique en Docker (/app/backend/app/database.py → /app) : alembic.ini et
+# backend/alembic/ y résident (cf. Dockerfile.api COPY alembic.ini /app/).
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+ALEMBIC_SCRIPT_LOCATION = _REPO_ROOT / "backend" / "alembic"
+BASELINE_REVISION = "baseline"
+
+
+def get_alembic_config() -> AlembicConfig:
+    """Config Alembic programmatique pour exécution in-process (STORY-120.2).
+
+    - ``script_location`` résolu en chemin absolu : robuste quel que soit le
+      répertoire de travail du processus (dev, uvicorn, Docker) ;
+    - volontairement construite SANS fichier ini : ``env.py`` n'appelle alors
+      pas ``fileConfig`` et ne réécrit pas la configuration de logging du
+      processus hôte (format/niveaux de ``main.py`` préservés) ;
+    - l'URL de connexion est fixée par ``env.py`` depuis les settings
+      applicatifs — jamais ici (aucun secret manipulé, aucun secret loggé).
+    """
+    cfg = AlembicConfig()
+    cfg.set_main_option("script_location", str(ALEMBIC_SCRIPT_LOCATION))
+    return cfg
+
+
+def _sanitize_error(exc: Exception) -> str:
+    """Message d'erreur sans jamais l'URL DB (peut contenir un mot de passe)."""
+    message = str(exc)
+    url = settings.database_url
+    if url:
+        message = message.replace(url, "***")
+    return message
 
 
 class Base(DeclarativeBase):
@@ -86,13 +129,81 @@ class Database:
             self.engine = None
             self.session_factory = None
 
-    async def create_tables(self) -> None:
-        """Crée toutes les tables définies dans les modèles."""
+    async def run_migrations(self) -> None:
+        """Applique les migrations Alembic (remplace le create_all historique).
+
+        Stratégie selon l'état détecté du schéma :
+
+        - base vierge → ``upgrade head`` : schéma complet créé par les
+          migrations uniquement ;
+        - base existante non versionnée (tables métier sans
+          ``alembic_version`` — installations créées historiquement par
+          ``create_all``) → ``stamp baseline`` puis ``upgrade head`` ;
+        - base déjà versionnée → ``upgrade head`` (no-op si à jour).
+
+        Raises:
+            WindFlowException: si une migration échoue — le démarrage est
+                bloqué, aucun repli silencieux vers ``create_all``.
+        """
         if not self.engine:
             raise RuntimeError("Database engine not initialized. Call connect() first.")
 
-        async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        try:
+            state = await self._detect_schema_state()
+            if state == "unversioned":
+                logger.info(
+                    "Base existante non versionnée : stamp '%s' puis upgrade head",
+                    BASELINE_REVISION,
+                    extra={"event": "db_migrations", "state": state},
+                )
+                await asyncio.to_thread(
+                    alembic_command.stamp,
+                    get_alembic_config(),
+                    BASELINE_REVISION,
+                )
+            elif state == "fresh":
+                logger.info(
+                    "Base vierge détectée : application des migrations (upgrade head)",
+                    extra={"event": "db_migrations", "state": state},
+                )
+            else:
+                logger.info(
+                    "Base déjà versionnée : upgrade head",
+                    extra={"event": "db_migrations", "state": state},
+                )
+            # env.py exécute asyncio.run() : interdit dans la boucle du
+            # lifespan → délégation à un thread dédié (sans boucle active).
+            await asyncio.to_thread(
+                alembic_command.upgrade, get_alembic_config(), "head"
+            )
+            logger.info(
+                "Migrations de base de données appliquées (head)",
+                extra={"event": "db_migrations", "state": state},
+            )
+        except Exception as exc:
+            raise WindFlowException(
+                f"Échec des migrations de base de données : {_sanitize_error(exc)}"
+            ) from exc
+
+    async def _detect_schema_state(self) -> str:
+        """Détecte l'état du schéma pour orienter le runner de migrations.
+
+        Returns:
+            str: ``"fresh"`` (aucune table), ``"unversioned"`` (tables métier
+            sans table ``alembic_version``) ou ``"versioned"``.
+        """
+        if not self.engine:
+            raise RuntimeError("Database engine not initialized. Call connect() first.")
+
+        def _table_names(sync_conn: Any) -> set[str]:
+            return set(inspect(sync_conn).get_table_names())
+
+        async with self.engine.connect() as conn:
+            tables = await conn.run_sync(_table_names)
+
+        if "alembic_version" in tables:
+            return "versioned"
+        return "unversioned" if tables else "fresh"
 
     async def seed_tables(self) -> None:
         """

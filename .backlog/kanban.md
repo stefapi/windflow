@@ -3,7 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-012 : P1 — Socle structurant (remédiation backend)
-- [ ] STORY-120 : Alembic — baseline du schéma existant et `upgrade head` au démarrage à la place de `create_all` (P1-1)
 - [ ] STORY-121 : Modèle `user_organizations` — association utilisateur ↔ organisation avec rôle (P1-2, partie modèle)
 - [ ] STORY-122 : Dépendances RBAC `require_role(...)` — hiérarchie, cache TTL 300 s et protections d'escalade sur les ~110 endpoints (P1-2, application)
 - [ ] STORY-123 : Refresh tokens révocables — table, rotation et logout invalidant (P1-3, partie refresh)
@@ -54,5 +53,8 @@ _(vide)_
 
 ## ✅ DONE
 
-_(vide)_
+- [x] STORY-120 : Alembic — baseline du schéma existant et `upgrade head` au démarrage à la place de `create_all` (P1-1)
+- [x] STORY-120.1 : Infra Alembic async + migration baseline (EPIC-012 — STORY-120)
+- [x] STORY-120.2 : Retrait de `create_all` — migrations au démarrage (EPIC-012 — STORY-120)
+- [x] STORY-120.3 : Makefile, CI et tests d'intégration des migrations (EPIC-012 — STORY-120)
 
