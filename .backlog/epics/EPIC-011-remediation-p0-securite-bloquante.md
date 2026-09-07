@@ -1,6 +1,6 @@
 # EPIC-011 : P0 — Sécurité bloquante (remédiation backend)
 
-**Statut :** IN_PROGRESS
+**Statut :** DONE
 **Priorité :** Haute
 
 ## Vision
@@ -34,11 +34,13 @@ Chaque item P0 du plan de remédiation devient une story :
 
 ## Liste des Stories liées
 
-- [x] STORY-100 : Auth WebSocket obligatoire — refus des connexions sans token valide sur les 5 canaux (P0-1)
-- [x] STORY-101 : Garde-fou de démarrage — refus des secrets dev par défaut en production (P0-2)
-- [x] STORY-102 : Rate limiting effectif sans Redis — fallback mémoire + warning (P0-3)
-- [x] STORY-103 : SecretManager AES/Fernet — chiffrement au repos des credentials cibles et env vars de stacks (P0-4)
-- [x] STORY-104 : Protection brute-force du login — compteur par username, blocage temporaire (P0-5)
+> ⚠️ Cette epic est fermée. Toutes les stories ont été supprimées le 2026-09-07.
+
+## Historique de clôture
+
+- **Date de fermeture :** 2026-09-07
+- **Stories supprimées :** STORY-100, STORY-101, STORY-102, STORY-103, STORY-103.1, STORY-103.2, STORY-103.3, STORY-103.4, STORY-104
+- **Raison :** Epic terminée
 
 ## Notes de conception
 
@@ -55,3 +57,40 @@ Chaque item P0 du plan de remédiation devient une story :
 - [ ] Le rate limiting et la protection brute-force fonctionnent sans Redis (mode léger RPi).
 - [ ] Les garde-fous §2.G du plan sont préservés (middlewares sécurité, WS modulaire).
 - [ ] Couverture de tests ≥ 80 % sur les modules touchés (rules 35).
+
+## Rapport de finalisation
+
+**Date :** 2026-09-07
+**Verdict :** ✅ CONFORME — prête pour clôture
+**Score :** 97 % (35/36 vérifications passées ; 1 réserve environnementale non bloquante)
+
+### Résumé
+
+- Stories vérifiées : 5/5 DONE (STORY-103 découpée en 4 sous-stories 103.1–103.4, toutes DONE) — 9 fichiers story audités
+- Critères de succès epic validés : **6/6** (vérification par analyse de code + exécution)
+- Anomalies critiques : **0** — Anomalies mineures : **4** — Avertissements : **3**
+- Code quality : tests **999 unit + 68 intégration passants (0 échec)**, couverture modules critiques **90–100 %**, ruff clean sur tous les modules créés par l'epic
+
+### Détail par phase
+
+**Phase 1 — Cohérence backlog :** ✅ Les 9 stories (5 + 4 sous-stories) sont cochées `[x]` dans l'epic et positionnées en ✅ DONE dans le kanban ; 47/47 fichiers livrables listés dans les notes d'implémentation existent sur disque ; chaque story possède statut, AC cochés, tâches cochées et notes d'implémentation complètes.
+
+**Phase 2 — Rapport par story :** 9/9 CONFORMES. STORY-100 (5/5 AC, 46 tests WS), STORY-101 (5/5 AC, 13 tests garde-fou), STORY-102 (5/5 AC, 18+9 tests, couv. 100 %), STORY-103.1–103.4 (AC validés, couv. 95–100 % par sous-story), STORY-104 (5/5 AC, 19+10 tests, couv. 97 %).
+
+**Phase 3 — Critères épic (6/6) :** ① 5 stories DONE avec tests passants ✓ ; ② 0 credential lisible en base — `SecretManager` Fernet (PBKDF2HMAC, salt `windflow-secrets-v1`, 480 000 it.) + `encrypt_credentials_for_storage()` / `encrypt_variables_for_storage()` + masquage API `_mask_sensitive_values()` + test E2E SQL brut `test_secret_encryption.py` ✓ ; ③ 0 connexion WS anonyme — `get_current_user_ws` lève `WebSocketException 1008` sur les 3 canaux dédiés, helper `authenticate_ws_first_message` sur général/terminal ✓ ; ④ rate limiting + brute-force sans Redis — `MemoryRateLimiter` et `BruteforceProtector` mémoire avec 429 + `Retry-After` ✓ ; ⑤ garde-fous §2.G — middlewares (correlation/security/timing/logging) et plugins WS intacts ✓ ; ⑥ couverture ≥ 80 % mesurée ce jour : dependencies 90 %, bruteforce 97 %, rate_limit 100 %, secret_manager 100 %, models/target 98 %, models/deployment 99 %, schemas/deployment 100 % ✓.
+
+**Phase 4 — Code quality :** tests 1067 passants via `.venv-test` (Python 3.11) ; `ruff check` All checks passed sur les modules créés par l'epic. **Limite environnementale (non bloquante)** : `make backend-lint` complet (black/isort/flake8/mypy/bandit) indisponible dans le venv courant — 24 erreurs ruff relevées sur `main.py`/`database_seed.py` sont une **baseline préexistante** (print debug d'oct. 2025, commit fa4cf27 — ciblée par STORY-250/P3), non imputable à l'epic.
+
+**Phase 5 — Architecture & standards :** 6/6 conformes — API-first (OpenAPI login enrichie 429 + `Retry-After`, schémas Pydantic, masquage côté schéma), type safety (exceptions `SecretEncryptionError`/`SecretDecryptionError` héritant `WindFlowException`, 0 `dict[str, Any]` non justifié), nommage snake_case/core, clean code (DRY helper centralisé WS), sécurité (aucun secret en dur hors liste noire config, jamais de token/mot de passe en logs — vérifié), observabilité (loggers dédiés `windflow.*`, état rate limiting 3 états au startup, URL Redis masquée).
+
+### Anomalies & avertissements (non bloquants)
+
+- 🟡 Statut epic `IN_PROGRESS` alors que toutes les stories sont DONE — transition `DONE` à effectuer via `close-epic` (nominal, non fait par `finalise-epic`)
+- 🟡 Résidu d'index git : `backend/tests/unit/test_api/test_debug_story1033.py` en état AD (ajouté à l'index, supprimé du disque) — à nettoyer
+- 🟡 Baseline lint préexistante : 24 erreurs E402/E712 (`main.py`, `database_seed.py`) — déjà couverte par STORY-250 (P3)
+- 🟢 `mypy`/`bandit`/`black`/`isort`/`flake8` + `poetry build` non exécutés (outils absents du venv) — repasser via `make backend-lint` / `make ci-full` en CI une fois l'environnement réparé
+- 🟢 Recommandations résiduelles STORY-103 : opérationnaliser la rotation de clé maîtresse ; réparer le venv Poetry racine (Python 3.14/fastuuid)
+
+### Prochaine étape
+
+→ Lancer `close-epic` pour clôturer EPIC-011 : « Ferme l'epic EPIC-011 »
