@@ -9,7 +9,7 @@ Endpoints :
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_active_user
@@ -17,6 +17,7 @@ from ...database import get_db
 from ...models.user import User
 from ...schemas.adoption import AdoptionRequest, AdoptionResponse, AdoptionWizardData
 from ...services import adoption_service
+from ...services.user_organization_service import UserOrganizationService
 
 router = APIRouter(tags=["discovery"])
 logger = logging.getLogger(__name__)
@@ -57,7 +58,24 @@ async def get_adoption_data(
     Returns:
         AdoptionWizardData avec inventaire complet et aperçu Compose.
     """
-    org_id = organization_id or current_user.organization_id
+    # STORY-121.3 : org explicite vérifiée contre l'appartenance (403) ;
+    # sinon organisation primaire de l'utilisateur
+    if organization_id and not await UserOrganizationService.is_member(
+        db, current_user, organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé à cette organisation",
+        )
+    org_id = (
+        organization_id
+        or await UserOrganizationService.get_primary_organization_id(db, current_user)
+    )
+    if org_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucune organisation : rattachez d'abord votre compte",
+        )
 
     return await adoption_service.get_adoption_data(
         db=db,
@@ -102,7 +120,24 @@ async def adopt_discovered_item(
     Returns:
         AdoptionResponse avec les IDs de la stack et du deployment créés.
     """
-    org_id = organization_id or current_user.organization_id
+    # STORY-121.3 : org explicite vérifiée contre l'appartenance (403) ;
+    # sinon organisation primaire de l'utilisateur
+    if organization_id and not await UserOrganizationService.is_member(
+        db, current_user, organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé à cette organisation",
+        )
+    org_id = (
+        organization_id
+        or await UserOrganizationService.get_primary_organization_id(db, current_user)
+    )
+    if org_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucune organisation : rattachez d'abord votre compte",
+        )
 
     return await adoption_service.adopt_discovered_item(
         db=db,

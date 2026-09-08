@@ -25,7 +25,6 @@ class TestDevMode:
             username="admin",
             is_superuser=True,
             is_active=True,
-            organization_id="org-1",
         )
 
         # Mock de la session DB
@@ -85,7 +84,6 @@ class TestDevMode:
             username="admin",
             is_superuser=True,
             is_active=True,
-            organization_id="org-1",
         )
 
         # Mock de la session DB et WebSocket

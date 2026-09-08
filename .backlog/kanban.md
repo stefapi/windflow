@@ -3,7 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-012 : P1 — Socle structurant (remédiation backend)
-- [ ] STORY-121 : Modèle `user_organizations` — association utilisateur ↔ organisation avec rôle (P1-2, partie modèle)
 - [ ] STORY-122 : Dépendances RBAC `require_role(...)` — hiérarchie, cache TTL 300 s et protections d'escalade sur les ~110 endpoints (P1-2, application)
 - [ ] STORY-123 : Refresh tokens révocables — table, rotation et logout invalidant (P1-3, partie refresh)
 - [ ] STORY-124 : Clés API `wf_ak_` — table `api_keys`, auth `X-API-Key` coexistant avec JWT (P1-3, partie clés API)
@@ -52,6 +51,12 @@ _(vide)_
 ## 🚧 REVIEW
 
 ## ✅ DONE
+
+- [x] STORY-121 : Modèle `user_organizations` — association utilisateur ↔ organisation avec rôle (P1-2, partie modèle) (EPIC-012) — via STORY-121.1/.2/.3
+- [x] STORY-121.3 : Migration des données, bascule des lectures vers l'association et retrait de la colonne héritée (EPIC-012 — STORY-121)
+
+- [x] STORY-121.2 : Endpoints de gestion des membres d'une organisation (EPIC-012 — STORY-121)
+- [x] STORY-121.1 : Enum `Role`, modèle `UserOrganization` et migration de création de table (EPIC-012 — STORY-121)
 
 - [x] STORY-120 : Alembic — baseline du schéma existant et `upgrade head` au démarrage à la place de `create_all` (P1-1)
 - [x] STORY-120.1 : Infra Alembic async + migration baseline (EPIC-012 — STORY-120)

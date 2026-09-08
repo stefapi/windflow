@@ -16,16 +16,17 @@ from configparser import ConfigParser
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
-from app.database import Base
 from app import models  # noqa: F401  # enregistre tous les modèles
+from app.database import Base
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 SCRIPT_LOCATION = REPO_ROOT / "backend" / "alembic"
 
-# Tables attendues : exactement celles des ~10 modèles ORM.
+# Tables attendues : exactement celles des modèles ORM (STORY-121.1 :
+# + user_organizations).
 EXPECTED_TABLES = {
     "users",
     "organizations",
@@ -37,6 +38,7 @@ EXPECTED_TABLES = {
     "plugin_hook_logs",
     "scheduled_tasks",
     "target_capabilities",
+    "user_organizations",
 }
 
 
@@ -100,13 +102,13 @@ class TestEnvDoesNotLogDatabaseUrl:
         # complète, le secret ne doit fuir dans aucune sortie.
         sqlite_url = f"sqlite+aiosqlite:///{db_path}?secret=S3cret-P4ssw0rd"
         result = _run_alembic("upgrade", "head", db_url=sqlite_url)
-        assert result.returncode == 0, (
-            f"upgrade head a échoué :\nstdout={result.stdout}\nstderr={result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"upgrade head a échoué :\nstdout={result.stdout}\nstderr={result.stderr}"
         combined = result.stdout + result.stderr
-        assert "S3cret-P4ssw0rd" not in combined, (
-            "L'URL DB (avec secret) fuit dans les sorties de la CLI alembic"
-        )
+        assert (
+            "S3cret-P4ssw0rd" not in combined
+        ), "L'URL DB (avec secret) fuit dans les sorties de la CLI alembic"
 
         # Variante PostgreSQL : mode offline (--sql) exécute env.py avec le
         # dialecte asyncpg/PostgreSQL et un mot de passe dans l'URL, sans
@@ -118,9 +120,9 @@ class TestEnvDoesNotLogDatabaseUrl:
             f"stdout={result.stdout}\nstderr={result.stderr}"
         )
         combined = result.stdout + result.stderr
-        assert "S3cret-P4ssw0rd" not in combined, (
-            "Le mot de passe PostgreSQL est apparu dans les logs/DDL générés"
-        )
+        assert (
+            "S3cret-P4ssw0rd" not in combined
+        ), "Le mot de passe PostgreSQL est apparu dans les logs/DDL générés"
         # Le DDL offline PostgreSQL contient bien les CREATE TABLE attendus :
         # preuve que env.py a traité la variante PostgreSQL de bout en bout.
         assert "CREATE TABLE organizations" in result.stdout
@@ -130,15 +132,19 @@ class TestBaselineCreatesAllModelTables:
     """test_baseline_creates_all_model_tables."""
 
     def test_baseline_creates_all_model_tables(self, tmp_path: Path) -> None:
-        """alembic upgrade head sur base SQLite temporaire → l'inspection
-        révèle exactement les tables de Base.metadata (ni plus, ni moins)."""
+        """``alembic upgrade head`` sur base SQLite temporaire → l'inspection
+        révèle exactement les tables de Base.metadata (ni plus, ni moins).
+
+        Depuis STORY-121.1, le schéma complet est créé par ``upgrade head``
+        (baseline + migration additive ``user_organizations``) et non par
+        la seule baseline."""
         db_path = tmp_path / "baseline.db"
         db_url = f"sqlite+aiosqlite:///{db_path}"
 
         result = _run_alembic("upgrade", "head", db_url=db_url)
-        assert result.returncode == 0, (
-            f"upgrade head a échoué :\nstdout={result.stdout}\nstderr={result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"upgrade head a échoué :\nstdout={result.stdout}\nstderr={result.stderr}"
 
         engine = create_engine(f"sqlite:///{db_path}")
         try:
@@ -148,9 +154,9 @@ class TestBaselineCreatesAllModelTables:
             engine.dispose()
 
         # alembic_version est créée par Alembic lui-même : attendue en plus.
-        assert db_tables == EXPECTED_TABLES | {"alembic_version"}, (
-            f"Tables observées : {sorted(db_tables)}"
-        )
+        assert db_tables == EXPECTED_TABLES | {
+            "alembic_version"
+        }, f"Tables observées : {sorted(db_tables)}"
         assert db_tables == set(Base.metadata.tables) | {"alembic_version"}, (
             "La baseline diverge de Base.metadata : "
             f"{db_tables ^ (set(Base.metadata.tables) | {'alembic_version'})}"
@@ -158,52 +164,79 @@ class TestBaselineCreatesAllModelTables:
 
 
 class TestExistingDatabaseStampScenario:
-    """Scénario AC 1 : base existante (create_all) → stamp → no-op → check."""
+    """Scénario AC 1 : base existante (create_all) → stamp → upgrade
+    additif → check (chemin « base existante + migration additive »
+    depuis STORY-121.1)."""
 
     def test_stamp_then_upgrade_is_noop_and_check_clean(self, tmp_path: Path) -> None:
-        """Sur une base créée par create_all : stamp baseline → upgrade head
-        no-op → alembic check sans diff (aucune recréation/altération)."""
+        """Sur une base créée par create_all (simulée **antérieure à
+        STORY-121.1**) : stamp baseline → upgrade head applique uniquement
+        la migration additive ``user_organizations`` → tables d'origine
+        intactes + nouvelle table → alembic check sans diff."""
         db_path = tmp_path / "existing.db"
         db_url = f"sqlite+aiosqlite:///{db_path}"
 
         # 1. Simule la base existante : create_all via un engine sync
-        #    (équivalent SQLite du create_all async de database.py).
+        #    (équivalent SQLite du create_all async de database.py),
+        #    puis DROP de la table nouvelle pour simuler fidèlement une
+        #    base antérieure à STORY-121.1 (sinon create_all la crée
+        #    aussi et l'upgrade entrerait en collision).
         sync_engine = create_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(sync_engine)
+        with sync_engine.begin() as conn:
+            conn.execute(text("DROP TABLE user_organizations"))
+        # STORY-121.3 : recréer la colonne héritée users.organization_id
+        # (+ index) — le schéma courant (modèles) ne la crée plus mais la
+        # migration 1213 s'attend à la trouver sur une base pré-121.3
+        with sync_engine.begin() as conn:
+            conn.execute(
+                text("ALTER TABLE users ADD COLUMN organization_id VARCHAR(36)")
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX ix_users_organization_id "
+                    "ON users (organization_id)"
+                )
+            )
         before = set(inspect(sync_engine).get_table_names())
         sync_engine.dispose()
-        assert EXPECTED_TABLES <= before, "create_all n'a pas créé les tables modèles"
+        assert (
+            EXPECTED_TABLES - {"user_organizations"} <= before
+        ), "create_all n'a pas créé les tables modèles"
+        assert "user_organizations" not in before
 
         # 2. stamp baseline — marque la base comme étant au niveau baseline
         result = _run_alembic("stamp", "baseline", db_url=db_url)
-        assert result.returncode == 0, (
-            f"stamp a échoué :\nstdout={result.stdout}\nstderr={result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"stamp a échoué :\nstdout={result.stdout}\nstderr={result.stderr}"
 
-        # 3. upgrade head → no-op (déjà à head), aucune table altérée
+        # 3. upgrade head → applique uniquement la migration additive
+        #    (baseline déjà stampée)
         result = _run_alembic("upgrade", "head", db_url=db_url)
-        assert result.returncode == 0, (
-            f"upgrade head a échoué :\nstdout={result.stdout}\nstderr={result.stderr}"
-        )
-        assert "Running upgrade" not in result.stdout, (
-            "upgrade head n'a pas été un no-op après stamp baseline"
-        )
+        assert (
+            result.returncode == 0
+        ), f"upgrade head a échoué :\nstdout={result.stdout}\nstderr={result.stderr}"
+        assert "Running upgrade baseline -> 1211_user_organizations" in (
+            result.stdout + result.stderr
+        ), "upgrade head n'a pas appliqué la migration additive attendue"
 
+        # Tables d'origine intactes + nouvelle table créée.
         engine = create_engine(f"sqlite:///{db_path}")
         try:
             after = set(inspect(engine).get_table_names())
         finally:
             engine.dispose()
-        assert before | {"alembic_version"} == after, (
-            "Le schéma a été modifié par upgrade head après stamp (non-no-op)"
-        )
+        assert (
+            before | {"alembic_version", "user_organizations"} == after
+        ), "Le schéma d'origine a été altéré ou la table additive manque"
 
         # 4. alembic check → aucun diff (commande échoue (rc=255) si diff
         #    détecté, rc=0 si propre).
         result = _run_alembic("check", db_url=db_url)
-        assert result.returncode == 0, (
-            f"alembic check a détecté un diff :\n{result.stdout}\n{result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"alembic check a détecté un diff :\n{result.stdout}\n{result.stderr}"
         assert "No new upgrade operations detected" in result.stdout
 
 
@@ -227,9 +260,9 @@ class TestDowngrade:
             remaining = set(inspect(engine).get_table_names())
         finally:
             engine.dispose()
-        assert remaining == {"alembic_version"}, (
-            f"Tables résiduelles après downgrade base : {sorted(remaining)}"
-        )
+        assert remaining == {
+            "alembic_version"
+        }, f"Tables résiduelles après downgrade base : {sorted(remaining)}"
 
 
 @pytest.mark.unit

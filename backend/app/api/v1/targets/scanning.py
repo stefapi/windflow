@@ -29,6 +29,7 @@ from ....services.commands import LocalCommandExecutor, SSHCommandExecutor
 from ....services.target_scan_parsers import build_capabilities_payload
 from ....services.target_scanner_service import TargetScannerService
 from ....services.target_service import TargetService
+from ....services.user_organization_service import UserOrganizationService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -272,11 +273,28 @@ async def discover_target(
             "host": discovery_request.host,
         },
     )
-    organization_id = discovery_request.organization_id or current_user.organization_id
-    if organization_id != current_user.organization_id:
+    # STORY-121.3 : org explicite vérifiée contre l'appartenance (403) ;
+    # sinon organisation primaire de l'utilisateur
+    if (
+        discovery_request.organization_id
+        and not await UserOrganizationService.is_member(
+            session, current_user, discovery_request.organization_id
+        )
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Impossible de découvrir une cible pour une autre organisation",
+        )
+    organization_id = (
+        discovery_request.organization_id
+        or await UserOrganizationService.get_primary_organization_id(
+            session, current_user
+        )
+    )
+    if organization_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucune organisation : rattachez d'abord votre compte",
         )
 
     existing = await TargetService.get_by_name(
@@ -382,7 +400,9 @@ async def _detect_access_profile(
             if discovery_request.ssh_private_key:
                 ssh_kwargs_detect["client_keys"] = [discovery_request.ssh_private_key]
                 if getattr(discovery_request, "ssh_private_key_passphrase", None):
-                    ssh_kwargs_detect["passphrase"] = discovery_request.ssh_private_key_passphrase
+                    ssh_kwargs_detect["passphrase"] = (
+                        discovery_request.ssh_private_key_passphrase
+                    )
             else:
                 ssh_kwargs_detect["password"] = discovery_request.password
 
@@ -552,7 +572,9 @@ async def scan_target(
             detail=f"Cible {target_id} non trouvée",
         )
 
-    if target.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, target.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )

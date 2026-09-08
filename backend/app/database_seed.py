@@ -64,17 +64,34 @@ async def seed_database(session: AsyncSession) -> None:
             await session.commit()
             return
 
-        # Créer l'utilisateur admin
+        # Créer l'utilisateur admin — STORY-121.3 : le User ne porte plus
+        # de colonne organisation ; l'association unique (admin) est posée
+        # directement (mapping cohérent avec la migration 1213 :
+        # superuser → admin, flag is_superuser intact — UserService.create
+        # ne saurait rattacher qu'en viewer, ce qui nécessiterait une
+        # promotion immédiate)
         admin_data = UserCreate(
             email=settings.admin_email,
             username=settings.admin_username,
             full_name=settings.admin_full_name,
             password=settings.admin_password,
-            organization_id=default_org.id,
+            organization_id=None,  # association posée directement ci-dessous
             is_superuser=True,
         )
 
-        await UserService.create(session, admin_data)
+        admin = await UserService.create(session, admin_data)
+
+        from .enums.rbac import Role
+        from .models.user_organization import UserOrganization
+
+        session.add(
+            UserOrganization(
+                user_id=admin.id,
+                organization_id=default_org.id,
+                role=Role.ADMIN,
+            )
+        )
+        await session.commit()
 
         target_created, target_messages = await _create_localhost_target(
             session, default_org.id

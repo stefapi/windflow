@@ -13,13 +13,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...auth.dependencies import get_current_active_user, require_superuser
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
+from ...enums.rbac import Role
 from ...models.user import User
+from ...models.user_organization import UserOrganization
 from ...schemas.organization import (
     OrganizationCreate,
     OrganizationResponse,
     OrganizationUpdate,
 )
+from ...schemas.organization_member import (
+    MemberRoleUpdateRequest,
+    OrganizationMemberAddRequest,
+    OrganizationMemberResponse,
+)
 from ...services.organization_service import OrganizationService
+from ...services.user_organization_service import UserOrganizationService
+from ...services.user_service import UserService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -278,9 +287,11 @@ async def get_organization(
         },
     )
     # Vérifier que l'utilisateur appartient à l'organisation ou est superuser
-    # Comparer en convertissant les deux côtés en string (organization_id en base est String(36))
-    if not current_user.is_superuser and current_user.organization_id != str(
-        organization_id
+    # (STORY-121.3 : appartenance via l'association — le bypass superuser
+    # est déjà intégré à is_member, on garde le court-circuit is_superuser
+    # pour éviter la requête inutile)
+    if not current_user.is_superuser and not await UserOrganizationService.is_member(
+        session, current_user, organization_id
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -926,3 +937,741 @@ async def bulk_delete_organizations(
         failed=failed,
         message=f"{len(success)} organisation(s) supprimée(s), {len(failed)} échec(s)",
     )
+
+
+# ---------------------------------------------------------------------------
+# Gestion des membres d'une organisation (spec 09 § Organizations — STORY-121.2)
+# ---------------------------------------------------------------------------
+
+
+def _role_str(role: object) -> str:
+    """
+    Valeur chaîne d'un rôle (enum ``Role`` ou str lue depuis la base).
+
+    Args:
+        role: Rôle (instance ``Role`` ou chaîne stockée en ``String(20)``)
+
+    Returns:
+        Valeur du rôle sous forme de chaîne (ex. ``"viewer"``)
+    """
+    return role.value if isinstance(role, Role) else str(role)
+
+
+def _member_to_response(link: UserOrganization) -> OrganizationMemberResponse:
+    """
+    Mappe une association ``UserOrganization`` vers le schéma de réponse membre.
+
+    Whitelist stricte : seuls ``user_id``, ``username``, ``email``,
+    ``full_name``, ``role`` et ``joined_at`` sont exposés — jamais
+    ``hashed_password`` ni ``keycloak_id``.
+
+    Args:
+        link: Association utilisateur ↔ organisation (relation ``user`` chargée)
+
+    Returns:
+        OrganizationMemberResponse: Réponse membre prête à sérialiser
+    """
+    return OrganizationMemberResponse(
+        user_id=link.user_id,
+        username=link.user.username,
+        email=link.user.email,
+        full_name=link.user.full_name,
+        role=link.role,
+        joined_at=link.joined_at,
+    )
+
+
+@router.get(
+    "/{organization_id}/users",
+    response_model=List[OrganizationMemberResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List members of an organization",
+    description="""
+List the members of an organization with their role and join date.
+
+## Access Control
+- **Authentication required** (any active member of the organization)
+- **Isolation**: Users who do not belong to the organization receive a 403
+  Forbidden error (superusers can list members of any organization)
+- Reading members is allowed for all roles (spec 08 permission matrix)
+
+## Pagination
+- Use `skip` and `limit` query parameters for pagination
+- Default limit: 100 members per page
+
+## Response Data
+Each member entry includes:
+- `user_id`, `username`, `email`, `full_name` (public user information only)
+- `role`: organization role (`viewer` | `operator` | `admin`)
+- `joined_at`: membership creation date
+
+Sensitive fields (`hashed_password`, `keycloak_id`) are never exposed.
+
+**Authentication Required**
+""",
+    dependencies=[Depends(conditional_rate_limiter(60, 60))],
+    responses={
+        200: {
+            "description": "List of members retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "user_id": "770e8400-e29b-41d4-a716-446655440010",
+                            "username": "jdoe",
+                            "email": "jdoe@example.com",
+                            "full_name": "John Doe",
+                            "role": "viewer",
+                            "joined_at": "2026-09-08T10:00:00Z",
+                        }
+                    ]
+                }
+            },
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
+        },
+        403: {
+            "description": "Access denied - user does not belong to this organization",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Accès refusé à cette organisation"}
+                }
+            },
+        },
+        404: {
+            "description": "Organization not found",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Organisation 550e8400-e29b-41d4-a716-446655440000 non trouvée"
+                    }
+                }
+            },
+        },
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Rate limit exceeded. Try again in 60 seconds."
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "An unexpected error occurred"}
+                }
+            },
+        },
+    },
+)
+async def list_organization_members(
+    request: Request,
+    organization_id: UUID,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Liste les membres d'une organisation avec leur rôle et date d'adhésion.
+
+    Args:
+        request: Requête HTTP (pour correlation_id)
+        organization_id: ID de l'organisation
+        skip: Nombre d'éléments à ignorer pour la pagination
+        limit: Nombre maximum d'éléments à retourner
+        current_user: Utilisateur courant (doit être membre de l'organisation)
+        session: Session de base de données
+
+    Returns:
+        List[OrganizationMemberResponse]: Membres de l'organisation
+
+    Raises:
+        HTTPException: 403 si l'utilisateur n'appartient pas à l'organisation,
+            404 si l'organisation n'existe pas
+    """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    # Isolation cross-organisation AVANT toute lecture
+    # (superuser bypass — spec 08 ; helper STORY-121.2)
+    if not current_user.is_superuser and not await UserOrganizationService.is_member(
+        session, current_user, organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé à cette organisation",
+        )
+
+    organization = await OrganizationService.get_by_id(session, organization_id)
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Organisation {organization_id} non trouvée",
+        )
+
+    logger.info(
+        f"Listing members of organization {organization_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "organization_id": str(organization_id),
+            "skip": skip,
+            "limit": limit,
+        },
+    )
+
+    members = await UserOrganizationService.list_members(
+        session, organization_id, skip, limit
+    )
+    return [_member_to_response(link) for link in members]
+
+
+@router.post(
+    "/{organization_id}/users",
+    response_model=OrganizationMemberResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a member to an organization",
+    description="""
+Add a user as a member of an organization with an optional role.
+
+## Access Control
+- **Interim protection**: superuser only (`require_superuser`) — the final
+  RBAC coverage (`require_role("admin")` for organization admins) will be
+  enforced by STORY-122
+- **Isolation**: even for superusers, the cross-organization isolation check
+  is structurally in place (no-op behind the superuser bypass today)
+- Adding members requires Admin+ permissions (spec 08 permission matrix)
+
+## Validation Rules
+- `user_id`: required UUID of an existing user (404 if the user does not exist)
+- `role`: optional, one of `viewer` | `operator` | `admin` — **defaults to
+  `viewer`** (spec 09); any other value (including `super_admin`) returns 422
+- Adding an existing member returns 409 Conflict
+
+## Use Cases
+- Onboarding a new user into an organization
+- Granting a user access to organization resources
+- Multi-tenant membership management
+
+**Authentication Required - Superuser Only (interim, STORY-122 will refine)**
+""",
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "default_viewer_role": {
+                            "summary": "Default viewer role",
+                            "description": "Add a member with the default `viewer` role",
+                            "value": {
+                                "user_id": "770e8400-e29b-41d4-a716-446655440010"
+                            },
+                        },
+                        "explicit_operator_role": {
+                            "summary": "Explicit operator role",
+                            "description": "Add a member with an explicit `operator` role",
+                            "value": {
+                                "user_id": "770e8400-e29b-41d4-a716-446655440010",
+                                "role": "operator",
+                            },
+                        },
+                    }
+                }
+            }
+        }
+    },
+    responses={
+        201: {
+            "description": "Member added successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "user_id": "770e8400-e29b-41d4-a716-446655440010",
+                        "username": "jdoe",
+                        "email": "jdoe@example.com",
+                        "full_name": "John Doe",
+                        "role": "viewer",
+                        "joined_at": "2026-09-08T10:00:00Z",
+                    }
+                }
+            },
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
+        },
+        403: {
+            "description": "Insufficient permissions or access denied to this organization",
+            "content": {
+                "application/json": {"example": {"detail": "Not enough permissions"}}
+            },
+        },
+        404: {
+            "description": "Organization or target user not found",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Utilisateur 770e8400-e29b-41d4-a716-446655440010 introuvable"
+                    }
+                }
+            },
+        },
+        409: {
+            "description": "User is already a member of this organization",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "L'utilisateur 770e8400-e29b-41d4-a716-446655440010 est déjà membre"
+                    }
+                }
+            },
+        },
+        422: {
+            "description": "Validation error - invalid role (super_admin is a system role) or invalid user_id format",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Input should be 'viewer', 'operator' or 'admin'"
+                    }
+                }
+            },
+        },
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Rate limit exceeded. Try again in 60 seconds."
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "An unexpected error occurred"}
+                }
+            },
+        },
+    },
+)
+async def add_organization_member(
+    request: Request,
+    organization_id: UUID,
+    member_data: OrganizationMemberAddRequest,
+    current_user: User = Depends(require_superuser),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Ajoute un utilisateur comme membre d'une organisation (superuser uniquement).
+
+    Protection intérimaire : ``require_superuser`` — la couche RBAC finale
+    (``require_role("admin")`` pour les admins d'organisation) est portée
+    par STORY-122.
+
+    Args:
+        request: Requête HTTP (pour correlation_id)
+        organization_id: ID de l'organisation
+        member_data: Données d'ajout (``user_id`` requis, ``role`` défaut viewer)
+        current_user: Utilisateur courant (doit être superuser)
+        session: Session de base de données
+
+    Returns:
+        OrganizationMemberResponse: Membre ajouté (rôle par défaut ``viewer``)
+
+    Raises:
+        HTTPException: 403 si accès refusé, 404 si l'organisation ou
+            l'utilisateur cible n'existe pas, 409 si déjà membre
+    """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    # Isolation cross-organisation (structure prête pour les admins d'org
+    # post-STORY-122 ; no-op intérim derrière le bypass superuser)
+    if not current_user.is_superuser and not await UserOrganizationService.is_member(
+        session, current_user, organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé à cette organisation",
+        )
+
+    organization = await OrganizationService.get_by_id(session, organization_id)
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Organisation {organization_id} non trouvée",
+        )
+
+    # Check explicite de l'utilisateur cible (404 distinct du 409)
+    target_user = await UserService.get_by_id(session, str(member_data.user_id))
+    if target_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Utilisateur {member_data.user_id} introuvable",
+        )
+
+    try:
+        membership = await UserOrganizationService.add_member(
+            session, organization_id, member_data
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    # Audit intérimaire (traçabilité structurée ; table audit_logs portée
+    # par STORY-125) — aucune donnée sensible dans les logs
+    logger.info(
+        "Member added",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "organization_id": str(organization_id),
+            "target_user_id": str(member_data.user_id),
+            "role": member_data.role.value,
+        },
+    )
+    return _member_to_response(membership)
+
+
+@router.put(
+    "/{organization_id}/users/{user_id}",
+    response_model=OrganizationMemberResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update a member's role",
+    description="""
+Change the role of an existing member of an organization.
+
+## Access Control
+- **Interim protection**: superuser only (`require_superuser`) — the final
+  RBAC coverage (`require_role("admin")` for organization admins) will be
+  enforced by STORY-122
+- Changing roles requires Admin+ permissions (spec 08 permission matrix)
+- Permission changes are audit-logged (spec 08 security section)
+
+## Validation Rules
+- `role`: required, one of `viewer` | `operator` | `admin` — any other
+  value (including `super_admin`) returns 422
+- Returns 404 if the organization exists but the user is not one of its members
+
+## Escalation Protection
+`super_admin` is a system role carried by `User.is_superuser` and can never
+be stored as an organization role (validation error 422). Further escalation
+protections (self-promotion, last-admin) are carried by STORY-122.
+
+**Authentication Required - Superuser Only (interim, STORY-122 will refine)**
+""",
+    dependencies=[Depends(conditional_rate_limiter(20, 60))],
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "promote_to_operator": {
+                            "summary": "Promote to operator",
+                            "description": "Change the member role to `operator`",
+                            "value": {"role": "operator"},
+                        },
+                        "promote_to_admin": {
+                            "summary": "Promote to admin",
+                            "description": "Change the member role to `admin`",
+                            "value": {"role": "admin"},
+                        },
+                        "demote_to_viewer": {
+                            "summary": "Demote to viewer",
+                            "description": "Change the member role back to `viewer`",
+                            "value": {"role": "viewer"},
+                        },
+                    }
+                }
+            }
+        }
+    },
+    responses={
+        200: {
+            "description": "Member role updated successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "user_id": "770e8400-e29b-41d4-a716-446655440010",
+                        "username": "jdoe",
+                        "email": "jdoe@example.com",
+                        "full_name": "John Doe",
+                        "role": "operator",
+                        "joined_at": "2026-09-08T10:00:00Z",
+                    }
+                }
+            },
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
+        },
+        403: {
+            "description": "Insufficient permissions or access denied to this organization",
+            "content": {
+                "application/json": {"example": {"detail": "Not enough permissions"}}
+            },
+        },
+        404: {
+            "description": "Organization not found or user is not a member",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Membre 770e8400-e29b-41d4-a716-446655440010 introuvable dans cette organisation"
+                    }
+                }
+            },
+        },
+        422: {
+            "description": "Validation error - invalid role (super_admin is a system role)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Input should be 'viewer', 'operator' or 'admin'"
+                    }
+                }
+            },
+        },
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Rate limit exceeded. Try again in 60 seconds."
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "An unexpected error occurred"}
+                }
+            },
+        },
+    },
+)
+async def update_organization_member_role(
+    request: Request,
+    organization_id: UUID,
+    user_id: UUID,
+    role_data: MemberRoleUpdateRequest,
+    current_user: User = Depends(require_superuser),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Modifie le rôle d'un membre d'une organisation (superuser uniquement).
+
+    Protection intérimaire : ``require_superuser`` — la couche RBAC finale
+    est portée par STORY-122.
+
+    Args:
+        request: Requête HTTP (pour correlation_id)
+        organization_id: ID de l'organisation
+        user_id: ID de l'utilisateur membre
+        role_data: Nouveau rôle (borné enum ``Role``)
+        current_user: Utilisateur courant (doit être superuser)
+        session: Session de base de données
+
+    Returns:
+        OrganizationMemberResponse: Membre avec son nouveau rôle
+
+    Raises:
+        HTTPException: 403 si accès refusé, 404 si l'organisation
+            n'existe pas ou l'utilisateur n'est pas membre
+    """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    # Isolation cross-organisation (structure prête pour STORY-122)
+    if not current_user.is_superuser and not await UserOrganizationService.is_member(
+        session, current_user, organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé à cette organisation",
+        )
+
+    organization = await OrganizationService.get_by_id(session, organization_id)
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Organisation {organization_id} non trouvée",
+        )
+
+    membership = await UserOrganizationService.get_membership(
+        session, organization_id, user_id
+    )
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Membre {user_id} introuvable dans cette organisation",
+        )
+
+    previous_role = _role_str(membership.role)
+    updated = await UserOrganizationService.update_member_role(
+        session, membership, role_data.role
+    )
+
+    # Audit intérimaire : ancien/nouveau rôle tracés (spec 08 § Audit)
+    logger.info(
+        "Member role updated",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "organization_id": str(organization_id),
+            "target_user_id": str(user_id),
+            "previous_role": previous_role,
+            "new_role": role_data.role.value,
+        },
+    )
+    return _member_to_response(updated)
+
+
+@router.delete(
+    "/{organization_id}/users/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove a member from an organization",
+    description="""
+Remove a member from an organization (deletes the membership association).
+
+## Access Control
+- **Interim protection**: superuser only (`require_superuser`) — the final
+  RBAC coverage (`require_role("admin")` for organization admins) will be
+  enforced by STORY-122
+- Removing members requires Admin+ permissions (spec 08 permission matrix)
+- Removals are audit-logged (spec 08 security section)
+
+## Impact of Removal
+- The user loses access to organization resources tied to the membership
+- The user account itself is **never** deleted
+- The system role (`User.is_superuser`) is **never** modified by removal
+
+## Response
+Returns 204 No Content on success; 404 if the organization exists but the
+user is not one of its members.
+
+**Authentication Required - Superuser Only (interim, STORY-122 will refine)**
+""",
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
+    responses={
+        204: {"description": "Member removed successfully (no content returned)"},
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
+        },
+        403: {
+            "description": "Insufficient permissions or access denied to this organization",
+            "content": {
+                "application/json": {"example": {"detail": "Not enough permissions"}}
+            },
+        },
+        404: {
+            "description": "Organization not found or user is not a member",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Membre 770e8400-e29b-41d4-a716-446655440010 introuvable dans cette organisation"
+                    }
+                }
+            },
+        },
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Rate limit exceeded. Try again in 60 seconds."
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "An unexpected error occurred"}
+                }
+            },
+        },
+    },
+)
+async def remove_organization_member(
+    request: Request,
+    organization_id: UUID,
+    user_id: UUID,
+    current_user: User = Depends(require_superuser),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Retire un membre d'une organisation (superuser uniquement).
+
+    Supprime uniquement l'association — jamais le compte utilisateur ni le
+    rôle système ``User.is_superuser`` (protections portées par STORY-122).
+    Protection intérimaire : ``require_superuser``.
+
+    Args:
+        request: Requête HTTP (pour correlation_id)
+        organization_id: ID de l'organisation
+        user_id: ID de l'utilisateur membre à retirer
+        current_user: Utilisateur courant (doit être superuser)
+        session: Session de base de données
+
+    Raises:
+        HTTPException: 403 si accès refusé, 404 si l'organisation
+            n'existe pas ou l'utilisateur n'est pas membre
+    """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    # Isolation cross-organisation (structure prête pour STORY-122)
+    if not current_user.is_superuser and not await UserOrganizationService.is_member(
+        session, current_user, organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé à cette organisation",
+        )
+
+    organization = await OrganizationService.get_by_id(session, organization_id)
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Organisation {organization_id} non trouvée",
+        )
+
+    membership = await UserOrganizationService.get_membership(
+        session, organization_id, user_id
+    )
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Membre {user_id} introuvable dans cette organisation",
+        )
+
+    await UserOrganizationService.remove_member(session, membership)
+
+    # Audit intérimaire (spec 08 § Audit — traçabilité du retrait)
+    logger.info(
+        "Member removed",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "organization_id": str(organization_id),
+            "target_user_id": str(user_id),
+        },
+    )
+    return None

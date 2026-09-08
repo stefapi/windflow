@@ -89,6 +89,25 @@ def _make_target_groups() -> list[TargetGroup]:
 # =============================================================================
 
 
+
+
+def _patch_org_membership():
+    """STORY-121.3 : stubbe l'appartenance (is_member) — les tests
+    compute mockent le service sous-jacent, pas la base."""
+    from contextlib import ExitStack
+
+    from app.services.user_organization_service import UserOrganizationService
+
+    stack = ExitStack()
+    stack.enter_context(
+        patch.object(
+            UserOrganizationService,
+            "is_member",
+            new=AsyncMock(return_value=True),
+        )
+    )
+    return stack
+
 class TestComputeStatsEndpoint:
     @pytest.mark.asyncio
     async def test_unauthenticated_returns_401(self, client) -> None:
@@ -148,20 +167,22 @@ class TestComputeStatsEndpoint:
         """Le paramètre organization_id est accepté et passé au service."""
         mock_stats = _make_stats_response()
 
-        with patch(
-            "app.api.v1.compute.compute_service.get_compute_stats",
-            new_callable=AsyncMock,
-            return_value=mock_stats,
-        ) as mock_svc:
-            response = await authenticated_client.get(
-                "/api/v1/compute/stats?organization_id=org-123"
-            )
+        with _patch_org_membership():
+            with patch(
+                "app.api.v1.compute.compute_service.get_compute_stats",
+                new_callable=AsyncMock,
+                return_value=mock_stats,
+            ) as mock_svc:
+                response = await authenticated_client.get(
+                    "/api/v1/compute/stats?organization_id=org-123"
+                )
 
         assert response.status_code == 200
-        # Le service doit avoir été appelé avec un org_id
+        # STORY-121.3 : le service reçoit la liste d'orgs (paramètre
+        # vérifié contre l'appartenance en amont)
         mock_svc.assert_called_once()
         call_kwargs = mock_svc.call_args.kwargs
-        assert call_kwargs.get("org_id") == "org-123"
+        assert call_kwargs.get("org_ids") == ["org-123"]
 
 
 # =============================================================================

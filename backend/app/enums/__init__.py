@@ -1,1 +1,1 @@
-"""Centralized enums for the target module."""
+"""Centralized enums shared across WindFlow domains."""

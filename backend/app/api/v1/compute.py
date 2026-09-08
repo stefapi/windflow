@@ -7,9 +7,10 @@ Expose deux endpoints d'agrégation :
 """
 
 import logging
-from typing import Annotated, Optional, Union
+from typing import Annotated, List, Optional, Union
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_active_user
@@ -17,6 +18,7 @@ from ...database import get_db
 from ...models.user import User
 from ...schemas.compute import ComputeGlobalView, ComputeStatsResponse, TargetGroup
 from ...services import compute_service
+from ...services.user_organization_service import UserOrganizationService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -49,9 +51,26 @@ async def get_compute_stats(
     Docker local. Si Docker n'est pas disponible, les compteurs Docker sont
     retournés à 0 (graceful degradation).
     """
-    org_id = organization_id or current_user.organization_id
-    logger.info(f"GET /compute/stats — user={current_user.username} org={org_id}")
-    return await compute_service.get_compute_stats(db=db, org_id=org_id)
+    # STORY-121.3 : paramètre explicite vérifié contre l'appartenance
+    # (403 sinon) ; sinon scoping sur toutes les appartenances
+    if organization_id:
+        if not await UserOrganizationService.is_member(
+            db, current_user, organization_id
+        ):
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="Accès refusé à cette organisation",
+            )
+        org_filter: List[str] = [organization_id]
+    else:
+        org_filter = await UserOrganizationService.get_user_organization_ids(
+            db, current_user
+        )
+
+    logger.info(
+        f"GET /compute/stats — user={current_user.username} orgs={len(org_filter)}"
+    )
+    return await compute_service.get_compute_stats(db=db, org_ids=org_filter)
 
 
 @router.get(
@@ -123,14 +142,29 @@ async def get_compute_global(
     - `com.docker.compose.project` (sans label WindFlow) → objet découvert
     - aucun des deux → container standalone
     """
-    org_id = organization_id or current_user.organization_id
+    # STORY-121.3 : paramètre explicite vérifié contre l'appartenance
+    # (403 sinon) ; sinon scoping sur toutes les appartenances
+    if organization_id:
+        if not await UserOrganizationService.is_member(
+            db, current_user, organization_id
+        ):
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="Accès refusé à cette organisation",
+            )
+        org_filter: List[str] = [organization_id]
+    else:
+        org_filter = await UserOrganizationService.get_user_organization_ids(
+            db, current_user
+        )
+
     logger.info(
-        f"GET /compute/global — user={current_user.username} org={org_id} "
+        f"GET /compute/global — user={current_user.username} orgs={len(org_filter)} "
         f"group_by={group_by} type={type} search={search}"
     )
     return await compute_service.get_compute_global(
         db=db,
-        org_id=org_id,
+        org_ids=org_filter,
         type_filter=type,
         technology=technology,
         target_id_filter=target_id,

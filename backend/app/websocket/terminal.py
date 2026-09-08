@@ -18,6 +18,7 @@ from ..auth.dependencies import authenticate_ws_first_message
 from ..database import db as database
 from ..models.deployment import Deployment
 from ..services.terminal_service import ExecSession, TerminalService
+from ..services.user_organization_service import UserOrganizationService
 
 logger = logging.getLogger(__name__)
 
@@ -188,10 +189,12 @@ async def container_terminal_websocket_endpoint(
                 # On autorise quand même pour permettre l'accès direct au container
                 pass
             else:
-                # Vérifier l'accès à l'organisation
-                if (
-                    deployment.organization_id != ws_user.organization_id
-                    and not ws_user.is_superadmin  # type: ignore[attr-defined]
+                # Vérifier l'accès à l'organisation — STORY-121.3 :
+                # appartenance via l'association (is_member, superuser
+                # bypass inclus) ; corrige le bug is_superadmin
+                # (attribut inexistant) qui rendait le check inopérant
+                if not await UserOrganizationService.is_member(
+                    db, ws_user, deployment.organization_id
                 ):
                     await log_terminal_audit(
                         str(ws_user.id),

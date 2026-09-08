@@ -12,9 +12,11 @@ from .stack_version import StackVersion
 from .target import Target
 from .target_capability import TargetCapability
 from .user import User
+from .user_organization import UserOrganization
 
 __all__ = [
     "User",
+    "UserOrganization",
     "Organization",
     "Target",
     "Stack",

@@ -9,7 +9,17 @@ import logging
 from typing import Any, List, Optional
 
 import aiohttp
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_active_user
@@ -40,8 +50,8 @@ from ...schemas.docker import (
     ContainerStateInfo,
     ContainerStatsResponse,
     ContainerUpdateResourcesRequest,
-    ContainerUpdateRestartPolicyRequest,
     ContainerUpdateResponse,
+    ContainerUpdateRestartPolicyRequest,
     ImageDetailResponse,
     ImagePullRequest,
     ImagePullResponse,
@@ -56,6 +66,7 @@ from ...schemas.docker import (
 from ...schemas.stack import StackCreate
 from ...services.docker_client_service import get_docker_client
 from ...services.stack_service import StackService
+from ...services.user_organization_service import UserOrganizationService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -78,7 +89,9 @@ async def list_containers(
     request: Request,
     all: bool = True,
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
-    limit: int = Query(50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"),
+    limit: int = Query(
+        50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"
+    ),
     current_user: User = Depends(get_current_active_user),
 ):
     """Liste tous les containers Docker avec pagination."""
@@ -160,7 +173,9 @@ async def get_container(
             image=container.image,
             config=ContainerConfigInfo.from_docker_dict(container.config),
             host_config=ContainerHostConfigInfo.from_docker_dict(container.host_config),
-            network_settings=ContainerNetworkSettingsInfo.from_docker_dict(container.network_settings),
+            network_settings=ContainerNetworkSettingsInfo.from_docker_dict(
+                container.network_settings
+            ),
             mounts=container.mounts,
             size_rw=container.size_rw,
             size_root_fs=container.size_root_fs,
@@ -237,7 +252,9 @@ async def create_container(
             image=container.image,
             config=ContainerConfigInfo.from_docker_dict(container.config),
             host_config=ContainerHostConfigInfo.from_docker_dict(container.host_config),
-            network_settings=ContainerNetworkSettingsInfo.from_docker_dict(container.network_settings),
+            network_settings=ContainerNetworkSettingsInfo.from_docker_dict(
+                container.network_settings
+            ),
             mounts=container.mounts,
         )
 
@@ -710,8 +727,12 @@ async def recreate_container(
             state=ContainerStateInfo.from_docker_dict(new_detail.state),
             image=new_detail.image,
             config=ContainerConfigInfo.from_docker_dict(new_detail.config),
-            host_config=ContainerHostConfigInfo.from_docker_dict(new_detail.host_config),
-            network_settings=ContainerNetworkSettingsInfo.from_docker_dict(new_detail.network_settings),
+            host_config=ContainerHostConfigInfo.from_docker_dict(
+                new_detail.host_config
+            ),
+            network_settings=ContainerNetworkSettingsInfo.from_docker_dict(
+                new_detail.network_settings
+            ),
             mounts=new_detail.mounts,
             size_rw=new_detail.size_rw,
             size_root_fs=new_detail.size_root_fs,
@@ -1120,11 +1141,17 @@ async def promote_container(
         pids_limit = host_config.get("PidsLimit")
         deploy: dict[str, Any] = {}
         if memory and memory > 0:
-            deploy.setdefault("resources", {}).setdefault("limits", {})["memory"] = memory
+            deploy.setdefault("resources", {}).setdefault("limits", {})[
+                "memory"
+            ] = memory
         if cpu_shares and cpu_shares > 0:
-            deploy.setdefault("resources", {}).setdefault("limits", {})["cpus"] = cpu_shares / 1024
+            deploy.setdefault("resources", {}).setdefault("limits", {})["cpus"] = (
+                cpu_shares / 1024
+            )
         if pids_limit and pids_limit > 0:
-            deploy.setdefault("resources", {}).setdefault("limits", {})["pids"] = pids_limit
+            deploy.setdefault("resources", {}).setdefault("limits", {})[
+                "pids"
+            ] = pids_limit
         if deploy:
             service_def["deploy"] = deploy
 
@@ -1132,6 +1159,7 @@ async def promote_container(
         container_name = container_info.get("Name", "").lstrip("/") or "service"
         # Sanitize name for compose service key
         import re
+
         service_key = container_name.replace("_", "-").replace(".", "-").lower()
         # Ensure it starts with alphanumeric
         service_key = re.sub(r"[^a-z0-9-]", "", service_key)
@@ -1147,9 +1175,20 @@ async def promote_container(
             },
         }
 
+        # STORY-121.3 : organisation primaire de l'utilisateur pour la
+        # ressource créée (plus ancienne appartenance)
+        primary_org = await UserOrganizationService.get_primary_organization_id(
+            session, current_user
+        )
+        if primary_org is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Aucune organisation : rattachez d'abord votre compte",
+            )
+
         # 4. Check name uniqueness
         existing = await StackService.get_by_name(
-            session, promote_data.name, str(current_user.organization_id)
+            session, promote_data.name, primary_org
         )
         if existing:
             raise HTTPException(
@@ -1163,7 +1202,7 @@ async def promote_container(
             description=f"Stack promue depuis le container {container_name}",
             template=compose_template,
             variables={},
-            organization_id=str(current_user.organization_id),
+            organization_id=primary_org,
         )
         stack = await StackService.create(session, stack_data)
 
@@ -1496,7 +1535,9 @@ async def list_images(
     request: Request,
     all: bool = False,
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
-    limit: int = Query(50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"),
+    limit: int = Query(
+        50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"
+    ),
     current_user: User = Depends(get_current_active_user),
 ):
     """Liste toutes les images Docker avec indicateur d'utilisation par containers et pagination."""
@@ -1808,9 +1849,7 @@ async def save_image(
         return Response(
             content=tar_bytes,
             media_type="application/x-tar",
-            headers={
-                "Content-Disposition": f"attachment; filename={image_id}.tar"
-            },
+            headers={"Content-Disposition": f"attachment; filename={image_id}.tar"},
         )
 
     except aiohttp.ClientResponseError as e:
@@ -1849,7 +1888,9 @@ async def save_image(
 async def list_volumes(
     request: Request,
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
-    limit: int = Query(50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"),
+    limit: int = Query(
+        50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"
+    ),
     current_user: User = Depends(get_current_active_user),
 ):
     """Liste tous les volumes Docker avec pagination."""
@@ -2003,7 +2044,9 @@ async def remove_volume(
 async def list_networks(
     request: Request,
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
-    limit: int = Query(50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"),
+    limit: int = Query(
+        50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"
+    ),
     current_user: User = Depends(get_current_active_user),
 ):
     """Liste tous les réseaux Docker avec pagination."""
@@ -2056,7 +2099,9 @@ async def list_networks(
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(50, 60))],
 )
-async def get_system_info(request: Request, current_user: User = Depends(get_current_active_user)):
+async def get_system_info(
+    request: Request, current_user: User = Depends(get_current_active_user)
+):
     """Récupère les informations système Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info("Getting Docker system info", extra={"correlation_id": correlation_id})
@@ -2102,7 +2147,9 @@ async def get_system_info(request: Request, current_user: User = Depends(get_cur
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(50, 60))],
 )
-async def get_version(request: Request, current_user: User = Depends(get_current_active_user)):
+async def get_version(
+    request: Request, current_user: User = Depends(get_current_active_user)
+):
     """Récupère la version Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info("Getting Docker version", extra={"correlation_id": correlation_id})

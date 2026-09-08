@@ -208,7 +208,12 @@ async def test_organization(db_session: AsyncSession) -> Organization:
 @pytest.fixture(scope="function")
 async def test_user(db_session: AsyncSession, test_organization: Organization) -> User:
     """
-    Crée un utilisateur de test standard.
+    Crée un utilisateur de test standard (association ``operator``).
+
+    STORY-121.3 : le rattachement passe par la table d'association — le
+    rôle ``operator`` est posé directement (cohérent avec le mapping de
+    migration des utilisateurs pré-existants ; UserService.create ne
+    rattache qu'en viewer).
 
     Args:
         db_session: Session de base de données
@@ -217,6 +222,8 @@ async def test_user(db_session: AsyncSession, test_organization: Organization) -
     Returns:
         User: Utilisateur de test créé
     """
+    from app.enums.rbac import Role
+    from app.models.user_organization import UserOrganization
     from app.schemas.user import UserCreate
 
     user_data = UserCreate(
@@ -224,11 +231,19 @@ async def test_user(db_session: AsyncSession, test_organization: Organization) -
         username="testuser",
         full_name="Test User",
         password="testpassword123",
-        organization_id=test_organization.id,
         is_superuser=False,
     )
 
     user = await UserService.create(db_session, user_data)
+
+    db_session.add(
+        UserOrganization(
+            user_id=user.id,
+            organization_id=test_organization.id,
+            role=Role.OPERATOR,
+        )
+    )
+    await db_session.commit()
     return user
 
 
@@ -237,7 +252,10 @@ async def test_superuser(
     db_session: AsyncSession, test_organization: Organization
 ) -> User:
     """
-    Crée un super-utilisateur de test.
+    Crée un super-utilisateur de test (association ``admin``).
+
+    STORY-121.3 : le rôle ``admin`` en association + flag ``is_superuser``
+    inchangé — cohérent avec le mapping de migration (superuser → admin).
 
     Args:
         db_session: Session de base de données
@@ -246,6 +264,8 @@ async def test_superuser(
     Returns:
         User: Super-utilisateur de test créé
     """
+    from app.enums.rbac import Role
+    from app.models.user_organization import UserOrganization
     from app.schemas.user import UserCreate
 
     user_data = UserCreate(
@@ -253,11 +273,19 @@ async def test_superuser(
         username="admin",
         full_name="Admin User",
         password="adminpassword123",
-        organization_id=test_organization.id,
         is_superuser=True,
     )
 
     user = await UserService.create(db_session, user_data)
+
+    db_session.add(
+        UserOrganization(
+            user_id=user.id,
+            organization_id=test_organization.id,
+            role=Role.ADMIN,
+        )
+    )
+    await db_session.commit()
     return user
 
 

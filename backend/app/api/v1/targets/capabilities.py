@@ -18,6 +18,7 @@ from ....schemas.target import (
 )
 from ....schemas.target_capability import TargetCapabilityResponse
 from ....services.target_service import TargetService
+from ....services.user_organization_service import UserOrganizationService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -106,7 +107,9 @@ async def health_check_target(
             detail=f"Cible {target_id} non trouvée",
         )
 
-    if target.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, target.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )
@@ -281,7 +284,9 @@ async def get_target_capabilities(
             detail=f"Cible {target_id} non trouvée",
         )
 
-    if target.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, target.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )
@@ -451,7 +456,9 @@ async def get_target_capability_by_type(
             detail=f"Cible {target_id} non trouvée",
         )
 
-    if target.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, target.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )
@@ -613,7 +620,9 @@ async def get_target_virtualization_capabilities(
             detail=f"Cible {target_id} non trouvée",
         )
 
-    if target.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, target.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )

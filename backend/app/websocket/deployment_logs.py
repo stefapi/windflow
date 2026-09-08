@@ -14,6 +14,7 @@ from sqlalchemy import select
 from ..database import db as database
 from ..models.deployment import Deployment
 from ..models.user import User
+from ..services.user_organization_service import UserOrganizationService
 from .connection_managers import manager
 
 logger = logging.getLogger(__name__)
@@ -37,8 +38,13 @@ async def verify_deployment_access(deployment_id: str, user, db) -> Deployment:
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
         )
 
-    # Vérifier l'accès utilisateur (organisation)
-    if not user.is_superadmin and deployment.organization_id != user.organization_id:
+    # Vérifier l'accès utilisateur (organisation) — STORY-121.3 :
+    # appartenance via l'association (is_member, superuser bypass inclus) ;
+    # corrige le bug is_superadmin (attribut inexistant) qui rendait le
+    # check inopérant
+    if not await UserOrganizationService.is_member(
+        db, user, deployment.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this deployment",

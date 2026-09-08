@@ -9,7 +9,7 @@ Délègue la classification, la construction et le filtrage aux modules spécial
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +37,9 @@ from ..services.docker_client_service import DockerClientService
 logger = logging.getLogger(__name__)
 
 
-async def _get_local_target(db: AsyncSession, org_id: Optional[str]) -> tuple[str, str]:
+async def _get_local_target(
+    db: AsyncSession, org_ids: Optional[List[str]]
+) -> tuple[str, str]:
     """
     Tente de trouver la target Docker locale dans la DB.
 
@@ -45,8 +47,8 @@ async def _get_local_target(db: AsyncSession, org_id: Optional[str]) -> tuple[st
         (target_id, target_name) — soit depuis la DB soit un placeholder
     """
     stmt = select(Target).where(Target.host.in_(["localhost", "127.0.0.1"]))
-    if org_id:
-        stmt = stmt.where(Target.organization_id == org_id)
+    if org_ids:
+        stmt = stmt.where(Target.organization_id.in_(org_ids))
     stmt = stmt.limit(1)
     result = await db.execute(stmt)
     target = result.scalar_one_or_none()
@@ -57,7 +59,7 @@ async def _get_local_target(db: AsyncSession, org_id: Optional[str]) -> tuple[st
 
 async def get_compute_stats(
     db: AsyncSession,
-    org_id: Optional[str],
+    org_ids: Optional[List[str]],
 ) -> ComputeStatsResponse:
     """
     Retourne les statistiques synthétiques de la vue Compute.
@@ -67,21 +69,22 @@ async def get_compute_stats(
 
     Args:
         db: Session base de données async
-        org_id: ID de l'organisation (filtre multi-tenant)
+        org_ids: IDs des organisations (filtre multi-tenant,
+            multi-appartenance STORY-121.3)
 
     Returns:
         ComputeStatsResponse avec les 9 compteurs
     """
     # --- DB : stacks ---
     stacks_stmt = select(func.count(Stack.id))
-    if org_id:
-        stacks_stmt = stacks_stmt.where(Stack.organization_id == org_id)
+    if org_ids:
+        stacks_stmt = stacks_stmt.where(Stack.organization_id.in_(org_ids))
     stacks_count: int = (await db.execute(stacks_stmt)).scalar() or 0
 
     # --- DB : targets ---
     targets_stmt = select(func.count(Target.id))
-    if org_id:
-        targets_stmt = targets_stmt.where(Target.organization_id == org_id)
+    if org_ids:
+        targets_stmt = targets_stmt.where(Target.organization_id.in_(org_ids))
     targets_count: int = (await db.execute(targets_stmt)).scalar() or 0
 
     # --- Docker : containers (graceful degradation) ---
@@ -160,7 +163,7 @@ async def get_compute_stats(
 
 async def get_compute_global(
     db: AsyncSession,
-    org_id: Optional[str],
+    org_ids: Optional[List[str]],
     type_filter: Optional[str] = None,
     technology: Optional[str] = None,
     target_id_filter: Optional[str] = None,
@@ -177,7 +180,7 @@ async def get_compute_global(
 
     Args:
         db: Session base de données async
-        org_id: Filtre organisation
+        org_ids: Filtre organisations (multi-appartenance STORY-121.3)
         type_filter: Filtre par type ("managed", "discovered", "standalone")
         technology: Filtre par technologie (ex: "compose")
         target_id_filter: Filtre par target_id
@@ -190,15 +193,15 @@ async def get_compute_global(
     """
     # 1. Récupérer les stacks DB avec leurs deployments actifs
     stacks_stmt = select(Stack).options(selectinload(Stack.deployments))
-    if org_id:
-        stacks_stmt = stacks_stmt.where(Stack.organization_id == org_id)
+    if org_ids:
+        stacks_stmt = stacks_stmt.where(Stack.organization_id.in_(org_ids))
     stacks_result = await db.execute(stacks_stmt)
     db_stacks = stacks_result.scalars().all()
 
     # Index des targets pour éviter les N+1
     targets_stmt = select(Target)
-    if org_id:
-        targets_stmt = targets_stmt.where(Target.organization_id == org_id)
+    if org_ids:
+        targets_stmt = targets_stmt.where(Target.organization_id.in_(org_ids))
     targets_result = await db.execute(targets_stmt)
     targets_by_id: dict[str, Target] = {t.id: t for t in targets_result.scalars().all()}
 
@@ -228,7 +231,7 @@ async def get_compute_global(
         )
 
     # 4. Construire les objets domaine via les builders
-    local_target_id, local_target_name = await _get_local_target(db, org_id)
+    local_target_id, local_target_name = await _get_local_target(db, org_ids)
     now_iso = datetime.now(timezone.utc).isoformat()
 
     # Client Docker partagé pour les inspections health

@@ -1,6 +1,6 @@
 # STORY-121 : Modèle `user_organizations` — association utilisateur ↔ organisation avec rôle (P1-2, partie modèle)
 
-**Statut :** TODO
+**Statut :** DONE
 **Epic Parent :** EPIC-012 — P1 : Socle structurant (remédiation backend)
 **Item plan :** P1-2 partie modèle (axe A2, rapport §3) — ampleur **M** (partie modèle de l'item XL)
 
@@ -24,11 +24,11 @@ En tant qu'administrateur WindFlow, je veux que l'appartenance d'un utilisateur 
 
 ## Critères d'acceptation (AC)
 
-- [ ] AC 1 : La table `user_organizations` existe via migration Alembic (STORY-120) conformément au schéma spec 06 (PK composite, `role` défaut `viewer`, `joined_at`, index `organization_id`), avec l'enum `Role` (`viewer`/`operator`/`admin`) partagé côté backend.
-- [ ] AC 2 : Migration de données sans perte : chaque utilisateur existant avec `organization_id` direct obtient sa ligne d'association avec le mapping non cassant (superuser → Super_Admin via flag inchangé ; autres → `operator`) ; les lectures sont basculées sur l'association et la colonne héritée `users.organization_id` est retirée (ou reléguée en simple valeur par défaut) **sans perte de données** — test sur fixture réaliste.
-- [ ] AC 3 : Endpoints de gestion des membres opérationnels conformément à spec 09 : lister les membres (rôle + joined_at), ajouter un membre (rôle défaut `viewer`), modifier le rôle, retirer un membre — protégés a minima par l'authentification + la dépendance la plus forte disponible (cf. contexte), la couverture RBAC finale étant vérifiée par STORY-122.
-- [ ] AC 4 : Tests de sécurité : `401` sans token sur les endpoints membres ; `403` pour un rôle insuffisant ; `422` sur rôle invalide dans le body ; un utilisateur ne peut pas lister/modifier les membres d'une organisation à laquelle il n'appartient pas.
-- [ ] AC 5 : Non-régression : login username/email, register, `disable_auth` (auto-login superadmin) et seed continuent de fonctionner ; `make lint` + `make backend-test` verts.
+- [x] AC 1 : La table `user_organizations` existe via migration Alembic (STORY-120) conformément au schéma spec 06 (PK composite, `role` défaut `viewer`, `joined_at`, index `organization_id`), avec l'enum `Role` (`viewer`/`operator`/`admin`) partagé côté backend.
+- [x] AC 2 : Migration de données sans perte : chaque utilisateur existant avec `organization_id` direct obtient sa ligne d'association avec le mapping non cassant (superuser → Super_Admin via flag inchangé ; autres → `operator`) ; les lectures sont basculées sur l'association et la colonne héritée `users.organization_id` est retirée (ou reléguée en simple valeur par défaut) **sans perte de données** — test sur fixture réaliste.
+- [x] AC 3 : Endpoints de gestion des membres opérationnels conformément à spec 09 : lister les membres (rôle + joined_at), ajouter un membre (rôle défaut `viewer`), modifier le rôle, retirer un membre — protégés a minima par l'authentification + la dépendance la plus forte disponible (cf. contexte), la couverture RBAC finale étant vérifiée par STORY-122.
+- [x] AC 4 : Tests de sécurité : `401` sans token sur les endpoints membres ; `403` pour un rôle insuffisant ; `422` sur rôle invalide dans le body ; un utilisateur ne peut pas lister/modifier les membres d'une organisation à laquelle il n'appartient pas.
+- [x] AC 5 : Non-régression : login username/email, register, `disable_auth` (auto-login superadmin) et seed continuent de fonctionner ; `make lint` + `make backend-test` verts.
 
 ## Références spécification
 
@@ -45,16 +45,57 @@ En tant qu'administrateur WindFlow, je veux que l'appartenance d'un utilisateur 
 
 ## Sous-stories
 
-*(section réservée — STORY-121 ampleur M, découpe non prévue a priori)*
+> Découpe effectuée le 2026-09-07 (skill `split-story`, **mode proactif** — complexité détectée par `analyse-story` : 8 tâches > 5, 16+ fichiers > 6, colonne `users.organization_id` consommée par ~30 fichiers backend). Découpe **basée sur les AC uniquement** (l'analyse s'était arrêtée au verdict COMPLEXE sans rédiger les tâches détaillées) : chaque sous-story devra passer par `analyse-story` avant `treat-story`.
+
+- [x] STORY-121.1 : Enum `Role`, modèle `UserOrganization` et migration de création de table — Couvre AC 1
+- [x] STORY-121.2 : Endpoints de gestion des membres d'une organisation — Couvre AC 3, AC 4
+- [x] STORY-121.3 : Migration des données, bascule des lectures vers l'association et retrait de la colonne héritée — Couvre AC 2, AC 5
 
 ## État d'avancement technique
 
-*(à remplir par analyse-story)*
+> ⚠️ L'avancement technique est désormais suivi dans les sous-stories individuelles.
+
+**Progression :** 3/3 sous-stories terminées
+- [x] STORY-121.1 : Enum `Role`, modèle `UserOrganization` et migration de création de table
+- [x] STORY-121.2 : Endpoints de gestion des membres d'une organisation
+- [x] STORY-121.3 : Migration des données, bascule des lectures vers l'association et retrait de la colonne héritée
 
 ## Tâches d'implémentation détaillées
 
-*(à remplir par analyse-story)*
+> ⚠️ Cette story a été découpée en sous-stories avant implémentation (complexité détectée par analyse-story).
+> Toutes les tâches identifiées ont été redistribuées à titre indicatif dans les sous-stories listées ci-dessus
+> (découpe AC-uniquement : les tâches détaillées restent à rédiger par `analyse-story` sur chaque sous-story).
+> Consulter chaque sous-story pour le périmètre et les dépendances.
 
 ## Tests à écrire
 
-*(à remplir par analyse-story)*
+> ⚠️ Les tests sont désormais définis dans les sous-stories individuelles.
+
+## Notes d'implémentation
+
+**Date de clôture :** 2026-09-08 (finalisation `finalise-story` après traitement des 3 sous-stories)
+
+### Récapitulatif de clôture
+
+La story a été implémentée intégralement via ses 3 sous-stories (découpe proactive `split-story`, complexité détectée par `analyse-story`) :
+
+- **STORY-121.1** — Enum `Role` ([`backend/app/enums/rbac.py`](../../backend/app/enums/rbac.py)), modèle `UserOrganization` ([`backend/app/models/user_organization.py`](../../backend/app/models/user_organization.py)), migration additive `1211_user_organizations` (table + PK composite + index). 14 tests modèle/enum + 6 tests migration structurelle.
+- **STORY-121.2** — Schémas [`backend/app/schemas/organization_member.py`](../../backend/app/schemas/organization_member.py), service [`UserOrganizationService`](../../backend/app/services/user_organization_service.py), 4 endpoints membres dans [`backend/app/api/v1/organizations.py`](../../backend/app/api/v1/organizations.py) (auth + `require_superuser` intérim + isolation cross-org). 42 tests (13 service + 29 API dont ~22 sécurité).
+- **STORY-121.3** — Migration de données `1213_users_org_migration` (mapping non cassant : superuser→`admin`, autres→`operator` ; retrait colonne `users.organization_id`), bascule de ~24 fichiers de lectures vers l'association, retrait claim JWT `organization_id`, correction bugs WS `is_superadmin`, seed via association. ~39 tests ajoutés.
+
+Les notes d'implémentation détaillées (fichiers, décisions, divergences, difficultés) sont portées par chaque sous-story.
+
+### Validation de finalisation (quality gate `finalise-story`)
+
+- **Tests** : suite backend complète **1188 passed / 1 skipped / 0 failed** en conditions CI (`.env` local neutralisé — son `DISABLE_AUTH=true`/`CSP_ENABLED=false` de dev contamine autrement les settings pydantic et provoque 67 échecs environnementaux sans lien avec la story) ; 105 tests ciblés story verts.
+- **Couverture** : 100 % sur les 4 nouveaux modules (`enums/rbac.py`, `models/user_organization.py`, `schemas/organization_member.py`, `services/user_organization_service.py`).
+- **Lint** : isort + black + flake8 verts sur les 33 fichiers du périmètre — **correction apportée à la finalisation** : tri d'imports isort sur [`backend/app/api/v1/stacks.py`](../../backend/app/api/v1/stacks.py), [`backend/app/api/v1/deployments.py`](../../backend/app/api/v1/deployments.py), [`backend/app/api/v1/docker.py`](../../backend/app/api/v1/docker.py) (dégradés par la story) et [`backend/app/api/v1/plugins.py`](../../backend/app/api/v1/plugins.py) (pré-existant, fichier du périmètre) ; 49 tests des fichiers corrigés re-passés verts.
+- **Typecheck** : mypy 26 erreurs = baseline pré-story (diff avant/après stash : 1 numéro de ligne décalé uniquement — stubs `psutil` environnementaux).
+- **Bandit** : 0 vulnérabilité haute sur le périmètre.
+- **Build** : `poetry build` non exécutable (venv Poetry cassé — contournement `.venv-test` documenté) ; `compileall` OK sur `backend/app`.
+- **Oublis** : aucun TODO/FIXME, aucun fichier annoncé manquant, plus aucune lecture `current_user.organization_id` active (uniquement commentaires historiques), `helper/permissions.py` = code mort hors périmètre confirmé.
+
+### Suivi
+
+- La couverture RBAC finale des endpoints membres (`require_role("admin")`) reste portée par **STORY-122** (prochaine étape), conformément au contexte de la story.
+- Débloque : STORY-122 (RBAC application), STORY-125 (audit trail).

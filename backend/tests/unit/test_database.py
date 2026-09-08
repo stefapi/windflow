@@ -19,12 +19,13 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, select, text
 
 from app import models  # noqa: F401  # enregistre tous les modèles
 from app.config import settings
 from app.core.exceptions import WindFlowException
-from app.database import Base, Database
+from app.database import Base, Database, get_alembic_config
 from app.models.organization import Organization
 from app.models.user import User
 
@@ -83,14 +84,18 @@ class TestRunMigrationsFreshDb:
         await _run_migrations_on(db_path)
 
         tables = _sync_table_names(db_path)
-        # Toutes les tables des modèles, créées par la migration baseline.
-        assert set(Base.metadata.tables) <= tables, (
-            f"Tables manquantes : {set(Base.metadata.tables) - tables}"
-        )
+        # Toutes les tables des modèles, créées par les migrations.
+        assert (
+            set(Base.metadata.tables) <= tables
+        ), f"Tables manquantes : {set(Base.metadata.tables) - tables}"
         # Preuve que le schéma vient des migrations (create_all ne crée pas
-        # cette table) et que la base est versionnée à la révision baseline.
+        # cette table) et que la base est versionnée à la tête courante
+        # (robuste aux migrations suivantes — STORY-121.3).
         assert "alembic_version" in tables
-        assert _alembic_version(db_path) == "baseline"
+        assert (
+            _alembic_version(db_path)
+            == ScriptDirectory.from_config(get_alembic_config()).get_current_head()
+        )
 
 
 class TestRunMigrationsExistingUnversionedDb:
@@ -105,9 +110,26 @@ class TestRunMigrationsExistingUnversionedDb:
 
         # Simule une installation historique : schéma create_all (usage de
         # simulation dans le test uniquement — interdit dans backend/app/)
-        # + données métier qui ne doivent surtout pas être perdues.
+        # + DROP de la table STORY-121.1 pour simuler fidèlement une base
+        # antérieure à cette story (create_all des métadonnées courantes
+        # la créerait aussi) + données métier à préserver.
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(legacy_engine)
+        with legacy_engine.begin() as conn:
+            conn.execute(text("DROP TABLE user_organizations"))
+        # STORY-121.3 : simuler la colonne héritée users.organization_id
+        # (+ index) — absente du schéma courant mais attendue par la
+        # migration 1213 sur une base pré-121.3
+        with legacy_engine.begin() as conn:
+            conn.execute(
+                text("ALTER TABLE users ADD COLUMN organization_id VARCHAR(36)")
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX ix_users_organization_id "
+                    "ON users (organization_id)"
+                )
+            )
         with legacy_engine.begin() as conn:
             conn.execute(
                 text(
@@ -123,7 +145,10 @@ class TestRunMigrationsExistingUnversionedDb:
         # 1er démarrage migré : stamp automatique puis upgrade (no-op).
         await _run_migrations_on(db_path)
 
-        assert _alembic_version(db_path) == "baseline"
+        assert (
+            _alembic_version(db_path)
+            == ScriptDirectory.from_config(get_alembic_config()).get_current_head()
+        )
         check_engine = create_engine(f"sqlite:///{db_path}")
         try:
             with check_engine.connect() as conn:
@@ -252,9 +277,9 @@ class TestStartupSeedPreserved:
 
             async with database.session() as session:
                 orgs = (await session.execute(select(Organization))).scalars().all()
-                assert any(o.slug == settings.default_org_slug for o in orgs), (
-                    "Organisation par défaut absente après seed"
-                )
+                assert any(
+                    o.slug == settings.default_org_slug for o in orgs
+                ), "Organisation par défaut absente après seed"
 
                 admin = (
                     await session.execute(

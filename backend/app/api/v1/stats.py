@@ -4,9 +4,9 @@ Endpoints API pour les statistiques du dashboard.
 
 import time
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,7 @@ from ...schemas.dashboard import (
     StackStatsResponse,
     TargetHealthItem,
 )
+from ...services.user_organization_service import UserOrganizationService
 
 router = APIRouter()
 
@@ -41,14 +42,29 @@ async def get_dashboard_stats(
     Statistiques consolidées pour le dashboard.
 
     Agrège les métriques targets, stacks, déploiements et workflows
-    filtrées par organisation de l'utilisateur courant.
+    filtrées par les organisations de l'utilisateur courant
+    (multi-appartenance — STORY-121.3).
     """
-    org_id = organization_id or current_user.organization_id
+    # STORY-121.3 : paramètre explicite vérifié contre l'appartenance
+    # (403 sinon) ; sinon scoping sur toutes les appartenances
+    if organization_id:
+        if not await UserOrganizationService.is_member(
+            db, current_user, organization_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Accès refusé à cette organisation",
+            )
+        org_filter: Optional[List[str]] = [organization_id]
+    else:
+        org_filter = await UserOrganizationService.get_user_organization_ids(
+            db, current_user
+        )
 
     # --- Targets ---
     targets_base = select(Target)
-    if org_id:
-        targets_base = targets_base.where(Target.organization_id == org_id)
+    if org_filter:
+        targets_base = targets_base.where(Target.organization_id.in_(org_filter))
     targets_result = await db.execute(targets_base)
     targets = targets_result.scalars().all()
 
@@ -77,8 +93,10 @@ async def get_dashboard_stats(
     # --- Stacks (STORY-432) ---
     # Note: Stack n'a pas de champ status, on compte juste le total
     stacks_count_stmt = select(func.count(Stack.id))
-    if org_id:
-        stacks_count_stmt = stacks_count_stmt.where(Stack.organization_id == org_id)
+    if org_filter:
+        stacks_count_stmt = stacks_count_stmt.where(
+            Stack.organization_id.in_(org_filter)
+        )
     total_stacks = (await db.execute(stacks_count_stmt)).scalar() or 0
 
     # Les stacks n'ont pas de statut running/stopped, on met tout en "running" (disponibles)
@@ -90,15 +108,17 @@ async def get_dashboard_stats(
 
     # --- Deployments ---
     dep_base = select(Deployment)
-    if org_id:
-        dep_base = dep_base.where(Deployment.organization_id == org_id)
+    if org_filter:
+        dep_base = dep_base.where(Deployment.organization_id.in_(org_filter))
 
     # Compteurs par statut
     dep_status_stmt = select(Deployment.status, func.count(Deployment.id)).group_by(
         Deployment.status
     )
-    if org_id:
-        dep_status_stmt = dep_status_stmt.where(Deployment.organization_id == org_id)
+    if org_filter:
+        dep_status_stmt = dep_status_stmt.where(
+            Deployment.organization_id.in_(org_filter)
+        )
     dep_status_result = await db.execute(dep_status_stmt)
     status_counts: dict[str, int] = {}
     for s, c in dep_status_result.all():
@@ -150,8 +170,10 @@ async def get_dashboard_stats(
     recent_dep_stmt = (
         select(Deployment).order_by(Deployment.created_at.desc()).limit(20)
     )
-    if org_id:
-        recent_dep_stmt = recent_dep_stmt.where(Deployment.organization_id == org_id)
+    if org_filter:
+        recent_dep_stmt = recent_dep_stmt.where(
+            Deployment.organization_id.in_(org_filter)
+        )
     recent_deps = (await db.execute(recent_dep_stmt)).scalars().all()
 
     recent_activity: list[ActivityFeedItem] = []

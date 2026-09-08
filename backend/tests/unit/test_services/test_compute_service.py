@@ -172,7 +172,7 @@ class TestGetComputeStats:
             mock_instance.ping.return_value = False
             mock_cls.return_value = mock_instance
 
-            result = await get_compute_stats(mock_db, org_id="org-1")
+            result = await get_compute_stats(mock_db, org_ids=["org-1"])
 
         assert isinstance(result, ComputeStatsResponse)
         assert result.stacks_count == 3
@@ -193,7 +193,7 @@ class TestGetComputeStats:
             mock_instance.ping.side_effect = ConnectionError("socket unreachable")
             mock_cls.return_value = mock_instance
 
-            result = await get_compute_stats(mock_db, org_id=None)
+            result = await get_compute_stats(mock_db, org_ids=None)
 
         assert result.total_containers == 0
         assert result.running_containers == 0
@@ -221,7 +221,7 @@ class TestGetComputeStats:
             mock_instance.list_containers.return_value = containers
             mock_cls.return_value = mock_instance
 
-            result = await get_compute_stats(mock_db, org_id=None)
+            result = await get_compute_stats(mock_db, org_ids=None)
 
         assert result.total_containers == 4
         assert result.running_containers == 3
@@ -292,7 +292,7 @@ class TestGetComputeGlobal:
             mock_instance.ping.return_value = False
             mock_cls.return_value = mock_instance
 
-            result = await get_compute_global(mock_db, org_id=None)
+            result = await get_compute_global(mock_db, org_ids=None)
 
         assert isinstance(result, ComputeGlobalView)
         assert len(result.managed_stacks) == 1
@@ -320,7 +320,7 @@ class TestGetComputeGlobal:
             mock_instance.list_containers.return_value = containers
             mock_cls.return_value = mock_instance
 
-            result = await get_compute_global(mock_db, org_id=None)
+            result = await get_compute_global(mock_db, org_ids=None)
 
         assert isinstance(result, ComputeGlobalView)
         assert len(result.managed_stacks) == 1
@@ -352,7 +352,7 @@ class TestGetComputeGlobal:
             mock_instance.list_containers.return_value = containers
             mock_cls.return_value = mock_instance
 
-            result = await get_compute_global(mock_db, org_id=None, group_by="target")
+            result = await get_compute_global(mock_db, org_ids=None, group_by="target")
 
         assert isinstance(result, list)
         assert all(isinstance(g, TargetGroup) for g in result)
@@ -377,7 +377,7 @@ class TestGetComputeGlobal:
             mock_instance.list_containers.return_value = containers
             mock_cls.return_value = mock_instance
 
-            result = await get_compute_global(mock_db, org_id=None, search="nginx")
+            result = await get_compute_global(mock_db, org_ids=None, search="nginx")
 
         assert isinstance(result, ComputeGlobalView)
         assert len(result.managed_stacks) == 1
@@ -404,7 +404,7 @@ class TestGetComputeGlobal:
             mock_cls.return_value = mock_instance
 
             result = await get_compute_global(
-                mock_db, org_id=None, type_filter="managed"
+                mock_db, org_ids=None, type_filter="managed"
             )
 
         assert isinstance(result, ComputeGlobalView)

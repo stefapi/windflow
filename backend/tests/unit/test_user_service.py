@@ -61,7 +61,14 @@ class TestUserService:
         assert user.email == "newuser@example.com"
         assert user.username == "newuser"
         assert user.hashed_password != "password123"
-        assert user.organization_id == test_organization.id
+        # STORY-121.3 : le rattachement vit dans l'association —
+        # organisation primaire du côté lecture
+        from app.services.user_organization_service import UserOrganizationService
+
+        primary = await UserOrganizationService.get_primary_organization_id(
+            db_session, user
+        )
+        assert primary == test_organization.id
 
     async def test_get_by_id(self, db_session: AsyncSession, test_user: User):
         """Test de récupération par ID."""

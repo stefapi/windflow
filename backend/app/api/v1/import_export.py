@@ -13,6 +13,7 @@ from ...auth.dependencies import get_current_user
 from ...database import get_db
 from ...models.stack import Stack
 from ...models.user import User
+from ...services.user_organization_service import UserOrganizationService
 
 router = APIRouter()
 
@@ -34,10 +35,10 @@ async def export_stack(
             status_code=status.HTTP_404_NOT_FOUND, detail="Stack not found"
         )
 
-    # Vérifier les permissions
-    if (
-        stack.organization_id != current_user.organization_id
-        and not current_user.is_superuser
+    # Vérifier les permissions (STORY-121.3 : appartenance via
+    # l'association — superuser bypass intégré à is_member)
+    if not await UserOrganizationService.is_member(
+        db, current_user, stack.organization_id
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
@@ -89,6 +90,17 @@ async def import_stack(
 
         stack_data = import_data["stack"]
 
+        # STORY-121.3 : organisation primaire de l'utilisateur (plus
+        # ancienne appartenance) pour la ressource créée
+        primary_org = await UserOrganizationService.get_primary_organization_id(
+            db, current_user
+        )
+        if primary_org is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Aucune organisation : rattachez d'abord votre compte",
+            )
+
         # Créer le nouveau stack
         new_stack = Stack(
             name=stack_data["name"],
@@ -103,7 +115,7 @@ async def import_stack(
             documentation_url=stack_data.get("documentation_url"),
             author=stack_data.get("author"),
             license=stack_data.get("license", "MIT"),
-            organization_id=current_user.organization_id,
+            organization_id=primary_org,
             is_public=False,  # Importé en privé par défaut
         )
 

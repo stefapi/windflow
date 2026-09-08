@@ -3,16 +3,16 @@ Modèle User pour l'authentification et gestion des utilisateurs.
 """
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
 
 if TYPE_CHECKING:
-    from .organization import Organization
+    from .user_organization import UserOrganization
 
 
 class User(Base):
@@ -46,14 +46,6 @@ class User(Base):
     # Keycloak SSO (optionnel)
     keycloak_id: Mapped[str] = mapped_column(String(255), nullable=True, unique=True)
 
-    # Organisation
-    organization_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("organizations.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
@@ -63,9 +55,12 @@ class User(Base):
     )
     last_login: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
-    # Relations
-    organization: Mapped["Organization"] = relationship(
-        "Organization", back_populates="users"
+    # Associations RBAC multi-organisations (STORY-121.1) — depuis
+    # STORY-121.3, l'appartenance organisation passe exclusivement par
+    # cette table (la colonne héritée users.organization_id a été
+    # retirée par la migration 1213)
+    organization_links: Mapped[List["UserOrganization"]] = relationship(
+        "UserOrganization", back_populates="user", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

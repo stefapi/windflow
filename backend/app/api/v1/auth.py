@@ -22,11 +22,35 @@ from ...schemas.user import (
     UserCreate,
     UserResponse,
 )
+from ...services.user_organization_service import UserOrganizationService
 from ...services.user_service import UserService
 
 logger = logging.getLogger("windflow.auth")
 
 router = APIRouter()
+
+
+async def _user_response(session, user: User) -> UserResponse:
+    """
+    Construit la réponse utilisateur avec l'organisation primaire résolue.
+
+    STORY-121.3 : la colonne ``users.organization_id`` n'existe plus —
+    ``UserResponse.organization_id`` (contrat API conservé) est peuplé
+    depuis l'association (première appartenance par ``joined_at``).
+    Helper partagé, réutilisé par ``users.py``.
+
+    Args:
+        session: Session de base de données async
+        user: Utilisateur à sérialiser
+
+    Returns:
+        UserResponse: Réponse avec ``organization_id`` = org primaire
+    """
+    resp = UserResponse.model_validate(user)
+    resp.organization_id = await UserOrganizationService.get_primary_organization_id(
+        session, user
+    )
+    return resp
 
 
 @router.post(
@@ -241,11 +265,12 @@ async def login(
         await bruteforce_protector.reset(key)
         logger.info("user.login username=%s ip=%s", form_data.username, client_ip)
 
-    # Créer la paire de tokens JWT
+    # Créer la paire de tokens JWT — STORY-121.3 : le claim
+    # organization_id n'est plus émis (multi-appartenance incompatible,
+    # l'organisation est résolue en base à chaque requête)
     token_data = {
         "sub": user.id,
         "username": user.username,
-        "organization_id": user.organization_id,
         "is_superuser": user.is_superuser,
     }
 
@@ -256,7 +281,7 @@ async def login(
         refresh_token=refresh_token,
         token_type="bearer",
         expires_in=settings.jwt_access_token_expire_minutes * 60,
-        user=UserResponse.model_validate(user),
+        user=await _user_response(session, user),
     )
 
 
@@ -408,9 +433,11 @@ async def refresh_token(
         )
 
     # Vérifier que les données du token correspondent à l'utilisateur
+    # (STORY-121.3 : comparaison sur username + is_superuser uniquement —
+    # le claim organization_id n'existe plus, l'appartenance peut évoluer
+    # sans invalider le refresh)
     if (
         user.username != token_data.username
-        or user.organization_id != token_data.organization_id
         or user.is_superuser != token_data.is_superuser
     ):
         raise HTTPException(
@@ -419,11 +446,10 @@ async def refresh_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Créer une nouvelle paire de tokens
+    # Créer une nouvelle paire de tokens (claims réduits — STORY-121.3)
     new_token_data = {
         "sub": user.id,
         "username": user.username,
-        "organization_id": user.organization_id,
         "is_superuser": user.is_superuser,
     }
 
@@ -693,14 +719,51 @@ async def register(
             detail=f"User with username '{user_data.username}' already exists",
         )
 
+    # Sécurité : l'auto-enregistrement ne peut jamais créer un
+    # superuser — UserCreate expose le champ pour la création par un
+    # admin, il est forcé à False ici (least privilege)
+    user_data.is_superuser = False
+
+    # STORY-121.3 : résolution de l'organisation cible avant création —
+    # sans organization_id dans le body, l'auto-enregistrement rattache à
+    # l'organisation par défaut (409 explicite si elle n'existe pas :
+    # corriger la config plutôt que créer un utilisateur orphelin) ;
+    # org fournie → doit exister (404). Rôle d'auto-enregistrement :
+    # viewer (borné côté UserService.create).
+    if not user_data.organization_id:
+        from ...services.organization_service import OrganizationService
+
+        default_org = await OrganizationService.get_by_slug(
+            session, settings.default_org_slug
+        )
+        if default_org is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Default organization not found — configure " "DEFAULT_ORG_SLUG"
+                ),
+            )
+        user_data.organization_id = default_org.id
+    else:
+        from ...services.organization_service import OrganizationService
+
+        target_org = await OrganizationService.get_by_id(
+            session, user_data.organization_id
+        )
+        if target_org is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(f"Organisation '{user_data.organization_id}' non trouvée"),
+            )
+
     # Créer l'utilisateur
     user = await UserService.create(session, user_data)
 
-    # Créer la paire de tokens JWT pour authentification automatique
+    # Créer la paire de tokens JWT pour authentification automatique —
+    # claims réduits (STORY-121.3 : sans organization_id)
     token_data = {
         "sub": user.id,
         "username": user.username,
-        "organization_id": user.organization_id,
         "is_superuser": user.is_superuser,
     }
 
@@ -711,7 +774,7 @@ async def register(
         refresh_token=refresh_token,
         token_type="bearer",
         expires_in=settings.jwt_access_token_expire_minutes * 60,
-        user=UserResponse.model_validate(user),
+        user=await _user_response(session, user),
     )
 
 
@@ -815,7 +878,10 @@ Get the profile information of the currently authenticated user.
     tags=["authentication"],
 )
 async def get_current_user_profile(
-    request: Request, current_user: User = Depends(get_current_active_user)
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
 ):
     """Get the profile information of the currently authenticated user."""
-    return current_user
+    # STORY-121.3 : organization_id = org primaire (association)
+    return await _user_response(session, current_user)

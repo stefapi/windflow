@@ -81,7 +81,10 @@ class UserCreate(UserBase):
     )
     organization_id: Optional[str] = Field(
         None,
-        description="ID de l'organisation (optionnel, utilise l'organisation du créateur par défaut)",
+        description=(
+            "Organisation cible du rattachement (rôle viewer) — ignoré si "
+            "l'utilisateur est créé sans organisation"
+        ),
         json_schema_extra={"example": "org-001"},
     )
     is_superuser: bool = Field(
@@ -144,7 +147,10 @@ class UserUpdate(BaseModel):
     )
     organization_id: Optional[str] = Field(
         None,
-        description="ID de l'organisation (superuser uniquement)",
+        description=(
+            "Nouvelle organisation (réaffectation : retrait de "
+            "l'appartenance actuelle + rattachement rôle viewer)"
+        ),
         json_schema_extra={"example": "org-001"},
     )
 
@@ -187,9 +193,13 @@ class UserResponse(UserBase):
     is_superuser: bool = Field(
         ..., description="Superutilisateur", json_schema_extra={"example": False}
     )
-    organization_id: str = Field(
-        ...,
-        description="ID de l'organisation",
+    organization_id: Optional[str] = Field(
+        None,
+        description=(
+            "Organisation principale (première appartenance par "
+            "joined_at) — l'appartenance complète est exposée par "
+            "GET /organizations/{id}/users"
+        ),
         json_schema_extra={"example": "org-001"},
     )
     keycloak_id: Optional[str] = Field(
@@ -385,14 +395,18 @@ class RefreshResponse(BaseModel):
 
 
 class TokenData(BaseModel):
-    """Schema pour données extraites du token JWT."""
+    """Schema pour données extraites du token JWT.
+
+    STORY-121.3 : le champ ``organization_id`` n'est plus porté par le
+    token (incompatible multi-appartenance) — l'organisation de
+    l'utilisateur est résolue en base à chaque requête, pas dans le token.
+    """
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "user_id": "user-990e8400",
                 "username": "johndoe",
-                "organization_id": "org-001",
                 "is_superuser": False,
             }
         }
@@ -405,11 +419,6 @@ class TokenData(BaseModel):
     )
     username: Optional[str] = Field(
         None, description="Nom d'utilisateur", json_schema_extra={"example": "johndoe"}
-    )
-    organization_id: Optional[str] = Field(
-        None,
-        description="ID de l'organisation",
-        json_schema_extra={"example": "org-001"},
     )
     is_superuser: bool = Field(
         default=False,

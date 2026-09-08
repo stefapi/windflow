@@ -17,7 +17,9 @@ from ...database import get_db
 from ...models.user import User
 from ...schemas.user import UserCreate, UserListResponse, UserResponse, UserUpdate
 from ...services.organization_service import OrganizationService
+from ...services.user_organization_service import UserOrganizationService
 from ...services.user_service import UserService
+from .auth import _user_response
 
 
 # Schema for bulk operations
@@ -44,6 +46,34 @@ class BulkOperationResponse(BaseModel):
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+async def _share_organization(
+    session: AsyncSession, user_a: User, user_b: User
+) -> bool:
+    """
+    Vérifie que deux utilisateurs partagent au moins une organisation.
+
+    STORY-121.3 : remplace l'ancienne comparaison stricte
+    ``user.organization_id != current_user.organization_id`` — l'isolation
+    croisée est désormais « intersection non vide des appartenances »
+    (multi-appartenance via la table d'association).
+
+    Args:
+        session: Session de base de données async
+        user_a: Premier utilisateur (ex. demandeur)
+        user_b: Second utilisateur (ex. cible)
+
+    Returns:
+        True s'ils partagent au moins une organisation
+    """
+    orgs_a = set(
+        await UserOrganizationService.get_user_organization_ids(session, user_a)
+    )
+    orgs_b = set(
+        await UserOrganizationService.get_user_organization_ids(session, user_b)
+    )
+    return bool(orgs_a & orgs_b)
 
 
 @router.get(
@@ -143,7 +173,6 @@ async def list_users(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "organization_id": str(current_user.organization_id),
             "is_superuser": current_user.is_superuser,
             "skip": skip,
             "limit": limit,
@@ -154,9 +183,13 @@ async def list_users(
     if current_user.is_superuser:
         users, total = await UserService.list_all(session, skip, limit)
     else:
-        # Les utilisateurs normaux voient uniquement ceux de leur organisation
-        users, total = await UserService.list_by_organization(
-            session, current_user.organization_id, skip, limit
+        # STORY-121.3 : scoping sur les appartenances (multi-org via
+        # la table d'association) au lieu de la colonne héritée
+        org_ids = await UserOrganizationService.get_user_organization_ids(
+            session, current_user
+        )
+        users, total = await UserService.list_by_organization_ids(
+            session, org_ids, skip, limit
         )
 
     # Calculer les métadonnées de pagination
@@ -196,7 +229,9 @@ Get the profile of the currently authenticated user.
     tags=["users"],
 )
 async def get_current_user_me(
-    request: Request, current_user: User = Depends(get_current_active_user)
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
 ):
     """Retourne le profil de l'utilisateur authentifié."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -204,7 +239,8 @@ async def get_current_user_me(
         "Getting current user profile",
         extra={"correlation_id": correlation_id, "user_id": str(current_user.id)},
     )
-    return current_user
+    # STORY-121.3 : organization_id = org primaire (association)
+    return await _user_response(session, current_user)
 
 
 @router.get(
@@ -324,17 +360,17 @@ async def get_user(
             detail=f"Utilisateur {user_id} non trouvé",
         )
 
-    # Vérifier que l'utilisateur appartient à la même organisation ou est superuser
-    if (
-        not current_user.is_superuser
-        and user.organization_id != current_user.organization_id
+    # Vérifier que les utilisateurs partagent une organisation ou superuser
+    # (STORY-121.3 : intersection des appartenances via l'association)
+    if not current_user.is_superuser and not await _share_organization(
+        session, current_user, user
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Accès refusé à cet utilisateur",
         )
 
-    return user
+    return await _user_response(session, user)
 
 
 @router.post(
@@ -543,7 +579,6 @@ async def create_user(
         # Superadmin: peut créer dans n'importe quelle organisation
         if provided_org_id:
             # Vérifier que l'organisation cible existe
-
             org = await OrganizationService.get_by_id(session, provided_org_id)
             if not org:
                 raise HTTPException(
@@ -551,21 +586,52 @@ async def create_user(
                     detail=f"Organisation '{provided_org_id}' non trouvée",
                 )
         else:
-            # Aucune organisation spécifiée: utiliser celle du superadmin
-            user_data.organization_id = current_user.organization_id
-    else:
-        # Utilisateur normal: ne peut créer que dans sa propre organisation
-        if provided_org_id:
-            # Vérifier que c'est bien son organisation
-            if provided_org_id != str(current_user.organization_id):
+            # Aucune organisation spécifiée : organisation primaire du
+            # superadmin (STORY-121.3 — plus ancienne appartenance)
+            primary_org = await UserOrganizationService.get_primary_organization_id(
+                session, current_user
+            )
+            if primary_org is None:
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Vous ne pouvez créer un utilisateur que dans votre propre organisation",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Aucune organisation cible : fournissez "
+                        "organization_id ou rattachez d'abord le compte "
+                        "à une organisation"
+                    ),
                 )
-        user_data.organization_id = current_user.organization_id
+            user_data.organization_id = primary_org
+    else:
+        # Utilisateur normal: ne peut créer que dans une organisation
+        # à laquelle il appartient (STORY-121.3 : is_member multi-org)
+        if provided_org_id and not await UserOrganizationService.is_member(
+            session, current_user, provided_org_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Vous ne pouvez créer un utilisateur que dans votre "
+                    "propre organisation"
+                ),
+            )
+        user_data.organization_id = (
+            provided_org_id
+            or await UserOrganizationService.get_primary_organization_id(
+                session, current_user
+            )
+        )
+        if user_data.organization_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Aucune organisation cible : fournissez "
+                    "organization_id ou rattachez d'abord votre compte "
+                    "à une organisation"
+                ),
+            )
 
     user = await UserService.create(session, user_data)
-    return user
+    return await _user_response(session, user)
 
 
 @router.put(
@@ -776,10 +842,10 @@ async def update_user(
             detail=f"Utilisateur {user_id} non trouvé",
         )
 
-    # Vérifier les permissions (même organisation ou superuser)
-    if (
-        not current_user.is_superuser
-        and existing_user.organization_id != current_user.organization_id
+    # Vérifier les permissions (organisation partagée ou superuser —
+    # STORY-121.3 : intersection des appartenances)
+    if not current_user.is_superuser and not await _share_organization(
+        session, current_user, existing_user
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -795,8 +861,24 @@ async def update_user(
                 detail=f"Utilisateur avec l'email '{user_data.email}' existe déjà",
             )
 
+    # STORY-121.3 : organization_id fourni = opération d'association
+    # (réaffectation unique-appartenance) — valider l'org puis déplacer
+    # l'appartenance via le service
+    if user_data.organization_id is not None:
+        target_org = await OrganizationService.get_by_id(
+            session, user_data.organization_id
+        )
+        if not target_org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(f"Organisation '{user_data.organization_id}' non trouvée"),
+            )
+        await UserService.update_organization_many(
+            session, [existing_user.id], user_data.organization_id
+        )
+
     user = await UserService.update(session, existing_user, user_data)
-    return user
+    return await _user_response(session, user)
 
 
 @router.delete(
@@ -928,10 +1010,10 @@ async def delete_user(
             detail=f"Utilisateur {user_id} non trouvé",
         )
 
-    # Vérifier les permissions (même organisation ou superuser)
-    if (
-        not current_user.is_superuser
-        and user.organization_id != current_user.organization_id
+    # Vérifier les permissions (organisation partagée ou superuser —
+    # STORY-121.3 : intersection des appartenances)
+    if not current_user.is_superuser and not await _share_organization(
+        session, current_user, user
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

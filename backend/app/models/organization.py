@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from .deployment import Deployment
     from .stack import Stack
     from .target import Target
-    from .user import User
+    from .user_organization import UserOrganization
 
 
 class Organization(Base):
@@ -54,8 +54,13 @@ class Organization(Base):
     )
 
     # Relations
-    users: Mapped[List["User"]] = relationship(
-        "User", back_populates="organization", cascade="all, delete-orphan"
+    # (STORY-121.3 : la relation directe users (FK héritée
+    # users.organization_id) a été retirée — les membres passent
+    # exclusivement par l'association user_links)
+
+    # Associations RBAC multi-membres (STORY-121.1)
+    user_links: Mapped[List["UserOrganization"]] = relationship(
+        "UserOrganization", back_populates="organization", cascade="all, delete-orphan"
     )
 
     targets: Mapped[List["Target"]] = relationship(

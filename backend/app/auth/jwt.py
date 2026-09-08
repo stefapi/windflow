@@ -101,9 +101,11 @@ def decode_access_token(token: str) -> Optional[TokenData]:
         if payload.get("type") != "access":
             return None
 
+        # STORY-121.3 : le claim organization_id n'est plus émis ni lu —
+        # les tokens antérieurs qui le portent restent valides (claim
+        # simplement ignoré, décodage tolérant)
         user_id = payload.get("sub")
         username = payload.get("username")
-        organization_id = payload.get("organization_id")
         is_superuser = payload.get("is_superuser", False)
 
         if user_id is None:
@@ -112,7 +114,6 @@ def decode_access_token(token: str) -> Optional[TokenData]:
         token_data = TokenData(
             user_id=str(user_id),
             username=str(username) if username is not None else None,
-            organization_id=str(organization_id) if organization_id is not None else None,
             is_superuser=bool(is_superuser),
         )
 
@@ -141,9 +142,11 @@ def decode_refresh_token(token: str) -> Optional[TokenData]:
         if payload.get("type") != "refresh":
             return None
 
+        # STORY-121.3 : le claim organization_id n'est plus émis ni lu —
+        # les tokens antérieurs qui le portent restent valides (claim
+        # simplement ignoré, décodage tolérant)
         user_id = payload.get("sub")
         username = payload.get("username")
-        organization_id = payload.get("organization_id")
         is_superuser = payload.get("is_superuser", False)
 
         if user_id is None:
@@ -152,7 +155,6 @@ def decode_refresh_token(token: str) -> Optional[TokenData]:
         token_data = TokenData(
             user_id=str(user_id),
             username=str(username) if username is not None else None,
-            organization_id=str(organization_id) if organization_id is not None else None,
             is_superuser=bool(is_superuser),
         )
 

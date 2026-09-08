@@ -5,12 +5,15 @@ Implémente le pattern Repository avec SQLAlchemy 2.0 async.
 """
 
 from typing import List, Optional, Tuple
+from uuid import UUID
 
 from passlib.context import CryptContext
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.user import User
+from ..models.user_organization import UserOrganization
+from ..schemas.organization_member import OrganizationMemberAddRequest
 from ..schemas.user import UserCreate, UserUpdate
 
 # Configuration password hashing avec Argon2
@@ -224,63 +227,56 @@ class UserService:
         return users, total
 
     @staticmethod
-    async def list_by_organization(
-        db: AsyncSession, organization_id: str, skip: int = 0, limit: int = 100
+    async def list_by_organization_ids(
+        db: AsyncSession,
+        organization_ids: List[str],
+        skip: int = 0,
+        limit: int = 100,
     ) -> Tuple[List[User], int]:
         """
-        Liste les utilisateurs d'une organisation avec le nombre total.
+        Liste les utilisateurs de plusieurs organisations via les associations.
+
+        STORY-121.3 : scoping multi-appartenance — les utilisateurs dont
+        l'id apparaît dans ``user_organizations`` pour l'une des
+        organisations données (remplace le filtre sur la colonne héritée).
 
         Args:
             db: Session de base de données async
-            organization_id: ID de l'organisation
+            organization_ids: IDs des organisations (appartenances du demandeur)
             skip: Nombre d'éléments à sauter (pagination)
             limit: Nombre max d'éléments à retourner
 
         Returns:
             Tuple[List[User], int]: Liste d'utilisateurs et nombre total
         """
-        # Requête pour les utilisateurs paginés
+        if not organization_ids:
+            return [], 0
+
+        subq = select(UserOrganization.user_id).where(
+            UserOrganization.organization_id.in_(organization_ids)
+        )
         result = await db.execute(
-            select(User)
-            .where(User.organization_id == organization_id)
-            .offset(skip)
-            .limit(limit)
+            select(User).where(User.id.in_(subq)).offset(skip).limit(limit)
         )
         users = list(result.scalars().all())
 
-        # Requête pour le count total
-        count_result = await db.execute(
-            select(func.count())
-            .select_from(User)
-            .where(User.organization_id == organization_id)
-        )
+        count_subq = select(func.count()).select_from(User).where(User.id.in_(subq))
+        count_result = await db.execute(count_subq)
         total = count_result.scalar_one()
 
         return users, total
 
     @staticmethod
-    async def count_by_organization(db: AsyncSession, organization_id: str) -> int:
-        """
-        Compte le nombre d'utilisateurs dans une organisation.
-
-        Args:
-            db: Session de base de données async
-            organization_id: ID de l'organisation
-
-        Returns:
-            Nombre d'utilisateurs
-        """
-        result = await db.execute(
-            select(func.count())
-            .select_from(User)
-            .where(User.organization_id == organization_id)
-        )
-        return result.scalar_one()
-
-    @staticmethod
     async def create(db: AsyncSession, user_data: UserCreate) -> User:
         """
         Crée un nouvel utilisateur.
+
+        STORY-121.3 : l'utilisateur est créé **sans** colonne organisation ;
+        si ``user_data.organization_id`` est fourni (org cible validée par
+        l'endpoint appelant), l'appartenance est créée via l'association
+        ``user_organizations`` avec le rôle par défaut ``viewer`` (least
+        privilege — un rôle explicite ne peut être posé que via les
+        endpoints membres protégés).
 
         Args:
             db: Session de base de données async
@@ -292,19 +288,30 @@ class UserService:
         # Hash du mot de passe
         hashed_password = UserService.hash_password(user_data.password)
 
-        # Création du modèle
+        # Création du modèle (sans organisation — STORY-121.3)
         user = User(
             email=user_data.email,
             username=user_data.username,
             full_name=user_data.full_name,
             hashed_password=hashed_password,
-            organization_id=user_data.organization_id,
             is_superuser=user_data.is_superuser,
         )
 
         db.add(user)
         await db.commit()
         await db.refresh(user)
+
+        # Rattachement via l'association (rôle viewer par défaut).
+        # Import différé : user_organization_service importe UserService
+        # (import cyclique sinon).
+        if user_data.organization_id:
+            from .user_organization_service import UserOrganizationService
+
+            await UserOrganizationService.add_member(
+                db,
+                user_data.organization_id,
+                OrganizationMemberAddRequest(user_id=UUID(user.id)),
+            )
 
         return user
 
@@ -322,6 +329,10 @@ class UserService:
             Utilisateur mis à jour
         """
         update_data = user_data.model_dump(exclude_unset=True)
+
+        # organization_id : traité comme opération d'association par
+        # l'endpoint users.py — pas une colonne (STORY-121.3)
+        update_data.pop("organization_id", None)
 
         # Hash du nouveau mot de passe si fourni
         if "password" in update_data:
@@ -402,10 +413,26 @@ class UserService:
         success = []
         failed = []
 
+        # Import différé : user_organization_service importe UserService
+        from .user_organization_service import UserOrganizationService
+
         for user_id in user_ids:
             user = await UserService.get_by_id(db, user_id)
             if user:
-                user.organization_id = organization_id
+                # STORY-121.3 : réaffectation via les associations —
+                # suppression des appartenances existantes puis
+                # rattachement à la nouvelle organisation (rôle viewer)
+                result = await db.execute(
+                    select(UserOrganization).where(UserOrganization.user_id == user.id)
+                )
+                for link in result.scalars().all():
+                    await db.delete(link)
+                await db.flush()
+                await UserOrganizationService.add_member(
+                    db,
+                    organization_id,
+                    OrganizationMemberAddRequest(user_id=UUID(user.id)),
+                )
                 success.append(user_id)
             else:
                 failed.append(user_id)

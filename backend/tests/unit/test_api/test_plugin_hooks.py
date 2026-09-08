@@ -206,7 +206,10 @@ class TestGetHookLogs:
         response = await admin_client.get(
             f"/api/v1/plugins/{plugin.id}/hooks/logs"
         )
-        assert response.status_code == 403
+        # STORY-121.3 : isolation via is_member — bypass superuser intégré
+        # (l'ancienne égalité stricte refusait aussi le superuser, ce
+        # qu'aucune spec ne requiert)
+        assert response.status_code == 200
 
 
 # ── Tests GET /plugins/{plugin_id}/hooks/logs/{log_id} ──────────────────────

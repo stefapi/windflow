@@ -2,8 +2,6 @@
 Routes de gestion des workflows.
 """
 
-from uuid import UUID
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +16,6 @@ router = APIRouter()
 async def list_workflows(
     skip: int = 0,
     limit: int = 100,
-    organization_id: UUID | None = None,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
 ):
@@ -28,7 +25,6 @@ async def list_workflows(
     Args:
         skip: Nombre d'éléments à ignorer pour la pagination
         limit: Nombre maximum d'éléments à retourner
-        organization_id: ID de l'organisation (optionnel, utilisé pour filtrage)
         current_user: Utilisateur courant
         session: Session de base de données
 
@@ -37,4 +33,6 @@ async def list_workflows(
     """
     # Pour l'instant, retourner une liste vide
     # Le modèle Workflow et WorkflowService seront implémentés plus tard
+    # (STORY-121.3 : paramètre organization_id mort retiré — l'endpoint
+    # stub ne consomme aucune organisation)
     return []

@@ -17,6 +17,7 @@ from ....schemas.target import (
     TargetUpdate,
 )
 from ....services.target_service import TargetService
+from ....services.user_organization_service import UserOrganizationService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -130,14 +131,24 @@ async def list_targets(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "organization_id": str(current_user.organization_id),
             "skip": skip,
             "limit": limit,
         },
     )
-    targets = await TargetService.list_by_organization(
-        session, current_user.organization_id, skip, limit
+    # STORY-121.3 : scoping sur les organisations de l'utilisateur
+    # (appartenances via l'association ; agrégation multi-org)
+    org_ids = await UserOrganizationService.get_user_organization_ids(
+        session, current_user
     )
+    targets = []
+    seen_ids: set[str] = set()
+    for org_id in org_ids:
+        for target in await TargetService.list_by_organization(
+            session, org_id, skip, limit
+        ):
+            if target.id not in seen_ids:
+                seen_ids.add(target.id)
+                targets.append(target)
     return [TargetResponse.model_validate(t) for t in targets]
 
 
@@ -267,7 +278,9 @@ async def get_target(
             detail=f"Cible {target_id} non trouvée",
         )
 
-    if target.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, target.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )
@@ -477,9 +490,16 @@ async def create_target(
             "target_name": target_data.name,
         },
     )
-    existing = await TargetService.get_by_name(
-        session, current_user.organization_id, target_data.name
+    # STORY-121.3 : organisation primaire de l'utilisateur
+    primary_org = await UserOrganizationService.get_primary_organization_id(
+        session, current_user
     )
+    if primary_org is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucune organisation : rattachez d'abord votre compte",
+        )
+    existing = await TargetService.get_by_name(session, primary_org, target_data.name)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -487,7 +507,7 @@ async def create_target(
         )
 
     target = await TargetService.create(
-        session, target_data, organization_id=current_user.organization_id
+        session, target_data, organization_id=primary_org
     )
 
     # Trigger initial health check so status is not stuck at default
@@ -699,14 +719,17 @@ async def update_target(
             detail=f"Cible {target_id} non trouvée",
         )
 
-    if existing_target.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, existing_target.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )
 
     if target_data.name and target_data.name != existing_target.name:
+        # STORY-121.3 : unicité vérifiée dans l'organisation de la cible
         existing_name = await TargetService.get_by_name(
-            session, current_user.organization_id, target_data.name
+            session, existing_target.organization_id, target_data.name
         )
         if existing_name:
             raise HTTPException(
@@ -832,7 +855,9 @@ async def delete_target(
             detail=f"Cible {target_id} non trouvée",
         )
 
-    if target.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, target.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
         )

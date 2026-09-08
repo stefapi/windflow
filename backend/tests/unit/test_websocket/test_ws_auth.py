@@ -31,17 +31,51 @@ def _make_user(
     user_id: str = "user-1",
     active: bool = True,
     superadmin: bool = False,
-    org_id: str = "org-1",
+    org_ids: tuple[str, ...] = ("org-1",),
 ) -> User:
-    """Construit un User non-persisté pour les tests."""
-    return User(
+    """Construit un User non-persisté pour les tests (STORY-121.3 :
+    l'appartenance est simulée en mockant le helper d'association —
+    le modèle User ne porte plus de colonne organization_id)."""
+    user = User(
         id=user_id,
         email="user@test.com",
         username="testuser",
         is_active=active,
         is_superuser=superadmin,
-        organization_id=org_id,
     )
+    user._test_org_ids = list(org_ids)  # attribut de test
+    return user
+
+
+def _patch_user_org_ids(user: User):
+    """Patche le helper d'association pour refléter les appartenances du user de test."""
+    from contextlib import ExitStack
+
+    stack = ExitStack()
+    from app.services.user_organization_service import UserOrganizationService
+
+    async def _fake_ids(db, u):
+        return list(getattr(u, "_test_org_ids", []))
+
+    async def _fake_primary(db, u):
+        ids = getattr(u, "_test_org_ids", [])
+        return ids[0] if ids else None
+
+    stack.enter_context(
+        patch.object(
+            UserOrganizationService,
+            "get_user_organization_ids",
+            side_effect=_fake_ids,
+        )
+    )
+    stack.enter_context(
+        patch.object(
+            UserOrganizationService,
+            "get_primary_organization_id",
+            side_effect=_fake_primary,
+        )
+    )
+    return stack
 
 
 def _make_token_data(user_id: str = "user-1") -> MagicMock:
@@ -320,12 +354,13 @@ class TestWsFirstMessageChannelsAuth:
                     "get_by_id",
                     AsyncMock(return_value=valid_user),
                 ):
-                    with ws_client.websocket_connect(self.GENERAL) as ws:
-                        ws.send_json({"type": "auth", "token": "valid.jwt"})
-                        response = ws.receive_json()
-                        assert response["type"] == "AUTH_LOGIN_SUCCESS"
-                        assert response["data"]["user_id"] == "user-1"
-                        assert response["data"]["username"] == "testuser"
+                    with _patch_user_org_ids(valid_user):
+                        with ws_client.websocket_connect(self.GENERAL) as ws:
+                            ws.send_json({"type": "auth", "token": "valid.jwt"})
+                            response = ws.receive_json()
+                            assert response["type"] == "AUTH_LOGIN_SUCCESS"
+                            assert response["data"]["user_id"] == "user-1"
+                            assert response["data"]["username"] == "testuser"
 
     def test_ws_connection_closed_with_inactive_user_first_message(self, ws_client):
         """Sécurité : token valide mais utilisateur inactif → close 1008."""
@@ -362,7 +397,8 @@ class TestWsFirstMessageChannelsAuth:
                     assert response["data"]["user_id"] == "user-1"
 
     def test_general_ws_auth_login_success_payload(self, ws_client):
-        """AC 3 : contenu du message AUTH_LOGIN_SUCCESS = user/username/org."""
+        """AC 3 : AUTH_LOGIN_SUCCESS expose l'org primaire + la liste des
+        appartenances, résolues depuis l'association (STORY-121.3)."""
         valid_user = _make_user()
         with patch.object(auth_dependencies.settings, "disable_auth", False):
             with patch.object(
@@ -375,11 +411,13 @@ class TestWsFirstMessageChannelsAuth:
                     "get_by_id",
                     AsyncMock(return_value=valid_user),
                 ):
-                    with ws_client.websocket_connect(self.GENERAL) as ws:
-                        ws.send_json({"type": "auth", "token": "valid.jwt"})
-                        response = ws.receive_json()
-                        assert response["type"] == "AUTH_LOGIN_SUCCESS"
-                        assert response["data"]["organization_id"] == "org-1"
+                    with _patch_user_org_ids(valid_user):
+                        with ws_client.websocket_connect(self.GENERAL) as ws:
+                            ws.send_json({"type": "auth", "token": "valid.jwt"})
+                            response = ws.receive_json()
+                            assert response["type"] == "AUTH_LOGIN_SUCCESS"
+                            assert response["data"]["organization_id"] == "org-1"
+                            assert response["data"]["organization_ids"] == ["org-1"]
 
     def test_terminal_closed_with_invalid_token_first_message(self, ws_client):
         """Sécurité : terminal + token invalide → message d'erreur puis close 1008."""

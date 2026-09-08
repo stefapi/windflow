@@ -28,6 +28,7 @@ from ...schemas.stack import (
 from ...schemas.stack_version import StackVersionCreate, StackVersionResponse
 from ...services.docker_client_service import DockerClientService
 from ...services.stack_service import StackService
+from ...services.user_organization_service import UserOrganizationService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -213,17 +214,30 @@ async def list_stacks(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "organization_id": str(current_user.organization_id),
             "skip": skip,
             "limit": limit,
             "include_archived": include_archived,
         },
     )
 
-    stacks = await StackService.list_by_organization(
-        session, current_user.organization_id, skip, limit,
-        include_archived=include_archived,
+    # STORY-121.3 : scoping sur les organisations de l'utilisateur
+    # (appartenances via l'association ; agrégation multi-org)
+    org_ids = await UserOrganizationService.get_user_organization_ids(
+        session, current_user
     )
+    stacks = []
+    seen_ids: set[str] = set()
+    for org_id in org_ids:
+        for stack in await StackService.list_by_organization(
+            session,
+            org_id,
+            skip,
+            limit,
+            include_archived=include_archived,
+        ):
+            if stack.id not in seen_ids:
+                seen_ids.add(stack.id)
+                stacks.append(stack)
 
     return stacks
 
@@ -381,7 +395,9 @@ async def get_stack(
         )
 
     # Vérifier que la stack appartient à la même organisation
-    if stack.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, stack.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette stack"
         )
@@ -754,21 +770,27 @@ async def create_stack(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "organization_id": str(current_user.organization_id),
             "stack_name": stack_data.name,
         },
     )
     # Vérifier que le nom n'existe pas déjà dans l'organisation
-    existing = await StackService.get_by_name(
-        session, current_user.organization_id, stack_data.name
+    # STORY-121.3 : organisation primaire de l'utilisateur
+    primary_org = await UserOrganizationService.get_primary_organization_id(
+        session, current_user
     )
+    if primary_org is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucune organisation : rattachez d'abord votre compte",
+        )
+    existing = await StackService.get_by_name(session, primary_org, stack_data.name)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Stack avec le nom '{stack_data.name}' existe déjà",
         )
 
-    stack = await StackService.create(session, stack_data, current_user.organization_id)  # type: ignore[call-arg]
+    stack = await StackService.create(session, stack_data, primary_org)  # type: ignore[call-arg]
     return stack
 
 
@@ -1004,16 +1026,19 @@ async def update_stack(
             detail=f"Stack {stack_id} non trouvée",
         )
 
-    # Vérifier les permissions
-    if existing_stack.organization_id != current_user.organization_id:
+    # Vérifier les permissions (STORY-121.3 : appartenance via l'association)
+    if not await UserOrganizationService.is_member(
+        session, current_user, existing_stack.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette stack"
         )
 
     # Si changement de nom, vérifier qu'il n'existe pas déjà
     if stack_data.name and stack_data.name != existing_stack.name:
+        # STORY-121.3 : unicité vérifiée dans l'organisation de la stack
         existing_name = await StackService.get_by_name(
-            session, current_user.organization_id, stack_data.name
+            session, existing_stack.organization_id, stack_data.name
         )
         if existing_name:
             raise HTTPException(
@@ -1161,7 +1186,9 @@ async def delete_stack(
         )
 
     # Vérifier les permissions
-    if stack.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, stack.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette stack"
         )
@@ -1366,7 +1393,9 @@ async def regenerate_variable(
         )
 
     # Vérifier les permissions
-    if stack.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, stack.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à ce stack"
         )
@@ -1434,7 +1463,9 @@ async def list_stack_versions(
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
         raise HTTPException(status_code=404, detail=f"Stack {stack_id} non trouvé")
-    if stack.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, stack.organization_id
+    ):
         raise HTTPException(status_code=403, detail="Accès refusé")
 
     stmt = (
@@ -1479,7 +1510,9 @@ async def create_stack_version(
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
         raise HTTPException(status_code=404, detail=f"Stack {stack_id} non trouvé")
-    if stack.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, stack.organization_id
+    ):
         raise HTTPException(status_code=403, detail="Accès refusé")
 
     max_stmt = select(func.coalesce(func.max(StackVersion.version_number), 0)).where(
@@ -1535,7 +1568,9 @@ async def restore_stack_version(
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
         raise HTTPException(status_code=404, detail=f"Stack {stack_id} non trouvé")
-    if stack.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, stack.organization_id
+    ):
         raise HTTPException(status_code=403, detail="Accès refusé")
 
     version_stmt = select(StackVersion).where(
@@ -1596,7 +1631,9 @@ async def _get_stack_and_containers(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Stack {stack_id} non trouvée",
         )
-    if stack.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, stack.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Accès refusé à cette stack",
@@ -1624,8 +1661,7 @@ async def _get_stack_and_containers(
 
     # Filtrer par label windflow.stack_id
     stack_containers = [
-        c for c in all_containers
-        if c.labels.get("windflow.stack_id") == stack_id
+        c for c in all_containers if c.labels.get("windflow.stack_id") == stack_id
     ]
 
     return stack, stack_containers
@@ -1665,9 +1701,7 @@ async def start_stack(
         extra={"correlation_id": correlation_id, "stack_id": stack_id},
     )
 
-    stack, containers = await _get_stack_and_containers(
-        stack_id, current_user, session
-    )
+    stack, containers = await _get_stack_and_containers(stack_id, current_user, session)
 
     if not containers:
         return StackActionResponse(
@@ -1744,9 +1778,7 @@ async def stop_stack(
         extra={"correlation_id": correlation_id, "stack_id": stack_id},
     )
 
-    stack, containers = await _get_stack_and_containers(
-        stack_id, current_user, session
-    )
+    stack, containers = await _get_stack_and_containers(stack_id, current_user, session)
 
     if not containers:
         return StackActionResponse(
@@ -1825,12 +1857,14 @@ async def redeploy_stack(
     strategy = redeploy_data.strategy
     logger.info(
         f"Redeploying stack {stack_id} (strategy={strategy})",
-        extra={"correlation_id": correlation_id, "stack_id": stack_id, "strategy": strategy},
+        extra={
+            "correlation_id": correlation_id,
+            "stack_id": stack_id,
+            "strategy": strategy,
+        },
     )
 
-    stack, containers = await _get_stack_and_containers(
-        stack_id, current_user, session
-    )
+    stack, containers = await _get_stack_and_containers(stack_id, current_user, session)
 
     if not containers:
         return StackRedeployResponse(
@@ -1925,7 +1959,9 @@ async def redeploy_stack(
             "description": "A stack with this name already exists in the target organization",
             "content": {
                 "application/json": {
-                    "example": {"detail": "Un stack nommé 'My Stack (copy)' existe déjà"}
+                    "example": {
+                        "detail": "Un stack nommé 'My Stack (copy)' existe déjà"
+                    }
                 }
             },
         },
@@ -2042,7 +2078,9 @@ async def archive_stack(
             detail=f"Stack non trouvé: {stack_id}",
         )
 
-    if stack.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, stack.organization_id
+    ):
         logger.warning(
             "Archive denied — org mismatch",
             extra={
@@ -2050,7 +2088,7 @@ async def archive_stack(
                 "user_id": str(current_user.id),
                 "stack_id": stack_id,
                 "stack_org": stack.organization_id,
-                "user_org": str(current_user.organization_id),
+                "user_org": "multiple",
             },
         )
         raise HTTPException(
@@ -2139,7 +2177,9 @@ async def unarchive_stack(
             detail=f"Stack non trouvé: {stack_id}",
         )
 
-    if stack.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, stack.organization_id
+    ):
         logger.warning(
             "Unarchive denied — org mismatch",
             extra={
@@ -2147,7 +2187,7 @@ async def unarchive_stack(
                 "user_id": str(current_user.id),
                 "stack_id": stack_id,
                 "stack_org": stack.organization_id,
-                "user_org": str(current_user.organization_id),
+                "user_org": "multiple",
             },
         )
         raise HTTPException(

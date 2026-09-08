@@ -21,6 +21,7 @@ from ...schemas.deployment import (
     DeploymentUpdate,
 )
 from ...services.deployment_service import DeploymentService
+from ...services.user_organization_service import UserOrganizationService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -118,23 +119,35 @@ async def list_deployments(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "organization_id": str(current_user.organization_id),
             "skip": skip,
             "limit": limit,
         },
     )
 
-    # Get total count and paginated items
-    total = await DeploymentService.count_by_organization(
-        session, current_user.organization_id
+    # STORY-121.3 : scoping sur les organisations de l'utilisateur
+    # (appartenances via l'association ; agrégation multi-org)
+    org_ids = await UserOrganizationService.get_user_organization_ids(
+        session, current_user
     )
-    deployments = await DeploymentService.list_by_organization(
-        session, current_user.organization_id, skip, limit
-    )
+    total = 0
+    deployments = []
+    seen_ids: set[str] = set()
+    for org_id in org_ids:
+        total += await DeploymentService.count_by_organization(session, org_id)
+        for dep in await DeploymentService.list_by_organization(
+            session, org_id, skip, limit
+        ):
+            if dep.id not in seen_ids:
+                seen_ids.add(dep.id)
+                deployments.append(dep)
 
     logger.info(
         f"Retrieved {len(deployments)} deployments (total: {total})",
-        extra={"correlation_id": correlation_id, "count": len(deployments), "total": total},
+        extra={
+            "correlation_id": correlation_id,
+            "count": len(deployments),
+            "total": total,
+        },
     )
 
     return DeploymentListResponse(
@@ -269,7 +282,9 @@ async def get_deployment(
         )
 
     # Vérifier que le déploiement appartient à la même organisation
-    if deployment.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, deployment.organization_id
+    ):
         logger.warning(
             f"Access denied to deployment: {deployment_id}",
             extra={
@@ -405,7 +420,9 @@ async def get_deployment_logs(
         )
 
     # Vérifier que le déploiement appartient à la même organisation
-    if deployment.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, deployment.organization_id
+    ):
         logger.warning(
             f"Access denied to deployment logs: {deployment_id}",
             extra={
@@ -642,8 +659,17 @@ async def create_deployment(
 
     # Vérifier que le nom n'existe pas déjà dans l'organisation (seulement si fourni)
     if deployment_data.name:
+        # STORY-121.3 : organisation primaire de l'utilisateur
+        primary_org = await UserOrganizationService.get_primary_organization_id(
+            session, current_user
+        )
+        if primary_org is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Aucune organisation : rattachez d'abord votre compte",
+            )
         existing = await DeploymentService.get_by_name(
-            session, current_user.organization_id, deployment_data.name
+            session, primary_org, deployment_data.name
         )
         if existing:
             logger.warning(
@@ -659,8 +685,9 @@ async def create_deployment(
             )
 
     try:
+        assert primary_org is not None  # guard 400 ci-dessus (mypy)
         deployment = await DeploymentService.create(
-            session, deployment_data, current_user.organization_id, current_user.id
+            session, deployment_data, primary_org, current_user.id
         )
 
         logger.info(
@@ -851,8 +878,10 @@ async def update_deployment(
             detail=f"Déploiement {deployment_id} non trouvé",
         )
 
-    # Vérifier les permissions
-    if existing_deployment.organization_id != current_user.organization_id:
+    # Vérifier les permissions (STORY-121.3 : appartenance via l'association)
+    if not await UserOrganizationService.is_member(
+        session, current_user, existing_deployment.organization_id
+    ):
         logger.warning(
             f"Access denied to update deployment: {deployment_id}",
             extra={
@@ -868,8 +897,9 @@ async def update_deployment(
 
     # Si changement de nom, vérifier qu'il n'existe pas déjà
     if deployment_data.name and deployment_data.name != existing_deployment.name:
+        # STORY-121.3 : unicité vérifiée dans l'organisation du déploiement
         existing_name = await DeploymentService.get_by_name(
-            session, current_user.organization_id, deployment_data.name
+            session, existing_deployment.organization_id, deployment_data.name
         )
         if existing_name:
             logger.warning(
@@ -1033,7 +1063,9 @@ async def retry_deployment(
         )
 
     # Vérifier les permissions
-    if deployment.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, deployment.organization_id
+    ):
         logger.warning(
             f"Access denied to retry deployment: {deployment_id}",
             extra={
@@ -1230,7 +1262,9 @@ async def cancel_deployment(
         )
 
     # Vérifier les permissions
-    if deployment.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, deployment.organization_id
+    ):
         logger.warning(
             f"Access denied to cancel deployment: {deployment_id}",
             extra={
@@ -1412,7 +1446,9 @@ async def delete_deployment(
         )
 
     # Vérifier les permissions
-    if deployment.organization_id != current_user.organization_id:
+    if not await UserOrganizationService.is_member(
+        session, current_user, deployment.organization_id
+    ):
         logger.warning(
             f"Access denied to delete deployment: {deployment_id}",
             extra={

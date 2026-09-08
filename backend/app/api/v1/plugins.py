@@ -31,6 +31,7 @@ from ...schemas.plugin_manifest import parse_dependency_string
 from ...services.plugin_dependency_service import PluginDependencyService
 from ...services.plugin_lifecycle_service import PluginLifecycleService
 from ...services.plugin_manager_service import PluginManagerService
+from ...services.user_organization_service import UserOrganizationService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -59,19 +60,26 @@ async def list_plugins(
     current_user: User = Depends(get_current_active_user),
     _rate_limit=Depends(conditional_rate_limiter(100, 60)),
 ) -> List[PluginSummaryResponse]:
-    """Liste les plugins de l'organisation de l'utilisateur courant."""
+    """Liste les plugins des organisations de l'utilisateur courant."""
+    # STORY-121.3 : scoping sur les appartenances (la plupart des users
+    # ont une seule org — on liste pour la première, comportement
+    # conservé ; multi-appartenance complète via les endpoints membres)
+    org_ids = await UserOrganizationService.get_user_organization_ids(db, current_user)
+    if not org_ids:
+        return []
+    primary_org = org_ids[0]
     logger.info(
         "list_plugins",
         extra={
             "user_id": current_user.id,
-            "organization_id": current_user.organization_id,
+            "organization_count": len(org_ids),
             "skip": skip,
             "limit": limit,
         },
     )
     plugins = await PluginManagerService.list_plugins(
         db,
-        organization_id=current_user.organization_id,
+        organization_id=primary_org,
         skip=skip,
         limit=limit,
     )
@@ -135,11 +143,19 @@ async def install_plugin(
     _rate_limit=Depends(conditional_rate_limiter(10, 60)),
 ) -> PluginActionResponse:
     """Installe un nouveau plugin (asynchrone via BackgroundTasks)."""
+    # STORY-121.3 : organisation primaire de l'utilisateur
+    primary_org = await UserOrganizationService.get_primary_organization_id(
+        db, current_user
+    )
+    if primary_org is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucune organisation : rattachez d'abord votre compte",
+        )
     logger.info(
         "install_plugin_requested",
         extra={
             "user_id": current_user.id,
-            "organization_id": current_user.organization_id,
             "source": install_data.source,
         },
     )
@@ -148,7 +164,7 @@ async def install_plugin(
             db,
             install_data=install_data,
             user_id=current_user.id,
-            organization_id=current_user.organization_id,
+            organization_id=primary_org,
         )
         return PluginActionResponse(
             id=plugin.id,
@@ -371,14 +387,16 @@ async def get_plugin_dependencies(
     conflicts_raw: list[str] = deps_data.get("conflicts", [])
 
     # Récupérer les plugins installés pour vérifier le statut
+    # (STORY-121.3 : toutes les organisations de l'utilisateur)
     from sqlalchemy import select as sql_select
+
     from ...models.plugin import Plugin as PluginModel
 
-    result = await db.execute(
-        sql_select(PluginModel).where(
-            PluginModel.organization_id == current_user.organization_id
-        )
-    )
+    org_ids = await UserOrganizationService.get_user_organization_ids(db, current_user)
+    stmt = sql_select(PluginModel)
+    if org_ids:
+        stmt = stmt.where(PluginModel.organization_id.in_(org_ids))
+    result = await db.execute(stmt)
     installed_plugins = {p.name: p for p in result.scalars().all()}
 
     # Construire les réponses pour requires
@@ -392,7 +410,9 @@ async def get_plugin_dependencies(
                     name=dep_ref.name,
                     version_constraint=dep_ref.version_constraint,
                     installed=installed_plugin is not None,
-                    installed_version=installed_plugin.version if installed_plugin else None,
+                    installed_version=(
+                        installed_plugin.version if installed_plugin else None
+                    ),
                 )
             )
         except ValueError:
@@ -409,7 +429,9 @@ async def get_plugin_dependencies(
                     name=dep_ref.name,
                     version_constraint=dep_ref.version_constraint,
                     installed=installed_plugin is not None,
-                    installed_version=installed_plugin.version if installed_plugin else None,
+                    installed_version=(
+                        installed_plugin.version if installed_plugin else None
+                    ),
                 )
             )
         except ValueError:
@@ -425,8 +447,17 @@ async def get_plugin_dependencies(
             conflicts_names.append(conf_str)
 
     # Récupérer les dépendants (plugins qui dépendent de celui-ci)
+    # (STORY-121.3 : organisation primaire)
+    primary_org_deps = await UserOrganizationService.get_primary_organization_id(
+        db, current_user
+    )
+    if primary_org_deps is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucune organisation : rattachez d'abord votre compte",
+        )
     dependents = await _dependency_service.check_uninstall_dependents(
-        db, plugin.name, current_user.organization_id
+        db, plugin.name, primary_org_deps
     )
 
     return PluginDependencyTreeResponse(
@@ -478,7 +509,11 @@ async def get_hook_logs(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Plugin non trouvé : {plugin_id}",
         )
-    if plugin.organization_id != current_user.organization_id:
+    # STORY-121.3 : isolation via l'appartenance (superuser bypass
+    # intégré à is_member)
+    if not await UserOrganizationService.is_member(
+        db, current_user, plugin.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Accès interdit : ce plugin appartient à une autre organisation",
@@ -522,7 +557,10 @@ async def get_hook_log_detail(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Plugin non trouvé : {plugin_id}",
         )
-    if plugin.organization_id != current_user.organization_id:
+    # STORY-121.3 : isolation via l'appartenance
+    if not await UserOrganizationService.is_member(
+        db, current_user, plugin.organization_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Accès interdit : ce plugin appartient à une autre organisation",

@@ -15,6 +15,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from ..auth.dependencies import authenticate_ws_first_message
 from ..database import db as database
 from ..schemas.websocket_events import WebSocketEventType
+from ..services.user_organization_service import UserOrganizationService
 
 # Import depuis le package websocket
 from . import (
@@ -114,13 +115,16 @@ async def general_websocket_endpoint(websocket: WebSocket):
             # Initialiser les plugins avec le contexte
             await plugin_manager.initialize_all(plugin_context)
 
-            # Préparer les données d'événement
+            # Préparer les données d'événement — STORY-121.3 : l'org
+            # principale et la liste complète des appartenances sont
+            # résolues depuis la table d'association (plus de colonne
+            # héritée sur User) ; aucune donnée sensible exposée
+            org_ids = await UserOrganizationService.get_user_organization_ids(db, user)
             auth_event_data = {
                 "user_id": str(user.id),
                 "username": user.username,
-                "organization_id": (
-                    str(user.organization_id) if user.organization_id else None
-                ),
+                "organization_id": org_ids[0] if org_ids else None,
+                "organization_ids": org_ids,
             }
 
             # Envoyer un message de confirmation d'authentification
