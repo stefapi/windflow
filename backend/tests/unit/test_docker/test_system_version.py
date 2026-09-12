@@ -6,13 +6,31 @@ STORY-020: GET /docker/system/version — secured with get_current_active_user
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.docker import router
 from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_admin, require_operator, require_viewer
 from app.models.user import User
 from app.services.docker_client_service import DockerClientService
+
+
+def _delegate_rbac_deps(application) -> None:
+    """Délègue require_* vers l'override courant de get_current_active_user.
+
+    STORY-122.2 : les routes Docker consomment les dépendances require_*.
+    En les surchargant par une fonction qui dépend de get_current_active_user
+    (elle-même surchargée — mock user ou lambda 401), les deux familles de
+    tests nominaux/401 continuent de fonctionner sans DB (RBAC couvert par
+    test_api/test_docker_rbac.py).
+    """
+
+    def _via_active_user(user=Depends(get_current_active_user)):
+        return user
+
+    for _rbac_dep in (require_viewer, require_operator, require_admin):
+        application.dependency_overrides[_rbac_dep] = _via_active_user
 
 
 def _make_mock_user() -> User:
@@ -48,6 +66,7 @@ def app():
     _app.include_router(router, prefix="/docker")
     # Override auth dependency for all tests by default
     _app.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
+    _delegate_rbac_deps(_app)
     return _app
 
 
@@ -85,10 +104,15 @@ class TestGetVersion:
     @pytest.mark.asyncio
     async def test_get_version_returns_401_without_token(self, app):
         """Test that version endpoint returns 401 without authentication."""
-        # Override auth to raise 401 (simulating no token)
+        # Override auth to raise 401 (simulating no token) — la délégation
+        # require_* (posée en fixture) propage automatiquement l'exception
         app.dependency_overrides[get_current_active_user] = lambda: (
             _ for _ in ()
-        ).throw(HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"))
+        ).throw(
+            HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+            )
+        )
 
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -117,9 +141,15 @@ class TestGetVersion:
 
         # Verify all expected fields are present
         expected_fields = [
-            "version", "ApiVersion", "MinAPIVersion",
-            "GitCommit", "GoVersion", "os", "arch",
-            "KernelVersion", "BuildTime",
+            "version",
+            "ApiVersion",
+            "MinAPIVersion",
+            "GitCommit",
+            "GoVersion",
+            "os",
+            "arch",
+            "KernelVersion",
+            "BuildTime",
         ]
         for field in expected_fields:
             assert field in data, f"Missing field: {field}"

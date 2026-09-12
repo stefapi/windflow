@@ -29,7 +29,9 @@ class Settings(BaseSettings):
     database_pool_recycle: int = 3600
 
     # JWT Authentication
-    jwt_secret_key: str = "dev-secret-key-change-in-production-please-use-a-long-random-string-minimum-32-characters"
+    jwt_secret_key: str = (
+        "dev-secret-key-change-in-production-please-use-a-long-random-string-minimum-32-characters"
+    )
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = (
         15  # Short-lived access tokens for better security
@@ -194,6 +196,15 @@ class Settings(BaseSettings):
     rate_limit_storage_url: Optional[str] = Field(
         default=None,
         description="Redis URL for distributed rate limiting (e.g., redis://localhost:6379/0)",
+    )
+
+    # === RBAC (STORY-122.1) ===
+    # TTL du cache des rôles (spec 08 — RBAC & permissions) : un changement
+    # de rôle est pris en compte au plus tard après expiration, ou
+    # immédiatement via l'invalidation explicite (écritures membres).
+    rbac_role_cache_ttl: int = Field(
+        default=300,
+        description="TTL du cache des rôles RBAC en secondes (défaut : 5 minutes)",
     )
 
     # === Protection brute-force du login ===

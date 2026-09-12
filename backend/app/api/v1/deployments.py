@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...auth.dependencies import get_current_active_user
+from ...auth.rbac import require_admin, require_operator, require_viewer
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
@@ -21,6 +21,7 @@ from ...schemas.deployment import (
     DeploymentUpdate,
 )
 from ...services.deployment_service import DeploymentService
+from ...services.stack_service import StackService
 from ...services.user_organization_service import UserOrganizationService
 
 router = APIRouter()
@@ -46,7 +47,8 @@ Results are automatically filtered by organization membership.
 ## Sorting
 Deployments are returned in reverse chronological order (newest first).
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Viewer — read-only access for any authenticated user
 """,
     responses={
         200: {
@@ -108,7 +110,7 @@ async def list_deployments(
     request: Request,
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ):
     """List all deployments in organization."""
@@ -176,9 +178,8 @@ Returns complete deployment information including:
 - Error messages (if failed)
 
 ## Access Control
-Users can only access deployments within their organization.
-
-**Authentication Required**
+- **Minimum role**: Viewer — read-only access for any authenticated user
+- Users can only access deployments within their organization.
 """,
     responses={
         200: {
@@ -252,7 +253,7 @@ Users can only access deployments within their organization.
 async def get_deployment(
     request: Request,
     deployment_id: UUID,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ):
     """Retrieve deployment by ID."""
@@ -322,9 +323,8 @@ For real-time log streaming, use the WebSocket endpoint:
 `/ws/deployments/{deployment_id}/logs`
 
 ## Access Control
-Users can only access logs for deployments within their organization.
-
-**Authentication Required**
+- **Minimum role**: Viewer — log read access
+- Users can only access logs for deployments within their organization.
 """,
     responses={
         200: {
@@ -390,7 +390,7 @@ Users can only access logs for deployments within their organization.
 async def get_deployment_logs(
     request: Request,
     deployment_id: UUID,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ):
     """Retrieve deployment logs."""
@@ -474,7 +474,8 @@ When enabled, the LLM backend can:
 Subscribe to WebSocket endpoint `/ws/deployments/{deployment_id}`
 for real-time deployment status updates.
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Operator — deployment action (create/deploy)
 """,
     openapi_extra={
         "requestBody": {
@@ -638,7 +639,7 @@ for real-time deployment status updates.
 async def create_deployment(
     request: Request,
     deployment_data: DeploymentCreate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
     session: AsyncSession = Depends(get_db),
 ):
     """Create a new deployment (implementation)."""
@@ -657,12 +658,45 @@ async def create_deployment(
         },
     )
 
+    # STORY-121.3 : organisation primaire de l'utilisateur
+    primary_org = await UserOrganizationService.get_primary_organization_id(
+        session, current_user
+    )
+    if primary_org is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucune organisation : rattachez d'abord votre compte",
+        )
+
+    # STORY-122.3 (AC 4) : isolation cross-organisation — la stack référencée
+    # doit appartenir à une organisation de l'utilisateur (pattern stacks.py
+    # GET /{stack_id}) avant toute création de déploiement.
+    referenced_stack = await StackService.get_by_id(
+        session, str(deployment_data.stack_id)
+    )
+    if not referenced_stack:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Stack {deployment_data.stack_id} non trouvée",
+        )
+    if not await UserOrganizationService.is_member(
+        session, current_user, referenced_stack.organization_id
+    ):
+        logger.warning(
+            f"Access denied to foreign stack: {deployment_data.stack_id}",
+            extra={
+                "correlation_id": correlation_id,
+                "user_id": str(current_user.id),
+                "stack_id": str(deployment_data.stack_id),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé à cette stack",
+        )
+
     # Vérifier que le nom n'existe pas déjà dans l'organisation (seulement si fourni)
     if deployment_data.name:
-        # STORY-121.3 : organisation primaire de l'utilisateur
-        primary_org = await UserOrganizationService.get_primary_organization_id(
-            session, current_user
-        )
         if primary_org is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -730,7 +764,8 @@ Update an existing deployment's configuration.
 If changing the name, it must not conflict with existing deployments
 in the same organization.
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Admin — resource management (update/delete/configure)
 """,
     openapi_extra={
         "requestBody": {
@@ -848,7 +883,7 @@ async def update_deployment(
     request: Request,
     deployment_id: UUID,
     deployment_data: DeploymentUpdate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """Update deployment configuration."""
@@ -954,7 +989,8 @@ Only deployments with the following statuses can be retried:
 - Temporary resource unavailability
 - Configuration issues that have been fixed externally
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Operator — operational action (retry)
 """,
     responses={
         200: {
@@ -1032,7 +1068,7 @@ Only deployments with the following statuses can be retried:
 async def retry_deployment(
     request: Request,
     deployment_id: UUID,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
     session: AsyncSession = Depends(get_db),
 ):
     """Retry a failed deployment."""
@@ -1153,7 +1189,8 @@ Only deployments with the following statuses can be cancelled:
 - Use with caution in production environments
 - Consider using rollback instead for running deployments
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Operator — operational action (cancel)
 """,
     responses={
         200: {
@@ -1231,7 +1268,7 @@ Only deployments with the following statuses can be cancelled:
 async def cancel_deployment(
     request: Request,
     deployment_id: UUID,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
     session: AsyncSession = Depends(get_db),
 ):
     """Cancel a running deployment."""
@@ -1349,7 +1386,8 @@ Delete a deployment permanently.
 3. Verify deployment ID before deletion
 4. Use soft-delete in production environments
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Admin — resource management (delete)
 """,
     responses={
         204: {"description": "Deployment deleted successfully (no content)"},
@@ -1415,7 +1453,7 @@ Delete a deployment permanently.
 async def delete_deployment(
     request: Request,
     deployment_id: UUID,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """Delete a deployment permanently."""

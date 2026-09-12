@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...auth.dependencies import get_current_active_user
+from ...auth.rbac import require_admin, require_viewer
 from ...database import get_db
 from ...models.user import User
 from ...schemas.adoption import AdoptionRequest, AdoptionResponse, AdoptionWizardData
@@ -43,7 +43,7 @@ async def get_adoption_data(
     item_id: str,
     organization_id: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ) -> AdoptionWizardData:
     """
     Collecte les données détaillées d'un objet découvert pour le wizard.
@@ -57,6 +57,11 @@ async def get_adoption_data(
 
     Returns:
         AdoptionWizardData avec inventaire complet et aperçu Compose.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — données du
+    wizard) + isolation par organisation (``is_member``).
     """
     # STORY-121.3 : org explicite vérifiée contre l'appartenance (403) ;
     # sinon organisation primaire de l'utilisateur
@@ -106,7 +111,7 @@ async def adopt_discovered_item(
     request: AdoptionRequest,
     organization_id: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> AdoptionResponse:
     """
     Adopte un objet découvert en le convertissant en stack managée.
@@ -119,6 +124,12 @@ async def adopt_discovered_item(
 
     Returns:
         AdoptionResponse avec les IDs de la stack et du deployment créés.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``admin`` minimum (matrice spec 08 : l'adoption
+    crée une stack + un deployment — gestion Admin+, aligné sur la création
+    de stacks STORY-122.3) + isolation par organisation (``is_member``).
     """
     # STORY-121.3 : org explicite vérifiée contre l'appartenance (403) ;
     # sinon organisation primaire de l'utilisateur

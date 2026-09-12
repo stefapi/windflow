@@ -9,7 +9,7 @@ from typing import Any
 import asyncssh
 from fastapi import APIRouter, Depends, Request, status
 
-from ....auth.dependencies import get_current_active_user
+from ....auth.rbac import require_operator
 from ....core.rate_limit import conditional_rate_limiter
 from ....models.user import User
 from ....schemas.target import (
@@ -64,9 +64,17 @@ Test la joignabilité d'un hôte sans authentification.
 async def test_reachability(
     request: Request,
     reachability_request: HostReachabilityRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
 ) -> HostReachabilityResponse:
-    """Test host reachability: DNS resolution + SSH port check (no auth)."""
+    """Test host reachability: DNS resolution + SSH port check (no auth).
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``operator`` minimum — diagnostic réseau
+    lecture-only sans credentials (spec 08 § familles : opération
+    Operator+). Divergence inventaire (admin) signalée : libellé réel =
+    test de joignabilité, pas un scan d'ajout de cible.
+    """
     import socket
     import time
 
@@ -248,9 +256,17 @@ Test SSH connection to a host with provided credentials.
 async def test_connection(
     request: Request,
     test_request: ConnectionTestRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
 ) -> ConnectionTestResponse:
-    """Test SSH connection to a target host."""
+    """Test SSH connection to a target host.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``operator`` minimum — test de connexion
+    SSH lecture-only (spec 08 § familles : SSH lecture = Operator+).
+    Divergence inventaire (admin) signalée : libellé réel = test de
+    connexion, cas prévu par la story.
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Testing SSH connection to {test_request.host}:{test_request.port}",
@@ -307,7 +323,9 @@ async def _test_local_connection(
             if sudo_test["success"]:
                 sudo_test_msg = f" — sudo vers {sudo_user} vérifié"
             else:
-                sudo_test_msg = f" — ⚠ sudo vers {sudo_user} échoué : {sudo_test['message']}"
+                sudo_test_msg = (
+                    f" — ⚠ sudo vers {sudo_user} échoué : {sudo_test['message']}"
+                )
 
         return ConnectionTestResponse(
             success=True,
@@ -359,7 +377,9 @@ async def _test_ssh_connection(
                 if sudo_test["success"]:
                     sudo_test_msg = f" — sudo vers {sudo_user} vérifié"
                 else:
-                    sudo_test_msg = f" — ⚠ sudo vers {sudo_user} échoué : {sudo_test['message']}"
+                    sudo_test_msg = (
+                        f" — ⚠ sudo vers {sudo_user} échoué : {sudo_test['message']}"
+                    )
 
             return ConnectionTestResponse(
                 success=True,

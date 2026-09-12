@@ -11,10 +11,11 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketException
 from sqlalchemy import select
 
 from ..auth.dependencies import authenticate_ws_first_message
+from ..auth.rbac import ensure_role_ws
 from ..database import db as database
 from ..models.deployment import Deployment
 from ..services.terminal_service import ExecSession, TerminalService
@@ -179,6 +180,31 @@ async def container_terminal_websocket_endpoint(
 
         # Vérifier l'utilisateur et ses permissions (RBAC)
         async with database.session() as db:
+            # RBAC global (STORY-122.6) : console = Operator+ (matrice
+            # spec 08 § Apps « Console »). Vérifié dès que l'utilisateur est
+            # connu (auth premier message), avant l'isolation
+            # organisationnelle et avant toute logique du canal — refus 1008
+            # avec message d'erreur applicatif (pattern xterm) + audit.
+            try:
+                await ensure_role_ws(websocket, ws_user, "operator", db)
+            except WebSocketException:
+                await log_terminal_audit(
+                    str(ws_user.id),
+                    ws_user.username,
+                    container_id,
+                    "connect",
+                    False,
+                    "Permission denied - operator role required",
+                )
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "message": "Insufficient permissions: operator role required",
+                    }
+                )
+                await websocket.close(code=1008)
+                return
+
             # RBAC: Vérifier que l'utilisateur a accès au déploiement contenant ce container
             stmt = select(Deployment).where(Deployment.container_id == container_id)
             result = await db.execute(stmt)

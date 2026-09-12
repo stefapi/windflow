@@ -12,6 +12,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.docker import router
 from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_admin, require_operator, require_viewer
 from app.services.docker_client_service import DockerClientService
 
 
@@ -30,6 +31,10 @@ def app():
     _app = FastAPI()
     _app.include_router(router, prefix="/docker")
     _app.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
+    # STORY-122.2 : routes Docker protégées par require_* — délégation au
+    # même provider (mini-app sans DB ; RBAC couvert par test_docker_rbac.py)
+    for _rbac_dep in (require_viewer, require_operator, require_admin):
+        _app.dependency_overrides[_rbac_dep] = lambda: _make_mock_user()
     return _app
 
 
@@ -45,9 +50,7 @@ def mock_docker_client():
 
 def _make_client_response_error(status: int) -> aiohttp.ClientResponseError:
     """Helper to create a ClientResponseError with given status."""
-    return aiohttp.ClientResponseError(
-        MagicMock(), (), status=status, message="Error"
-    )
+    return aiohttp.ClientResponseError(MagicMock(), (), status=status, message="Error")
 
 
 class TestPauseContainer:
@@ -73,7 +76,9 @@ class TestPauseContainer:
     @pytest.mark.asyncio
     async def test_pause_not_found(self, app, mock_docker_client):
         """Test pause returns 404 when container not found."""
-        mock_docker_client.pause_container.side_effect = _make_client_response_error(404)
+        mock_docker_client.pause_container.side_effect = _make_client_response_error(
+            404
+        )
 
         with patch(
             "app.api.v1.docker.get_docker_client",
@@ -129,7 +134,9 @@ class TestUnpauseContainer:
     @pytest.mark.asyncio
     async def test_unpause_not_found(self, app, mock_docker_client):
         """Test unpause returns 404 when container not found."""
-        mock_docker_client.unpause_container.side_effect = _make_client_response_error(404)
+        mock_docker_client.unpause_container.side_effect = _make_client_response_error(
+            404
+        )
 
         with patch(
             "app.api.v1.docker.get_docker_client",

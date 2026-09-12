@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...auth.dependencies import get_current_active_user
+from ...auth.rbac import require_admin, require_operator, require_viewer
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...helper.template_renderer import TemplateRenderer
@@ -131,7 +131,8 @@ List all Docker Compose stacks available in the current user's organization.
 - Display available stacks in the UI
 - Browse stack catalog
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Viewer — read-only access for any authenticated user
 """,
     responses={
         200: {
@@ -188,7 +189,7 @@ async def list_stacks(
     skip: int = 0,
     limit: int = 100,
     include_archived: bool = False,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ):
     """
@@ -269,7 +270,8 @@ This allows users to get fresh values without modifying the stack template.
 - Inspect stack configuration
 - Prepare deployment parameters
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Viewer — read-only access for any authenticated user
 """,
     responses={
         200: {
@@ -360,7 +362,7 @@ This allows users to get fresh values without modifying the stack template.
 async def get_stack(
     request: Request,
     stack_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ):
     """
@@ -440,7 +442,8 @@ These macros are rendered when the stack is retrieved, providing fresh values ea
 - Share stack configurations across teams
 - Version control deployment configurations
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Admin — resource management (create/delete/configure)
 """,
     openapi_extra={
         "requestBody": {
@@ -746,7 +749,7 @@ spec:
 async def create_stack(
     request: Request,
     stack_data: StackCreate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """
@@ -790,7 +793,22 @@ async def create_stack(
             detail=f"Stack avec le nom '{stack_data.name}' existe déjà",
         )
 
-    stack = await StackService.create(session, stack_data, primary_org)  # type: ignore[call-arg]
+    # STORY-122.3 (AC 4) : isolation — l'organisation cible du body doit
+    # être une organisation de l'utilisateur (organization_id requis par
+    # StackCreate est appliqué tel quel par le service). Répare au passage
+    # l'appel historique StackService.create(session, data, org) (signature
+    # à 2 arguments — TypeError 500 préexistant).
+    if stack_data.organization_id != primary_org and not (
+        await UserOrganizationService.is_member(
+            session, current_user, stack_data.organization_id
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé à cette organisation",
+        )
+
+    stack = await StackService.create(session, stack_data)
     return stack
 
 
@@ -828,7 +846,8 @@ You can add or update variables with Jinja macros:
 - Improve stack documentation
 - Modify resource limits
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Admin — resource management (create/delete/configure)
 """,
     openapi_extra={
         "requestBody": {
@@ -990,7 +1009,7 @@ async def update_stack(
     request: Request,
     stack_id: str,
     stack_data: StackUpdate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """
@@ -1097,7 +1116,8 @@ This operation is **irreversible**. The stack definition will be permanently del
 - Remove deprecated configurations
 - Maintain stack catalog hygiene
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Admin — resource management (create/delete/configure)
 """,
     responses={
         204: {"description": "Stack deleted successfully (no content returned)"},
@@ -1153,7 +1173,7 @@ This operation is **irreversible**. The stack definition will be permanently del
 async def delete_stack(
     request: Request,
     stack_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """
@@ -1212,6 +1232,9 @@ without having to reload the entire stack or create a new deployment.
 - **Get a new port**: Request a different available port number
 - **Refresh random values**: Generate new random strings or tokens
 
+## Access Control
+- **Minimum role**: Operator — operational action (generate fresh values)
+
 ## Supported Macros
 - `{{ generate_password(length) }}`: Generates a new secure random password
 - `{{ get_valid_port() }}`: Returns a new available port number
@@ -1224,8 +1247,6 @@ without having to reload the entire stack or create a new deployment.
 
 ## Response
 Returns the newly generated value along with the original macro template for reference.
-
-**Authentication Required**
 """,
     responses={
         200: {
@@ -1352,7 +1373,7 @@ async def regenerate_variable(
     request: Request,
     stack_id: str,
     variable_name: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
     session: AsyncSession = Depends(get_db),
 ):
     """
@@ -1456,7 +1477,7 @@ async def regenerate_variable(
 )
 async def list_stack_versions(
     stack_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ) -> List[StackVersionResponse]:
     """Liste l'historique des versions d'un stack."""
@@ -1503,7 +1524,7 @@ async def list_stack_versions(
 async def create_stack_version(
     stack_id: str,
     version_data: StackVersionCreate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
     session: AsyncSession = Depends(get_db),
 ) -> StackVersionResponse:
     """Crée un snapshot manuel de la version actuelle du stack."""
@@ -1561,7 +1582,7 @@ async def create_stack_version(
 async def restore_stack_version(
     stack_id: str,
     version_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
     session: AsyncSession = Depends(get_db),
 ):
     """Restaure un stack à une version précédente."""
@@ -1683,7 +1704,8 @@ Start all containers belonging to a managed stack.
 - Stack must exist and belong to the user's organization
 - Docker must be available
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Operator — operational action on running resources
 """,
     tags=["stacks"],
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
@@ -1691,7 +1713,7 @@ Start all containers belonging to a managed stack.
 async def start_stack(
     request: Request,
     stack_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
     session: AsyncSession = Depends(get_db),
 ):
     """Démarre tous les containers d'une stack managée."""
@@ -1759,7 +1781,8 @@ Stop all containers belonging to a managed stack.
 - Stack must exist and belong to the user's organization
 - Docker must be available
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Operator — operational action on running resources
 """,
     tags=["stacks"],
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
@@ -1768,7 +1791,7 @@ async def stop_stack(
     request: Request,
     stack_id: str,
     timeout: int = 10,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
     session: AsyncSession = Depends(get_db),
 ):
     """Arrête tous les containers d'une stack managée."""
@@ -1840,7 +1863,8 @@ Redeploy all containers belonging to a managed stack.
 - Stack must exist and belong to the user's organization
 - Docker must be available
 
-**Authentication Required**
+## Access Control
+- **Minimum role**: Operator — operational action (redeploy/rollback)
 """,
     tags=["stacks"],
     dependencies=[Depends(conditional_rate_limiter(20, 60))],
@@ -1849,7 +1873,7 @@ async def redeploy_stack(
     request: Request,
     stack_id: str,
     redeploy_data: StackRedeployRequest = StackRedeployRequest(),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
     session: AsyncSession = Depends(get_db),
 ):
     """Redéploie une stack avec la stratégie choisie."""
@@ -1941,7 +1965,8 @@ async def redeploy_stack(
     - **Private**: The duplicated stack is private by default
     - **Organization**: Optionally target a different organization
 
-    **Authentication Required**
+    ## Access Control
+    - **Minimum role**: Admin — stack creation (duplicated configuration)
     """,
     responses={
         200: {
@@ -1972,7 +1997,7 @@ async def redeploy_stack(
 async def duplicate_stack(
     stack_id: str,
     data: StackDuplicateRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ) -> StackResponse:
     """
@@ -2031,7 +2056,8 @@ async def duplicate_stack(
     - **Idempotent**: Archiving an already archived stack is a no-op
     - **Organization scoped**: Only accessible if the stack belongs to the user's organization
 
-    **Authentication Required**
+    ## Access Control
+    - **Minimum role**: Operator — operational action on running resources
     """,
     responses={
         200: {
@@ -2060,7 +2086,7 @@ async def duplicate_stack(
 async def archive_stack(
     stack_id: str,
     request: Request,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
     session: AsyncSession = Depends(get_db),
 ) -> StackActionResponse:
     """
@@ -2130,7 +2156,8 @@ async def archive_stack(
     - **Idempotent**: Unarchiving a non-archived stack is a no-op
     - **Organization scoped**: Only accessible if the stack belongs to the user's organization
 
-    **Authentication Required**
+    ## Access Control
+    - **Minimum role**: Operator — operational action on running resources
     """,
     responses={
         200: {
@@ -2159,7 +2186,7 @@ async def archive_stack(
 async def unarchive_stack(
     stack_id: str,
     request: Request,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
     session: AsyncSession = Depends(get_db),
 ) -> StackActionResponse:
     """

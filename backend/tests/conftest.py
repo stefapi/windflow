@@ -20,6 +20,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.database import get_alembic_config, get_db
+from app.enums.rbac import Role
 from app.main import app
 from app.models.organization import Organization
 from app.models.stack import Stack
@@ -287,6 +288,147 @@ async def test_superuser(
     )
     await db_session.commit()
     return user
+
+
+# --- STORY-122.7 : helpers / fixtures rôles RBAC partagés -------------------
+
+_ROLE_USER_PASSWORD = "rolepassword123"
+
+
+async def create_user_with_role(
+    db_session: AsyncSession,
+    organization: Organization,
+    role: Role,
+    *,
+    is_superuser: bool = False,
+    suffix: str = "",
+) -> User:
+    """
+    Crée un utilisateur rattaché à ``organization`` avec le rôle RBAC donné.
+
+    STORY-122.7 (Tâche 1) : factorisation du pattern ``test_user`` —
+    ``UserService.create`` puis association ``UserOrganization(role=...)``
+    dans l'organisation fournie. Le paramètre ``suffix`` garantit l'unicité
+    username/email lorsque plusieurs utilisateurs coexistent dans un même
+    test (ex. viewer + operator + admin d'org pour la matrice consolidée).
+
+    Args:
+        db_session: Session de base de données
+        organization: Organisation à laquelle rattacher l'utilisateur
+        role: Rôle de l'association (viewer | operator | admin | super_admin)
+        is_superuser: Flag système superadmin (tous droits, toutes orgs)
+        suffix: Suffixe d'unicité username/email (optionnel)
+
+    Returns:
+        User: Utilisateur créé avec son association en base
+    """
+    from app.models.user_organization import UserOrganization
+    from app.schemas.user import UserCreate
+
+    unique = f"-{suffix}" if suffix else ""
+    user_data = UserCreate(
+        email=f"{role.value}{unique}@example.com",
+        username=f"{role.value}{unique}",
+        full_name=f"{role.value.title()} User {suffix}".strip(),
+        password=_ROLE_USER_PASSWORD,
+        is_superuser=is_superuser,
+    )
+
+    user = await UserService.create(db_session, user_data)
+    db_session.add(
+        UserOrganization(
+            user_id=user.id,
+            organization_id=organization.id,
+            role=role,
+        )
+    )
+    await db_session.commit()
+    return user
+
+
+async def _login_role_client(client: AsyncClient, username: str) -> None:
+    """
+    Authentifie le client partagé par login JWT (pattern ``authenticated_client``).
+
+    Args:
+        client: Client de test (muté : header Authorization ajouté)
+        username: Identifiant de l'utilisateur à connecter
+    """
+    response = await client.post(
+        "/api/v1/auth/login",
+        data={"username": username, "password": _ROLE_USER_PASSWORD},
+    )
+    assert response.status_code == 200, response.text
+    client.headers.update(
+        {"Authorization": f"Bearer {response.json()['access_token']}"}
+    )
+
+
+@pytest.fixture(scope="function")
+async def viewer_user(
+    db_session: AsyncSession, test_organization: Organization
+) -> User:
+    """
+    Utilisateur **viewer** rattaché à ``test_organization`` (STORY-122.7).
+    """
+    return await create_user_with_role(
+        db_session, test_organization, Role.VIEWER, suffix="m7"
+    )
+
+
+@pytest.fixture(scope="function")
+async def viewer_client(
+    client: AsyncClient, viewer_user: User
+) -> AsyncGenerator[AsyncClient, None]:
+    """Client authentifié en viewer (lecture seule — matrice consolidée)."""
+    await _login_role_client(client, viewer_user.username)
+    yield client
+    client.headers.pop("Authorization", None)
+
+
+@pytest.fixture(scope="function")
+async def operator_user(
+    db_session: AsyncSession, test_organization: Organization
+) -> User:
+    """
+    Utilisateur **operator** rattaché à ``test_organization`` (STORY-122.7).
+    """
+    return await create_user_with_role(
+        db_session, test_organization, Role.OPERATOR, suffix="m7"
+    )
+
+
+@pytest.fixture(scope="function")
+async def operator_client(
+    client: AsyncClient, operator_user: User
+) -> AsyncGenerator[AsyncClient, None]:
+    """Client authentifié en operator (actions opérationnelles)."""
+    await _login_role_client(client, operator_user.username)
+    yield client
+    client.headers.pop("Authorization", None)
+
+
+@pytest.fixture(scope="function")
+async def org_admin_user(
+    db_session: AsyncSession, test_organization: Organization
+) -> User:
+    """
+    Utilisateur **admin d'organisation** (non-superuser) rattaché à
+    ``test_organization`` (STORY-122.7) — gestion dans son organisation.
+    """
+    return await create_user_with_role(
+        db_session, test_organization, Role.ADMIN, suffix="m7"
+    )
+
+
+@pytest.fixture(scope="function")
+async def org_admin_client(
+    client: AsyncClient, org_admin_user: User
+) -> AsyncGenerator[AsyncClient, None]:
+    """Client authentifié en admin d'organisation (non-superuser)."""
+    await _login_role_client(client, org_admin_user.username)
+    yield client
+    client.headers.pop("Authorization", None)
 
 
 @pytest.fixture(scope="function")

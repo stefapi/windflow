@@ -10,9 +10,10 @@ import json
 import logging
 from datetime import datetime
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect, WebSocketException
 
 from ..auth.dependencies import authenticate_ws_first_message
+from ..auth.rbac import ensure_role_ws
 from ..database import db as database
 from ..schemas.websocket_events import WebSocketEventType
 from ..services.user_organization_service import UserOrganizationService
@@ -97,6 +98,14 @@ async def general_websocket_endpoint(websocket: WebSocket):
 
         # Créer une session qui restera ouverte pendant toute la connexion
         async with database.session() as db:
+            # Garde RBAC homogène (STORY-122.6) : événements généraux =
+            # lecture → viewer minimum (tout utilisateur actif authentifié,
+            # défaut conservateur viewer — spec 08 § Apps « Logs/Lister »).
+            try:
+                await ensure_role_ws(websocket, user, "viewer", db)
+            except WebSocketException:
+                await websocket.close(code=1008)
+                return
             # Créer le contexte pour les plugins avec la session DB disponible
             plugin_context = PluginContext(
                 db=db,  # Session disponible pour toute la durée de la connexion

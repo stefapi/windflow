@@ -202,6 +202,26 @@ class UserService:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def count_superadmins(db: AsyncSession) -> int:
+        """
+        Compte les utilisateurs superadmins (STORY-122.4, AC 3).
+
+        Sert de garde aux protections « dernier superadmin » : ni démotable
+        (``is_superuser=False``), ni désactivable (``is_active=False``), ni
+        supprimable — les endpoints lèvent 409 quand le comptage tombe à 1.
+
+        Args:
+            db: Session de base de données async
+
+        Returns:
+            Nombre d'utilisateurs avec ``is_superuser == True``
+        """
+        result = await db.execute(
+            select(func.count()).select_from(User).where(User.is_superuser == True)
+        )
+        return int(result.scalar_one())
+
+    @staticmethod
     async def list_all(
         db: AsyncSession, skip: int = 0, limit: int = 100
     ) -> Tuple[List[User], int]:

@@ -14,6 +14,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.docker import router
 from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_admin, require_operator, require_viewer
 
 
 def _make_mock_user():
@@ -37,7 +38,13 @@ def app():
     """Crée une application FastAPI de test."""
     application = FastAPI()
     application.include_router(router, prefix="/api/v1/docker")
-    application.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
+    application.dependency_overrides[get_current_active_user] = (
+        lambda: _make_mock_user()
+    )
+    # STORY-122.2 : routes Docker protégées par require_* — délégation au
+    # même provider (mini-app sans DB ; RBAC couvert par test_docker_rbac.py)
+    for _rbac_dep in (require_viewer, require_operator, require_admin):
+        application.dependency_overrides[_rbac_dep] = lambda: _make_mock_user()
     return application
 
 
@@ -51,9 +58,7 @@ class TestLoadImage:
         mock_client.load_image = AsyncMock(return_value="Load complete")
         mock_client.close = AsyncMock()
 
-        with patch(
-            "app.api.v1.docker.get_docker_client", return_value=mock_client
-        ):
+        with patch("app.api.v1.docker.get_docker_client", return_value=mock_client):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
@@ -83,9 +88,7 @@ class TestLoadImage:
         """Upload avec content_type='text/plain' → HTTP 400."""
         mock_client = AsyncMock()
 
-        with patch(
-            "app.api.v1.docker.get_docker_client", return_value=mock_client
-        ):
+        with patch("app.api.v1.docker.get_docker_client", return_value=mock_client):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
@@ -107,14 +110,10 @@ class TestLoadImage:
     async def test_load_image_handles_docker_error(self, app):
         """Erreur Docker pendant le load → HTTP 500."""
         mock_client = AsyncMock()
-        mock_client.load_image = AsyncMock(
-            side_effect=Exception("Docker daemon error")
-        )
+        mock_client.load_image = AsyncMock(side_effect=Exception("Docker daemon error"))
         mock_client.close = AsyncMock()
 
-        with patch(
-            "app.api.v1.docker.get_docker_client", return_value=mock_client
-        ):
+        with patch("app.api.v1.docker.get_docker_client", return_value=mock_client):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
@@ -138,9 +137,7 @@ class TestLoadImage:
         mock_client.load_image = AsyncMock(return_value="Load complete")
         mock_client.close = AsyncMock()
 
-        with patch(
-            "app.api.v1.docker.get_docker_client", return_value=mock_client
-        ):
+        with patch("app.api.v1.docker.get_docker_client", return_value=mock_client):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
@@ -171,22 +168,16 @@ class TestSaveImage:
         mock_client.save_image = AsyncMock(return_value=fake_tar)
         mock_client.close = AsyncMock()
 
-        with patch(
-            "app.api.v1.docker.get_docker_client", return_value=mock_client
-        ):
+        with patch("app.api.v1.docker.get_docker_client", return_value=mock_client):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
-                response = await ac.get(
-                    "/api/v1/docker/images/nginx:latest/save"
-                )
+                response = await ac.get("/api/v1/docker/images/nginx:latest/save")
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/x-tar"
         assert "attachment" in response.headers.get("content-disposition", "")
-        assert "nginx:latest.tar" in response.headers.get(
-            "content-disposition", ""
-        )
+        assert "nginx:latest.tar" in response.headers.get("content-disposition", "")
         assert response.content == fake_tar
 
         mock_client.save_image.assert_called_once_with("nginx:latest")
@@ -196,20 +187,14 @@ class TestSaveImage:
     async def test_save_image_returns_404_when_not_found(self, app):
         """Image inexistante → HTTP 404."""
         mock_client = AsyncMock()
-        mock_client.save_image = AsyncMock(
-            side_effect=_make_client_response_error(404)
-        )
+        mock_client.save_image = AsyncMock(side_effect=_make_client_response_error(404))
         mock_client.close = AsyncMock()
 
-        with patch(
-            "app.api.v1.docker.get_docker_client", return_value=mock_client
-        ):
+        with patch("app.api.v1.docker.get_docker_client", return_value=mock_client):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
-                response = await ac.get(
-                    "/api/v1/docker/images/nonexistent:latest/save"
-                )
+                response = await ac.get("/api/v1/docker/images/nonexistent:latest/save")
 
         assert response.status_code == 404
         assert "non trouvée" in response.json()["detail"]
@@ -218,20 +203,14 @@ class TestSaveImage:
     async def test_save_image_handles_docker_error(self, app):
         """Erreur Docker générique → HTTP 500."""
         mock_client = AsyncMock()
-        mock_client.save_image = AsyncMock(
-            side_effect=Exception("Docker daemon error")
-        )
+        mock_client.save_image = AsyncMock(side_effect=Exception("Docker daemon error"))
         mock_client.close = AsyncMock()
 
-        with patch(
-            "app.api.v1.docker.get_docker_client", return_value=mock_client
-        ):
+        with patch("app.api.v1.docker.get_docker_client", return_value=mock_client):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
-                response = await ac.get(
-                    "/api/v1/docker/images/nginx:latest/save"
-                )
+                response = await ac.get("/api/v1/docker/images/nginx:latest/save")
 
         assert response.status_code == 500
         assert "Erreur" in response.json()["detail"]

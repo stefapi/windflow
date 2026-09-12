@@ -11,7 +11,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ...auth.dependencies import get_current_active_user
+from ...auth.rbac import require_viewer
 from ...config import settings as app_settings
 from ...core.rate_limit import conditional_rate_limiter
 from ...models.user import User
@@ -51,10 +51,16 @@ async def list_registry_plugins(
     limit: int = 100,
     category: Optional[str] = None,
     query: Optional[str] = None,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     _rate_limit=Depends(conditional_rate_limiter(60, 60)),
 ) -> List[RegistryPluginSummaryResponse]:
-    """Liste les plugins du registre officiel avec filtres optionnels."""
+    """Liste les plugins du registre officiel avec filtres optionnels.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (parcourir le marketplace —
+    matrice spec 08 : « Parcourir le registre » = tous les rôles).
+    """
     logger.info(
         "list_registry_plugins",
         extra={
@@ -107,10 +113,16 @@ async def list_registry_plugins(
 )
 async def get_registry_plugin_detail(
     plugin_name: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     _rate_limit=Depends(conditional_rate_limiter(60, 60)),
 ) -> RegistryPluginDetailResponse:
-    """Récupère les détails d'un plugin du registre par son nom."""
+    """Récupère les détails d'un plugin du registre par son nom.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture marketplace —
+    matrice spec 08).
+    """
     logger.info(
         "get_registry_plugin_detail",
         extra={

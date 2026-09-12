@@ -3,8 +3,10 @@
 ## 📋 BACKLOG
 
 ### EPIC-012 : P1 — Socle structurant (remédiation backend)
-- [ ] STORY-122 : Dépendances RBAC `require_role(...)` — hiérarchie, cache TTL 300 s et protections d'escalade sur les ~110 endpoints (P1-2, application)
-- [ ] STORY-123 : Refresh tokens révocables — table, rotation et logout invalidant (P1-3, partie refresh)
+- [ ] STORY-123.1 : Modèle `RefreshToken`, migration Alembic et configuration (EPIC-012 — STORY-123)
+- [ ] STORY-123.2 : `RefreshTokenService` et refresh token opaque dans `jwt.py` (EPIC-012 — STORY-123)
+- [ ] STORY-123.3 : Endpoints auth — émission persistée, `/refresh` rotatif, `/logout` révocant (EPIC-012 — STORY-123)
+- [ ] STORY-123.4 : Purge des entrées expirées et tests sécurité transverses (EPIC-012 — STORY-123)
 - [ ] STORY-124 : Clés API `wf_ak_` — table `api_keys`, auth `X-API-Key` coexistant avec JWT (P1-3, partie clés API)
 - [ ] STORY-125 : Audit trail — table `audit_logs`, émission sur actions critiques, `GET /admin/audit`, rétention (P1-4)
 - [ ] STORY-126 : Enveloppes de réponse API — `APIResponse` / `PaginatedResponse` / erreur `{error:{code,message}}` (P1-5)
@@ -42,7 +44,8 @@
 
 ## 🏗️ IN PROGRESS
 
-_(vide)_
+### EPIC-012 : P1 — Socle structurant (remédiation backend)
+- [~] STORY-123 : Refresh tokens révocables — table, rotation et logout invalidant (P1-3, partie refresh) — via STORY-123.1 → 123.4
 
 ## 🚫 BLOCKED
 
@@ -50,8 +53,17 @@ _(vide)_
 
 ## 🚧 REVIEW
 
+_(vide)_
+
 ## ✅ DONE
 
+- [x] STORY-122 : Dépendances RBAC `require_role(...)` — 140 endpoints + 5 canaux WS protégés, matrice transverse vérifiée (P1-2, application) (EPIC-012) — via STORY-122.1 → 122.7
+- [x] STORY-122.7 : RBAC — matrice transverse, non-régression et couverture (EPIC-012 — STORY-122)
+- [x] STORY-122.6 : Application RBAC — admin instance et canaux WebSocket (EPIC-012 — STORY-122)
+- [x] STORY-122.5 : Application RBAC — plugins, registry, targets et endpoints de lecture (EPIC-012 — STORY-122)
+- [x] STORY-122.4 : Application RBAC — organizations, users et protections d'escalade (EPIC-012 — STORY-122)
+- [x] STORY-122.3 : Application RBAC — stacks, deployments, schedules et isolation organisationnelle (EPIC-012 — STORY-122)
+- [x] STORY-122.2 : Application RBAC au module Docker — 35 endpoints (EPIC-012 — STORY-122)
 - [x] STORY-121 : Modèle `user_organizations` — association utilisateur ↔ organisation avec rôle (P1-2, partie modèle) (EPIC-012) — via STORY-121.1/.2/.3
 - [x] STORY-121.3 : Migration des données, bascule des lectures vers l'association et retrait de la colonne héritée (EPIC-012 — STORY-121)
 

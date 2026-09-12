@@ -22,7 +22,7 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...auth.dependencies import get_current_active_user
+from ...auth.rbac import require_admin, require_operator, require_viewer
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
@@ -81,7 +81,13 @@ logger = logging.getLogger(__name__)
     "/containers",
     response_model=List[ContainerResponse],
     summary="List containers",
-    description="List all Docker containers (running and stopped). Supports pagination with skip and limit parameters.",
+    description="""
+List all Docker containers (running and stopped). Supports pagination
+with skip and limit parameters.
+
+## Access Control
+- **Minimum role**: Viewer — read-only access for any authenticated user
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
@@ -92,7 +98,7 @@ async def list_containers(
     limit: int = Query(
         50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"
     ),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ):
     """Liste tous les containers Docker avec pagination."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -144,14 +150,19 @@ async def list_containers(
     "/containers/{container_id}",
     response_model=ContainerDetailResponse,
     summary="Inspect container",
-    description="Get detailed information about a container.",
+    description="""
+Get detailed information about a container.
+
+## Access Control
+- **Minimum role**: Viewer — read-only access for any authenticated user
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
 async def get_container(
     request: Request,
     container_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ):
     """Récupère les détails d'un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -206,14 +217,19 @@ async def get_container(
     response_model=ContainerResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create container",
-    description="Create a new Docker container without starting it.",
+    description="""
+Create a new Docker container without starting it.
+
+## Access Control
+- **Minimum role**: Admin — resource management (create/delete/configure)
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(20, 60))],
 )
 async def create_container(
     request: Request,
     container_data: ContainerCreateRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ):
     """Crée un nouveau container Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -289,14 +305,19 @@ async def create_container(
     "/containers/batch/start",
     response_model=BatchContainerActionResponse,
     summary="Start multiple containers",
-    description="Start a batch of containers by their IDs. Used for discovered stacks.",
+    description="""
+Start a batch of containers by their IDs. Used for discovered stacks.
+
+## Access Control
+- **Minimum role**: Operator — operational action on running resources
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
 )
 async def batch_start_containers(
     request: Request,
     batch_data: BatchContainerActionRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
 ):
     """Démarre un ensemble de containers en une seule requête."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -349,14 +370,19 @@ async def batch_start_containers(
     "/containers/batch/stop",
     response_model=BatchContainerActionResponse,
     summary="Stop multiple containers",
-    description="Stop a batch of containers by their IDs. Used for discovered stacks.",
+    description="""
+Stop a batch of containers by their IDs. Used for discovered stacks.
+
+## Access Control
+- **Minimum role**: Operator — operational action on running resources
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
 )
 async def batch_stop_containers(
     request: Request,
     batch_data: BatchContainerActionRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
 ):
     """Arrête un ensemble de containers en une seule requête."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -409,14 +435,19 @@ async def batch_stop_containers(
     "/containers/{container_id}/start",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Start container",
-    description="Start a stopped container.",
+    description="""
+Start a stopped container.
+
+## Access Control
+- **Minimum role**: Operator — operational action on running resources
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(50, 60))],
 )
 async def start_container(
     request: Request,
     container_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
 ):
     """Démarre un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -456,7 +487,12 @@ async def start_container(
     "/containers/{container_id}/stop",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Stop container",
-    description="Stop a running container.",
+    description="""
+Stop a running container.
+
+## Access Control
+- **Minimum role**: Operator — operational action on running resources
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(50, 60))],
 )
@@ -464,7 +500,7 @@ async def stop_container(
     request: Request,
     container_id: str,
     timeout: int = 10,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
 ):
     """Arrête un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -504,7 +540,12 @@ async def stop_container(
     "/containers/{container_id}/restart",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Restart container",
-    description="Restart a container.",
+    description="""
+Restart a container.
+
+## Access Control
+- **Minimum role**: Operator — operational action on running resources
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(50, 60))],
 )
@@ -512,7 +553,7 @@ async def restart_container(
     request: Request,
     container_id: str,
     timeout: int = 10,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
 ):
     """Redémarre un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -548,14 +589,19 @@ async def restart_container(
     "/containers/{container_id}/pause",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Pause container",
-    description="Pause a running container.",
+    description="""
+Pause a running container.
+
+## Access Control
+- **Minimum role**: Operator — operational action on running resources
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(50, 60))],
 )
 async def pause_container(
     request: Request,
     container_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
 ):
     """Met en pause un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -591,14 +637,19 @@ async def pause_container(
     "/containers/{container_id}/unpause",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Unpause container",
-    description="Unpause a paused container.",
+    description="""
+Unpause a paused container.
+
+## Access Control
+- **Minimum role**: Operator — operational action on running resources
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(50, 60))],
 )
 async def unpause_container(
     request: Request,
     container_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
 ):
     """Reprend un container en pause."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -634,7 +685,12 @@ async def unpause_container(
     "/containers/{container_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove container",
-    description="Remove a container.",
+    description="""
+Remove a container.
+
+## Access Control
+- **Minimum role**: Admin — resource management (create/delete/configure)
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
 )
@@ -642,7 +698,7 @@ async def remove_container(
     request: Request,
     container_id: str,
     force: bool = False,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ):
     """Supprime un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -683,7 +739,10 @@ async def remove_container(
         "Recreate a container with updated configuration. "
         "Stops, removes, and recreates the container. "
         "None fields preserve the current value. "
-        "Named volumes and bind mounts are preserved."
+        "Named volumes and bind mounts are preserved.\n\n"
+        "## Access Control\n"
+        "- **Minimum role**: Admin — resource management "
+        "(create/delete/configure)"
     ),
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(10, 60))],
@@ -692,7 +751,7 @@ async def recreate_container(
     request: Request,
     container_id: str,
     recreate_data: ContainerRecreateRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ):
     """Recrée un container avec une nouvelle configuration."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -780,7 +839,12 @@ async def recreate_container(
     "/containers/{container_id}/restart-policy",
     response_model=ContainerUpdateResponse,
     summary="Update container restart policy",
-    description="Update the restart policy of a container without recreation.",
+    description="""
+Update the restart policy of a container without recreation.
+
+## Access Control
+- **Minimum role**: Admin — resource management (create/delete/configure)
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
 )
@@ -788,7 +852,7 @@ async def update_restart_policy(
     request: Request,
     container_id: str,
     update_data: ContainerUpdateRestartPolicyRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ):
     """Met à jour la politique de redémarrage d'un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -832,7 +896,12 @@ async def update_restart_policy(
     "/containers/{container_id}/resources",
     response_model=ContainerUpdateResponse,
     summary="Update container resources",
-    description="Update resource limits of a container without recreation.",
+    description="""
+Update resource limits of a container without recreation.
+
+## Access Control
+- **Minimum role**: Admin — resource management (create/delete/configure)
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
 )
@@ -840,7 +909,7 @@ async def update_resources(
     request: Request,
     container_id: str,
     update_data: ContainerUpdateResourcesRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ):
     """Met à jour les limites de ressources d'un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -888,7 +957,12 @@ async def update_resources(
     "/containers/{container_id}/rename",
     response_model=ContainerRenameResponse,
     summary="Rename container",
-    description="Rename a container.",
+    description="""
+Rename a container.
+
+## Access Control
+- **Minimum role**: Admin — resource management (create/delete/configure)
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(20, 60))],
 )
@@ -896,7 +970,7 @@ async def rename_container(
     request: Request,
     container_id: str,
     rename_data: ContainerRenameRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ):
     """Renomme un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -939,7 +1013,12 @@ async def rename_container(
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
     summary="Connect container to network",
-    description="Connect a container to a Docker network at runtime.",
+    description="""
+Connect a container to a Docker network at runtime.
+
+## Access Control
+- **Minimum role**: Admin — network management (create/attach/delete)
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
 )
@@ -947,7 +1026,7 @@ async def connect_container_to_network(
     request: Request,
     container_id: str,
     connect_data: ContainerNetworkConnectRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ):
     """Connecte un container à un réseau Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -996,7 +1075,12 @@ async def connect_container_to_network(
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
     summary="Disconnect container from network",
-    description="Disconnect a container from a Docker network at runtime.",
+    description="""
+Disconnect a container from a Docker network at runtime.
+
+## Access Control
+- **Minimum role**: Admin — network management (create/attach/delete)
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
 )
@@ -1004,7 +1088,7 @@ async def disconnect_container_from_network(
     request: Request,
     container_id: str,
     disconnect_data: ContainerNetworkDisconnectRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ):
     """Déconnecte un container d'un réseau Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1051,7 +1135,12 @@ async def disconnect_container_from_network(
     "/containers/{container_id}/promote",
     response_model=ContainerPromoteResponse,
     summary="Promote container to stack",
-    description="Promote a standalone container to a WindFlow managed stack.",
+    description="""
+Promote a standalone container to a WindFlow managed stack.
+
+## Access Control
+- **Minimum role**: Admin — stack creation from a standalone container
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(10, 60))],
 )
@@ -1059,7 +1148,7 @@ async def promote_container(
     request: Request,
     container_id: str,
     promote_data: ContainerPromoteRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """Promeut un container standalone en stack WindFlow managée."""
@@ -1249,14 +1338,19 @@ async def promote_container(
     "/containers/{container_id}/shells",
     response_model=List[ContainerShellResponse],
     summary="List available shells",
-    description="Detect available shells in a container for terminal access.",
+    description="""
+Detect available shells in a container for terminal access.
+
+## Access Control
+- **Minimum role**: Operator — prerequisite for console/exec access
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(50, 60))],
 )
 async def get_container_shells(
     request: Request,
     container_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_operator),
 ):
     """
     Détecte les shells disponibles dans un conteneur.
@@ -1306,14 +1400,19 @@ async def get_container_shells(
     "/containers/{container_id}/stats",
     response_model=ContainerStatsResponse,
     summary="Get container stats snapshot",
-    description="Get a single snapshot of container resource usage statistics.",
+    description="""
+Get a single snapshot of container resource usage statistics.
+
+## Access Control
+- **Minimum role**: Viewer — read-only metrics
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
 async def get_container_stats(
     request: Request,
     container_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ):
     """Récupère un snapshot des statistiques d'un container."""
     from ...websocket.container_stats import format_stats_response
@@ -1359,7 +1458,12 @@ async def get_container_stats(
     "/containers/{container_id}/top",
     response_model=ContainerProcessListResponse,
     summary="List container processes",
-    description="Get the list of processes running in a container.",
+    description="""
+Get the list of processes running in a container.
+
+## Access Control
+- **Minimum role**: Viewer — read-only access for any authenticated user
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
@@ -1367,7 +1471,7 @@ async def get_container_processes(
     request: Request,
     container_id: str,
     ps_args: Optional[str] = None,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ):
     """Liste les processus d'un container."""
     from datetime import datetime, timezone
@@ -1461,7 +1565,12 @@ async def get_container_processes(
 @router.get(
     "/containers/{container_id}/logs",
     summary="Get container logs",
-    description="Get logs from a container.",
+    description="""
+Get logs from a container.
+
+## Access Control
+- **Minimum role**: Viewer — log read access
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
@@ -1470,7 +1579,7 @@ async def get_container_logs(
     container_id: str,
     tail: int = 100,
     timestamps: bool = False,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ):
     """Récupère les logs d'un container."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1527,7 +1636,12 @@ async def get_container_logs(
     "/images",
     response_model=List[ImageResponse],
     summary="List images",
-    description="List all Docker images. Supports pagination with skip and limit parameters.",
+    description="""
+List all Docker images. Supports pagination with skip and limit parameters.
+
+## Access Control
+- **Minimum role**: Viewer — read-only access for any authenticated user
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
@@ -1538,7 +1652,7 @@ async def list_images(
     limit: int = Query(
         50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"
     ),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ):
     """Liste toutes les images Docker avec indicateur d'utilisation par containers et pagination."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1591,14 +1705,19 @@ async def list_images(
     "/images/{image_id}",
     response_model=ImageDetailResponse,
     summary="Inspect image",
-    description="Get detailed information about a Docker image.",
+    description="""
+Get detailed information about a Docker image.
+
+## Access Control
+- **Minimum role**: Viewer — read-only access for any authenticated user
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
 async def get_image(
     request: Request,
     image_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ):
     """Inspecte une image Docker et retourne ses détails."""
     from datetime import datetime, timezone
@@ -1666,14 +1785,19 @@ async def get_image(
     "/images/pull",
     response_model=ImagePullResponse,
     summary="Pull image",
-    description="Pull an image from a registry.",
+    description="""
+Pull an image from a registry.
+
+## Access Control
+- **Minimum role**: Admin — image management (pull/delete/import)
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(10, 60))],
 )
 async def pull_image(
     request: Request,
     pull_data: ImagePullRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ):
     """Pull une image Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1716,7 +1840,12 @@ async def pull_image(
 @router.delete(
     "/images/{image_id}",
     summary="Remove image",
-    description="Remove a Docker image.",
+    description="""
+Remove a Docker image.
+
+## Access Control
+- **Minimum role**: Admin — image management (pull/delete/import)
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
 )
@@ -1724,7 +1853,7 @@ async def remove_image(
     request: Request,
     image_id: str,
     force: bool = False,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ):
     """Supprime une image Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1762,14 +1891,19 @@ async def remove_image(
 @router.post(
     "/images/load",
     summary="Load image",
-    description="Load a Docker image from a tar archive.",
+    description="""
+Load a Docker image from a tar archive.
+
+## Access Control
+- **Minimum role**: Admin — image management (pull/delete/import)
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(10, 60))],
 )
 async def load_image(
     request: Request,
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ):
     """Importe une image Docker depuis un fichier tar."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1817,14 +1951,19 @@ async def load_image(
 @router.get(
     "/images/{image_id}/save",
     summary="Save image",
-    description="Export a Docker image as a tar archive.",
+    description="""
+Export a Docker image as a tar archive.
+
+## Access Control
+- **Minimum role**: Viewer — read/export access
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(10, 60))],
 )
 async def save_image(
     request: Request,
     image_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ):
     """Exporte une image Docker au format tar."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1881,7 +2020,12 @@ async def save_image(
     "/volumes",
     response_model=List[VolumeResponse],
     summary="List volumes",
-    description="List all Docker volumes. Supports pagination with skip and limit parameters.",
+    description="""
+List all Docker volumes. Supports pagination with skip and limit parameters.
+
+## Access Control
+- **Minimum role**: Viewer — read-only access for any authenticated user
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
@@ -1891,7 +2035,7 @@ async def list_volumes(
     limit: int = Query(
         50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"
     ),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ):
     """Liste tous les volumes Docker avec pagination."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1931,14 +2075,19 @@ async def list_volumes(
     response_model=VolumeResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create volume",
-    description="Create a new Docker volume.",
+    description="""
+Create a new Docker volume.
+
+## Access Control
+- **Minimum role**: Admin — volume management (create/delete)
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(20, 60))],
 )
 async def create_volume(
     request: Request,
     volume_data: VolumeCreateRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ):
     """Crée un nouveau volume Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -1987,7 +2136,12 @@ async def create_volume(
     "/volumes/{volume_name}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove volume",
-    description="Remove a Docker volume.",
+    description="""
+Remove a Docker volume.
+
+## Access Control
+- **Minimum role**: Admin — volume management (create/delete)
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
 )
@@ -1995,7 +2149,7 @@ async def remove_volume(
     request: Request,
     volume_name: str,
     force: bool = False,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
 ):
     """Supprime un volume Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -2037,7 +2191,12 @@ async def remove_volume(
     "/networks",
     response_model=List[NetworkResponse],
     summary="List networks",
-    description="List all Docker networks. Supports pagination with skip and limit parameters.",
+    description="""
+List all Docker networks. Supports pagination with skip and limit parameters.
+
+## Access Control
+- **Minimum role**: Viewer — read-only access for any authenticated user
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
@@ -2047,7 +2206,7 @@ async def list_networks(
     limit: int = Query(
         50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"
     ),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ):
     """Liste tous les réseaux Docker avec pagination."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -2095,12 +2254,17 @@ async def list_networks(
     "/system/info",
     response_model=SystemInfoResponse,
     summary="Get system info",
-    description="Get Docker system information.",
+    description="""
+Get Docker system information.
+
+## Access Control
+- **Minimum role**: Viewer — read-only system information
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(50, 60))],
 )
 async def get_system_info(
-    request: Request, current_user: User = Depends(get_current_active_user)
+    request: Request, current_user: User = Depends(require_viewer)
 ):
     """Récupère les informations système Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -2143,13 +2307,16 @@ async def get_system_info(
     "/system/version",
     response_model=SystemVersionResponse,
     summary="Get version",
-    description="Get Docker version information.",
+    description="""
+Get Docker version information.
+
+## Access Control
+- **Minimum role**: Viewer — read-only system information
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(50, 60))],
 )
-async def get_version(
-    request: Request, current_user: User = Depends(get_current_active_user)
-):
+async def get_version(request: Request, current_user: User = Depends(require_viewer)):
     """Récupère la version Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info("Getting Docker version", extra={"correlation_id": correlation_id})
@@ -2184,11 +2351,16 @@ async def get_version(
     "/system/ping",
     response_model=PingResponse,
     summary="Ping Docker",
-    description="Test Docker connectivity.",
+    description="""
+Test Docker connectivity.
+
+## Access Control
+- **Minimum role**: Viewer — read-only system information
+""",
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
 )
-async def ping(request: Request, current_user: User = Depends(get_current_active_user)):
+async def ping(request: Request, current_user: User = Depends(require_viewer)):
     """Teste la connexion Docker."""
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info("Pinging Docker", extra={"correlation_id": correlation_id})

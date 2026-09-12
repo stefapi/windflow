@@ -7,7 +7,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ....auth.dependencies import get_current_active_user
+from ....auth.rbac import require_admin, require_viewer
 from ....core.rate_limit import conditional_rate_limiter
 from ....database import get_db
 from ....models.user import User
@@ -121,10 +121,16 @@ async def list_targets(
     request: Request,
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ) -> list[TargetResponse]:
-    """List deployment targets for the organization."""
+    """List deployment targets for the organization.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — matrice spec 08 :
+    « Lister les hosts » = tous les rôles) + scoping par organisation.
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         "Listing targets for organization",
@@ -262,10 +268,16 @@ Attempting to access targets from other organizations returns 403 Forbidden.
 async def get_target(
     request: Request,
     target_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ) -> TargetResponse:
-    """Retrieve a deployment target by ID."""
+    """Retrieve a deployment target by ID.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — matrice spec 08)
+    + isolation par organisation (``is_member``).
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Getting target {target_id}",
@@ -477,10 +489,16 @@ Attempting to create a target with an existing name returns 409 Conflict.
 async def create_target(
     request: Request,
     target_data: TargetCreate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ) -> TargetResponse:
-    """Create a new deployment target."""
+    """Create a new deployment target.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``admin`` minimum (matrice spec 08 :
+    « Ajouter un host » = Admin+).
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Creating target '{target_data.name}'",
@@ -699,10 +717,16 @@ async def update_target(
     request: Request,
     target_id: str,
     target_data: TargetUpdate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ) -> TargetResponse:
-    """Update a deployment target."""
+    """Update a deployment target.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``admin`` minimum (matrice spec 08 — gestion
+    host) + isolation par organisation (``is_member``).
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Updating target {target_id}",
@@ -835,10 +859,16 @@ Returns 204 No Content on successful deletion (empty response body).
 async def delete_target(
     request: Request,
     target_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ) -> None:
-    """Delete a deployment target permanently."""
+    """Delete a deployment target permanently.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``admin`` minimum (matrice spec 08 :
+    « Supprimer un host » = Admin+) + isolation par organisation.
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Deleting target {target_id}",

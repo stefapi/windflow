@@ -13,6 +13,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.docker import router
 from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_operator
 from app.schemas.docker import ContainerShellResponse
 
 
@@ -64,9 +65,7 @@ class TestContainerShellsEndpoint:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
-                response = await client.get(
-                    "/api/v1/docker/containers/abc123/shells"
-                )
+                response = await client.get("/api/v1/docker/containers/abc123/shells")
 
         app.dependency_overrides.clear()
 
@@ -81,6 +80,8 @@ class TestContainerShellsEndpoint:
 
         # Surcharge la dépendance d'authentification
         app.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
+        # STORY-122.2 : shells = require_operator (délégation mini-app sans DB)
+        app.dependency_overrides[require_operator] = lambda: _make_mock_user()
 
         with patch(
             "app.services.terminal_service.TerminalService",
@@ -118,6 +119,7 @@ class TestContainerShellsEndpoint:
         mock_terminal_service.close = AsyncMock()
 
         app.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
+        app.dependency_overrides[require_operator] = lambda: _make_mock_user()
 
         with patch(
             "app.services.terminal_service.TerminalService",
@@ -143,6 +145,7 @@ class TestContainerShellsEndpoint:
         mock_terminal_service.close = AsyncMock()
 
         app.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
+        app.dependency_overrides[require_operator] = lambda: _make_mock_user()
 
         with patch(
             "app.services.terminal_service.TerminalService",

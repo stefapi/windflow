@@ -54,11 +54,15 @@ class TestDuplicateStack:
     @pytest.mark.asyncio
     async def test_duplicate_stack_success(
         self,
-        authenticated_client: AsyncClient,
+        admin_client: AsyncClient,
         test_stack: Stack,
     ):
-        """Dupliquer un stack existant avec un nouveau nom → 200."""
-        response = await authenticated_client.post(
+        """Dupliquer un stack existant avec un nouveau nom → 200.
+
+        STORY-122.3 : duplication = création de stack → rôle minimum Admin
+        (le client authentifié operator historique reçoit désormais 403).
+        """
+        response = await admin_client.post(
             f"/api/v1/stacks/{test_stack.id}/duplicate",
             json={"new_name": "Duplicated Stack"},
         )
@@ -75,10 +79,10 @@ class TestDuplicateStack:
     @pytest.mark.asyncio
     async def test_duplicate_stack_not_found(
         self,
-        authenticated_client: AsyncClient,
+        admin_client: AsyncClient,
     ):
         """Dupliquer un stack inexistant → 404."""
-        response = await authenticated_client.post(
+        response = await admin_client.post(
             "/api/v1/stacks/nonexistent-id/duplicate",
             json={"new_name": "New Stack"},
         )
@@ -89,11 +93,11 @@ class TestDuplicateStack:
     @pytest.mark.asyncio
     async def test_duplicate_stack_name_conflict(
         self,
-        authenticated_client: AsyncClient,
+        admin_client: AsyncClient,
         test_stack: Stack,
     ):
         """Dupliquer avec un nom déjà existant dans la même org → 409."""
-        response = await authenticated_client.post(
+        response = await admin_client.post(
             f"/api/v1/stacks/{test_stack.id}/duplicate",
             json={"new_name": test_stack.name},
         )
@@ -104,12 +108,12 @@ class TestDuplicateStack:
     @pytest.mark.asyncio
     async def test_duplicate_stack_different_org(
         self,
-        authenticated_client: AsyncClient,
+        admin_client: AsyncClient,
         test_stack: Stack,
         second_organization: Organization,
     ):
         """Dupliquer vers une autre organisation → 200."""
-        response = await authenticated_client.post(
+        response = await admin_client.post(
             f"/api/v1/stacks/{test_stack.id}/duplicate",
             json={
                 "new_name": "Duplicated in Other Org",
@@ -125,11 +129,11 @@ class TestDuplicateStack:
     @pytest.mark.asyncio
     async def test_duplicate_stack_empty_name(
         self,
-        authenticated_client: AsyncClient,
+        admin_client: AsyncClient,
         test_stack: Stack,
     ):
         """Body avec new_name vide → 422 (validation Pydantic)."""
-        response = await authenticated_client.post(
+        response = await admin_client.post(
             f"/api/v1/stacks/{test_stack.id}/duplicate",
             json={"new_name": ""},
         )

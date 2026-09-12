@@ -14,6 +14,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.docker import router
 from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_admin, require_operator, require_viewer
 
 
 def _make_mock_user():
@@ -79,7 +80,13 @@ def app():
     """Crée une application FastAPI de test."""
     application = FastAPI()
     application.include_router(router, prefix="/api/v1/docker")
-    application.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
+    application.dependency_overrides[get_current_active_user] = (
+        lambda: _make_mock_user()
+    )
+    # STORY-122.2 : routes Docker protégées par require_* — délégation au
+    # même provider (mini-app sans DB ; RBAC couvert par test_docker_rbac.py)
+    for _rbac_dep in (require_viewer, require_operator, require_admin):
+        application.dependency_overrides[_rbac_dep] = lambda: _make_mock_user()
     return application
 
 
@@ -93,9 +100,7 @@ class TestGetImageInspect:
         mock_client.inspect_image = AsyncMock(return_value=_make_inspect_data())
         mock_client.close = AsyncMock()
 
-        with patch(
-            "app.api.v1.docker.get_docker_client", return_value=mock_client
-        ):
+        with patch("app.api.v1.docker.get_docker_client", return_value=mock_client):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
@@ -138,15 +143,11 @@ class TestGetImageInspect:
         )
         mock_client.close = AsyncMock()
 
-        with patch(
-            "app.api.v1.docker.get_docker_client", return_value=mock_client
-        ):
+        with patch("app.api.v1.docker.get_docker_client", return_value=mock_client):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
-                response = await ac.get(
-                    "/api/v1/docker/images/nonexistent:latest"
-                )
+                response = await ac.get("/api/v1/docker/images/nonexistent:latest")
 
         assert response.status_code == 404
         assert "non trouvée" in response.json()["detail"]
@@ -160,9 +161,7 @@ class TestGetImageInspect:
         )
         mock_client.close = AsyncMock()
 
-        with patch(
-            "app.api.v1.docker.get_docker_client", return_value=mock_client
-        ):
+        with patch("app.api.v1.docker.get_docker_client", return_value=mock_client):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
@@ -184,9 +183,7 @@ class TestGetImageInspect:
         mock_client.inspect_image = AsyncMock(return_value=minimal_data)
         mock_client.close = AsyncMock()
 
-        with patch(
-            "app.api.v1.docker.get_docker_client", return_value=mock_client
-        ):
+        with patch("app.api.v1.docker.get_docker_client", return_value=mock_client):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:

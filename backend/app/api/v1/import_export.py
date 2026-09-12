@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...auth.dependencies import get_current_user
+from ...auth.rbac import require_admin, require_viewer
 from ...database import get_db
 from ...models.stack import Stack
 from ...models.user import User
@@ -21,10 +21,18 @@ router = APIRouter()
 @router.get("/stacks/{stack_id}/export")
 async def export_stack(
     stack_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_viewer),
     db: AsyncSession = Depends(get_db),
 ):
-    """Exporte un stack au format JSON."""
+    """Exporte un stack au format JSON.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture/export — matrice
+    spec 08 : export = lecture) + isolation par organisation
+    (``is_member``). Bascule depuis ``get_current_user`` : la chaîne
+    ``require_role`` impose en plus le contrôle d'utilisateur actif.
+    """
 
     stmt = select(Stack).where(Stack.id == stack_id)
     result = await db.execute(stmt)
@@ -72,10 +80,18 @@ async def export_stack(
 @router.post("/stacks/import")
 async def import_stack(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Importe un stack depuis un fichier JSON."""
+    """Importe un stack depuis un fichier JSON.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``admin`` minimum (matrice spec 08 :
+    l'import écrit des données — Système/Backup = Admin+). Bascule
+    depuis ``get_current_user`` : la chaîne ``require_role`` impose en
+    plus le contrôle d'utilisateur actif.
+    """
 
     try:
         content = await file.read()

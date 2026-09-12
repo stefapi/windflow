@@ -173,6 +173,11 @@ class UserOrganizationService:
         Le rôle par défaut ``viewer`` est géré par le schéma
         ``OrganizationMemberAddRequest`` (défaut Pydantic).
 
+        Note sécurité (STORY-122.4) : la protection anti-escalade (rôle
+        attribué strictement inférieur à celui de l'acteur) est vérifiée
+        au niveau endpoint ; ce service reste intentionnellement neutre
+        car il est aussi consommé par la seed/CLI admin.
+
         Args:
             db: Session de base de données async
             organization_id: ID de l'organisation
@@ -242,6 +247,12 @@ class UserOrganizationService:
     ) -> UserOrganization:
         """
         Met à jour le rôle d'un membre existant.
+
+        Note sécurité (STORY-122.4) : la protection anti-escalade (nouveau
+        rôle strictement inférieur au rôle de l'acteur, rôle actuel de la
+        cible strictement inférieur aussi — couvre l'auto-promotion) est
+        vérifiée au niveau endpoint ; ce service reste intentionnellement
+        neutre car il est aussi consommé par la seed/CLI admin.
 
         Args:
             db: Session de base de données async

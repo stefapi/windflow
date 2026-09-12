@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...auth.dependencies import get_current_active_user
+from ...auth.rbac import require_viewer
 from ...database import get_db
 from ...models.user import User
 from ...schemas.compute import ComputeGlobalView, ComputeStatsResponse, TargetGroup
@@ -42,7 +42,7 @@ async def get_compute_stats(
         Query(description="Filtrer par ID d'organisation (multi-tenant)"),
     ] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ) -> ComputeStatsResponse:
     """
     Statistiques synthétiques pour le bandeau supérieur de la vue Compute.
@@ -50,6 +50,11 @@ async def get_compute_stats(
     Agrège les données de la base de données (stacks, targets) et du daemon
     Docker local. Si Docker n'est pas disponible, les compteurs Docker sont
     retournés à 0 (graceful degradation).
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — métriques/statut
+    compute) + isolation par organisation (``is_member``).
     """
     # STORY-121.3 : paramètre explicite vérifié contre l'appartenance
     # (403 sinon) ; sinon scoping sur toutes les appartenances
@@ -129,7 +134,7 @@ async def get_compute_global(
         Query(description="Filtrer par ID d'organisation (multi-tenant)"),
     ] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ) -> Union[ComputeGlobalView, list[TargetGroup]]:
     """
     Vue globale des ressources compute.
@@ -141,6 +146,11 @@ async def get_compute_global(
     - `windflow.managed=true` → stack managée par WindFlow
     - `com.docker.compose.project` (sans label WindFlow) → objet découvert
     - aucun des deux → container standalone
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — vue détaillée
+    compute) + isolation par organisation (``is_member``).
     """
     # STORY-121.3 : paramètre explicite vérifié contre l'appartenance
     # (403 sinon) ; sinon scoping sur toutes les appartenances

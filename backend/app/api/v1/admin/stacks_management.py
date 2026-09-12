@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ....auth.dependencies import get_current_superadmin
+from ....auth.rbac import require_super_admin
 from ....database import get_db
 from ....models.deployment import Deployment
 from ....models.organization import Organization
@@ -107,10 +107,16 @@ class StacksOverview(BaseModel):
 
 @router.get("/definitions", response_model=List[StackDefinitionInfo])
 async def list_stack_definitions(
-    current_user=Depends(get_current_superadmin),
+    current_user=Depends(require_super_admin),
 ) -> List[StackDefinitionInfo]:
     """
     Liste toutes les définitions YAML de stacks disponibles.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
 
     Équivalent à: seed_stacks.py --list
     """
@@ -178,10 +184,16 @@ async def list_stack_definitions(
 
 @router.post("/validate")
 async def validate_stack_definitions(
-    current_user=Depends(get_current_superadmin),
+    current_user=Depends(require_super_admin),
 ) -> Dict[str, Any]:
     """
     Valide toutes les définitions YAML sans les importer.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
 
     Équivalent à: seed_stacks.py --dry-run
     """
@@ -226,10 +238,16 @@ async def import_stacks(
         False, description="Forcer la mise à jour des stacks existants"
     ),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_superadmin),
+    current_user=Depends(require_super_admin),
 ) -> ImportStats:
     """
     Importe un ou tous les stacks depuis les définitions YAML.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
 
     Équivalent à:
     - seed_stacks.py (tous les stacks)
@@ -330,10 +348,16 @@ async def list_imported_stacks(
     category: Optional[str] = Query(None),
     is_public: Optional[bool] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_superadmin),
+    current_user=Depends(require_super_admin),
 ) -> List[StackResponse]:
     """
     Liste tous les stacks actuellement importés en base de données.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
 
     Équivalent à: check_stacks.py
     """
@@ -364,10 +388,16 @@ async def list_imported_stacks(
 
 @router.get("/sync/status", response_model=SyncStatus)
 async def get_sync_status(
-    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_superadmin)
+    db: AsyncSession = Depends(get_db), current_user=Depends(require_super_admin)
 ) -> SyncStatus:
     """
     Compare les définitions YAML avec les stacks en base de données.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
 
     Identifie:
     - Nouveaux stacks à importer
@@ -425,10 +455,16 @@ async def auto_sync_stacks(
     import_new: bool = Body(True, description="Importer les nouveaux stacks"),
     delete_obsolete: bool = Body(False, description="Supprimer les stacks obsolètes"),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_superadmin),
+    current_user=Depends(require_super_admin),
 ) -> ImportStats:
     """
     Synchronisation automatique des stacks.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
 
     Options:
     - Importe les nouveaux stacks
@@ -573,10 +609,16 @@ async def auto_sync_stacks(
 async def export_stack_yaml(
     stack_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_superadmin),
+    current_user=Depends(require_super_admin),
 ) -> Dict[str, Any]:
     """
     Exporte un stack en format YAML.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
 
     Génère un fichier YAML depuis la configuration en base de données.
     """
@@ -610,10 +652,16 @@ async def export_multiple_stacks(
     stack_ids: List[str] = Body(..., description="Liste des IDs de stacks à exporter"),
     format: str = Body("yaml", description="Format d'export (yaml ou json)"),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_superadmin),
+    current_user=Depends(require_super_admin),
 ) -> Dict[str, Any]:
     """
     Exporte plusieurs stacks.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
     """
     exported_stacks = {}
 
@@ -650,10 +698,16 @@ async def export_multiple_stacks(
 async def toggle_stack_visibility(
     stack_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_superadmin),
+    current_user=Depends(require_super_admin),
 ) -> StackResponse:
     """
     Bascule la visibilité d'un stack (public <-> privé).
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
     """
     stack = await StackService.get_by_id(db, stack_id)
 
@@ -678,10 +732,16 @@ async def duplicate_stack(
         None, description="ID de l'organisation cible"
     ),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_superadmin),
+    current_user=Depends(require_super_admin),
 ) -> StackResponse:
     """
     Duplique un stack existant.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
     """
     original_stack = await StackService.get_by_id(db, stack_id)
 
@@ -726,10 +786,16 @@ async def delete_stack(
         False, description="Forcer la suppression même avec déploiements"
     ),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_superadmin),
+    current_user=Depends(require_super_admin),
 ) -> Dict[str, str]:
     """
     Supprime un stack.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
 
     Par défaut, refuse de supprimer si des déploiements existent.
     Utiliser force=true pour forcer la suppression.
@@ -771,10 +837,16 @@ async def delete_stack(
 
 @router.get("/stats/overview", response_model=StacksOverview)
 async def get_stacks_overview(
-    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_superadmin)
+    db: AsyncSession = Depends(get_db), current_user=Depends(require_super_admin)
 ) -> StacksOverview:
     """
     Vue d'ensemble des statistiques des stacks.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
     """
     # Nombre total de stacks
     total_result = await db.execute(select(func.count(Stack.id)))
@@ -835,10 +907,16 @@ async def get_stacks_overview(
 async def get_stack_usage(
     stack_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_superadmin),
+    current_user=Depends(require_super_admin),
 ) -> StackUsageStats:
     """
     Statistiques d'usage d'un stack spécifique.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
     """
     stack = await StackService.get_by_id(db, stack_id)
 
@@ -913,10 +991,16 @@ async def get_stack_usage(
 
 @router.get("/health")
 async def get_stacks_health(
-    db: AsyncSession = Depends(get_db), current_user=Depends(get_current_superadmin)
+    db: AsyncSession = Depends(get_db), current_user=Depends(require_super_admin)
 ) -> Dict[str, Any]:
     """
     Vérifie la santé des stacks et détecte les problèmes.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
     """
     stacks_dir = Path(__file__).parent.parent.parent.parent / "stacks_definitions"
 
@@ -986,10 +1070,16 @@ async def search_stacks(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_superadmin),
+    current_user=Depends(require_super_admin),
 ) -> Dict[str, Any]:
     """
     Recherche avancée de stacks.
+
+    ## Access Control (STORY-122.6)
+
+    - **Minimum role**: Super Admin — registre système global du catalogue
+      de stacks (import/sync instance) ; les admins d'organisation reçoivent
+      403 (spec 08 § Système « Registres »).
     """
     query = select(Stack)
 

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...auth.dependencies import get_current_active_user
+from ...auth.rbac import require_viewer
 from ...database import get_db
 from ...models.deployment import Deployment
 from ...models.stack import Stack
@@ -36,7 +36,7 @@ router = APIRouter()
 async def get_dashboard_stats(
     organization_id: Optional[str] = Query(None, description="ID de l'organisation"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ) -> DashboardStats:
     """
     Statistiques consolidées pour le dashboard.
@@ -44,6 +44,11 @@ async def get_dashboard_stats(
     Agrège les métriques targets, stacks, déploiements et workflows
     filtrées par les organisations de l'utilisateur courant
     (multi-appartenance — STORY-121.3).
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — statistiques)
+    + isolation par organisation (``is_member``).
     """
     # STORY-121.3 : paramètre explicite vérifié contre l'appartenance
     # (403 sinon) ; sinon scoping sur toutes les appartenances
@@ -316,9 +321,14 @@ async def get_dashboard_stats(
 async def get_stack_stats(
     stack_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
 ) -> StackStatsResponse:
-    """Statistiques détaillées d'un stack."""
+    """Statistiques détaillées d'un stack.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — statistiques).
+    """
 
     # Déploiements par statut
     deployments_by_status_stmt = (

@@ -11,7 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...auth.dependencies import get_current_active_user, require_superuser
+from ...auth.dependencies import get_current_active_user
+from ...auth.rbac import require_super_admin, require_viewer
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
@@ -163,10 +164,17 @@ async def list_users(
     request: Request,
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ):
-    """List all users within the current user's organization."""
+    """
+    List all users within the current user's organization.
+
+    ## Access Control (STORY-122.4)
+
+    Rôle minimum ``viewer`` ; scoping organisationnel existant conservé
+    (superusers : toutes orgs ; sinon users de ses organisations).
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         "Listing users",
@@ -343,10 +351,17 @@ Retrieve detailed information about a specific user.
 async def get_user(
     request: Request,
     user_id: UUID,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ):
-    """Retrieve detailed information about a specific user."""
+    """
+    Retrieve detailed information about a specific user.
+
+    ## Access Control (STORY-122.4)
+
+    Rôle minimum ``viewer`` ; isolation organisationnelle existante
+    (``_share_organization``) conservée.
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Getting user {user_id}",
@@ -551,10 +566,19 @@ Create a new user within an organization.
 async def create_user(
     request: Request,
     user_data: UserCreate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_super_admin),
     session: AsyncSession = Depends(get_db),
 ):
-    """Create a new user within an organization."""
+    """
+    Create a new user within an organization.
+
+    ## Access Control (STORY-122.4)
+
+    Nécessite le rôle global ``super_admin`` — la gestion des comptes via
+    ``/users/*`` est une opération d'administration d'instance (matrice
+    spec 08) ; la gestion des membres d'une org passe par
+    ``/organizations/{id}/users`` (admin de l'org).
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Creating user '{user_data.email}'",
@@ -821,10 +845,21 @@ async def update_user(
     request: Request,
     user_id: UUID,
     user_data: UserUpdate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_super_admin),
     session: AsyncSession = Depends(get_db),
 ):
-    """Update an existing user's information."""
+    """
+    Update an existing user's information.
+
+    ## Access Control (STORY-122.4)
+
+    Nécessite le rôle global ``super_admin`` (administration d'instance).
+
+    ## Escalation Protection (AC 3)
+
+    Le **dernier superadmin** n'est ni démotable (``is_superuser=False``)
+    ni désactivable (``is_active=False``) — 409 Conflict explicite.
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Updating user {user_id}",
@@ -841,6 +876,26 @@ async def update_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Utilisateur {user_id} non trouvé",
         )
+
+    # AC 3 : le dernier superadmin n'est ni démotable ni désactivable
+    if existing_user.is_superuser:
+        demotes = user_data.is_superuser is False
+        deactivates = user_data.is_active is False
+        if (demotes or deactivates) and await UserService.count_superadmins(
+            session
+        ) <= 1:
+            logger.warning(
+                "Escalation guard: cannot demote or deactivate the last superadmin",
+                extra={
+                    "correlation_id": correlation_id,
+                    "user_id": str(current_user.id),
+                    "target_user_id": str(user_id),
+                },
+            )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot demote or deactivate the last superadmin",
+            )
 
     # Vérifier les permissions (organisation partagée ou superuser —
     # STORY-121.3 : intersection des appartenances)
@@ -982,10 +1037,20 @@ Permanently delete a user account.
 async def delete_user(
     request: Request,
     user_id: UUID,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_super_admin),
     session: AsyncSession = Depends(get_db),
 ):
-    """Permanently delete a user account."""
+    """
+    Permanently delete a user account.
+
+    ## Access Control (STORY-122.4)
+
+    Nécessite le rôle global ``super_admin`` (administration d'instance).
+
+    ## Escalation Protection (AC 3)
+
+    Le **dernier superadmin** n'est pas supprimable — 409 Conflict explicite.
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Deleting user {user_id}",
@@ -1008,6 +1073,21 @@ async def delete_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Utilisateur {user_id} non trouvé",
+        )
+
+    # AC 3 : le dernier superadmin n'est pas supprimable
+    if user.is_superuser and await UserService.count_superadmins(session) <= 1:
+        logger.warning(
+            "Escalation guard: cannot delete the last superadmin",
+            extra={
+                "correlation_id": correlation_id,
+                "user_id": str(current_user.id),
+                "target_user_id": str(user_id),
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete the last superadmin",
         )
 
     # Vérifier les permissions (organisation partagée ou superuser —
@@ -1078,7 +1158,7 @@ Delete multiple users in a single operation.
 async def bulk_delete_users(
     request: Request,
     bulk_data: BulkDeleteRequest,
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_super_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """Delete multiple users in bulk."""
@@ -1163,7 +1243,7 @@ Assign multiple users to a different organization in a single operation.
 async def bulk_assign_organization(
     request: Request,
     bulk_data: BulkAssignOrganizationRequest,
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_super_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """Assign multiple users to an organization in bulk."""

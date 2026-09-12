@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...auth.dependencies import get_current_active_user, require_superuser
+from ...auth.dependencies import get_current_active_user
+from ...auth.rbac import require_admin, require_super_admin
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...enums.rbac import Role
@@ -25,6 +26,10 @@ from ...schemas.organization_member import (
     MemberRoleUpdateRequest,
     OrganizationMemberAddRequest,
     OrganizationMemberResponse,
+)
+from ...services.authorization_service import (
+    ROLE_HIERARCHY,
+    AuthorizationService,
 )
 from ...services.organization_service import OrganizationService
 from ...services.user_organization_service import UserOrganizationService
@@ -137,17 +142,22 @@ async def list_organizations(
     request: Request,
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_super_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Liste toutes les organisations (superuser uniquement).
+    Liste toutes les organisations (super_admin uniquement).
+
+    ## Access Control (STORY-122.4)
+
+    Nécessite le rôle global ``super_admin`` (admin instance — matrice
+    spec 08 : liste globale des organisations).
 
     Args:
         request: Requête HTTP (pour correlation_id)
         skip: Nombre d'éléments à ignorer pour la pagination
         limit: Nombre maximum d'éléments à retourner
-        current_user: Utilisateur courant (doit être superuser)
+        current_user: Utilisateur courant (doit être super_admin)
         session: Session de base de données
 
     Returns:
@@ -453,16 +463,21 @@ After creating an organization, you typically need to:
 async def create_organization(
     request: Request,
     organization_data: OrganizationCreate,
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_super_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Crée une nouvelle organisation (superuser uniquement).
+    Crée une nouvelle organisation (super_admin uniquement).
+
+    ## Access Control (STORY-122.4)
+
+    Nécessite le rôle global ``super_admin`` (matrice spec 08 :
+    « Créer = Super Admin uniquement »).
 
     Args:
         request: Requête HTTP (pour correlation_id)
         organization_data: Données de l'organisation à créer
-        current_user: Utilisateur courant (doit être superuser)
+        current_user: Utilisateur courant (doit être super_admin)
         session: Session de base de données
 
     Returns:
@@ -655,24 +670,30 @@ async def update_organization(
     request: Request,
     organization_id: UUID,
     organization_data: OrganizationUpdate,
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Met à jour une organisation (superuser uniquement).
+    Met à jour une organisation (admin de l'organisation).
+
+    ## Access Control (STORY-122.4)
+
+    Nécessite le rôle global ``admin`` **et** l'appartenance à
+    l'organisation (isolation via ``is_member`` — un admin global
+    non-membre ne modifie pas l'org ; les superusers bypassent).
 
     Args:
         request: Requête HTTP (pour correlation_id)
         organization_id: ID de l'organisation à modifier
         organization_data: Nouvelles données de l'organisation
-        current_user: Utilisateur courant (doit être superuser)
+        current_user: Utilisateur courant (admin membre ou superuser)
         session: Session de base de données
 
     Returns:
         OrganizationResponse: Organisation mise à jour
 
     Raises:
-        HTTPException: Si l'organisation n'existe pas ou nom en conflit
+        HTTPException: 403 si non-membre, 404 si introuvable, 409 conflit nom
     """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
@@ -683,6 +704,14 @@ async def update_organization(
             "organization_id": str(organization_id),
         },
     )
+    # Isolation : admin global non-membre → refus (superuser bypass)
+    if not current_user.is_superuser and not await UserOrganizationService.is_member(
+        session, current_user, organization_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé à cette organisation",
+        )
     # Vérifier que l'organisation existe
     existing_org = await OrganizationService.get_by_id(session, organization_id)
     if not existing_org:
@@ -796,16 +825,22 @@ Instead of deletion, consider:
 async def delete_organization(
     request: Request,
     organization_id: UUID,
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_super_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Supprime une organisation (superuser uniquement).
+    Supprime une organisation (super_admin uniquement).
+
+    ## Access Control (STORY-122.4)
+
+    Nécessite le rôle global ``super_admin`` — suppression irréversible
+    avec effets cascade (matrice spec 08 : opération d'administration
+    d'instance).
 
     Args:
         request: Requête HTTP (pour correlation_id)
         organization_id: ID de l'organisation à supprimer
-        current_user: Utilisateur courant (doit être superuser)
+        current_user: Utilisateur courant (doit être super_admin)
         session: Session de base de données
 
     Raises:
@@ -884,10 +919,17 @@ Delete multiple organizations in a single operation.
 async def bulk_delete_organizations(
     request: Request,
     bulk_data: BulkDeleteOrgRequest,
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_super_admin),
     session: AsyncSession = Depends(get_db),
 ):
-    """Delete multiple organizations in bulk."""
+    """
+    Delete multiple organizations in bulk.
+
+    ## Access Control (STORY-122.4)
+
+    Nécessite le rôle global ``super_admin`` — opération globale
+    d'administration d'instance.
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         "Bulk deleting organizations",
@@ -1142,11 +1184,11 @@ async def list_organization_members(
 Add a user as a member of an organization with an optional role.
 
 ## Access Control
-- **Interim protection**: superuser only (`require_superuser`) — the final
-  RBAC coverage (`require_role("admin")` for organization admins) will be
-  enforced by STORY-122
-- **Isolation**: even for superusers, the cross-organization isolation check
-  is structurally in place (no-op behind the superuser bypass today)
+- **Minimum role**: Admin in the organization — non-superusers must be a
+  member of the organization (cross-organization isolation via membership
+  check) and cannot assign a role equal or higher than their own
+  (escalation protection, spec 08 § Security)
+- Superusers bypass the isolation check
 - Adding members requires Admin+ permissions (spec 08 permission matrix)
 
 ## Validation Rules
@@ -1160,7 +1202,7 @@ Add a user as a member of an organization with an optional role.
 - Granting a user access to organization resources
 - Multi-tenant membership management
 
-**Authentication Required - Superuser Only (interim, STORY-122 will refine)**
+**Authentication Required - Admin role in the organization**
 """,
     dependencies=[Depends(conditional_rate_limiter(10, 60))],
     openapi_extra={
@@ -1270,21 +1312,25 @@ async def add_organization_member(
     request: Request,
     organization_id: UUID,
     member_data: OrganizationMemberAddRequest,
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Ajoute un utilisateur comme membre d'une organisation (superuser uniquement).
+    Ajoute un utilisateur comme membre d'une organisation (admin de l'org).
 
-    Protection intérimaire : ``require_superuser`` — la couche RBAC finale
-    (``require_role("admin")`` pour les admins d'organisation) est portée
-    par STORY-122.
+    ## Access Control (STORY-122.4)
+
+    Nécessite le rôle global ``admin`` **et** l'appartenance à
+    l'organisation (isolation ``is_member`` — garde effectif ; les
+    superusers bypassent). Anti-escalade : un admin non-superuser ne peut
+    ajouter qu'un membre avec un rôle **strictement inférieur** au sien
+    (spec 08 § Protection contre l'escalade).
 
     Args:
         request: Requête HTTP (pour correlation_id)
         organization_id: ID de l'organisation
         member_data: Données d'ajout (``user_id`` requis, ``role`` défaut viewer)
-        current_user: Utilisateur courant (doit être superuser)
+        current_user: Utilisateur courant (admin membre ou superuser)
         session: Session de base de données
 
     Returns:
@@ -1320,6 +1366,39 @@ async def add_organization_member(
             detail=f"Utilisateur {member_data.user_id} introuvable",
         )
 
+    # Anti-escalade (AC 3, spec 08 § Protection contre l'escalade) :
+    # un acteur non-superuser ne peut ajouter un membre qu'avec un rôle
+    # strictement inférieur au sien dans l'organisation.
+    if not current_user.is_superuser:
+        actor_role = await AuthorizationService.get_role_in_organization(
+            session, current_user, organization_id
+        )
+        if (
+            actor_role is None
+            or ROLE_HIERARCHY.get(actor_role, -1) < ROLE_HIERARCHY["admin"]
+        ):
+            # Double garde : l'isolation is_member a déjà filtré, mais un
+            # non-admin membre (viewer/operator) ne doit pas passer.
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions",
+            )
+        if ROLE_HIERARCHY[member_data.role.value] >= ROLE_HIERARCHY[actor_role]:
+            logger.warning(
+                "Escalation attempt blocked: role equal or higher than actor",
+                extra={
+                    "correlation_id": correlation_id,
+                    "user_id": str(current_user.id),
+                    "target_user_id": str(member_data.user_id),
+                    "organization_id": str(organization_id),
+                    "requested_role": member_data.role.value,
+                },
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot assign a role equal or higher than your own",
+            )
+
     try:
         membership = await UserOrganizationService.add_member(
             session, organization_id, member_data
@@ -1329,6 +1408,9 @@ async def add_organization_member(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
+
+    # STORY-122.1 : invalidation cache rôle (TTL max 300 s sinon)
+    await AuthorizationService.invalidate_user_role_cache(str(member_data.user_id))
 
     # Audit intérimaire (traçabilité structurée ; table audit_logs portée
     # par STORY-125) — aucune donnée sensible dans les logs
@@ -1354,9 +1436,13 @@ async def add_organization_member(
 Change the role of an existing member of an organization.
 
 ## Access Control
-- **Interim protection**: superuser only (`require_superuser`) — the final
-  RBAC coverage (`require_role("admin")` for organization admins) will be
-  enforced by STORY-122
+- **Minimum role**: Admin in the organization — non-superusers must be a
+  member of the organization (cross-organization isolation via membership
+  check)
+- **Escalation protection** (spec 08 § Security): a non-superuser admin
+  cannot assign a role equal or higher than their own, cannot modify a
+  member whose current role is equal or higher, and cannot promote
+  themselves; superusers bypass these checks
 - Changing roles requires Admin+ permissions (spec 08 permission matrix)
 - Permission changes are audit-logged (spec 08 security section)
 
@@ -1367,10 +1453,9 @@ Change the role of an existing member of an organization.
 
 ## Escalation Protection
 `super_admin` is a system role carried by `User.is_superuser` and can never
-be stored as an organization role (validation error 422). Further escalation
-protections (self-promotion, last-admin) are carried by STORY-122.
+be stored as an organization role (validation error 422).
 
-**Authentication Required - Superuser Only (interim, STORY-122 will refine)**
+**Authentication Required - Admin role in the organization**
 """,
     dependencies=[Depends(conditional_rate_limiter(20, 60))],
     openapi_extra={
@@ -1471,21 +1556,26 @@ async def update_organization_member_role(
     organization_id: UUID,
     user_id: UUID,
     role_data: MemberRoleUpdateRequest,
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Modifie le rôle d'un membre d'une organisation (superuser uniquement).
+    Modifie le rôle d'un membre d'une organisation (admin de l'org).
 
-    Protection intérimaire : ``require_superuser`` — la couche RBAC finale
-    est portée par STORY-122.
+    ## Access Control & Anti-escalade (STORY-122.4)
+
+    Nécessite le rôle global ``admin`` **et** l'appartenance à
+    l'organisation (isolation ``is_member`` ; superusers bypassent).
+    Anti-escalade (spec 08 § Protection contre l'escalade) : un acteur
+    non-superuser ne peut ni attribuer un rôle >= au sien, ni modifier un
+    membre dont le rôle actuel est >= au sien (couvre l'auto-promotion).
 
     Args:
         request: Requête HTTP (pour correlation_id)
         organization_id: ID de l'organisation
         user_id: ID de l'utilisateur membre
         role_data: Nouveau rôle (borné enum ``Role``)
-        current_user: Utilisateur courant (doit être superuser)
+        current_user: Utilisateur courant (admin membre ou superuser)
         session: Session de base de données
 
     Returns:
@@ -1521,10 +1611,49 @@ async def update_organization_member_role(
             detail=f"Membre {user_id} introuvable dans cette organisation",
         )
 
+    # Anti-escalade (AC 3, spec 08 § Protection contre l'escalade) :
+    # un acteur non-superuser ne peut ni attribuer un rôle >= au sien,
+    # ni modifier un membre dont le rôle actuel est >= au sien
+    # (la seconde condition couvre l'auto-promotion : son propre rôle
+    # actuel est >= à son rôle d'acteur).
+    if not current_user.is_superuser:
+        actor_role = await AuthorizationService.get_role_in_organization(
+            session, current_user, organization_id
+        )
+        if actor_role is None:
+            # Double garde : is_member a déjà filtré les non-membres.
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Accès refusé à cette organisation",
+            )
+        new_role_level = ROLE_HIERARCHY[role_data.role.value]
+        current_role_level = ROLE_HIERARCHY[_role_str(membership.role)]
+        actor_level = ROLE_HIERARCHY[actor_role]
+        if new_role_level >= actor_level or current_role_level >= actor_level:
+            logger.warning(
+                "Escalation attempt blocked: cannot assign or modify a role "
+                "equal or higher than your own",
+                extra={
+                    "correlation_id": correlation_id,
+                    "user_id": str(current_user.id),
+                    "target_user_id": str(user_id),
+                    "organization_id": str(organization_id),
+                    "previous_role": _role_str(membership.role),
+                    "requested_role": role_data.role.value,
+                },
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot assign a role equal or higher than your own",
+            )
+
     previous_role = _role_str(membership.role)
     updated = await UserOrganizationService.update_member_role(
         session, membership, role_data.role
     )
+
+    # STORY-122.1 : invalidation cache rôle (TTL max 300 s sinon)
+    await AuthorizationService.invalidate_user_role_cache(str(user_id))
 
     # Audit intérimaire : ancien/nouveau rôle tracés (spec 08 § Audit)
     logger.info(
@@ -1549,9 +1678,9 @@ async def update_organization_member_role(
 Remove a member from an organization (deletes the membership association).
 
 ## Access Control
-- **Interim protection**: superuser only (`require_superuser`) — the final
-  RBAC coverage (`require_role("admin")` for organization admins) will be
-  enforced by STORY-122
+- **Minimum role**: Admin in the organization — non-superusers must be a
+  member of the organization (cross-organization isolation via membership
+  check); superusers bypass the isolation check
 - Removing members requires Admin+ permissions (spec 08 permission matrix)
 - Removals are audit-logged (spec 08 security section)
 
@@ -1564,7 +1693,7 @@ Remove a member from an organization (deletes the membership association).
 Returns 204 No Content on success; 404 if the organization exists but the
 user is not one of its members.
 
-**Authentication Required - Superuser Only (interim, STORY-122 will refine)**
+**Authentication Required - Admin role in the organization**
 """,
     dependencies=[Depends(conditional_rate_limiter(10, 60))],
     responses={
@@ -1615,21 +1744,26 @@ async def remove_organization_member(
     request: Request,
     organization_id: UUID,
     user_id: UUID,
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Retire un membre d'une organisation (superuser uniquement).
+    Retire un membre d'une organisation (admin de l'org).
+
+    ## Access Control (STORY-122.4)
+
+    Nécessite le rôle global ``admin`` **et** l'appartenance à
+    l'organisation (isolation ``is_member`` — garde effectif ; les
+    superusers bypassent).
 
     Supprime uniquement l'association — jamais le compte utilisateur ni le
-    rôle système ``User.is_superuser`` (protections portées par STORY-122).
-    Protection intérimaire : ``require_superuser``.
+    rôle système ``User.is_superuser``.
 
     Args:
         request: Requête HTTP (pour correlation_id)
         organization_id: ID de l'organisation
         user_id: ID de l'utilisateur membre à retirer
-        current_user: Utilisateur courant (doit être superuser)
+        current_user: Utilisateur courant (admin membre ou superuser)
         session: Session de base de données
 
     Raises:
@@ -1663,6 +1797,9 @@ async def remove_organization_member(
         )
 
     await UserOrganizationService.remove_member(session, membership)
+
+    # STORY-122.1 : invalidation cache rôle (TTL max 300 s sinon)
+    await AuthorizationService.invalidate_user_role_cache(str(user_id))
 
     # Audit intérimaire (spec 08 § Audit — traçabilité du retrait)
     logger.info(

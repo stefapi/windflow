@@ -93,11 +93,25 @@ def ws_client():
     app.dependency_overrides.clear()
 
 
+def _rbac_empty_roles_result() -> MagicMock:
+    """Résultat de requête sans association (rôle global = viewer, défaut).
+
+    STORY-122.6 : les canaux WebSocket vérifient désormais le rôle minimum
+    via ``ensure_role_ws`` → ``AuthorizationService.get_global_role`` qui
+    requête ``user_organizations`` ; le mock doit retourner une liste vide
+    (utilisateur sans appartenance → viewer conservateur).
+    """
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = []
+    return result
+
+
 def _override_db():
     """Override de get_db par une session mockée (aucune DB réelle nécessaire)."""
     from app.database import get_db
 
     session = AsyncMock()
+    session.execute = AsyncMock(return_value=_rbac_empty_roles_result())
 
     async def override():
         yield session
@@ -109,6 +123,7 @@ def _override_db():
 def _mock_database_session():
     """Retourne un mock de database.session() (context manager async)."""
     mock_db = MagicMock()
+    mock_db.execute = AsyncMock(return_value=_rbac_empty_roles_result())
     mock_database = MagicMock()
     mock_database.session.return_value.__aenter__ = AsyncMock(return_value=mock_db)
     mock_database.session.return_value.__aexit__ = AsyncMock(return_value=False)

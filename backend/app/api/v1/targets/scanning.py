@@ -9,7 +9,7 @@ import asyncssh
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ....auth.dependencies import get_current_active_user
+from ....auth.rbac import require_admin
 from ....core.rate_limit import conditional_rate_limiter
 from ....database import get_db
 from ....models.user import User
@@ -260,10 +260,17 @@ If no preferred type is specified, the system automatically selects:
 async def discover_target(
     request: Request,
     discovery_request: TargetDiscoveryRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ) -> TargetDiscoveryResponse:
-    """Discover target capabilities and create deployment target."""
+    """Discover target capabilities and create deployment target.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``admin`` minimum (matrice spec 08 :
+    « Scanner / Ajouter un host » = Admin+ — la découverte crée la
+    cible) + isolation par organisation (``is_member``).
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Discovering target at {discovery_request.host}",
@@ -552,10 +559,17 @@ Users can only scan targets belonging to their organization.
 async def scan_target(
     request: Request,
     target_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_admin),
     session: AsyncSession = Depends(get_db),
 ) -> TargetResponse:
-    """Scan target capabilities and update information."""
+    """Scan target capabilities and update information.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``admin`` minimum (matrice spec 08 :
+    « Scanner un host » = Admin+) + isolation par organisation
+    (``is_member``).
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Scanning target {target_id}",

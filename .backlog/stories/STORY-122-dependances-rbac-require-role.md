@@ -1,6 +1,6 @@
 # STORY-122 : Dépendances RBAC `require_role(...)` — hiérarchie, cache TTL 300 s et protections d'escalade sur les ~110 endpoints (P1-2, application)
 
-**Statut :** TODO
+**Statut :** DONE
 **Epic Parent :** EPIC-012 — P1 : Socle structurant (remédiation backend)
 **Item plan :** P1-2 application (axes A2 + B15, rapport §3) — ampleur **XL**
 
@@ -25,11 +25,11 @@ En tant qu'administrateur sécurité de WindFlow, je veux que chaque endpoint du
 
 ## Critères d'acceptation (AC)
 
-- [ ] AC 1 : La dépendance `require_role(minimum_role)` (nouveau module `auth/rbac.py` ou équivalent) est implémentée avec la hiérarchie viewer < operator < admin < super_admin ; `User.is_superadmin` = tous droits sur toutes les organisations ; le rôle est résolu via `user_organizations` avec **cache TTL 300 s** (Redis standard / mémoire léger) — test : un changement de rôle est pris en compte au plus tard 300 s après (invalidation au changement de rôle testée).
-- [ ] AC 2 : **Tous** les endpoints existants (~110, ~20 routers : users, targets, stacks, deployments, docker — dont les 40 endpoints —, plugins + plugin_registry, organizations, schedules, admin/*, compute, discovery, stats, import/export…) sont protégés par `require_role(...)` conformément à la matrice spec 08 ; vérifié par une **matrice rôle×endpoint représentative** en tests : viewer → `403` sur `DELETE /docker/containers/{id}` et sur les POST/PUT/DELETE de gestion ; operator → `200` sur les actions opérationnelles et `403` sur la gestion ; admin → gestion `200` dans son organisation ; `super_admin` requis sur l'admin instance (`admin/*`, création d'organisation…).
-- [ ] AC 3 : **Protections d'escalade** : le **dernier superadmin** n'est ni démotable ni désactivable (`409`/`400` avec message explicite) ; un Admin ne peut pas modifier un rôle supérieur ou égal au sien ni se promouvoir ; le rôle `Super_Admin` n'est pas attribuable via l'API d'organisations (rôle système).
-- [ ] AC 4 : Isolation organisationnelle : un utilisateur n'accède pas aux ressources d'une organisation à laquelle il n'appartient pas (`403`/`404` selon la matrice) — vérifié sur un échantillon représentatif (stacks, targets, deployments).
-- [ ] AC 5 : Tests de sécurité obligatoires écrits et passants : `401` sans token, `403` rôle insuffisant, `404` ressource étrangère — sur un échantillon par router ; non-régression : `disable_auth` fonctionne en dev, login username/email + register non régressés, aucun endpoint Docker supprimé ; couverture ≥ 80 % sur les modules touchés, **viser 95 %** sur auth/RBAC.
+- [x] AC 1 : La dépendance `require_role(minimum_role)` (nouveau module `auth/rbac.py` ou équivalent) est implémentée avec la hiérarchie viewer < operator < admin < super_admin ; `User.is_superadmin` = tous droits sur toutes les organisations ; le rôle est résolu via `user_organizations` avec **cache TTL 300 s** (Redis standard / mémoire léger) — test : un changement de rôle est pris en compte au plus tard 300 s après (invalidation au changement de rôle testée). *(STORY-122.1)*
+- [x] AC 2 : **Tous** les endpoints existants (~110, ~20 routers : users, targets, stacks, deployments, docker — dont les 40 endpoints —, plugins + plugin_registry, organizations, schedules, admin/*, compute, discovery, stats, import/export…) sont protégés par `require_role(...)` conformément à la matrice spec 08 ; vérifié par une **matrice rôle×endpoint représentative** en tests : viewer → `403` sur `DELETE /docker/containers/{id}` et sur les POST/PUT/DELETE de gestion ; operator → `200` sur les actions opérationnelles et `403` sur la gestion ; admin → gestion `200` dans son organisation ; `super_admin` requis sur l'admin instance (`admin/*`, création d'organisation…). *(122.2-122.6 volets + 122.7 vérification exhaustive structurelle : 140 routes, 0 non protégée)*
+- [x] AC 3 : **Protections d'escalade** : le **dernier superadmin** n'est ni démotable ni désactivable (`409`/`400` avec message explicite) ; un Admin ne peut pas modifier un rôle supérieur ou égal au sien ni se promouvoir ; le rôle `Super_Admin` n'est pas attribuable via l'API d'organisations (rôle système). *(STORY-122.4)*
+- [x] AC 4 : Isolation organisationnelle : un utilisateur n'accède pas aux ressources d'une organisation à laquelle il n'appartient pas (`403`/`404` selon la matrice) — vérifié sur un échantillon représentatif (stacks, targets, deployments). *(STORY-122.3 + consolidation 122.7)*
+- [x] AC 5 : Tests de sécurité obligatoires écrits et passants : `401` sans token, `403` rôle insuffisant, `404` ressource étrangère — sur un échantillon par router ; non-régression : `disable_auth` fonctionne en dev, login username/email + register non régressés, aucun endpoint Docker supprimé ; couverture ≥ 80 % sur les modules touchés, **viser 95 %** sur auth/RBAC. *(122.2-122.6 échantillons + 122.7 consolidation : rbac.py 100 %, authorization_service 98 %)*
 
 ## Références spécification
 
@@ -47,16 +47,52 @@ En tant qu'administrateur sécurité de WindFlow, je veux que chaque endpoint du
 
 ## Sous-stories
 
-*(section réservée — STORY-122 est l'item XL le plus invasif du plan : `analyse-story` devra évaluer une découpe par groupes de routers ; plage réservée STORY-132-159 pour sous-découpes éventuelles)*
+> Découpe proactive réalisée par `split-story` le 2026-09-08 (complexité détectée par `analyse-story` Phase 2.5 : ~14 tâches / ~26 fichiers / ~118 endpoints vérifiés — les 4 critères remplis). Découpage par groupes de routers exigé par le plan (§7.3). L'exploration complète (inventaire des 35+15+15+10+9+8+8+6+13+5+11 routes, patterns, marqueurs intérimaires) est embarquée dans le contexte technique de chaque sous-story.
+
+- [x] STORY-122.1 : Socle RBAC — `auth/rbac.py`, hiérarchie 4 rôles et cache TTL 300 s — Couvre AC 1
+- [x] STORY-122.2 : Application RBAC au module Docker — 35 endpoints — Couvre AC 2 (volet Docker), AC 5 (échantillon)
+- [x] STORY-122.3 : Application RBAC — stacks, deployments, schedules et isolation organisationnelle — Couvre AC 2 (volet), AC 4
+- [x] STORY-122.4 : Application RBAC — organizations, users et protections d'escalade — Couvre AC 3, AC 2 (volet)
+- [x] STORY-122.5 : Application RBAC — plugins, registry, targets et endpoints de lecture — Couvre AC 2 (volet)
+- [x] STORY-122.6 : Application RBAC — admin instance et canaux WebSocket — Couvre AC 2 (volet)
+- [x] STORY-122.7 : RBAC — matrice transverse, non-régression et couverture — Couvre AC 2 (exhaustivité), AC 5
+
+**Ordre d'implémentation :** 122.1 (socle, bloquante) → 122.2 → 122.3 → 122.4 → 122.5 → 122.6 (parallélisables entre elles) → 122.7 (transverse, après toutes).
+
+**Répartition des AC :** AC 1 → 122.1 · AC 3 → 122.4 · AC 4 → 122.3 · AC 5 → 122.7 (consolidation) avec échantillons par router dans 122.2-122.6 · AC 2 (transverse par nature) → volets 122.2-122.6, vérification exhaustive finale 122.7.
 
 ## État d'avancement technique
 
-*(à remplir par analyse-story)*
+> ⚠️ L'avancement technique est désormais suivi dans les sous-stories individuelles.
+
+**Progression :** 7/7 sous-stories terminées ✅
+- [x] STORY-122.1 : Socle RBAC — require_role, hiérarchie, cache TTL
+- [x] STORY-122.2 : RBAC Docker (35 endpoints)
+- [x] STORY-122.3 : RBAC stacks/deployments/schedules + isolation
+- [x] STORY-122.4 : RBAC organizations/users + protections d'escalade
+- [x] STORY-122.5 : RBAC plugins/registry/targets/lectures
+- [x] STORY-122.6 : RBAC admin instance + WebSocket
+- [x] STORY-122.7 : Matrice transverse + non-régression + couverture
 
 ## Tâches d'implémentation détaillées
 
-*(à remplir par analyse-story)*
+> ⚠️ Cette story a été découpée en sous-stories avant implémentation (complexité détectée par analyse-story).
+> Toutes les tâches ont été redistribuées dans les sous-stories listées ci-dessus.
+> Consulter chaque sous-story pour les tâches détaillées.
 
 ## Tests à écrire
 
-*(à remplir par analyse-story)*
+> ⚠️ Les tests sont désormais définis dans les sous-stories individuelles.
+
+## Notes d'implémentation (clôture)
+
+**Date :** 2026-09-12
+
+Story close via ses 7 sous-stories (toutes DONE) — voir les notes d'implémentation de chaque sous-story pour le détail (fichiers, décisions, divergences, tests).
+
+**Bilan :**
+- 140 routes API protégées par `require_role(...)` conformément à la matrice spec 08 (test structurel anti-oubli en CI : `test_rbac_exhaustivite.py`) ;
+- 5 canaux WebSocket matriciels (terminal operator+, 4 autres viewer+) avec refus 1008 avant accept ;
+- Protections d'escalade (dernier superadmin, admin vs rôles supérieurs) et isolation organisationnelle vérifiées ;
+- Couverture chemins critiques : `auth/rbac.py` 100 %, `authorization_service.py` 98 % (cible 95 % dépassée) ;
+- Non-régression : 1376 tests unitaires verts, `disable_auth`/login username+email/register/logout préservés, aucun endpoint supprimé (§2.G).

@@ -7,7 +7,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ....auth.dependencies import get_current_active_user
+from ....auth.rbac import require_viewer
 from ....core.rate_limit import conditional_rate_limiter
 from ....database import get_db
 from ....enums.target import CapabilityType
@@ -85,10 +85,21 @@ The `last_check` timestamp is updated on every check.
 async def health_check_target(
     request: Request,
     target_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ) -> HealthCheckResponse:
-    """Perform a lightweight TCP health check on a target."""
+    """Perform a lightweight TCP health check on a target.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture de statut —
+    matrice spec 08 : « statut des hosts » = tous les rôles) + isolation
+    par organisation (``is_member``).
+
+    Divergence inventaire : la story cible admin (« associer
+    capabilities ») mais le libellé réel est un health-check TCP de
+    lecture → viewer, conforme matrice Hosts.
+    """
     from ....enums.target import TargetStatus as TS
 
     correlation_id = getattr(request.state, "correlation_id", None)
@@ -268,10 +279,16 @@ async def get_target_capabilities(
     request: Request,
     target_id: str,
     capability_type: CapabilityType | None = None,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ) -> TargetCapabilitiesResponse:
-    """Retrieve target capabilities with optional filtering."""
+    """Retrieve target capabilities with optional filtering.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — matrice
+    spec 08) + isolation par organisation (``is_member``).
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Getting capabilities for target {target_id}",
@@ -436,10 +453,16 @@ async def get_target_capability_by_type(
     request: Request,
     target_id: str,
     capability_type: CapabilityType,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ) -> TargetCapabilityResponse:
-    """Retrieve a specific capability by type for a target."""
+    """Retrieve a specific capability by type for a target.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — matrice
+    spec 08) + isolation par organisation (``is_member``).
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Getting capability {capability_type} for target {target_id}",
@@ -604,10 +627,16 @@ Returns an array of virtualization capabilities, which may be empty if no virtua
 async def get_target_virtualization_capabilities(
     request: Request,
     target_id: str,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ) -> list[TargetCapabilityResponse]:
-    """Retrieve virtualization capabilities for a target."""
+    """Retrieve virtualization capabilities for a target.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — matrice
+    spec 08) + isolation par organisation (``is_member``).
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
         f"Getting virtualization capabilities for target {target_id}",

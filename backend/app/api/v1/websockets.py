@@ -7,8 +7,11 @@ meilleure organisation et maintenabilité.
 """
 
 from fastapi import APIRouter, Depends, WebSocket
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_user_ws
+from ...auth.rbac import ensure_role_ws
+from ...database import get_db
 from ...models.user import User
 from ...websocket.container_logs import container_logs_websocket_endpoint
 from ...websocket.container_stats import container_stats_websocket_endpoint
@@ -67,6 +70,7 @@ async def deployment_logs_websocket(
     websocket: WebSocket,
     deployment_id: str,
     user: User = Depends(get_current_user_ws),
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Stream deployment logs in real-time.
@@ -101,7 +105,14 @@ async def deployment_logs_websocket(
     - User must be authenticated with valid JWT token
     - User must belong to the same organization as the deployment
     - Superadmins can access all deployments
+
+    ## Access Control — RBAC (STORY-122.6)
+
+    - **Minimum role**: Viewer — logs de déploiement = lecture (matrice
+      spec 08 § Apps « Logs ») ; rôle insuffisant → handshake refusé
+      (close 1008) avant acceptation du canal.
     """
+    await ensure_role_ws(websocket, user, "viewer", session)
     await deployment_logs_websocket_endpoint(websocket, deployment_id, user)
 
 
@@ -148,6 +159,7 @@ async def docker_container_logs_websocket(
     container_id: str,
     tail: int = 100,
     user: User = Depends(get_current_user_ws),
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Stream Docker container logs in real-time.
@@ -178,7 +190,14 @@ async def docker_container_logs_websocket(
 
     Client Messages:
     - Heartbeat: Send "ping" to keep connection alive
+
+    ## Access Control — RBAC (STORY-122.6)
+
+    - **Minimum role**: Viewer — logs de conteneur = lecture (matrice
+      spec 08 § Apps « Logs ») ; rôle insuffisant → handshake refusé
+      (close 1008) avant acceptation du canal.
     """
+    await ensure_role_ws(websocket, user, "viewer", session)
     await container_logs_websocket_endpoint(websocket, container_id, tail, user)
 
 
@@ -189,6 +208,7 @@ async def docker_container_stats_websocket(
     websocket: WebSocket,
     container_id: str,
     user: User = Depends(get_current_user_ws),
+    session: AsyncSession = Depends(get_db),
 ):
     """
     Stream Docker container stats in real-time.
@@ -218,5 +238,12 @@ async def docker_container_stats_websocket(
 
     Client Messages:
     - Heartbeat: Send "ping" to keep connection alive
+
+    ## Access Control — RBAC (STORY-122.6)
+
+    - **Minimum role**: Viewer — métriques de conteneur = lecture (matrice
+      spec 08 § Apps « Inspecter ») ; rôle insuffisant → handshake refusé
+      (close 1008) avant acceptation du canal.
     """
+    await ensure_role_ws(websocket, user, "viewer", session)
     await container_stats_websocket_endpoint(websocket, container_id, user)

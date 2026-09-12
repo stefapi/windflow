@@ -11,7 +11,7 @@ from typing import List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...auth.dependencies import get_current_active_user, require_superuser
+from ...auth.rbac import require_admin, require_viewer
 from ...core.exceptions import WindFlowException
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
@@ -57,10 +57,16 @@ async def list_plugins(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     _rate_limit=Depends(conditional_rate_limiter(100, 60)),
 ) -> List[PluginSummaryResponse]:
-    """Liste les plugins des organisations de l'utilisateur courant."""
+    """Liste les plugins des organisations de l'utilisateur courant.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — matrice spec 08 :
+    « Voir les plugins installés » = tous les rôles).
+    """
     # STORY-121.3 : scoping sur les appartenances (la plupart des users
     # ont une seule org — on liste pour la première, comportement
     # conservé ; multi-appartenance complète via les endpoints membres)
@@ -100,10 +106,15 @@ async def list_plugins(
 async def get_plugin(
     plugin_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     _rate_limit=Depends(conditional_rate_limiter(100, 60)),
 ) -> PluginResponse:
-    """Récupère les détails d'un plugin par son ID."""
+    """Récupère les détails d'un plugin par son ID.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — matrice spec 08).
+    """
     logger.info(
         "get_plugin",
         extra={
@@ -130,7 +141,7 @@ async def get_plugin(
         202: {"description": "Installation acceptée (asynchrone)"},
         400: {"description": "Manifest invalide"},
         401: {"description": "Authentification requise"},
-        403: {"description": "Droits insuffisants (superuser requis)"},
+        403: {"description": "Droits insuffisants (rôle Admin requis)"},
         409: {"description": "Plugin déjà installé"},
         422: {"description": "Données invalides"},
     },
@@ -139,10 +150,17 @@ async def install_plugin(
     install_data: PluginInstallRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_admin),
     _rate_limit=Depends(conditional_rate_limiter(10, 60)),
 ) -> PluginActionResponse:
-    """Installe un nouveau plugin (asynchrone via BackgroundTasks)."""
+    """Installe un nouveau plugin (asynchrone via BackgroundTasks).
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``admin`` minimum (matrice spec 08 :
+    « Installer/Désinstaller/Configurer un plugin » = Admin+ — remplace le
+    marqueur intérimaire ``require_superuser``).
+    """
     # STORY-121.3 : organisation primaire de l'utilisateur
     primary_org = await UserOrganizationService.get_primary_organization_id(
         db, current_user
@@ -202,7 +220,7 @@ async def install_plugin(
     responses={
         202: {"description": "Mise à jour acceptée (asynchrone)"},
         401: {"description": "Authentification requise"},
-        403: {"description": "Droits insuffisants (superuser requis)"},
+        403: {"description": "Droits insuffisants (rôle Admin requis)"},
         404: {"description": "Plugin non trouvé"},
         422: {"description": "Données invalides"},
     },
@@ -212,10 +230,16 @@ async def update_plugin(
     update_data: PluginUpdateRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_admin),
     _rate_limit=Depends(conditional_rate_limiter(10, 60)),
 ) -> PluginActionResponse:
-    """Met à jour un plugin existant (asynchrone via BackgroundTasks)."""
+    """Met à jour un plugin existant (asynchrone via BackgroundTasks).
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``admin`` minimum (matrice spec 08 — remplace
+    le marqueur intérimaire ``require_superuser``).
+    """
     logger.info(
         "update_plugin_requested",
         extra={
@@ -255,7 +279,7 @@ async def update_plugin(
     responses={
         200: {"description": "Configuration mise à jour"},
         401: {"description": "Authentification requise"},
-        403: {"description": "Droits insuffisants (superuser requis)"},
+        403: {"description": "Droits insuffisants (rôle Admin requis)"},
         404: {"description": "Plugin non trouvé"},
         422: {"description": "Données invalides"},
     },
@@ -264,10 +288,16 @@ async def configure_plugin(
     plugin_id: str,
     config_data: PluginConfigureRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_admin),
     _rate_limit=Depends(conditional_rate_limiter(20, 60)),
 ) -> PluginResponse:
-    """Configure un plugin existant."""
+    """Configure un plugin existant.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``admin`` minimum (matrice spec 08 — remplace
+    le marqueur intérimaire ``require_superuser``).
+    """
     logger.info(
         "configure_plugin_requested",
         extra={
@@ -303,17 +333,23 @@ async def configure_plugin(
     responses={
         204: {"description": "Plugin désinstallé avec succès"},
         401: {"description": "Authentification requise"},
-        403: {"description": "Droits insuffisants (superuser requis)"},
+        403: {"description": "Droits insuffisants (rôle Admin requis)"},
         404: {"description": "Plugin non trouvé"},
     },
 )
 async def uninstall_plugin(
     plugin_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_superuser),
+    current_user: User = Depends(require_admin),
     _rate_limit=Depends(conditional_rate_limiter(10, 60)),
 ) -> None:
-    """Désinstalle un plugin."""
+    """Désinstalle un plugin.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``admin`` minimum (matrice spec 08 — remplace
+    le marqueur intérimaire ``require_superuser``).
+    """
     logger.info(
         "uninstall_plugin_requested",
         extra={
@@ -361,10 +397,15 @@ async def uninstall_plugin(
 async def get_plugin_dependencies(
     plugin_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     _rate_limit=Depends(conditional_rate_limiter(100, 60)),
 ) -> PluginDependencyTreeResponse:
-    """Retourne l'arbre de dépendances complet d'un plugin installé."""
+    """Retourne l'arbre de dépendances complet d'un plugin installé.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — matrice spec 08).
+    """
     logger.info(
         "get_plugin_dependencies",
         extra={
@@ -490,10 +531,15 @@ async def get_hook_logs(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     _rate_limit=Depends(conditional_rate_limiter(100, 60)),
 ) -> List[HookLogSummaryResponse]:
-    """Liste les logs d'exécution des hooks pour un plugin."""
+    """Liste les logs d'exécution des hooks pour un plugin.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — matrice spec 08).
+    """
     logger.info(
         "get_hook_logs",
         extra={
@@ -539,10 +585,15 @@ async def get_hook_log_detail(
     plugin_id: str,
     log_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_viewer),
     _rate_limit=Depends(conditional_rate_limiter(100, 60)),
 ) -> HookLogResponse:
-    """Récupère le détail d'un log d'exécution de hook."""
+    """Récupère le détail d'un log d'exécution de hook.
+
+    ## Access Control (STORY-122.5)
+
+    Nécessite le rôle global ``viewer`` minimum (lecture — matrice spec 08).
+    """
     logger.info(
         "get_hook_log_detail",
         extra={

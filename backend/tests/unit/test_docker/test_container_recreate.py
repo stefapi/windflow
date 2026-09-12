@@ -16,8 +16,8 @@ from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.docker import router
 from app.auth.dependencies import get_current_active_user
+from app.auth.rbac import require_admin, require_operator, require_viewer
 from app.services.docker_client_service import ContainerDetail
-
 
 # =============================================================================
 # Fixtures
@@ -52,7 +52,8 @@ def _make_container_detail(
             "Cmd": cmd or ["nginx", "-g", "daemon off;"],
             "Entrypoint": None,
         },
-        host_config=host_config or {
+        host_config=host_config
+        or {
             "NetworkMode": "bridge",
             "RestartPolicy": {"Name": "unless-stopped"},
             "Privileged": False,
@@ -62,8 +63,14 @@ def _make_container_detail(
             "PortBindings": {"80/tcp": [{"HostPort": "8080"}]},
         },
         network_settings=network_settings or {"Networks": {}},
-        mounts=mounts or [
-            {"Type": "volume", "Source": "data-vol", "Destination": "/data", "Mode": "rw"},
+        mounts=mounts
+        or [
+            {
+                "Type": "volume",
+                "Source": "data-vol",
+                "Destination": "/data",
+                "Mode": "rw",
+            },
         ],
         size_rw=1024,
         size_root_fs=51200,
@@ -99,14 +106,24 @@ def mock_docker_client():
         detail = await client.get_container(container_id)
 
         merged_image = kwargs.get("image") or detail.config.get("Image", "")
-        merged_env = kwargs.get("env") if kwargs.get("env") is not None else detail.config.get("Env", [])
-        merged_labels = kwargs.get("labels") if kwargs.get("labels") is not None else detail.config.get("Labels", {})
+        merged_env = (
+            kwargs.get("env")
+            if kwargs.get("env") is not None
+            else detail.config.get("Env", [])
+        )
+        merged_labels = (
+            kwargs.get("labels")
+            if kwargs.get("labels") is not None
+            else detail.config.get("Labels", {})
+        )
 
         if kwargs.get("pull_image") and merged_image:
             await client.pull_image(merged_image)
 
         try:
-            await client.stop_container(container_id, timeout=kwargs.get("stop_timeout", 10))
+            await client.stop_container(
+                container_id, timeout=kwargs.get("stop_timeout", 10)
+            )
         except Exception:
             pass
         await client.remove_container(container_id, force=True, remove_volumes=False)
@@ -143,6 +160,10 @@ def app():
     _app = FastAPI()
     _app.include_router(router, prefix="/api/v1/docker")
     _app.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
+    # STORY-122.2 : routes Docker protégées par require_* — délégation au
+    # même provider (mini-app sans DB ; RBAC couvert par test_docker_rbac.py)
+    for _rbac_dep in (require_viewer, require_operator, require_admin):
+        _app.dependency_overrides[_rbac_dep] = lambda: _make_mock_user()
     return _app
 
 
@@ -247,7 +268,9 @@ async def test_recreate_mounts_preserved(app, mock_docker_client):
 
     assert response.status_code == 200
     mock_docker_client.remove_container.assert_called_once_with(
-        "abc123def456", force=True, remove_volumes=False,
+        "abc123def456",
+        force=True,
+        remove_volumes=False,
     )
 
 
@@ -345,7 +368,10 @@ async def test_recreate_response_contains_ids(app, mock_docker_client):
 async def test_recreate_container_not_found(app, mock_docker_client):
     """Container inexistant → 404 (AC 7)."""
     mock_docker_client.recreate_container.side_effect = aiohttp.ClientResponseError(
-        MagicMock(), (), status=404, message="Not Found",
+        MagicMock(),
+        (),
+        status=404,
+        message="Not Found",
     )
 
     transport = ASGITransport(app=app, raise_app_exceptions=False)
@@ -427,7 +453,9 @@ async def test_recreate_remove_succeeds_start_fails(app, mock_docker_client):
 
 
 @pytest.mark.asyncio
-async def test_recreate_schema_validation_stop_timeout_too_high(app, mock_docker_client):
+async def test_recreate_schema_validation_stop_timeout_too_high(
+    app, mock_docker_client
+):
     """stop_timeout > 300 → 422 Validation Error."""
     transport = ASGITransport(app=app, raise_app_exceptions=False)
 
@@ -442,7 +470,9 @@ async def test_recreate_schema_validation_stop_timeout_too_high(app, mock_docker
 
 
 @pytest.mark.asyncio
-async def test_recreate_schema_validation_negative_stop_timeout(app, mock_docker_client):
+async def test_recreate_schema_validation_negative_stop_timeout(
+    app, mock_docker_client
+):
     """stop_timeout < 0 → 422 Validation Error."""
     transport = ASGITransport(app=app, raise_app_exceptions=False)
 

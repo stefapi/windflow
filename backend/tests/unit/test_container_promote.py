@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.organization import Organization
 from app.models.stack import Stack
-from app.models.user import User
 from app.schemas.stack import StackCreate
 from app.services.stack_service import StackService
 
@@ -50,7 +49,9 @@ def _make_container_inspect(
 
 
 @pytest.fixture
-async def existing_stack(db_session: AsyncSession, test_organization: Organization) -> Stack:
+async def existing_stack(
+    db_session: AsyncSession, test_organization: Organization
+) -> Stack:
     """Crée un stack existant pour tester les conflits de nom."""
     stack_data = StackCreate(
         name="Existing Stack",
@@ -62,13 +63,31 @@ async def existing_stack(db_session: AsyncSession, test_organization: Organizati
     return await StackService.create(db_session, stack_data)
 
 
+@pytest.fixture(autouse=True)
+def _jwt_mode(monkeypatch):
+    """Force le mode JWT normal (disable_auth=False) — pattern 122.1.
+
+    Le ``.env`` local de développement peut porter ``DISABLE_AUTH=true``
+    (auto-login superadmin) : sans ce patch, le test 401 recevrait un 500
+    (pas de superadmin en base de test) au lieu du 401 attendu.
+    """
+    from app.auth import dependencies as auth_deps
+
+    monkeypatch.setattr(auth_deps.settings, "disable_auth", False)
+
+
 class TestPromoteContainer:
-    """Tests pour POST /api/v1/docker/containers/{container_id}/promote."""
+    """Tests pour POST /api/v1/docker/containers/{container_id}/promote.
+
+    STORY-122.2 : promote = création de stack → rôle minimum Admin. Les
+    tests utilisent ``admin_client`` (superuser → bypass) ; la matrice
+    RBAC Docker est couverte par ``test_api/test_docker_rbac.py``.
+    """
 
     @pytest.mark.asyncio
     async def test_promote_container_success(
         self,
-        authenticated_client: AsyncClient,
+        admin_client: AsyncClient,
     ):
         """Nominal : promeut un container standalone en stack → 200."""
         mock_inspect = _make_container_inspect(
@@ -79,15 +98,13 @@ class TestPromoteContainer:
             restart_policy={"Name": "always", "MaximumRetryCount": 0},
         )
 
-        with patch(
-            "app.api.v1.docker.get_docker_client"
-        ) as mock_get_client:
+        with patch("app.api.v1.docker.get_docker_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.inspect_container = AsyncMock(return_value=mock_inspect)
             mock_client.close = AsyncMock()
             mock_get_client.return_value = mock_client
 
-            response = await authenticated_client.post(
+            response = await admin_client.post(
                 "/api/v1/docker/containers/abc123/promote",
                 json={"name": "My Promoted Stack"},
             )
@@ -115,14 +132,12 @@ class TestPromoteContainer:
     @pytest.mark.asyncio
     async def test_promote_returns_404_container_not_found(
         self,
-        authenticated_client: AsyncClient,
+        admin_client: AsyncClient,
     ):
         """Erreur : container Docker inexistant → 404."""
         import aiohttp
 
-        with patch(
-            "app.api.v1.docker.get_docker_client"
-        ) as mock_get_client:
+        with patch("app.api.v1.docker.get_docker_client") as mock_get_client:
             mock_client = AsyncMock()
             error = aiohttp.ClientResponseError(
                 request_info=AsyncMock(),
@@ -134,7 +149,7 @@ class TestPromoteContainer:
             mock_client.close = AsyncMock()
             mock_get_client.return_value = mock_client
 
-            response = await authenticated_client.post(
+            response = await admin_client.post(
                 "/api/v1/docker/containers/nonexistent/promote",
                 json={"name": "Test Stack"},
             )
@@ -145,22 +160,20 @@ class TestPromoteContainer:
     @pytest.mark.asyncio
     async def test_promote_returns_409_already_managed(
         self,
-        authenticated_client: AsyncClient,
+        admin_client: AsyncClient,
     ):
         """Conflit : container déjà managé (label windflow.managed) → 409."""
         mock_inspect = _make_container_inspect(
             labels={"windflow.managed": "true"},
         )
 
-        with patch(
-            "app.api.v1.docker.get_docker_client"
-        ) as mock_get_client:
+        with patch("app.api.v1.docker.get_docker_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.inspect_container = AsyncMock(return_value=mock_inspect)
             mock_client.close = AsyncMock()
             mock_get_client.return_value = mock_client
 
-            response = await authenticated_client.post(
+            response = await admin_client.post(
                 "/api/v1/docker/containers/abc123/promote",
                 json={"name": "Test Stack"},
             )
@@ -171,21 +184,19 @@ class TestPromoteContainer:
     @pytest.mark.asyncio
     async def test_promote_returns_409_name_conflict(
         self,
-        authenticated_client: AsyncClient,
+        admin_client: AsyncClient,
         existing_stack: Stack,
     ):
         """Conflit : nom de stack déjà pris dans l'organisation → 409."""
         mock_inspect = _make_container_inspect()
 
-        with patch(
-            "app.api.v1.docker.get_docker_client"
-        ) as mock_get_client:
+        with patch("app.api.v1.docker.get_docker_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.inspect_container = AsyncMock(return_value=mock_inspect)
             mock_client.close = AsyncMock()
             mock_get_client.return_value = mock_client
 
-            response = await authenticated_client.post(
+            response = await admin_client.post(
                 "/api/v1/docker/containers/abc123/promote",
                 json={"name": existing_stack.name},
             )
@@ -196,10 +207,10 @@ class TestPromoteContainer:
     @pytest.mark.asyncio
     async def test_promote_returns_422_empty_name(
         self,
-        authenticated_client: AsyncClient,
+        admin_client: AsyncClient,
     ):
         """Validation : nom vide dans le body → 422."""
-        response = await authenticated_client.post(
+        response = await admin_client.post(
             "/api/v1/docker/containers/abc123/promote",
             json={"name": ""},
         )
@@ -209,10 +220,10 @@ class TestPromoteContainer:
     @pytest.mark.asyncio
     async def test_promote_returns_422_name_too_long(
         self,
-        authenticated_client: AsyncClient,
+        admin_client: AsyncClient,
     ):
         """Validation : nom > 255 caractères → 422."""
-        response = await authenticated_client.post(
+        response = await admin_client.post(
             "/api/v1/docker/containers/abc123/promote",
             json={"name": "a" * 256},
         )
