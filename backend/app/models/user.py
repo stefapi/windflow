@@ -12,6 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..database import Base
 
 if TYPE_CHECKING:
+    from .refresh_token import RefreshToken
     from .user_organization import UserOrganization
 
 
@@ -61,6 +62,12 @@ class User(Base):
     # retirée par la migration 1213)
     organization_links: Mapped[List["UserOrganization"]] = relationship(
         "UserOrganization", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    # Refresh tokens opaques révocables (STORY-123.1) — la suppression
+    # du user purge ses refresh tokens (FK CASCADE + delete-orphan)
+    refresh_tokens: Mapped[List["RefreshToken"]] = relationship(
+        "RefreshToken", back_populates="user", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

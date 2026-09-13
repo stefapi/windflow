@@ -431,6 +431,23 @@ async def org_admin_client(
     client.headers.pop("Authorization", None)
 
 
+# --- STORY-123.4 (arbitrage n°4) : fixtures login & lignes refresh_tokens ----
+#
+# Toutes les fixtures ci-dessous qui font un login réel (authenticated_client,
+# admin_client, viewer_client, operator_client, org_admin_client) appellent
+# ``POST /auth/login``, qui depuis STORY-123.3 **persiste le hash du refresh
+# token opaque émis** → chaque test utilisant ces fixtures crée une ligne
+# ``refresh_tokens`` en base.
+#
+# Position (arbitrage n°4 de la découpe STORY-123) : c'est une NON-RÉGRESSION
+# GRATUITE — la table grandit en base de test sans casser aucune assertion
+# (la base est recréée par test via copie du template migré, cf.
+# ``test_db_engine``). Ne pas contrer ce comportement. Si un test isolé exige
+# une base sans refresh tokens (ex. comptage exact de lignes), purger
+# explicitement dans CE test (``DELETE FROM refresh_tokens`` ou
+# ``RefreshTokenService.purge_expired``) plutôt qu'ici.
+
+
 @pytest.fixture(scope="function")
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """

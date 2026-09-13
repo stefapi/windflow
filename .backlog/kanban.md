@@ -3,10 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-012 : P1 — Socle structurant (remédiation backend)
-- [ ] STORY-123.1 : Modèle `RefreshToken`, migration Alembic et configuration (EPIC-012 — STORY-123)
-- [ ] STORY-123.2 : `RefreshTokenService` et refresh token opaque dans `jwt.py` (EPIC-012 — STORY-123)
-- [ ] STORY-123.3 : Endpoints auth — émission persistée, `/refresh` rotatif, `/logout` révocant (EPIC-012 — STORY-123)
-- [ ] STORY-123.4 : Purge des entrées expirées et tests sécurité transverses (EPIC-012 — STORY-123)
 - [ ] STORY-124 : Clés API `wf_ak_` — table `api_keys`, auth `X-API-Key` coexistant avec JWT (P1-3, partie clés API)
 - [ ] STORY-125 : Audit trail — table `audit_logs`, émission sur actions critiques, `GET /admin/audit`, rétention (P1-4)
 - [ ] STORY-126 : Enveloppes de réponse API — `APIResponse` / `PaginatedResponse` / erreur `{error:{code,message}}` (P1-5)
@@ -44,8 +40,7 @@
 
 ## 🏗️ IN PROGRESS
 
-### EPIC-012 : P1 — Socle structurant (remédiation backend)
-- [~] STORY-123 : Refresh tokens révocables — table, rotation et logout invalidant (P1-3, partie refresh) — via STORY-123.1 → 123.4
+_(vide)_
 
 ## 🚫 BLOCKED
 
@@ -57,6 +52,11 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] STORY-123 : Refresh tokens révocables — table, rotation et logout invalidant (P1-3, partie refresh) (EPIC-012) — via STORY-123.1 → 123.4
+- [x] STORY-123.4 : Purge des entrées expirées et tests sécurité transverses (EPIC-012 — STORY-123)
+- [x] STORY-123.1 : Modèle `RefreshToken`, migration Alembic et configuration (EPIC-012 — STORY-123)
+- [x] STORY-123.2 : `RefreshTokenService` et refresh token opaque dans `jwt.py` (EPIC-012 — STORY-123)
+- [x] STORY-123.3 : Endpoints auth — émission persistée, `/refresh` rotatif, `/logout` révocant (EPIC-012 — STORY-123)
 - [x] STORY-122 : Dépendances RBAC `require_role(...)` — 140 endpoints + 5 canaux WS protégés, matrice transverse vérifiée (P1-2, application) (EPIC-012) — via STORY-122.1 → 122.7
 - [x] STORY-122.7 : RBAC — matrice transverse, non-régression et couverture (EPIC-012 — STORY-122)
 - [x] STORY-122.6 : Application RBAC — admin instance et canaux WebSocket (EPIC-012 — STORY-122)

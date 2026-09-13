@@ -6,6 +6,7 @@ from .deployment import Deployment
 from .organization import Organization
 from .plugin import Plugin
 from .plugin_hook_log import PluginHookLog
+from .refresh_token import RefreshToken
 from .scheduled_task import ScheduledTask
 from .stack import Stack
 from .stack_version import StackVersion
@@ -26,4 +27,5 @@ __all__ = [
     "ScheduledTask",
     "Plugin",
     "PluginHookLog",
+    "RefreshToken",
 ]

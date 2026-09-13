@@ -155,6 +155,39 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"✗ Periodic health check could not start: {e}")
 
+    # Periodic refresh token purge (STORY-123.4 — boucle asyncio au
+    # lifespan, sans Celery : arbitrage F1 reporté à STORY-130).
+    # Consomme RefreshTokenService.purge_expired() ; logs = comptages
+    # uniquement (rules 40 — jamais de données sensibles).
+    purge_task: asyncio.Task | None = None
+    try:
+        from .database import AsyncSessionLocal as _PurgeSessionLocal
+        from .services.refresh_token_service import (
+            RefreshTokenService as _RefreshTokenService,
+        )
+
+        _purge_interval = settings.refresh_token_purge_interval_hours * 3600
+
+        async def _periodic_refresh_token_purge() -> None:
+            """Background loop: purge expired/revoked refresh tokens."""
+            while True:
+                try:
+                    async with _PurgeSessionLocal() as purge_db:
+                        removed = await _RefreshTokenService.purge_expired(purge_db)
+                    if removed:
+                        logger.info("Refresh token purge: %d entries removed", removed)
+                except Exception as exc:
+                    logger.error("Refresh token purge error: %s", exc)
+                await asyncio.sleep(_purge_interval)
+
+        purge_task = asyncio.create_task(_periodic_refresh_token_purge())
+        logger.info(
+            "✓ Periodic refresh token purge started "
+            f"(every {settings.refresh_token_purge_interval_hours}h)"
+        )
+    except Exception as e:
+        logger.warning(f"✗ Periodic refresh token purge could not start: {e}")
+
     logger.info("=" * 60)
     logger.info(f"🚀 {settings.app_name} is ready!")
     logger.info(f"   Docs: http://{settings.api_host}:{settings.api_port}/docs")
@@ -174,6 +207,15 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("✓ Periodic health check task cancelled")
+
+    # Cancel periodic refresh token purge task
+    if purge_task and not purge_task.done():
+        purge_task.cancel()
+        try:
+            await purge_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("✓ Periodic refresh token purge task cancelled")
 
     # Close rate limiter
     if settings.rate_limit_enabled and settings.rate_limit_storage_url:

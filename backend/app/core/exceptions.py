@@ -60,6 +60,20 @@ class SecretDecryptionError(WindFlowException):
     """Levée lorsqu'une opération de déchiffrement de secret échoue.
 
     Typiquement : mauvaise clé maîtresse, ciphertext corrompu ou
-    altéré (Fernet invalide la signature HMAC). Le message ne
-    contient jamais de matériel cryptographique.
+    altéré (Fernet invalide la signature HMAC). Le message ne contient
+    jamais de matériel cryptographique.
     """
+
+
+class InvalidRefreshTokenError(WindFlowException):
+    """Levée lorsqu'un refresh token est invalide (STORY-123.2).
+
+    Token inconnu, expiré, consommé ou malformé. Refus sémantique
+    ``401 INVALID_OR_EXPIRED_TOKEN`` (spec 09) — le message ne divulgue
+    ni la valeur du token ni la raison exacte (anti-énumération) :
+    l'appelant (STORY-123.3) mappe systématiquement à 401.
+    """
+
+    def __init__(self, reason: str = "Invalid or expired refresh token") -> None:
+        self.reason = reason
+        super().__init__(reason)

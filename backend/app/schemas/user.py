@@ -279,22 +279,25 @@ class Token(BaseModel):
 
 
 class RefreshTokenRequest(BaseModel):
-    """Schema pour demande de refresh token."""
+    """Schema pour demande de refresh token.
+
+    STORY-123.3 : bornes de validation (non vide, ``<= 512`` caractères)
+    cohérentes avec ``RefreshTokenService.MAX_TOKEN_LENGTH`` — rejet 422
+    avant tout hachage Argon2 (anti-DoS, rules 40).
+    """
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh..."
-            }
+            "example": {"refresh_token": "wf_rt_<86 caractères base64url>"}
         }
     )
 
     refresh_token: str = Field(
         ...,
-        description="Token de rafraîchissement",
-        json_schema_extra={
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh..."
-        },
+        min_length=1,
+        max_length=512,
+        description="Token de rafraîchissement opaque (préfixe diagnostique wf_rt_)",
+        json_schema_extra={"example": "wf_rt_<86 caractères base64url>"},
     )
 
 

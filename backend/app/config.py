@@ -36,7 +36,27 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = (
         15  # Short-lived access tokens for better security
     )
-    jwt_refresh_token_expire_days: int = 7  # Longer refresh tokens for better UX
+
+    # Durée de vie des refresh tokens opaques révocables (STORY-123.1).
+    # Source de vérité pour la colonne refresh_tokens.expires_at —
+    # remplace l'ancien refresh JWT 7 j (retiré par STORY-123.2).
+    # Env var : REFRESH_TOKEN_EXPIRE_DAYS.
+    refresh_token_expire_days: int = Field(
+        default=7,
+        ge=1,
+        description="Lifetime (days) of opaque revocable refresh tokens "
+        "(spec 07 § Configuration, default 7 days).",
+    )
+
+    # Intervalle du job de purge des refresh tokens expirés/révoqués
+    # (STORY-123.4 — boucle asyncio au lifespan, sans Celery : arbitrage
+    # F1 reporté à STORY-130). Env var : REFRESH_TOKEN_PURGE_INTERVAL_HOURS.
+    refresh_token_purge_interval_hours: int = Field(
+        default=24,
+        ge=1,
+        description="Interval (hours) between refresh token purge runs "
+        "(background lifespan job; logs counts only).",
+    )
 
     # Clé maîtresse de chiffrement des secrets au repos (STORY-103.1)
     # Optionnelle : si vide, la clé maîtresse dérive de jwt_secret_key

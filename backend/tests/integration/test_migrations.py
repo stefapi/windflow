@@ -44,7 +44,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 
 # Tables métier attendues + table technique Alembic (STORY-121.1 :
-# + user_organizations).
+# + user_organizations ; STORY-123.1 : + refresh_tokens).
 EXPECTED_TABLES = {
     "users",
     "organizations",
@@ -57,6 +57,7 @@ EXPECTED_TABLES = {
     "scheduled_tasks",
     "target_capabilities",
     "user_organizations",
+    "refresh_tokens",
     "alembic_version",
 }
 
@@ -148,8 +149,6 @@ class TestFreshSqliteDbUpgradeHead:
         assert "alembic_version" in tables
 
 
-
-
 def _add_legacy_users_org_column(db_path: Path) -> None:
     """STORY-121.3 : recrée la colonne héritée ``users.organization_id``
     (+ index) sur une base legacy stampée — le schéma courant (modèles)
@@ -169,6 +168,7 @@ def _add_legacy_users_org_column(db_path: Path) -> None:
     finally:
         engine.dispose()
 
+
 class TestExistingDbStampedThenStartupNoDiff:
     """test_existing_db_stamped_then_startup_has_no_diff."""
 
@@ -184,14 +184,16 @@ class TestExistingDbStampedThenStartupNoDiff:
         db_path = tmp_path / "legacy.db"
         db_url = f"sqlite+aiosqlite:///{db_path}"
 
-        # Installation legacy : schéma create_all + DROP de la table
-        # nouvelle (les métadonnées courantes la créeraient aussi — il
-        # faut simuler une base strictement antérieure à STORY-121.1)
+        # Installation legacy : schéma create_all + DROP des tables
+        # additives (les métadonnées courantes les créeraient aussi — il
+        # faut simuler une base strictement antérieure à STORY-121.1 ;
+        # pattern étendu à refresh_tokens par STORY-123.1)
         # + données métier.
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(legacy_engine)
         with legacy_engine.begin() as conn:
             conn.execute(text("DROP TABLE user_organizations"))
+            conn.execute(text("DROP TABLE refresh_tokens"))
         with legacy_engine.begin() as conn:
             conn.execute(
                 text(
@@ -216,10 +218,14 @@ class TestExistingDbStampedThenStartupNoDiff:
         ), f"stamp baseline a échoué :\nstdout={stamp.stdout}\nstderr={stamp.stderr}"
         await _startup_migrated(db_path)
 
-        # Aucune recréation/altération : mêmes tables + la table additive,
-        # données intactes.
+        # Aucune recréation/altération : mêmes tables + les tables
+        # additives, données intactes.
         tables_after = _sqlite_table_names(db_path)
-        assert tables_after == tables_before | {"alembic_version", "user_organizations"}
+        assert tables_after == tables_before | {
+            "alembic_version",
+            "user_organizations",
+            "refresh_tokens",
+        }
         check_engine = create_engine(f"sqlite:///{db_path}")
         try:
             with check_engine.connect() as conn:
@@ -358,6 +364,7 @@ class TestUserOrganizationsTableMigration:
         Base.metadata.create_all(legacy_engine)
         with legacy_engine.begin() as conn:
             conn.execute(text("DROP TABLE user_organizations"))
+            conn.execute(text("DROP TABLE refresh_tokens"))
         with legacy_engine.begin() as conn:
             conn.execute(
                 text(
@@ -432,6 +439,7 @@ class TestUsersOrgMigrationData:
         Base.metadata.create_all(legacy_engine)
         with legacy_engine.begin() as conn:
             conn.execute(text("DROP TABLE user_organizations"))
+            conn.execute(text("DROP TABLE refresh_tokens"))
             # Recréer la colonne legacy (create_all ne la crée plus)
             conn.execute(
                 text("ALTER TABLE users ADD COLUMN organization_id VARCHAR(36)")
@@ -494,9 +502,7 @@ class TestUsersOrgMigrationData:
     def _users_columns(db_path: Path) -> set[str]:
         engine = create_engine(f"sqlite:///{db_path}")
         try:
-            return {
-                col["name"] for col in inspect(engine).get_columns("users")
-            }
+            return {col["name"] for col in inspect(engine).get_columns("users")}
         finally:
             engine.dispose()
 
@@ -507,9 +513,9 @@ class TestUsersOrgMigrationData:
         stamp = _run_alembic("stamp", "baseline", db_url=db_url)
         assert stamp.returncode == 0, stamp.stderr
         upgrade = _run_alembic("upgrade", "head", db_url=db_url)
-        assert upgrade.returncode == 0, (
-            f"upgrade head a échoué :\nstdout={upgrade.stdout}\nstderr={upgrade.stderr}"
-        )
+        assert (
+            upgrade.returncode == 0
+        ), f"upgrade head a échoué :\nstdout={upgrade.stdout}\nstderr={upgrade.stderr}"
         return db_path
 
     def test_migration_creates_association_for_every_user_with_org(
@@ -524,9 +530,7 @@ class TestUsersOrgMigrationData:
         assert by_user["u-op"][1] == "org-a"
         assert by_user["u-op2"][1] == "org-b"
 
-    def test_migration_mapping_superuser_gets_admin_role(
-        self, tmp_path: Path
-    ) -> None:
+    def test_migration_mapping_superuser_gets_admin_role(self, tmp_path: Path) -> None:
         """Mapping non cassant : superuser → ``admin`` **et** flag
         ``is_superuser`` inchangé (le rôle système reste porté par le flag)."""
         db_path = self._legacy_then_upgrade(tmp_path, "mig-data-2.db")
@@ -594,9 +598,9 @@ class TestUsersOrgMigrationData:
         assert up.returncode == 0, up.stderr
 
         rows_after_replay = sorted(self._associations(db_path))
-        assert rows_after_replay == rows_after_first, (
-            "la migration rejouée ne doit pas dupliquer les associations"
-        )
+        assert (
+            rows_after_replay == rows_after_first
+        ), "la migration rejouée ne doit pas dupliquer les associations"
 
     def test_downgrade_restores_column_nullable_and_backfills_first_membership(
         self, tmp_path: Path
@@ -611,17 +615,12 @@ class TestUsersOrgMigrationData:
 
         engine = create_engine(f"sqlite:///{db_path}")
         try:
-            columns = {
-                col["name"]: col
-                for col in inspect(engine).get_columns("users")
-            }
+            columns = {col["name"]: col for col in inspect(engine).get_columns("users")}
             assert "organization_id" in columns
             assert columns["organization_id"]["nullable"] is True
             with engine.connect() as conn:
                 org = conn.execute(
-                    text(
-                        "SELECT organization_id FROM users WHERE id='u-super'"
-                    )
+                    text("SELECT organization_id FROM users WHERE id='u-super'")
                 ).scalar_one()
                 count = conn.execute(
                     text("SELECT COUNT(*) FROM user_organizations")
@@ -658,7 +657,9 @@ class TestUsersOrgMigrationData:
         db_url = f"sqlite+aiosqlite:///{db_path}"
         # Rejouer 1213 (downgrade → upgrade) : les stacks doivent survivre
         assert (
-            _run_alembic("downgrade", "1211_user_organizations", db_url=db_url).returncode
+            _run_alembic(
+                "downgrade", "1211_user_organizations", db_url=db_url
+            ).returncode
             == 0
         )
         assert _run_alembic("upgrade", "head", db_url=db_url).returncode == 0

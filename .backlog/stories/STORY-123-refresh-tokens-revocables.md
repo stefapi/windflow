@@ -1,6 +1,6 @@
 # STORY-123 : Refresh tokens révocables — table, rotation et logout invalidant (P1-3, partie refresh)
 
-**Statut :** TODO
+**Statut :** DONE
 **Epic Parent :** EPIC-012 — P1 : Socle structurant (remédiation backend)
 **Item plan :** P1-3 partie refresh (axes A4 + B6, rapport §2) — ampleur **M** (partie refresh de l'item L)
 
@@ -26,9 +26,9 @@ En tant qu'utilisateur de WindFlow, je veux que mes refresh tokens soient des ch
 ## Critères d'acceptation (AC)
 
 - [ ] AC 1 : La table `refresh_tokens` existe via migration Alembic (STORY-120) conformément au schéma spec 06 ; le refresh token émis au login est **opaque** (pas un JWT), seul son **hash** est stocké en base ; durée 7 jours configurable (`REFRESH_TOKEN_EXPIRE_DAYS`).
-- [ ] AC 2 : **Rotation** : `POST /auth/refresh` accepte le refresh courant une seule fois et en émet un nouveau (l'ancien invalidé) ; un refresh révoqué/expiré/consommé → `401` ; cohérence conservée avec les vérifications actuelles (utilisateur actif).
-- [ ] AC 3 : **Logout révocant** : `POST /auth/logout` invalide le refresh token en base ; le refresh suivant avec ce token → `401` ; **révocation globale** disponible par utilisateur (utilisée par STORY-129) ; purge des entrées expirées effective.
-- [ ] AC 4 : Tests de sécurité : `401` sur refresh avec token inconnu/invalide/révoqué ; non-régression login/refresh/logout (codes et bodies actuels hors enveloppe — STORY-126 gère le format) ; hash bcrypt en base vérifié (jamais la valeur brute) ; `make lint` + `make backend-test` verts.
+- [x] AC 2 : **Rotation** : `POST /auth/refresh` accepte le refresh courant une seule fois et en émet un nouveau (l'ancien invalidé) ; un refresh révoqué/expiré/consommé → `401` ; cohérence conservée avec les vérifications actuelles (utilisateur actif).
+- [x] AC 3 : **Logout révocant** : `POST /auth/logout` invalide le refresh token en base ; le refresh suivant avec ce token → `401` ; **révocation globale** disponible par utilisateur (utilisée par STORY-129) ; purge des entrées expirées effective.
+- [x] AC 4 : Tests de sécurité : `401` sur refresh avec token inconnu/invalide/révoqué ; non-régression login/refresh/logout (codes et bodies actuels hors enveloppe — STORY-126 gère le format) ; hash bcrypt en base vérifié (jamais la valeur brute) ; `make lint` + `make backend-test` verts. *(hash Argon2 selon l'arbitrage n°1 — divergence « bcrypt » consignée pour STORY-252)*
 
 ## Références spécification
 
@@ -45,16 +45,40 @@ En tant qu'utilisateur de WindFlow, je veux que mes refresh tokens soient des ch
 
 ## Sous-stories
 
-*(section réservée — ampleur M, découpe non prévue a priori)*
+> Découpe proactive réalisée le 2026-09-12 par `split-story` (complexité détectée par `analyse-story` Phase 2.5 : ~9 tâches / 11 fichiers). Ordre d'implémentation : 123.1 → 123.2 → 123.3 → 123.4.
+
+- [x] STORY-123.1 : Modèle `RefreshToken`, migration Alembic et configuration — Couvre AC 1 (part structurelle)
+- [x] STORY-123.2 : `RefreshTokenService` et refresh token opaque dans `jwt.py` — Couvre AC 2 (part mécanique)
+- [x] STORY-123.3 : Endpoints auth — émission persistée, `/refresh` rotatif, `/logout` révocant — Couvre AC 3 (part endpoints) et démontre AC 1/AC 2 de bout en bout
+- [x] STORY-123.4 : Purge des entrées expirées et tests sécurité transverses — Couvre AC 4 et la part purge de l'AC 3
 
 ## État d'avancement technique
 
-*(à remplir par analyse-story)*
+> ⚠️ L'avancement technique est désormais suivi dans les sous-stories individuelles.
+
+**Progression :** 4/4 sous-stories terminées
+- [x] STORY-123.1 : Modèle `RefreshToken`, migration Alembic et configuration
+- [x] STORY-123.2 : `RefreshTokenService` et refresh token opaque dans `jwt.py`
+- [x] STORY-123.3 : Endpoints auth — émission persistée, `/refresh` rotatif, `/logout` révocant
+- [x] STORY-123.4 : Purge des entrées expirées et tests sécurité transverses
 
 ## Tâches d'implémentation détaillées
 
-*(à remplir par analyse-story)*
+> ⚠️ Cette story a été découpée en sous-stories avant implémentation (complexité détectée par analyse-story).
+> Toutes les tâches ont été redistribuées dans les sous-stories listées ci-dessus.
+> Consulter chaque sous-story pour les tâches détaillées.
 
 ## Tests à écrire
 
-*(à remplir par analyse-story)*
+> ⚠️ Les tests sont désormais définis dans les sous-stories individuelles.
+
+## Notes d'implémentation (synthèse de clôture)
+
+> Clôture administrative du bloc STORY-123 — 4/4 sous-stories DONE le 2026-09-13.
+
+- **STORY-123.1** : modèle `RefreshToken`, migration Alembic `refresh_tokens`, configuration (`REFRESH_TOKEN_EXPIRE_DAYS`) ;
+- **STORY-123.2** : `RefreshTokenService` + refresh opaque côté `jwt.py` (hash Argon2 — arbitrage n°1, divergence « bcrypt » consignée pour STORY-252) ;
+- **STORY-123.3** : endpoints `/login` `/refresh` `/logout` — émission persistée, rotation, logout révocant, révocation globale ;
+- **STORY-123.4** : job de purge au lifespan + tests sécurité transverses (AC 4 validé).
+
+Le détail des fichiers modifiés et des décisions techniques figure dans la section « Notes d'implémentation » de chaque sous-story.

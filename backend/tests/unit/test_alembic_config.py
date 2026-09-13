@@ -26,7 +26,7 @@ ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 SCRIPT_LOCATION = REPO_ROOT / "backend" / "alembic"
 
 # Tables attendues : exactement celles des modèles ORM (STORY-121.1 :
-# + user_organizations).
+# + user_organizations ; STORY-123.1 : + refresh_tokens).
 EXPECTED_TABLES = {
     "users",
     "organizations",
@@ -39,6 +39,7 @@ EXPECTED_TABLES = {
     "scheduled_tasks",
     "target_capabilities",
     "user_organizations",
+    "refresh_tokens",
 }
 
 
@@ -170,21 +171,24 @@ class TestExistingDatabaseStampScenario:
 
     def test_stamp_then_upgrade_is_noop_and_check_clean(self, tmp_path: Path) -> None:
         """Sur une base créée par create_all (simulée **antérieure à
-        STORY-121.1**) : stamp baseline → upgrade head applique uniquement
-        la migration additive ``user_organizations`` → tables d'origine
-        intactes + nouvelle table → alembic check sans diff."""
+        STORY-121.1**) : stamp baseline → upgrade head applique les
+        migrations additives (``user_organizations`` puis
+        ``refresh_tokens``) → tables d'origine intactes + nouvelles
+        tables → alembic check sans diff."""
         db_path = tmp_path / "existing.db"
         db_url = f"sqlite+aiosqlite:///{db_path}"
 
         # 1. Simule la base existante : create_all via un engine sync
         #    (équivalent SQLite du create_all async de database.py),
-        #    puis DROP de la table nouvelle pour simuler fidèlement une
-        #    base antérieure à STORY-121.1 (sinon create_all la crée
-        #    aussi et l'upgrade entrerait en collision).
+        #    puis DROP des tables additives pour simuler fidèlement une
+        #    base antérieure à STORY-121.1 (sinon create_all les crée
+        #    aussi et l'upgrade entrerait en collision — pattern
+        #    STORY-121.1, étendu à refresh_tokens par STORY-123.1).
         sync_engine = create_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(sync_engine)
         with sync_engine.begin() as conn:
             conn.execute(text("DROP TABLE user_organizations"))
+            conn.execute(text("DROP TABLE refresh_tokens"))
         # STORY-121.3 : recréer la colonne héritée users.organization_id
         # (+ index) — le schéma courant (modèles) ne la crée plus mais la
         # migration 1213 s'attend à la trouver sur une base pré-121.3
@@ -201,9 +205,10 @@ class TestExistingDatabaseStampScenario:
         before = set(inspect(sync_engine).get_table_names())
         sync_engine.dispose()
         assert (
-            EXPECTED_TABLES - {"user_organizations"} <= before
+            EXPECTED_TABLES - {"user_organizations", "refresh_tokens"} <= before
         ), "create_all n'a pas créé les tables modèles"
         assert "user_organizations" not in before
+        assert "refresh_tokens" not in before
 
         # 2. stamp baseline — marque la base comme étant au niveau baseline
         result = _run_alembic("stamp", "baseline", db_url=db_url)
@@ -228,8 +233,9 @@ class TestExistingDatabaseStampScenario:
         finally:
             engine.dispose()
         assert (
-            before | {"alembic_version", "user_organizations"} == after
-        ), "Le schéma d'origine a été altéré ou la table additive manque"
+            before | {"alembic_version", "user_organizations", "refresh_tokens"}
+            == after
+        ), "Le schéma d'origine a été altéré ou une table additive manque"
 
         # 4. alembic check → aucun diff (commande échoue (rc=255) si diff
         #    détecté, rc=0 si propre).

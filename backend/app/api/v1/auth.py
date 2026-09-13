@@ -9,9 +9,10 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_active_user
-from ...auth.jwt import create_token_pair, decode_refresh_token
+from ...auth.jwt import create_access_token, create_token_pair
 from ...config import settings
 from ...core.bruteforce_protection import bruteforce_protector
+from ...core.exceptions import InvalidRefreshTokenError
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
@@ -22,6 +23,7 @@ from ...schemas.user import (
     UserCreate,
     UserResponse,
 )
+from ...services.refresh_token_service import RefreshTokenService
 from ...services.user_organization_service import UserOrganizationService
 from ...services.user_service import UserService
 
@@ -72,8 +74,8 @@ Authenticate a user and generate JWT tokens.
 - **Email**: Login with email and password
 
 ## Token Types
-- **Access Token**: Short-lived token for API requests (default: 30 minutes)
-- **Refresh Token**: Long-lived token to obtain new access tokens (default: 7 days)
+- **Access Token**: Short-lived JWT for API requests (default: 15 minutes)
+- **Refresh Token**: **Opaque** server-side token (default: 7 days, `REFRESH_TOKEN_EXPIRE_DAYS`) — only its hash is stored in `refresh_tokens` (revocable, STORY-123)
 
 ## Security Features
 - Password hashing with bcrypt
@@ -276,6 +278,13 @@ async def login(
 
     access_token, refresh_token = create_token_pair(token_data)
 
+    # STORY-123.3 : persister le hash du refresh opaque émis (sans cette
+    # ligne le token serait inutilisable au prochain /auth/refresh) — bloc
+    # commun aux deux branches : couvre le login par credentials ET
+    # l'auto-login du mode dev ``disable_auth`` (arbitrage n°3). Le service
+    # ne logge que des identifiants, jamais la valeur claire (rules 40).
+    await RefreshTokenService.create(session, user.id, refresh_token)
+
     return LoginResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -291,30 +300,25 @@ async def login(
     status_code=status.HTTP_200_OK,
     summary="Refresh access token",
     description="""
-Refresh an access token using a valid refresh token.
+Refresh an access token using a valid **opaque** refresh token.
 
 ## Process
-1. Validates the refresh token signature and expiration
-2. Verifies the user still exists and is active
-3. Checks that user data hasn't changed (username, organization, permissions)
-4. Generates a new token pair (access + refresh)
-5. Returns new tokens with updated expiration
+1. Resolves the submitted token by hash lookup in `refresh_tokens` (STORY-123)
+2. Rejects unknown, expired, already-consumed or revoked tokens (401)
+3. Verifies the user still exists and is active
+4. **Rotates** the refresh token (single use) and issues a new access JWT
+5. Returns the new token pair
 
-## Token Rotation
-This endpoint implements **token rotation** for enhanced security:
-- Each refresh generates a **new refresh token**
-- Old refresh tokens become invalid after use
-- Prevents token replay attacks
-
-## Use Cases
-- **Seamless UX**: Refresh tokens before access token expires
-- **Session Extension**: Keep users logged in without re-authentication
-- **Security**: Shorter access token lifetime with automatic renewal
+## Token Rotation (single use)
+- Each refresh **consumes** the current token and emits a **new opaque one**
+- Replaying a consumed token returns 401 **and revokes the whole token
+  family** of the user (reuse detection — stolen token defense)
+- Logout revokes all refresh tokens of the user server-side
 
 ## Security Features
-- Validates token signature and expiration
-- Checks user account status
-- Detects token data tampering
+- Opaque tokens: no readable claims, hash-only storage (Argon2)
+- Generic 401 `INVALID_OR_EXPIRED_TOKEN` (no token existence oracle)
+- Request body validated (non-empty, max 512 chars) before hashing
 - Rate limiting to prevent abuse
 
 **No Authentication Required** - Uses refresh token for authentication
@@ -327,23 +331,23 @@ This endpoint implements **token rotation** for enhanced security:
                     "examples": {
                         "standard_refresh": {
                             "summary": "Standard token refresh",
-                            "description": "Refresh access token with valid refresh token",
+                            "description": "Refresh access token with valid opaque refresh token",
                             "value": {
-                                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJ1c2VybmFtZSI6ImFkbWluIiwib3JnYW5pemF0aW9uX2lkIjoiNjYwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAxIiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJ0eXBlIjoicmVmcmVzaCIsImV4cCI6MTczNTk0NTIwMH0.signature"
+                                "refresh_token": "wf_rt_<86-chars-base64url-opaque-token>"
                             },
                         },
                         "before_expiration": {
                             "summary": "Proactive refresh",
                             "description": "Refresh before access token expires",
                             "value": {
-                                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                                "refresh_token": "wf_rt_<86-chars-base64url-opaque-token>"
                             },
                         },
                         "after_expiration": {
                             "summary": "After access token expired",
                             "description": "Refresh after access token has expired",
                             "value": {
-                                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                                "refresh_token": "wf_rt_<86-chars-base64url-opaque-token>"
                             },
                         },
                     }
@@ -370,17 +374,13 @@ This endpoint implements **token rotation** for enhanced security:
             "content": {
                 "application/json": {
                     "examples": {
-                        "invalid_token": {
-                            "summary": "Invalid token",
-                            "value": {"detail": "Invalid refresh token"},
+                        "invalid_or_expired": {
+                            "summary": "Unknown, expired, consumed or revoked token",
+                            "value": {"detail": "INVALID_OR_EXPIRED_TOKEN"},
                         },
-                        "user_not_found": {
-                            "summary": "User not found",
-                            "value": {"detail": "User not found or inactive"},
-                        },
-                        "token_mismatch": {
-                            "summary": "Token data mismatch",
-                            "value": {"detail": "Token data mismatch"},
+                        "reuse_detected": {
+                            "summary": "Replayed consumed token (family revoked)",
+                            "value": {"detail": "INVALID_OR_EXPIRED_TOKEN"},
                         },
                     }
                 }
@@ -412,48 +412,44 @@ async def refresh_token(
     refresh_request: RefreshTokenRequest,
     session: AsyncSession = Depends(get_db),
 ):
-    """Refresh access token using a valid refresh token."""
-    # Décoder et valider le refresh token
-    token_data = decode_refresh_token(refresh_request.refresh_token)
-
-    if token_data is None:
+    """Refresh access token by rotating a valid opaque refresh token."""
+    # STORY-123.3 : rotation via lookup par hash (service 123.2) — usage
+    # unique, nouveau token émis dans la même transaction. Refus 401
+    # générique sur inconnu/expiré/consommé/révoqué : la révocation
+    # défensive de la famille est déjà appliquée par le service, et le
+    # message ne révèle pas si le token a existé (spec 09).
+    try:
+        new_row, new_refresh_token = await RefreshTokenService.rotate(
+            session, refresh_request.refresh_token
+        )
+    except InvalidRefreshTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+            detail="INVALID_OR_EXPIRED_TOKEN",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
 
-    # Vérifier que l'utilisateur existe toujours et est actif
-    user = await UserService.get_by_id(session, token_data.user_id)  # type: ignore[arg-type]
+    # Utilisateur actif — cohérence conservée avec les vérifications
+    # actuelles (AC 2). Défense : le token fraîchement émis est révoqué
+    # pour ne pas laisser de ligne active à un compte désactivé.
+    user = await UserService.get_by_id(session, new_row.user_id)
     if not user or not user.is_active:
+        await RefreshTokenService.revoke_all_for_user(session, new_row.user_id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive",
+            detail="INVALID_OR_EXPIRED_TOKEN",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Vérifier que les données du token correspondent à l'utilisateur
-    # (STORY-121.3 : comparaison sur username + is_superuser uniquement —
-    # le claim organization_id n'existe plus, l'appartenance peut évoluer
-    # sans invalider le refresh)
-    if (
-        user.username != token_data.username
-        or user.is_superuser != token_data.is_superuser
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token data mismatch",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Créer une nouvelle paire de tokens (claims réduits — STORY-121.3)
+    # Access JWT seul — le refresh neuf vient de la rotation (claims
+    # réduits STORY-121.3 : sans organization_id)
     new_token_data = {
         "sub": user.id,
         "username": user.username,
         "is_superuser": user.is_superuser,
     }
 
-    new_access_token, new_refresh_token = create_token_pair(new_token_data)
+    new_access_token = create_access_token(new_token_data)
 
     return RefreshResponse(
         access_token=new_access_token,
@@ -468,23 +464,18 @@ async def refresh_token(
     status_code=status.HTTP_200_OK,
     summary="User logout",
     description="""
-Logout the current user and invalidate their session.
+Logout the current user and revoke their refresh tokens.
 
 ## Process
 1. Validates the user's access token
-2. Returns success confirmation
-3. Client should delete stored tokens
+2. **Revokes all refresh tokens** of the user in database (server-side)
+3. Returns success confirmation
+4. Client should delete stored tokens
 
-## JWT Stateless Architecture
-This endpoint follows a **stateless JWT approach**:
-- Tokens are **not stored server-side**
-- Logout is handled by **client deleting tokens**
-- No server-side token blacklist (for simplicity)
-
-## Implementation Notes
-- This endpoint is provided for **API consistency**
-- Can be extended with token blacklist/revocation if needed
-- Useful for logging user activity and audit trails
+## Revocation Semantics (STORY-123)
+- Logout is **stateful**: every refresh token of the user is revoked —
+  any subsequent `/auth/refresh` with a former token returns 401
+- Idempotent: calling logout twice still returns 200
 
 ## Client Responsibilities
 After calling this endpoint, the client must:
@@ -503,7 +494,7 @@ After calling this endpoint, the client must:
                 "application/json": {
                     "example": {
                         "message": "Successfully logged out",
-                        "detail": "Token invalidated on client side",
+                        "detail": "All refresh tokens revoked server-side",
                     }
                 }
             },
@@ -536,12 +527,29 @@ After calling this endpoint, the client must:
     tags=["authentication"],
 )
 async def logout(
-    request: Request, current_user: User = Depends(get_current_active_user)
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
 ):
-    """User logout and session invalidation."""
+    """User logout — server-side revocation of all refresh tokens."""
+    # STORY-123.3 (arbitrage n°2, Option A) : logout révocant global — le
+    # frontend appelle /logout sans body, on révoque donc tous les refresh
+    # tokens de l'utilisateur authentifié (« déconnexion de partout »).
+    # Ne révoque JAMAIS sur la base d'un id fourni par le client
+    # (current_user résolu par la dépendance d'auth). Idempotent : un
+    # second logout révoque 0 token → 200.
+    revoked_count = await RefreshTokenService.revoke_all_for_user(
+        session, current_user.id
+    )
+    # Audit léger : user_id + volume seulement — jamais de token (rules 40)
+    logger.info(
+        "user.logout user_id=%s refresh_tokens_revoked=%d",
+        current_user.id,
+        revoked_count,
+    )
     return {
         "message": "Successfully logged out",
-        "detail": "Token invalidated on client side",
+        "detail": "All refresh tokens revoked server-side",
     }
 
 
@@ -768,6 +776,11 @@ async def register(
     }
 
     access_token, refresh_token = create_token_pair(token_data)
+
+    # STORY-123.3 : persister le hash du refresh opaque émis (auto-login
+    # du register) — même obligation que /login ; le service ne logge
+    # que des identifiants, jamais la valeur claire (rules 40).
+    await RefreshTokenService.create(session, user.id, refresh_token)
 
     return LoginResponse(
         access_token=access_token,

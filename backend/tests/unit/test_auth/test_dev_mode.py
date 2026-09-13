@@ -142,3 +142,60 @@ class TestDevMode:
                     assert exc_info.value.status_code == 401
                     # get_first_superadmin ne doit PAS être appelé en mode normal
                     mock_user_service.get_first_superadmin.assert_not_called()
+
+    async def test_dev_auto_login_persists_refresh_token(
+        self, client, db_session, test_superuser, monkeypatch
+    ):
+        """STORY-123.3 (arbitrage n°3) : l'auto-login du mode dev
+        persiste la ligne ``refresh_tokens`` (hash, jamais la valeur
+        claire) — le flux refresh reste fonctionnel en ``disable_auth``.
+
+        Divergence documentée : l'appel HTTP avec form vide est filtré en
+        422 par FastAPI 0.141 (champs form vides traités comme manquants
+        — comportement framework vérifié sur app minimale, préexistant à
+        123.3) ; le chemin auto-login est donc exercé par appel direct du
+        handler avec un ``OAuth2PasswordRequestForm`` aux credentials
+        vides, comme le ferait un form correctement parsé.
+        """
+        from unittest.mock import MagicMock
+
+        from fastapi.security import OAuth2PasswordRequestForm
+        from sqlalchemy import select
+
+        from app.api.v1 import auth as auth_module
+        from app.models.refresh_token import RefreshToken
+
+        # Même objet settings que celui consommé par login()
+        monkeypatch.setattr(auth_module.settings, "disable_auth", True)
+
+        fake_request = MagicMock()
+        fake_request.client.host = "127.0.0.1"
+        empty_form = OAuth2PasswordRequestForm(username="", password="")
+
+        response = await auth_module.login(
+            request=fake_request, form_data=empty_form, session=db_session
+        )
+        assert response.user.id == test_superuser.id
+
+        rows = (
+            (
+                await db_session.execute(
+                    select(RefreshToken).where(
+                        RefreshToken.user_id == test_superuser.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(rows) == 1, "auto-login dev doit persister le hash"
+        assert rows[0].token_hash != response.refresh_token
+        assert rows[0].token_hash.startswith("$argon2")
+
+        # Le flux refresh HTTP fonctionne avec le token émis en dev
+        refresh = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": response.refresh_token},
+        )
+        assert refresh.status_code == 200, refresh.text
+        assert refresh.json()["refresh_token"] != response.refresh_token
