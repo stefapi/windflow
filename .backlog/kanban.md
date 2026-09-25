@@ -3,7 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-012 : P1 — Socle structurant (remédiation backend)
-- [ ] STORY-124 : Clés API `wf_ak_` — table `api_keys`, auth `X-API-Key` coexistant avec JWT (P1-3, partie clés API)
 - [ ] STORY-125 : Audit trail — table `audit_logs`, émission sur actions critiques, `GET /admin/audit`, rétention (P1-4)
 - [ ] STORY-126 : Enveloppes de réponse API — `APIResponse` / `PaginatedResponse` / erreur `{error:{code,message}}` (P1-5)
 - [ ] STORY-127 : Hiérarchie d'exceptions — compléter `core/exceptions.py` et remplacer les `HTTPException` brutes (P1-5, partie exceptions)
@@ -51,6 +50,12 @@ _(vide)_
 _(vide)_
 
 ## ✅ DONE
+
+- [x] STORY-124 : Clés API `wf_ak_` — table `api_keys`, auth `X-API-Key` coexistant avec JWT (P1-3, partie clés API) (EPIC-012) — via STORY-124.1 → 124.4
+- [x] STORY-124.4 : Tests transverses et sécurité des clés API (EPIC-012 — STORY-124)
+- [x] STORY-124.1 : Modèle `APIKey` et migration Alembic (EPIC-012 — STORY-124)
+- [x] STORY-124.2 : `ApiKeyService` — génération `wf_ak_`, hash déterministe et schemas (EPIC-012 — STORY-124)
+- [x] STORY-124.3 : Endpoints `/auth/api-keys` et auth par clé dans `get_current_user` (EPIC-012 — STORY-124)
 
 - [x] STORY-123 : Refresh tokens révocables — table, rotation et logout invalidant (P1-3, partie refresh) (EPIC-012) — via STORY-123.1 → 123.4
 - [x] STORY-123.4 : Purge des entrées expirées et tests sécurité transverses (EPIC-012 — STORY-123)

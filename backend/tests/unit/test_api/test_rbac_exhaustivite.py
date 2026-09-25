@@ -49,7 +49,9 @@ PROTECTED_DEPENDENCY_NAMES: frozenset[str] = frozenset(
 # Comptes de routes par module router — garde-fou §2.G : aucun endpoint
 # supprimé ; tout ajout/suppression doit être un choix explicite (revue).
 EXPECTED_ROUTE_COUNTS: dict[str, int] = {
-    "auth": 5,
+    # STORY-124.3 : +3 routes /api-keys (POST/GET/DELETE, protégées
+    # get_current_active_user) — évolution explicite revue §2.G.
+    "auth": 8,
     "users": 8,
     "organizations": 10,
     "targets": 13,

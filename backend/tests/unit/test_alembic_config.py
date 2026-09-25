@@ -26,7 +26,8 @@ ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 SCRIPT_LOCATION = REPO_ROOT / "backend" / "alembic"
 
 # Tables attendues : exactement celles des modèles ORM (STORY-121.1 :
-# + user_organizations ; STORY-123.1 : + refresh_tokens).
+# + user_organizations ; STORY-123.1 : + refresh_tokens ; STORY-124.1 :
+# + api_keys).
 EXPECTED_TABLES = {
     "users",
     "organizations",
@@ -40,6 +41,7 @@ EXPECTED_TABLES = {
     "target_capabilities",
     "user_organizations",
     "refresh_tokens",
+    "api_keys",
 }
 
 
@@ -183,12 +185,14 @@ class TestExistingDatabaseStampScenario:
         #    puis DROP des tables additives pour simuler fidèlement une
         #    base antérieure à STORY-121.1 (sinon create_all les crée
         #    aussi et l'upgrade entrerait en collision — pattern
-        #    STORY-121.1, étendu à refresh_tokens par STORY-123.1).
+        #    STORY-121.1, étendu à refresh_tokens par STORY-123.1 puis
+        #    api_keys par STORY-124.1).
         sync_engine = create_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(sync_engine)
         with sync_engine.begin() as conn:
             conn.execute(text("DROP TABLE user_organizations"))
             conn.execute(text("DROP TABLE refresh_tokens"))
+            conn.execute(text("DROP TABLE api_keys"))
         # STORY-121.3 : recréer la colonne héritée users.organization_id
         # (+ index) — le schéma courant (modèles) ne la crée plus mais la
         # migration 1213 s'attend à la trouver sur une base pré-121.3
@@ -205,10 +209,12 @@ class TestExistingDatabaseStampScenario:
         before = set(inspect(sync_engine).get_table_names())
         sync_engine.dispose()
         assert (
-            EXPECTED_TABLES - {"user_organizations", "refresh_tokens"} <= before
+            EXPECTED_TABLES - {"user_organizations", "refresh_tokens", "api_keys"}
+            <= before
         ), "create_all n'a pas créé les tables modèles"
         assert "user_organizations" not in before
         assert "refresh_tokens" not in before
+        assert "api_keys" not in before
 
         # 2. stamp baseline — marque la base comme étant au niveau baseline
         result = _run_alembic("stamp", "baseline", db_url=db_url)
@@ -226,14 +232,15 @@ class TestExistingDatabaseStampScenario:
             result.stdout + result.stderr
         ), "upgrade head n'a pas appliqué la migration additive attendue"
 
-        # Tables d'origine intactes + nouvelle table créée.
+        # Tables d'origine intactes + nouvelles tables créées.
         engine = create_engine(f"sqlite:///{db_path}")
         try:
             after = set(inspect(engine).get_table_names())
         finally:
             engine.dispose()
         assert (
-            before | {"alembic_version", "user_organizations", "refresh_tokens"}
+            before
+            | {"alembic_version", "user_organizations", "refresh_tokens", "api_keys"}
             == after
         ), "Le schéma d'origine a été altéré ou une table additive manque"
 

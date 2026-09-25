@@ -44,7 +44,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 
 # Tables métier attendues + table technique Alembic (STORY-121.1 :
-# + user_organizations ; STORY-123.1 : + refresh_tokens).
+# + user_organizations ; STORY-123.1 : + refresh_tokens ; STORY-124.1 :
+# + api_keys).
 EXPECTED_TABLES = {
     "users",
     "organizations",
@@ -58,6 +59,7 @@ EXPECTED_TABLES = {
     "target_capabilities",
     "user_organizations",
     "refresh_tokens",
+    "api_keys",
     "alembic_version",
 }
 
@@ -187,13 +189,15 @@ class TestExistingDbStampedThenStartupNoDiff:
         # Installation legacy : schéma create_all + DROP des tables
         # additives (les métadonnées courantes les créeraient aussi — il
         # faut simuler une base strictement antérieure à STORY-121.1 ;
-        # pattern étendu à refresh_tokens par STORY-123.1)
+        # pattern étendu à refresh_tokens par STORY-123.1 puis api_keys
+        # par STORY-124.1)
         # + données métier.
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(legacy_engine)
         with legacy_engine.begin() as conn:
             conn.execute(text("DROP TABLE user_organizations"))
             conn.execute(text("DROP TABLE refresh_tokens"))
+            conn.execute(text("DROP TABLE api_keys"))
         with legacy_engine.begin() as conn:
             conn.execute(
                 text(
@@ -225,6 +229,7 @@ class TestExistingDbStampedThenStartupNoDiff:
             "alembic_version",
             "user_organizations",
             "refresh_tokens",
+            "api_keys",
         }
         check_engine = create_engine(f"sqlite:///{db_path}")
         try:
@@ -365,6 +370,7 @@ class TestUserOrganizationsTableMigration:
         with legacy_engine.begin() as conn:
             conn.execute(text("DROP TABLE user_organizations"))
             conn.execute(text("DROP TABLE refresh_tokens"))
+            conn.execute(text("DROP TABLE api_keys"))
         with legacy_engine.begin() as conn:
             conn.execute(
                 text(
@@ -440,6 +446,7 @@ class TestUsersOrgMigrationData:
         with legacy_engine.begin() as conn:
             conn.execute(text("DROP TABLE user_organizations"))
             conn.execute(text("DROP TABLE refresh_tokens"))
+            conn.execute(text("DROP TABLE api_keys"))
             # Recréer la colonne legacy (create_all ne la crée plus)
             conn.execute(
                 text("ALTER TABLE users ADD COLUMN organization_id VARCHAR(36)")

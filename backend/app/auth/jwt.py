@@ -27,6 +27,17 @@ from ..schemas.user import TokenData
 # consommateurs : le contrat API reste ``{refresh_token: string}``).
 REFRESH_TOKEN_PREFIX = "wf_rt_"
 
+# Préfixe des clés API (spec 07 — authentification par clé API) : sert de
+# discriminateur dans ``Authorization: Bearer ...`` (une valeur préfixée
+# ``wf_ak_`` n'est JAMAIS soumise au décodeur JWT — garantie posée par
+# STORY-124.3 côté dependencies.py).
+API_KEY_PREFIX = "wf_ak_"
+
+# Longueur totale exacte d'une clé API émise (préfixe + 48 caractères).
+# Exposée pour la validation de forme AVANT hachage côté service
+# (anti-DoS, pattern ``MAX_TOKEN_LENGTH``).
+MAX_API_KEY_LENGTH = len(API_KEY_PREFIX) + 48
+
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
@@ -70,6 +81,27 @@ def generate_refresh_token() -> str:
         Token opaque ``wf_rt_<86 chars>`` (~92 caractères au total)
     """
     return f"{REFRESH_TOKEN_PREFIX}{secrets.token_urlsafe(64)}"
+
+
+def generate_api_key() -> str:
+    """
+    Génère une clé API ``wf_ak_`` + 48 caractères aléatoires (STORY-124.2).
+
+    ``secrets.token_urlsafe(36)`` : exactement 48 caractères base64url
+    dérivés de 36 octets CSPRNG (entropie ~288 bits, spec 07 § clés
+    API). Le préfixe ``wf_ak_`` permet de distinguer une clé API d'un
+    JWT dans ``Authorization: Bearer ...`` sans tenter de décoder.
+
+    ⚠️ **Sécurité** : la valeur claire générée n'est **jamais** stockée
+    ni loggée — seul son hash déterministe est persisté (table
+    ``api_keys``, STORY-124.1). Elle n'apparaît qu'une **seule** fois,
+    dans la réponse 201 du ``POST /auth/api-keys`` (STORY-124.3) ; la
+    perte de cette valeur est définitive.
+
+    Returns:
+        Clé API ``wf_ak_<48 chars>`` (54 caractères au total)
+    """
+    return f"{API_KEY_PREFIX}{secrets.token_urlsafe(36)}"
 
 
 def create_token_pair(data: dict) -> tuple[str, str]:

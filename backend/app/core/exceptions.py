@@ -77,3 +77,37 @@ class InvalidRefreshTokenError(WindFlowException):
     def __init__(self, reason: str = "Invalid or expired refresh token") -> None:
         self.reason = reason
         super().__init__(reason)
+
+
+class InvalidApiKeyError(WindFlowException):
+    """Levée lorsqu'une clé API est invalide (STORY-124.2).
+
+    Clé inconnue, malformée, révoquée, expirée ou propriétaire inactif.
+    Refus sémantique ``401`` sans divulgation (anti-énumération, rules
+    40) : le message ne distingue jamais « clé inconnue » de « clé
+    révoquée/expirée » — l'appelant (STORY-124.3) mappe
+    systématiquement à 401.
+    """
+
+    def __init__(self, reason: str = "Invalid API key") -> None:
+        self.reason = reason
+        super().__init__(reason)
+
+
+class NotFoundError(WindFlowException):
+    """Levée lorsqu'une ressource demandée est introuvable.
+
+    Sémantique ``404`` générique. Utilisée pour les lectures/révoquations
+    **scoped** : une ressource appartenant à un autre utilisateur est
+    traitée comme inexistante (on ne révèle pas son existence —
+    anti-énumération, rules 40). La ressource visée est identifiée par
+    son type et son id dans ``details`` (jamais par un secret).
+    """
+
+    def __init__(self, resource: str, resource_id: str) -> None:
+        self.resource = resource
+        self.resource_id = resource_id
+        super().__init__(
+            f"{resource} not found: {resource_id}",
+            details={"resource": resource, "resource_id": resource_id},
+        )

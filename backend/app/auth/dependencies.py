@@ -8,10 +8,11 @@ import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import (
     Depends,
+    Header,
     HTTPException,
     Query,
     WebSocket,
@@ -22,11 +23,13 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
+from ..core.exceptions import InvalidApiKeyError
 from ..database import db as database
 from ..database import get_db
 from ..models.user import User
+from ..services.api_key_service import ApiKeyService
 from ..services.user_service import UserService
-from .jwt import decode_access_token
+from .jwt import API_KEY_PREFIX, decode_access_token
 
 logger = logging.getLogger(__name__)
 
@@ -39,23 +42,45 @@ WS_AUTH_TIMEOUT_SECONDS: float = 30.0
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme), session: AsyncSession = Depends(get_db)
+    token: Optional[str] = Depends(oauth2_scheme),
+    session: AsyncSession = Depends(get_db),
+    # STORY-124.3 : métadonnées Header dans l'annotation Annotated (et non
+    # en valeur par défaut) — la valeur par défaut Python reste ``None``
+    # pour les appels directs (tests unitaires 123.x appelent
+    # ``get_current_user(token=..., session=...)`` sans clé : l'objet
+    # ``Header`` en défaut serait truthy et dévierait le flux vers la voie
+    # clé API).
+    x_api_key: Annotated[Optional[str], Header(alias="X-API-Key")] = None,
 ) -> User:
     """
-    Récupère l'utilisateur courant à partir du token JWT.
+    Récupère l'utilisateur courant à partir d'un token JWT **ou** d'une clé API.
 
-    En mode développement (DISABLE_AUTH=true), retourne automatiquement
-    le premier utilisateur superadmin trouvé en base de données.
+    Ordre de résolution (STORY-124.3) :
+    1. Mode développement (DISABLE_AUTH=true) : auto-login superadmin,
+       comportement inchangé ;
+    2. Clé API — header ``X-API-Key`` **ou** ``Authorization: Bearer wf_ak_…``
+       (préfixe ``API_KEY_PREFIX``) : vérification en base via
+       ``ApiKeyService.verify`` (révocation immédiate, expiration,
+       propriétaire actif, ``last_used_at`` throttlé). Une valeur préfixée
+       ``wf_ak_`` n'est **jamais** soumise au décodeur JWT (garantie
+       structurelle de cet ordre de résolution) ;
+    3. Sinon : voie JWT existante à l'identique.
+
+    La clé porte les permissions RBAC de son propriétaire — l'utilisateur
+    résolu suit exactement le même chemin que par JWT (statut,
+    ``get_current_active_user``, ``require_role``).
 
     Args:
-        token: Token JWT extrait de l'en-tête Authorization
+        token: Token JWT extrait de l'en-tête Authorization (voie Bearer)
         session: Session de base de données
+        x_api_key: Clé API brute extraite du header ``X-API-Key``
 
     Returns:
         Utilisateur authentifié
 
     Raises:
-        HTTPException: Si le token est invalide ou l'utilisateur n'existe pas
+        HTTPException: Si les credentials sont invalides, expirés,
+            révoqués ou l'utilisateur n'existe pas (401 générique)
     """
     # Mode développement sans authentification
     if settings.disable_auth:
@@ -66,6 +91,28 @@ async def get_current_user(
                 detail="No superadmin user found in database for development mode",
             )
         return user
+
+    # STORY-124.3 : voie clé API — X-API-Key prioritaire, sinon Bearer
+    # préfixé wf_ak_ (le discriminateur du schéma Bearer). Résolue AVANT
+    # la voie JWT : une valeur wf_ak_ ne peut jamais atteindre le
+    # décodeur JWT.
+    api_key = x_api_key or (
+        token if token is not None and token.startswith(API_KEY_PREFIX) else None
+    )
+
+    if api_key is not None:
+        # Refus 401 générique anti-énumération (from None — le motif
+        # inconnu/révoqué/expiré/propriétaire inactif n'est pas divulgué,
+        # cf. InvalidApiKeyError STORY-124.2) ; vérification en base à
+        # chaque requête → révocation immédiate.
+        try:
+            return await ApiKeyService.verify(session, api_key)
+        except InvalidApiKeyError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from None
 
     # Mode production avec authentification JWT normale
     credentials_exception = HTTPException(

@@ -113,12 +113,14 @@ class TestRunMigrationsExistingUnversionedDb:
         # + DROP des tables additives pour simuler fidèlement une base
         # antérieure à STORY-121.1 (create_all des métadonnées courantes
         # les créerait aussi — DROP refresh_tokens ajouté par
-        # STORY-123.1) + données métier à préserver.
+        # STORY-123.1, DROP api_keys par STORY-124.1) + données métier
+        # à préserver.
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(legacy_engine)
         with legacy_engine.begin() as conn:
             conn.execute(text("DROP TABLE user_organizations"))
             conn.execute(text("DROP TABLE refresh_tokens"))
+            conn.execute(text("DROP TABLE api_keys"))
         # STORY-121.3 : simuler la colonne héritée users.organization_id
         # (+ index) — absente du schéma courant mais attendue par la
         # migration 1213 sur une base pré-121.3

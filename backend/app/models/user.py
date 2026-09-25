@@ -12,6 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..database import Base
 
 if TYPE_CHECKING:
+    from .api_key import APIKey
     from .refresh_token import RefreshToken
     from .user_organization import UserOrganization
 
@@ -68,6 +69,12 @@ class User(Base):
     # du user purge ses refresh tokens (FK CASCADE + delete-orphan)
     refresh_tokens: Mapped[List["RefreshToken"]] = relationship(
         "RefreshToken", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    # Clés API wf_ak_ révocables (STORY-124.1) — la suppression du
+    # user purge ses clés API (FK CASCADE + delete-orphan)
+    api_keys: Mapped[List["APIKey"]] = relationship(
+        "APIKey", back_populates="user", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

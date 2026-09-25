@@ -12,10 +12,11 @@ from ...auth.dependencies import get_current_active_user
 from ...auth.jwt import create_access_token, create_token_pair
 from ...config import settings
 from ...core.bruteforce_protection import bruteforce_protector
-from ...core.exceptions import InvalidRefreshTokenError
+from ...core.exceptions import InvalidRefreshTokenError, NotFoundError
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
+from ...schemas.api_key import APIKeyCreate, APIKeyCreated, APIKeyResponse
 from ...schemas.user import (
     LoginResponse,
     RefreshResponse,
@@ -23,6 +24,7 @@ from ...schemas.user import (
     UserCreate,
     UserResponse,
 )
+from ...services.api_key_service import ApiKeyService
 from ...services.refresh_token_service import RefreshTokenService
 from ...services.user_organization_service import UserOrganizationService
 from ...services.user_service import UserService
@@ -898,3 +900,298 @@ async def get_current_user_profile(
     """Get the profile information of the currently authenticated user."""
     # STORY-121.3 : organization_id = org primaire (association)
     return await _user_response(session, current_user)
+
+
+@router.post(
+    "/api-keys",
+    response_model=APIKeyCreated,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create an API key",
+    description="""
+Create a new API key (`wf_ak_...`) for the authenticated user.
+
+## ⚠️ One-Time Display
+The response contains the **complete raw key** in the `key` field — this is
+the **only** time it is ever returned by the API:
+- Only its Argon2 hash is stored server-side (never the value)
+- `GET /auth/api-keys` will never return it again
+- Once lost, the key must be revoked and a new one created
+
+Copy and store it securely (vault, secret manager) immediately.
+
+## Process
+1. Validates the request body (label 1-100 chars, optional `expires_at`)
+2. Generates a random key `wf_ak_` + 48 base64url chars (~288 bits entropy)
+3. Persists **only** its deterministic Argon2 hash in `api_keys`
+4. Returns the key metadata **and the raw key** (201)
+
+## Key Properties
+- Prefix: `wf_ak_` (usable via `X-API-Key` header or `Authorization: Bearer`)
+- Permissions: the key carries its **owner's RBAC roles** (spec 08 applies
+  identically)
+- Expiration: optional — `expires_at: null` means the key never expires
+- Revocation: immediate via `DELETE /auth/api-keys/{id}`
+
+## Security Features
+- Rate limited (10 creations per minute)
+- Owner-scoped: the key belongs to the authenticated user
+- Audit: `api_key.created` event with `user_id` + `key_id` only
+
+**Authentication Required** - Bearer JWT (API keys cannot create keys)
+""",
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
+    responses={
+        201: {
+            "description": (
+                "API key created — the raw `key` is returned ONE TIME ONLY, "
+                "copy it now"
+            ),
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": "9d2c8a4f-1b3e-4f5a-8a7b-2c9d0e1f2a3b",
+                        "name": "CLI laptop",
+                        "expires_at": "2027-01-01T00:00:00Z",
+                        "last_used_at": None,
+                        "revoked": False,
+                        "created_at": "2026-09-15T10:00:00Z",
+                        "key": "wf_ak_8kL2mNpQ4rStUvWxYz0a1B3c5D7f9h1j3k5l7n9pR2t4v",
+                    }
+                }
+            },
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
+        },
+        422: {
+            "description": "Invalid body (name empty or > 100 chars, invalid expires_at)",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Name must be 1-100 characters long"}
+                }
+            },
+        },
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Too Many Requests. Maximum 10 requests per minute."
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "An unexpected error occurred"}
+                }
+            },
+        },
+    },
+    tags=["authentication"],
+)
+async def create_api_key(
+    request: Request,
+    key_data: APIKeyCreate,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Create an API key — the raw key is returned ONE TIME ONLY (201)."""
+    # STORY-124.3 : affichage unique — la valeur claire ne transite qu'ici
+    # (schemas 124.2 : APIKeyCreated). Aucun log d'endpoint : les events
+    # ``api_key.*`` du service suffisent (user_id + key_id uniquement).
+    return await ApiKeyService.create(session, current_user.id, key_data)
+
+
+@router.get(
+    "/api-keys",
+    response_model=list[APIKeyResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List my API keys",
+    description="""
+List the API keys of the authenticated user.
+
+## Response Content
+Metadata only — **never** the key value nor its hash:
+- `id`, `name`: identification
+- `expires_at`: expiration date (`null` = never expires)
+- `last_used_at`: last successful use (throttled update, max 1 write/min)
+- `revoked`: revocation status (**distinct** from expiration)
+- `created_at`: creation timestamp
+
+## Expired Keys
+Expired keys **remain listed** with their `expires_at` visible (arbitrage
+STORY-124.3): expiration and revocation are separate concepts. An expired
+key simply stops authenticating (401).
+
+## Ordering
+Most recent first (`created_at` descending).
+
+## Security Features
+- Owner-scoped: only the authenticated user's keys are returned
+- No secrets in response (`key_hash` and `key` are never serialized)
+
+**Authentication Required** - Bearer JWT or API key
+""",
+    responses={
+        200: {
+            "description": "List of API keys (metadata only, no secrets)",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "id": "9d2c8a4f-1b3e-4f5a-8a7b-2c9d0e1f2a3b",
+                            "name": "CLI laptop",
+                            "expires_at": "2027-01-01T00:00:00Z",
+                            "last_used_at": "2026-09-15T14:22:05Z",
+                            "revoked": False,
+                            "created_at": "2026-09-15T10:00:00Z",
+                        },
+                        {
+                            "id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+                            "name": "Old CI key",
+                            "expires_at": "2026-01-01T00:00:00Z",
+                            "last_used_at": "2025-12-30T08:15:00Z",
+                            "revoked": False,
+                            "created_at": "2025-06-01T09:00:00Z",
+                        },
+                    ]
+                }
+            },
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
+        },
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Too Many Requests. Maximum 60 requests per minute."
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "An unexpected error occurred"}
+                }
+            },
+        },
+    },
+    tags=["authentication"],
+)
+async def list_api_keys(
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """List the authenticated user's API keys (metadata only, no secrets)."""
+    # STORY-124.3 : clés expirées conservées (arbitrage) — revoked distinct
+    # de l'expiration ; jamais key_hash ni key (schema APIKeyResponse).
+    return await ApiKeyService.list_for_user(session, current_user.id)
+
+
+@router.delete(
+    "/api-keys/{key_id}",
+    response_model=APIKeyResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Revoke an API key",
+    description="""
+Revoke one of the authenticated user's API keys — **effective immediately**:
+any subsequent request using this key returns `401` (the key is verified
+against the database on every request, no long-lived cache).
+
+## Semantics
+- **Scoped**: only the owner's keys can be revoked — a key belonging to
+  another user is treated as non-existent (404, no existence oracle)
+- **Idempotent**: revoking an already-revoked key returns its current
+  state (200)
+- **Irreversible**: a revoked key can never authenticate again; create a
+  new one if needed
+
+## Process
+1. Resolves the key by `key_id` **scoped to the current user**
+2. Sets `revoked = true` (no-op if already revoked)
+3. Emits `api_key.revoked` audit event (`user_id` + `key_id` only)
+4. Returns the key metadata in its final state
+
+**Authentication Required** - Bearer JWT or API key
+""",
+    dependencies=[Depends(conditional_rate_limiter(10, 60))],
+    responses={
+        200: {
+            "description": "Key revoked (or already revoked — idempotent)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": "9d2c8a4f-1b3e-4f5a-8a7b-2c9d0e1f2a3b",
+                        "name": "CLI laptop",
+                        "expires_at": "2027-01-01T00:00:00Z",
+                        "last_used_at": "2026-09-15T14:22:05Z",
+                        "revoked": True,
+                        "created_at": "2026-09-15T10:00:00Z",
+                    }
+                }
+            },
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {"example": {"detail": "Not authenticated"}}
+            },
+        },
+        404: {
+            "description": "Key not found (unknown or owned by another user)",
+            "content": {
+                "application/json": {"example": {"detail": "API key not found"}}
+            },
+        },
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Too Many Requests. Maximum 10 requests per minute."
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "An unexpected error occurred"}
+                }
+            },
+        },
+    },
+    tags=["authentication"],
+)
+async def revoke_api_key(
+    request: Request,
+    key_id: str,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Revoke an API key (owner-scoped, idempotent, immediate effect)."""
+    # STORY-124.3 : NotFoundError du service (clé inexistante OU étrangère,
+    # sans distinction) → 404 — l'isolation est garantie par le scoping
+    # ``user_id == current_user.id`` posé par 124.2.
+    try:
+        return await ApiKeyService.revoke(session, current_user.id, key_id)
+    except NotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="API key not found",
+        ) from None
