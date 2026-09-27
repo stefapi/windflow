@@ -16,6 +16,7 @@ from ....schemas.target import (
     TargetResponse,
     TargetUpdate,
 )
+from ....services.audit_service import AuditService
 from ....services.target_service import TargetService
 from ....services.user_organization_service import UserOrganizationService
 
@@ -893,3 +894,14 @@ async def delete_target(
         )
 
     await TargetService.delete(session, target_id)
+
+    # STORY-125.2 : audit de la suppression (après succès, org du target).
+    await AuditService.log_from_request(
+        request,
+        "target.deleted",
+        user=current_user,
+        organization_id=target.organization_id,
+        resource_type="target",
+        resource_id=target_id,
+        details={"name": target.name},
+    )

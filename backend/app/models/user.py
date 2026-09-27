@@ -13,6 +13,7 @@ from ..database import Base
 
 if TYPE_CHECKING:
     from .api_key import APIKey
+    from .audit_log import AuditLog
     from .refresh_token import RefreshToken
     from .user_organization import UserOrganization
 
@@ -75,6 +76,13 @@ class User(Base):
     # user purge ses clés API (FK CASCADE + delete-orphan)
     api_keys: Mapped[List["APIKey"]] = relationship(
         "APIKey", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    # Lignes d'audit trail (STORY-125.1) — PAS de cascade : la trace
+    # survit à la suppression de l'acteur (FK SET NULL, conservation
+    # documentaire spec 06 — contraire des tables 123/124)
+    audit_logs: Mapped[List["AuditLog"]] = relationship(
+        "AuditLog", back_populates="user", passive_deletes=True
     )
 
     def __repr__(self) -> str:

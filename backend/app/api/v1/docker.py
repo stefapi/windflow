@@ -26,6 +26,7 @@ from ...auth.rbac import require_admin, require_operator, require_viewer
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
+from ...services.audit_service import AuditService
 from ...schemas.docker import (
     BatchContainerActionRequest,
     BatchContainerActionResponse,
@@ -458,10 +459,20 @@ async def start_container(
     client = await get_docker_client()
     try:
         await client.start_container(container_id)
+        # STORY-125.2 : audit après succès métier (endpoint global Docker —
+        # organization_id NULL, catalogue spec 15 ``container.started``).
+        await AuditService.log_from_request(
+            request,
+            "container.started",
+            user=current_user,
+            resource_type="container",
+            resource_id=container_id,
+        )
 
     except aiohttp.ClientResponseError as e:
         if e.status == 304:
-            # Container déjà démarré
+            # Container déjà démarré — action idempotente déjà effective,
+            # l'audit de l'action demandée reste émis (ci-dessus).
             pass
         elif e.status == 404:
             raise HTTPException(
@@ -511,10 +522,19 @@ async def stop_container(
     client = await get_docker_client()
     try:
         await client.stop_container(container_id, timeout=timeout)
+        # STORY-125.2 : audit après succès métier (catalogue spec 15
+        # ``container.stopped`` ; endpoint global — organization_id NULL).
+        await AuditService.log_from_request(
+            request,
+            "container.stopped",
+            user=current_user,
+            resource_type="container",
+            resource_id=container_id,
+        )
 
     except aiohttp.ClientResponseError as e:
         if e.status == 304:
-            # Container déjà arrêté
+            # Container déjà arrêté — idempotent, audit déjà émis.
             pass
         elif e.status == 404:
             raise HTTPException(
@@ -710,6 +730,16 @@ async def remove_container(
     client = await get_docker_client()
     try:
         await client.remove_container(container_id, force=force)
+        # STORY-125.2 : audit après succès métier (catalogue spec 15
+        # ``container.deleted`` ; endpoint global — organization_id NULL).
+        await AuditService.log_from_request(
+            request,
+            "container.deleted",
+            user=current_user,
+            resource_type="container",
+            resource_id=container_id,
+            details={"force": force},
+        )
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:

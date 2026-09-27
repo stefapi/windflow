@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **STORY-125.3 — Endpoint admin audit + purge lifespan et rétention** (P1-4, partie consultation/rétention — EPIC-012) : exploitation opérationnelle du journal d'audit.
+  - `GET /api/v1/admin/audit` (super_admin uniquement — spec 08 § Système) : pagination `{items, total, skip, limit}` plafonnée 100, filtres bornés `user_id`/`action`/`resource_type`/`since`, OpenAPI documenté ; lecture seule stricte (l'audit n'est pas falsifiable depuis l'API, `details` masqué structurellement à l'écriture). Garde-fou routes admin incrémenté 15 → 16.
+  - Boucle lifespan dédiée `_periodic_audit_purge` (pattern STORY-123.4, non fusionnée avec la purge refresh tokens) : purge par âge uniquement selon `AUDIT_RETENTION_DAYS` ; **démarrage conditionnel** — défaut illimité = job non démarré + log unique ; intervalle `AUDIT_PURGE_INTERVAL_HOURS` ; cancellation au shutdown.
+  - Tests : endpoint (200 paginé + ordre, 401, 403 admin d'org/viewer/operator, 422 × 7, page vide, filtres, pagination sans chevauchement) + rétention courte (1 j) — 41 tests story verts, 1552 au total.
+- **STORY-125.2 — Émission d'audit sur les actions critiques** (P1-4, partie émission — EPIC-012) : branchement de `AuditService.log_from_request` sur le catalogue complet (20 actions / 18 points d'insertion).
+  - Auth : `user.login` (après reset brute-force), `user.login_failed` aux 2 refus 401 (credentials invalides / user inactif — `user_id=None` si inconnu, `username` seul en `details`, jamais le password), `user.logout`, `api_key.created` / `api_key.revoked`.
+  - Suppressions : `stack.deleted` (test de référence P1-4 : acteur, org de la stack, cible, `correlation_id` strictement égal au header `X-Correlation-ID`), `target.deleted`, `organization.deleted` (une ligne par org en bulk), `container.deleted`.
+  - Rôles/membres : `user.role_changed` (`{previous_role, new_role}`), `member.added` / `member.removed`. Déploiements : `deployment.created` (acteur = initiateur), `deployment.succeeded` / `deployment.failed` sur transition terminale (acteur système `user_id=None`), `stack.rollback`. Conteneurs/plugins : `container.started` / `container.stopped`, `plugin.installed` / `plugin.removed`.
+  - Tests d'émission `test_audit_emission.py` (14 tests) : test de référence P1-4, parcours complets par famille, résilience (échec d'écriture injecté → l'action métier répond quand même) et sécurité (aucun password ni clé `wf_ak_` brute dans `details` ni les logs).
+  - Bugs pré-existants corrigés au passage (révélés par les tests d'émission) : `StackService.delete()` inexistante (`DELETE /stacks/{id}` levait `AttributeError` → 500, masqué par un `type: ignore`) et crash naive/aware dans `DeploymentService.update_status` sur la transition RUNNING → FAILED (calcul de durée).
+
+### Fixed
+
+- `DELETE /api/v1/stacks/{id}` renvoyait 500 (`AttributeError`) : `StackService.delete()` était appelée mais n'existait pas — méthode ajoutée (pattern `TargetService.delete`), `type: ignore` masqueur retiré.
+- `DeploymentService.update_status` levait `TypeError` (soustraction naive/aware) sur toute transition RUNNING → FAILED/STOPPED avec `deployed_at` défini : `stopped_at` et le calcul de durée passés en naïf UTC cohérent avec les colonnes DateTime SQLite.
+
+- **STORY-125.1 — Socle audit trail** (P1-4, partie socle — EPIC-012) : table `audit_logs` et service central d'audit.
+  - Table `audit_logs` + modèle `AuditLog` et migration Alembic `1251_audit_logs` — FK `SET NULL` sur `users`/`organizations` (conservation documentaire : la trace survit à la suppression de son acteur), colonnes `correlation_id` (indexée — recherche d'incident par requête) et `organization_id` au-delà de la spec 06, `details` JSON natif, index composite `idx_audit_resource`.
+  - `AuditService` : écriture **best-effort** ne levant jamais (`audit.write_failed` loggé sans le contenu de `details`), masquage systématique à l'écriture par `_sanitize_details` (clés password/token/secret/key/credential/authorization/cookie → `***`, récursif, troncature 512), `log_from_request()` extrayant IP/correlation_id du middleware, consultation filtrée paginée `list_entries()`, purge `purge_expired()` (no-op si rétention None).
+  - Config rétention : `AUDIT_RETENTION_DAYS` (défaut None = conservation indéfinie, spec 15) + `AUDIT_PURGE_INTERVAL_HOURS` (24) ; schemas Pydantic en lecture seule (`AuditLogResponse`, `AuditLogListResponse`) — l'audit n'est pas inscriptible par API.
+  - L'émission sur les actions critiques (STORY-125.2) et l'endpoint `GET /admin/audit` + purge périodique (STORY-125.3) suivent.
 - **STORY-124 — Clés API `wf_ak_`** (P1-3, partie clés API — EPIC-012) : authentification par clé API coexistant avec JWT.
   - Table `api_keys` + modèle `APIKey` et migration Alembic `1241_api_keys` (STORY-124.1) — hash uniquement en base, FK CASCADE, expiration optionnelle, révocation distincte de l'expiration.
   - `ApiKeyService` : génération `wf_ak_` + 48 caractères (`secrets.token_urlsafe`), hash déterministe Argon2 (sel dérivé HMAC-SHA256, lookup par hash — arbitrage F2/STORY-123, divergence « bcrypt » des specs consignée pour STORY-252), création/liste/révocation idempotente/vérification ; schemas Pydantic n'exposant jamais `key_hash` ni la clé brute (affichage unique à la création) (STORY-124.2).

@@ -3,7 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-012 : P1 — Socle structurant (remédiation backend)
-- [ ] STORY-125 : Audit trail — table `audit_logs`, émission sur actions critiques, `GET /admin/audit`, rétention (P1-4)
 - [ ] STORY-126 : Enveloppes de réponse API — `APIResponse` / `PaginatedResponse` / erreur `{error:{code,message}}` (P1-5)
 - [ ] STORY-127 : Hiérarchie d'exceptions — compléter `core/exceptions.py` et remplacer les `HTTPException` brutes (P1-5, partie exceptions)
 - [ ] STORY-128 : Pagination généralisée — `?page&per_page` sur toutes les listes non paginées (P1-6)
@@ -51,6 +50,9 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] STORY-125.3 : Endpoint admin `GET /admin/audit`, purge lifespan et rétention (P1-4 — STORY-125 découpée)
+- [x] STORY-125.2 : Émission d'audit sur les actions critiques (P1-4 — STORY-125 découpée)
+- [x] STORY-125.1 : Socle audit trail — modèle, migration, config, schemas et service (EPIC-012 — STORY-125)
 - [x] STORY-124 : Clés API `wf_ak_` — table `api_keys`, auth `X-API-Key` coexistant avec JWT (P1-3, partie clés API) (EPIC-012) — via STORY-124.1 → 124.4
 - [x] STORY-124.4 : Tests transverses et sécurité des clés API (EPIC-012 — STORY-124)
 - [x] STORY-124.1 : Modèle `APIKey` et migration Alembic (EPIC-012 — STORY-124)

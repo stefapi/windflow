@@ -20,6 +20,7 @@ from ...schemas.deployment import (
     DeploymentResponse,
     DeploymentUpdate,
 )
+from ...services.audit_service import AuditService
 from ...services.deployment_service import DeploymentService
 from ...services.stack_service import StackService
 from ...services.user_organization_service import UserOrganizationService
@@ -731,6 +732,19 @@ async def create_deployment(
                 "deployment_id": str(deployment.id),
                 "user_id": str(current_user.id),
             },
+        )
+
+        # STORY-125.2 : audit de la création (après succès, acteur =
+        # current_user — l'initiateur ; les transitions terminales du
+        # service émettront deployment.succeeded/failed en acteur système).
+        await AuditService.log_from_request(
+            request,
+            "deployment.created",
+            user=current_user,
+            organization_id=primary_org,
+            resource_type="deployment",
+            resource_id=str(deployment.id),
+            details={"name": deployment_data.name, "stack_id": str(deployment_data.stack_id)},
         )
 
         return deployment

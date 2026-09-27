@@ -59,7 +59,9 @@ Chaque item P1 du plan de remédiation devient une story (certains items XL/L so
 - [x] STORY-122 : Dépendances RBAC `require_role(...)` — hiérarchie, cache TTL 300 s et protections d'escalade sur les ~110 endpoints (P1-2, application) — via STORY-122.1 → 122.7
 - [x] STORY-123 : Refresh tokens révocables — table, rotation et logout invalidant (P1-3, partie refresh)
 - [x] STORY-124 : Clés API `wf_ak_` — table `api_keys`, auth `X-API-Key` coexistant avec JWT (P1-3, partie clés API)
-- [ ] STORY-125 : Audit trail — table `audit_logs`, émission sur actions critiques, `GET /admin/audit`, rétention (P1-4)
+- [x] STORY-125.1 : Socle audit trail — modèle, migration, config, schemas et service (P1-4 — STORY-125 découpée)
+- [x] STORY-125.2 : Émission d'audit sur les actions critiques (P1-4 — STORY-125 découpée)
+- [x] STORY-125.3 : Endpoint admin `GET /admin/audit`, purge lifespan et rétention (P1-4 — STORY-125 découpée)
 - [ ] STORY-126 : Enveloppes de réponse API — `APIResponse` / `PaginatedResponse` / erreur `{error:{code,message}}` (P1-5)
 - [ ] STORY-127 : Hiérarchie d'exceptions — compléter `core/exceptions.py` et remplacer les `HTTPException` brutes (P1-5, partie exceptions)
 - [ ] STORY-128 : Pagination généralisée — `?page&per_page` sur toutes les listes non paginées (P1-6)

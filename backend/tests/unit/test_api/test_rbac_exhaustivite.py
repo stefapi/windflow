@@ -62,7 +62,7 @@ EXPECTED_ROUTE_COUNTS: dict[str, int] = {
     "stats": 2,
     "import_export": 2,
     "schedules": 6,
-    "admin": 15,
+    "admin": 16,
     "docker": 35,
     "compute": 2,
     "discovery": 2,

@@ -8,7 +8,7 @@ list, get, install, update, configure, uninstall, hooks/logs.
 import logging
 from typing import List
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.rbac import require_admin, require_viewer
@@ -16,6 +16,7 @@ from ...core.exceptions import WindFlowException
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
+from ...services.audit_service import AuditService
 from ...schemas.plugin import (
     PluginActionResponse,
     PluginConfigureRequest,
@@ -147,6 +148,7 @@ async def get_plugin(
     },
 )
 async def install_plugin(
+    request: Request,
     install_data: PluginInstallRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
@@ -183,6 +185,17 @@ async def install_plugin(
             install_data=install_data,
             user_id=current_user.id,
             organization_id=primary_org,
+        )
+        # STORY-125.2 : audit de l'installation (après succès, org du
+        # plugin — catalogue spec 15 ``plugin.installed``).
+        await AuditService.log_from_request(
+            request,
+            "plugin.installed",
+            user=current_user,
+            organization_id=primary_org,
+            resource_type="plugin",
+            resource_id=str(plugin.id),
+            details={"name": plugin.name},
         )
         return PluginActionResponse(
             id=plugin.id,
@@ -338,6 +351,7 @@ async def configure_plugin(
     },
 )
 async def uninstall_plugin(
+    request: Request,
     plugin_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
@@ -358,10 +372,26 @@ async def uninstall_plugin(
         },
     )
     try:
+        plugin = await _plugin_service.get_plugin(db, plugin_id)
+        # STORY-125.2 : org du plugin capturée AVANT suppression (la ligne
+        # cesse d'exister après uninstall — correlation/org tracées).
+        plugin_org_id = plugin.organization_id if plugin else None
+        plugin_name = plugin.name if plugin else None
         await _plugin_service.uninstall_plugin(
             db,
             plugin_id=plugin_id,
             user_id=current_user.id,
+        )
+        # Audit après succès (catalogue spec 15 ``plugin.removed``) —
+        # resource = plugin retiré, org capturée avant suppression.
+        await AuditService.log_from_request(
+            request,
+            "plugin.removed",
+            user=current_user,
+            organization_id=plugin_org_id,
+            resource_type="plugin",
+            resource_id=plugin_id,
+            details={"name": plugin_name},
         )
     except WindFlowException as exc:
         if exc.details.get("error_type") == "not_found":

@@ -19,6 +19,7 @@ from ..models.deployment import (
 )
 from ..models.stack import Stack
 from ..schemas.deployment import DeploymentCreate, DeploymentUpdate
+from .audit_service import AuditService
 from .deployment_events import deployment_events
 
 logger = logging.getLogger(__name__)
@@ -647,13 +648,19 @@ class DeploymentService:
             deployment.deployed_at = datetime.now(timezone.utc)
             logger.info(f"Déploiement {deployment_id} démarré avec succès")
         elif status in [DeploymentStatus.STOPPED, DeploymentStatus.FAILED]:
-            deployment.stopped_at = datetime.now(timezone.utc)
+            # STORY-125.2 : naïf UTC pour la colonne DateTime SQLite —
+            # ``deployed_at`` rechargé de la base est naïf, soustraire un
+            # aware lèverait TypeError (bug révélé par les tests d'émission
+            # de la transition RUNNING → FAILED).
+            stopped_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+            deployment.stopped_at = stopped_naive
 
             # Calculer la durée si possible
             if deployment.deployed_at:
-                duration = (
-                    deployment.stopped_at - deployment.deployed_at
-                ).total_seconds()
+                deployed = deployment.deployed_at
+                if deployed.tzinfo is not None:
+                    deployed = deployed.astimezone(timezone.utc).replace(tzinfo=None)
+                duration = (stopped_naive - deployed).total_seconds()
                 deployment.deploy_duration_seconds = duration
                 logger.info(
                     f"Déploiement {deployment_id} terminé en {duration:.2f}s "
@@ -662,6 +669,41 @@ class DeploymentService:
 
         await db.commit()
         await db.refresh(deployment)
+
+        # STORY-125.2 : audit des transitions terminales (catalogue spec 15)
+        # — acteur **système** (``user_id=None``) : le modèle Deployment n'a
+        # pas de colonne acteur (vérifié) et ``update_status`` n'a pas de
+        # contexte HTTP ; l'initiateur reste traçable via la ligne
+        # ``deployment.created`` émise par l'endpoint. Émis via ``log()``
+        # avec session courte dédiée — indépendant de la transaction métier
+        # (best-effort : ne lève jamais, n'altère pas le commit ci-dessus).
+        if (
+            status == DeploymentStatus.RUNNING
+            and old_status != DeploymentStatus.RUNNING
+        ):
+            await AuditService.log(
+                "deployment.succeeded",
+                user_id=None,
+                organization_id=deployment.organization_id,
+                resource_type="deployment",
+                resource_id=deployment_id,
+                details={"name": deployment.name, "status": status.value},
+            )
+        elif (
+            status == DeploymentStatus.FAILED and old_status != DeploymentStatus.FAILED
+        ):
+            await AuditService.log(
+                "deployment.failed",
+                user_id=None,
+                organization_id=deployment.organization_id,
+                resource_type="deployment",
+                resource_id=deployment_id,
+                details={
+                    "name": deployment.name,
+                    "status": status.value,
+                    "error": error_message,
+                },
+            )
 
         # Émettre événement de changement de statut via WebSocket
         try:
@@ -697,8 +739,8 @@ class DeploymentService:
         # Update target health status on deployment completion/failure
         if status in (DeploymentStatus.RUNNING, DeploymentStatus.FAILED):
             try:
-                from ..models.target import Target
                 from ..enums.target import TargetStatus
+                from ..models.target import Target
 
                 target_result = await db.execute(
                     select(Target).where(Target.id == deployment.target_id)

@@ -27,7 +27,7 @@ SCRIPT_LOCATION = REPO_ROOT / "backend" / "alembic"
 
 # Tables attendues : exactement celles des modèles ORM (STORY-121.1 :
 # + user_organizations ; STORY-123.1 : + refresh_tokens ; STORY-124.1 :
-# + api_keys).
+# + api_keys ; STORY-125.1 : + audit_logs).
 EXPECTED_TABLES = {
     "users",
     "organizations",
@@ -42,6 +42,7 @@ EXPECTED_TABLES = {
     "user_organizations",
     "refresh_tokens",
     "api_keys",
+    "audit_logs",
 }
 
 
@@ -193,6 +194,7 @@ class TestExistingDatabaseStampScenario:
             conn.execute(text("DROP TABLE user_organizations"))
             conn.execute(text("DROP TABLE refresh_tokens"))
             conn.execute(text("DROP TABLE api_keys"))
+            conn.execute(text("DROP TABLE audit_logs"))
         # STORY-121.3 : recréer la colonne héritée users.organization_id
         # (+ index) — le schéma courant (modèles) ne la crée plus mais la
         # migration 1213 s'attend à la trouver sur une base pré-121.3
@@ -209,12 +211,14 @@ class TestExistingDatabaseStampScenario:
         before = set(inspect(sync_engine).get_table_names())
         sync_engine.dispose()
         assert (
-            EXPECTED_TABLES - {"user_organizations", "refresh_tokens", "api_keys"}
+            EXPECTED_TABLES
+            - {"user_organizations", "refresh_tokens", "api_keys", "audit_logs"}
             <= before
         ), "create_all n'a pas créé les tables modèles"
         assert "user_organizations" not in before
         assert "refresh_tokens" not in before
         assert "api_keys" not in before
+        assert "audit_logs" not in before
 
         # 2. stamp baseline — marque la base comme étant au niveau baseline
         result = _run_alembic("stamp", "baseline", db_url=db_url)
@@ -240,7 +244,13 @@ class TestExistingDatabaseStampScenario:
             engine.dispose()
         assert (
             before
-            | {"alembic_version", "user_organizations", "refresh_tokens", "api_keys"}
+            | {
+                "alembic_version",
+                "user_organizations",
+                "refresh_tokens",
+                "api_keys",
+                "audit_logs",
+            }
             == after
         ), "Le schéma d'origine a été altéré ou une table additive manque"
 

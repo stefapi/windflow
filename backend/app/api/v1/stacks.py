@@ -15,6 +15,7 @@ from ...database import get_db
 from ...helper.template_renderer import TemplateRenderer
 from ...models.stack_version import StackVersion
 from ...models.user import User
+from ...services.audit_service import AuditService
 from ...schemas.stack import (
     StackActionResponse,
     StackCreate,
@@ -1213,7 +1214,20 @@ async def delete_stack(
             status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette stack"
         )
 
-    await StackService.delete(session, stack_id)  # type: ignore[attr-defined]
+    await StackService.delete(session, stack_id)
+
+    # STORY-125.2 : audit de la suppression (après succès — test de référence
+    # P1-4) : ligne avec acteur, org de la stack, action, cible et le
+    # correlation_id du middleware (header X-Correlation-ID → DB).
+    await AuditService.log_from_request(
+        request,
+        "stack.deleted",
+        user=current_user,
+        organization_id=stack.organization_id,
+        resource_type="stack",
+        resource_id=stack_id,
+        details={"name": stack.name},
+    )
 
 
 @router.post(
@@ -1580,6 +1594,7 @@ async def create_stack_version(
     dependencies=[Depends(conditional_rate_limiter(10, 60))],
 )
 async def restore_stack_version(
+    request: Request,
     stack_id: str,
     version_id: str,
     current_user: User = Depends(require_operator),
@@ -1625,6 +1640,18 @@ async def restore_stack_version(
     # Restaurer
     update_data = StackUpdate(compose_content=version.compose_content)  # type: ignore[call-arg]
     updated_stack = await StackService.update(session, stack_id, update_data)
+
+    # STORY-125.2 : audit du rollback (après succès de la restauration —
+    # catalogue spec 15 ``stack.rollback`` ; correlation_id du middleware).
+    await AuditService.log_from_request(
+        request,
+        "stack.rollback",
+        user=current_user,
+        organization_id=stack.organization_id,
+        resource_type="stack",
+        resource_id=stack_id,
+        details={"restored_version_id": version_id},
+    )
     return updated_stack
 
 

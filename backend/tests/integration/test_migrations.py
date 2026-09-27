@@ -45,7 +45,7 @@ ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 
 # Tables métier attendues + table technique Alembic (STORY-121.1 :
 # + user_organizations ; STORY-123.1 : + refresh_tokens ; STORY-124.1 :
-# + api_keys).
+# + api_keys ; STORY-125.1 : + audit_logs).
 EXPECTED_TABLES = {
     "users",
     "organizations",
@@ -60,6 +60,7 @@ EXPECTED_TABLES = {
     "user_organizations",
     "refresh_tokens",
     "api_keys",
+    "audit_logs",
     "alembic_version",
 }
 
@@ -198,6 +199,7 @@ class TestExistingDbStampedThenStartupNoDiff:
             conn.execute(text("DROP TABLE user_organizations"))
             conn.execute(text("DROP TABLE refresh_tokens"))
             conn.execute(text("DROP TABLE api_keys"))
+            conn.execute(text("DROP TABLE audit_logs"))
         with legacy_engine.begin() as conn:
             conn.execute(
                 text(
@@ -230,6 +232,7 @@ class TestExistingDbStampedThenStartupNoDiff:
             "user_organizations",
             "refresh_tokens",
             "api_keys",
+            "audit_logs",
         }
         check_engine = create_engine(f"sqlite:///{db_path}")
         try:
@@ -371,6 +374,7 @@ class TestUserOrganizationsTableMigration:
             conn.execute(text("DROP TABLE user_organizations"))
             conn.execute(text("DROP TABLE refresh_tokens"))
             conn.execute(text("DROP TABLE api_keys"))
+            conn.execute(text("DROP TABLE audit_logs"))
         with legacy_engine.begin() as conn:
             conn.execute(
                 text(
@@ -426,6 +430,146 @@ class TestUserOrganizationsTableMigration:
         )
 
 
+class TestAuditLogsTableMigration:
+    """STORY-125.1 — migration additive ``audit_logs`` : structure de la
+    table (spec 06 + colonnes story) sur base vierge, downgrade propre."""
+
+    def test_fresh_db_upgrade_creates_audit_logs_table(
+        self, tmp_path: Path
+    ) -> None:
+        """Base vierge → ``upgrade head`` → table ``audit_logs``
+        présente dans le schéma."""
+        engine = _upgraded_engine(tmp_path, "fresh-audit.db")
+        try:
+            assert "audit_logs" in inspect(engine).get_table_names()
+        finally:
+            engine.dispose()
+
+    def test_table_structure_matches_spec(self, tmp_path: Path) -> None:
+        """Colonnes conformes spec 06 + story : ``id``/``user_id``/
+        ``organization_id`` ``String(36)``, ``action`` ``String(50)``
+        NOT NULL, ``resource_type`` ``String(30)``, ``ip_address``
+        ``String(45)``, ``correlation_id`` ``String(64)``, ``details``
+        JSON, ``created_at`` DateTime NOT NULL, ``resource_id`` Text."""
+        engine = _upgraded_engine(tmp_path, "structure-audit.db")
+        try:
+            columns = {
+                col["name"]: col
+                for col in inspect(engine).get_columns("audit_logs")
+            }
+        finally:
+            engine.dispose()
+
+        assert set(columns) == {
+            "id",
+            "user_id",
+            "organization_id",
+            "action",
+            "resource_type",
+            "resource_id",
+            "details",
+            "ip_address",
+            "correlation_id",
+            "created_at",
+        }
+        for name, length in (
+            ("id", 36),
+            ("user_id", 36),
+            ("organization_id", 36),
+            ("action", 50),
+            ("resource_type", 30),
+            ("ip_address", 45),
+            ("correlation_id", 64),
+        ):
+            assert (
+                columns[name]["type"].length == length
+            ), f"{name} doit être String({length})"
+        assert not columns["action"].get("nullable", True), "action NOT NULL"
+        assert not columns["created_at"].get("nullable", True)
+        # Colonnes de contexte nullable (acteur système, cible absente).
+        for name in (
+            "user_id",
+            "organization_id",
+            "resource_type",
+            "resource_id",
+            "details",
+            "ip_address",
+            "correlation_id",
+        ):
+            assert columns[name].get("nullable") is True, f"{name} nullable"
+
+    def test_foreign_keys_set_null(self, tmp_path: Path) -> None:
+        """FK ``user_id → users.id`` et ``organization_id →
+        organizations.id`` avec ``ondelete SET NULL`` (conservation
+        documentaire — réflexion SQLite)."""
+        engine = _upgraded_engine(tmp_path, "fk-audit.db")
+        try:
+            with engine.connect() as conn:
+                rows = conn.exec_driver_sql(
+                    "PRAGMA foreign_key_list(audit_logs)"
+                ).fetchall()
+        finally:
+            engine.dispose()
+
+        fks = {
+            row[3]: {"table": row[2], "to": row[4], "on_delete": row[6]}
+            for row in rows
+        }
+        assert fks["user_id"]["table"] == "users"
+        assert fks["user_id"]["to"] == "id"
+        assert fks["user_id"]["on_delete"] == "SET NULL"
+        assert fks["organization_id"]["table"] == "organizations"
+        assert fks["organization_id"]["to"] == "id"
+        assert fks["organization_id"]["on_delete"] == "SET NULL"
+
+    def test_indexes_present_including_composite(self, tmp_path: Path) -> None:
+        """Index spec 06 + story : ``user_id``, ``organization_id``,
+        ``action``, ``correlation_id``, ``created_at`` + composite
+        ``idx_audit_resource (resource_type, resource_id)``."""
+        engine = _upgraded_engine(tmp_path, "idx-audit.db")
+        try:
+            indexes = inspect(engine).get_indexes("audit_logs")
+        finally:
+            engine.dispose()
+
+        by_name = {idx["name"]: idx for idx in indexes}
+        for name, column in (
+            ("ix_audit_logs_user_id", ["user_id"]),
+            ("ix_audit_logs_organization_id", ["organization_id"]),
+            ("ix_audit_logs_action", ["action"]),
+            ("ix_audit_logs_correlation_id", ["correlation_id"]),
+            ("ix_audit_logs_created_at", ["created_at"]),
+            ("idx_audit_resource", ["resource_type", "resource_id"]),
+        ):
+            assert name in by_name, (
+                f"Index manquant : {name} (présentes = {sorted(by_name)})"
+            )
+            assert by_name[name]["column_names"] == column
+            assert not by_name[name]["unique"]
+
+    def test_downgrade_one_step_drops_table(self, tmp_path: Path) -> None:
+        """Downgrade ciblé ``1251 → 1241`` → table ``audit_logs``
+        absente, les autres tables intactes."""
+        db_path = tmp_path / "down-audit.db"
+        db_url = f"sqlite+aiosqlite:///{db_path}"
+
+        up = _run_alembic("upgrade", "head", db_url=db_url)
+        assert up.returncode == 0, up.stderr
+
+        down = _run_alembic(
+            "downgrade", "1241_api_keys", db_url=db_url
+        )
+        assert down.returncode == 0, down.stderr
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            tables = set(inspect(engine).get_table_names())
+        finally:
+            engine.dispose()
+        assert "audit_logs" not in tables
+        assert "api_keys" in tables, "Le downgrade ciblé ne doit pas toucher api_keys"
+
+
 class TestUsersOrgMigrationData:
     """STORY-121.3 — migration de données ``users.organization_id`` →
     ``user_organizations`` (mapping non cassant) + retrait de la colonne.
@@ -447,6 +591,7 @@ class TestUsersOrgMigrationData:
             conn.execute(text("DROP TABLE user_organizations"))
             conn.execute(text("DROP TABLE refresh_tokens"))
             conn.execute(text("DROP TABLE api_keys"))
+            conn.execute(text("DROP TABLE audit_logs"))
             # Recréer la colonne legacy (create_all ne la crée plus)
             conn.execute(
                 text("ALTER TABLE users ADD COLUMN organization_id VARCHAR(36)")

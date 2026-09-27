@@ -188,6 +188,43 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"✗ Periodic refresh token purge could not start: {e}")
 
+    # Periodic audit trail purge (STORY-125.3 — boucle asyncio dédiée au
+    # lifespan, pattern STORY-123.4 : intervalles et logs distincts, sans
+    # fusion des deux boucles). Consomme AuditService.purge_expired() —
+    # purge par âge uniquement (rules 40) ; logs = comptages uniquement.
+    audit_purge_task: asyncio.Task | None = None
+    if settings.audit_retention_days is None:
+        # Démarrage conditionnel : rétention illimitée par défaut (spec
+        # 15) — un réveil horaire ne ferait que des no-op.
+        logger.info("○ Audit retention disabled (keep forever) — purge job not started")
+    else:
+        try:
+            from .database import AsyncSessionLocal as _AuditSessionLocal
+            from .services.audit_service import AuditService as _AuditService
+
+            _audit_interval = settings.audit_purge_interval_hours * 3600
+
+            async def _periodic_audit_purge() -> None:
+                """Background loop: purge audit entries past retention."""
+                while True:
+                    try:
+                        async with _AuditSessionLocal() as audit_db:
+                            removed = await _AuditService.purge_expired(audit_db)
+                        if removed:
+                            logger.info("Audit purge: %d entries removed", removed)
+                    except Exception as exc:
+                        logger.error("Audit purge error: %s", exc)
+                    await asyncio.sleep(_audit_interval)
+
+            audit_purge_task = asyncio.create_task(_periodic_audit_purge())
+            logger.info(
+                "✓ Periodic audit purge started "
+                f"(retention={settings.audit_retention_days}d, "
+                f"every {settings.audit_purge_interval_hours}h)"
+            )
+        except Exception as e:
+            logger.warning(f"✗ Periodic audit purge could not start: {e}")
+
     logger.info("=" * 60)
     logger.info(f"🚀 {settings.app_name} is ready!")
     logger.info(f"   Docs: http://{settings.api_host}:{settings.api_port}/docs")
@@ -216,6 +253,16 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("✓ Periodic refresh token purge task cancelled")
+
+    # Cancel periodic audit purge task (STORY-125.3 — pas démarrée si
+    # rétention illimitée : None → garde naturellement satisfaite)
+    if audit_purge_task and not audit_purge_task.done():
+        audit_purge_task.cancel()
+        try:
+            await audit_purge_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("✓ Periodic audit purge task cancelled")
 
     # Close rate limiter
     if settings.rate_limit_enabled and settings.rate_limit_storage_url:

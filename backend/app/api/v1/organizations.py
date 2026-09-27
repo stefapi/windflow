@@ -27,6 +27,7 @@ from ...schemas.organization_member import (
     OrganizationMemberAddRequest,
     OrganizationMemberResponse,
 )
+from ...services.audit_service import AuditService
 from ...services.authorization_service import (
     ROLE_HIERARCHY,
     AuthorizationService,
@@ -865,6 +866,19 @@ async def delete_organization(
 
     await OrganizationService.delete(session, organization_id)
 
+    # STORY-125.2 : audit de la suppression (après succès). org supprimée →
+    # la FK SET NULL anonymise la ligne (conservation documentaire, 125.1) ;
+    # on trace l'id tout de même via organization_id + details.name.
+    await AuditService.log_from_request(
+        request,
+        "organization.deleted",
+        user=current_user,
+        organization_id=str(organization_id),
+        resource_type="organization",
+        resource_id=str(organization_id),
+        details={"name": organization.name},
+    )
+
 
 @router.post(
     "/bulk/delete",
@@ -966,6 +980,17 @@ async def bulk_delete_organizations(
                 continue
 
             await OrganizationService.delete(session, UUID(org_id))
+            # STORY-125.2 : une ligne d'audit par org supprimée (bulk) —
+            # chaque suppression destructrice est tracée individuellement.
+            await AuditService.log_from_request(
+                request,
+                "organization.deleted",
+                user=current_user,
+                organization_id=org_id,
+                resource_type="organization",
+                resource_id=org_id,
+                details={"name": org.name, "bulk": True},
+            )
             success.append(org_id)
         except Exception as e:
             logger.error(
@@ -1424,6 +1449,16 @@ async def add_organization_member(
             "role": member_data.role.value,
         },
     )
+    # STORY-125.2 : audit persisté de l'ajout de membre (après succès).
+    await AuditService.log_from_request(
+        request,
+        "member.added",
+        user=current_user,
+        organization_id=str(organization_id),
+        resource_type="user",
+        resource_id=str(member_data.user_id),
+        details={"role": member_data.role.value},
+    )
     return _member_to_response(membership)
 
 
@@ -1667,6 +1702,17 @@ async def update_organization_member_role(
             "new_role": role_data.role.value,
         },
     )
+    # STORY-125.2 : audit persisté du changement de rôle (spec 08 § Audit —
+    # changements de rôles = action critique du catalogue spec 15).
+    await AuditService.log_from_request(
+        request,
+        "user.role_changed",
+        user=current_user,
+        organization_id=str(organization_id),
+        resource_type="user",
+        resource_id=str(user_id),
+        details={"previous_role": previous_role, "new_role": role_data.role.value},
+    )
     return _member_to_response(updated)
 
 
@@ -1810,5 +1856,14 @@ async def remove_organization_member(
             "organization_id": str(organization_id),
             "target_user_id": str(user_id),
         },
+    )
+    # STORY-125.2 : audit persisté du retrait de membre (après succès).
+    await AuditService.log_from_request(
+        request,
+        "member.removed",
+        user=current_user,
+        organization_id=str(organization_id),
+        resource_type="user",
+        resource_id=str(user_id),
     )
     return None

@@ -121,6 +121,7 @@ class TestRunMigrationsExistingUnversionedDb:
             conn.execute(text("DROP TABLE user_organizations"))
             conn.execute(text("DROP TABLE refresh_tokens"))
             conn.execute(text("DROP TABLE api_keys"))
+            conn.execute(text("DROP TABLE audit_logs"))
         # STORY-121.3 : simuler la colonne héritée users.organization_id
         # (+ index) — absente du schéma courant mais attendue par la
         # migration 1213 sur une base pré-121.3

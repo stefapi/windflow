@@ -3,6 +3,7 @@ Modèles de données SQLAlchemy pour WindFlow.
 """
 
 from .api_key import APIKey
+from .audit_log import AuditLog
 from .deployment import Deployment
 from .organization import Organization
 from .plugin import Plugin
@@ -30,4 +31,5 @@ __all__ = [
     "PluginHookLog",
     "RefreshToken",
     "APIKey",
+    "AuditLog",
 ]

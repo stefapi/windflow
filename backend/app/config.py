@@ -58,6 +58,25 @@ class Settings(BaseSettings):
         "(background lifespan job; logs counts only).",
     )
 
+    # Rétention de l'audit trail (STORY-125.1). Source de vérité pour
+    # AuditService.purge_expired — None = conservation indéfinie (défaut,
+    # spec 15 § Rétention). Env var : AUDIT_RETENTION_DAYS.
+    audit_retention_days: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Audit log retention in days (None = keep forever, "
+        "spec 15 § Rétention ; e.g. 90 on RPi).",
+    )
+
+    # Intervalle du job de purge de l'audit trail (STORY-125.3 — boucle
+    # asyncio au lifespan). Env var : AUDIT_PURGE_INTERVAL_HOURS.
+    audit_purge_interval_hours: int = Field(
+        default=24,
+        ge=1,
+        description="Interval (hours) between audit log purge runs "
+        "(background lifespan job).",
+    )
+
     # Clé maîtresse de chiffrement des secrets au repos (STORY-103.1)
     # Optionnelle : si vide, la clé maîtresse dérive de jwt_secret_key
     # (aucune nouvelle variable obligatoire en dev). Le SecretManager

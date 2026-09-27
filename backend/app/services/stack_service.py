@@ -80,6 +80,28 @@ class StackService:
         return stack
 
     @staticmethod
+    @staticmethod
+    async def delete(db: AsyncSession, stack_id: str) -> bool:
+        """Supprime définitivement un stack (STORY-125.2 — divergence
+        documentée : la méthode était référencée par le DELETE /{stack_id}
+        mais n'existait pas, l'endpoint levait ``AttributeError`` → 500).
+
+        Args:
+            db: Session de base de données async
+            stack_id: ID du stack à supprimer
+
+        Returns:
+            True si supprimé, False si non trouvé
+        """
+        stack = await StackService.get_by_id(db, stack_id)
+        if not stack:
+            return False
+
+        await db.delete(stack)
+        await db.commit()
+        return True
+
+    @staticmethod
     async def archive(db: AsyncSession, stack_id: str) -> Stack:
         """
         Archive un stack.

@@ -25,6 +25,7 @@ from ...schemas.user import (
     UserResponse,
 )
 from ...services.api_key_service import ApiKeyService
+from ...services.audit_service import AuditService
 from ...services.refresh_token_service import RefreshTokenService
 from ...services.user_organization_service import UserOrganizationService
 from ...services.user_service import UserService
@@ -252,6 +253,21 @@ async def login(
                 form_data.username,
                 client_ip,
             )
+            # STORY-125.2 : audit de l'échec de credentials (catalogue spec 15).
+            # Volontairement audité dans le chemin d'erreur 401 — user_id=None
+            # si user inconnu ; ``username`` autorisé dans details (identifiant
+            # public déjà loggé), jamais le password (rules 40).
+            await AuditService.log_from_request(
+                request,
+                "user.login_failed",
+                user=user,
+                resource_type="user",
+                resource_id=str(user.id) if user is not None else None,
+                details={
+                    "username": form_data.username,
+                    "reason": "invalid_credentials",
+                },
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
@@ -261,6 +277,15 @@ async def login(
         if not user.is_active:
             # NON compté : le mot de passe était correct, ce n'est pas un signal
             # de force brute (décision documentée STORY-104)
+            # STORY-125.2 : 2e refus audité (user inactif, password correct).
+            await AuditService.log_from_request(
+                request,
+                "user.login_failed",
+                user=user,
+                resource_type="user",
+                resource_id=str(user.id),
+                details={"username": form_data.username, "reason": "inactive_user"},
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
             )
@@ -268,6 +293,16 @@ async def login(
         # Login réussi : réinitialisation du compteur d'échecs du username
         await bruteforce_protector.reset(key)
         logger.info("user.login username=%s ip=%s", form_data.username, client_ip)
+        # STORY-125.2 : audit du login réussi (après reset brute-force —
+        # l'action métier est validée, l'audit ne doit pas la précéder).
+        await AuditService.log_from_request(
+            request,
+            "user.login",
+            user=user,
+            resource_type="user",
+            resource_id=str(user.id),
+            details={"username": user.username},
+        )
 
     # Créer la paire de tokens JWT — STORY-121.3 : le claim
     # organization_id n'est plus émis (multi-appartenance incompatible,
@@ -548,6 +583,15 @@ async def logout(
         "user.logout user_id=%s refresh_tokens_revoked=%d",
         current_user.id,
         revoked_count,
+    )
+    # STORY-125.2 : audit du logout (après révocation effective).
+    await AuditService.log_from_request(
+        request,
+        "user.logout",
+        user=current_user,
+        resource_type="user",
+        resource_id=str(current_user.id),
+        details={"refresh_tokens_revoked": revoked_count},
     )
     return {
         "message": "Successfully logged out",
@@ -1005,7 +1049,18 @@ async def create_api_key(
     # STORY-124.3 : affichage unique — la valeur claire ne transite qu'ici
     # (schemas 124.2 : APIKeyCreated). Aucun log d'endpoint : les events
     # ``api_key.*`` du service suffisent (user_id + key_id uniquement).
-    return await ApiKeyService.create(session, current_user.id, key_data)
+    created = await ApiKeyService.create(session, current_user.id, key_data)
+    # STORY-125.2 : audit de la création (après succès) — key_id seulement,
+    # jamais la valeur brute ni son hash (rules 40).
+    await AuditService.log_from_request(
+        request,
+        "api_key.created",
+        user=current_user,
+        resource_type="api_key",
+        resource_id=str(created.id),
+        details={"name": created.name},
+    )
+    return created
 
 
 @router.get(
@@ -1189,9 +1244,19 @@ async def revoke_api_key(
     # sans distinction) → 404 — l'isolation est garantie par le scoping
     # ``user_id == current_user.id`` posé par 124.2.
     try:
-        return await ApiKeyService.revoke(session, current_user.id, key_id)
+        revoked = await ApiKeyService.revoke(session, current_user.id, key_id)
     except NotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="API key not found",
         ) from None
+    # STORY-125.2 : audit de la révocation (après succès, idempotent — la
+    # ligne est émise même sur re-révocation, reflétant l'action HTTP).
+    await AuditService.log_from_request(
+        request,
+        "api_key.revoked",
+        user=current_user,
+        resource_type="api_key",
+        resource_id=key_id,
+    )
+    return revoked
