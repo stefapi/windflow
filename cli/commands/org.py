@@ -3,38 +3,51 @@ Commandes de gestion des organisations pour le CLI WindFlow.
 """
 
 import argparse
+
 from cli.client import api_client
-from cli.utils import print_success, print_error, print_info, print_json, print_table, format_timestamp
+from cli.utils import (
+    format_timestamp,
+    print_error,
+    print_info,
+    print_json,
+    print_success,
+    print_table,
+)
 
 
 def setup_org_parser(subparsers) -> None:
     """Configure le parser pour les commandes d'organisation."""
-    org_parser = subparsers.add_parser(
-        'org',
-        help='Gestion des organisations'
+    org_parser = subparsers.add_parser("org", help="Gestion des organisations")
+    org_subparsers = org_parser.add_subparsers(
+        dest="org_action", help="Actions sur les organisations"
     )
-    org_subparsers = org_parser.add_subparsers(dest='org_action', help='Actions sur les organisations')
 
     # List
-    list_parser = org_subparsers.add_parser('list', help='Lister les organisations')
-    list_parser.add_argument('--format', choices=['table', 'json'], default='table', help='Format de sortie')
+    list_parser = org_subparsers.add_parser("list", help="Lister les organisations")
+    list_parser.add_argument(
+        "--format", choices=["table", "json"], default="table", help="Format de sortie"
+    )
 
     # Get
-    get_parser = org_subparsers.add_parser('get', help='Détails d\'une organisation')
-    get_parser.add_argument('org_id', help='ID de l\'organisation')
-    get_parser.add_argument('--format', choices=['table', 'json'], default='json', help='Format de sortie')
+    get_parser = org_subparsers.add_parser("get", help="Détails d'une organisation")
+    get_parser.add_argument("org_id", help="ID de l'organisation")
+    get_parser.add_argument(
+        "--format", choices=["table", "json"], default="json", help="Format de sortie"
+    )
 
 
 def handle_org_command(args) -> int:
     """Gère les commandes d'organisation."""
-    if not hasattr(args, 'org_action') or args.org_action is None:
-        print_error("Action d'organisation requise. Utilisez --help pour plus d'informations.")
+    if not hasattr(args, "org_action") or args.org_action is None:
+        print_error(
+            "Action d'organisation requise. Utilisez --help pour plus d'informations."
+        )
         return 1
 
     try:
-        if args.org_action == 'list':
+        if args.org_action == "list":
             return handle_list(args.format)
-        elif args.org_action == 'get':
+        elif args.org_action == "get":
             return handle_get(args.org_id, args.format)
         else:
             print_error(f"Action inconnue: {args.org_action}")
@@ -44,33 +57,38 @@ def handle_org_command(args) -> int:
         return 1
 
 
-def handle_list(output_format: str = 'table') -> int:
+def handle_list(output_format: str = "table") -> int:
     """Liste toutes les organisations."""
     try:
-        response = api_client.get('/organizations')
+        response = api_client.get("/organizations")
 
-        if output_format == 'json':
+        if output_format == "json":
             print_json(response)
             return 0
 
         # Format tableau
-        organizations = response if isinstance(response, list) else response.get('data', [])
+        # STORY-126.3 : post-unwrap spec 09 — liste directe ou {items: [...]}
+        organizations = (
+            response if isinstance(response, list) else response.get("items", [])
+        )
 
         if not organizations:
             print_info("Aucune organisation trouvée")
             return 0
 
-        headers = ['ID', 'Nom', 'Slug', 'Actif', 'Créé le']
+        headers = ["ID", "Nom", "Slug", "Actif", "Créé le"]
         rows = []
 
         for org in organizations:
-            rows.append([
-                str(org.get('id', 'N/A'))[:8] + '...',
-                org.get('name', 'N/A'),
-                org.get('slug', 'N/A'),
-                '✓' if org.get('is_active', True) else '✗',
-                format_timestamp(org.get('created_at', 'N/A'))
-            ])
+            rows.append(
+                [
+                    str(org.get("id", "N/A"))[:8] + "...",
+                    org.get("name", "N/A"),
+                    org.get("slug", "N/A"),
+                    "✓" if org.get("is_active", True) else "✗",
+                    format_timestamp(org.get("created_at", "N/A")),
+                ]
+            )
 
         print_table(headers, rows)
         print_info(f"Total: {len(organizations)} organisation(s)")
@@ -81,12 +99,12 @@ def handle_list(output_format: str = 'table') -> int:
         return 1
 
 
-def handle_get(org_id: str, output_format: str = 'json') -> int:
+def handle_get(org_id: str, output_format: str = "json") -> int:
     """Affiche les détails d'une organisation."""
     try:
-        org = api_client.get(f'/organizations/{org_id}')
+        org = api_client.get(f"/organizations/{org_id}")
 
-        if output_format == 'json':
+        if output_format == "json":
             print_json(org)
             return 0
 

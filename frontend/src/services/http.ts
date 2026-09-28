@@ -1,10 +1,16 @@
 /**
  * HTTP Client Configuration
  * Axios instance with interceptors for authentication and error handling
+ *
+ * STORY-126.3 : unwrap centralisé des enveloppes spec 09 — les réponses 2xx
+ * de /api/v1/* arrivent sous `{"data": ..., "message": ...}` ; l'interceptor
+ * remplace `response.data` par le contenu de `data` (transparent pour les
+ * stores/vues). Les erreurs arrivent sous `{"error": {code, message}}` —
+ * `detail` reste lu en fallback de transition (ancien format pré-126.2).
  */
 
-import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
-import type { ApiError } from '@/types/api'
+import axios, { type AxiosInstance, type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
+import type { ApiError, ApiEnvelope } from '@/types/api'
 import { useAuthStore } from '@/stores/auth'
 
 // Retry configuration for 401 errors
@@ -14,9 +20,7 @@ let retryAttempts = 0
 let isRetrying = false
 
 // Create axios instance with custom backend URL from environment
-const baseURL = import.meta.env['VITE_API_BASE_URL']
-  ? `${import.meta.env['VITE_API_BASE_URL']}/api/v1`
-  : '/api/v1'
+const baseURL = import.meta.env['VITE_API_BASE_URL'] ? `${import.meta.env['VITE_API_BASE_URL']}/api/v1` : '/api/v1'
 
 // Display API address for debugging
 console.log('🔌 API Base URL:', baseURL)
@@ -28,6 +32,21 @@ const http: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+/**
+ * STORY-126.3 : déplie l'enveloppe spec 09 des réponses 2xx.
+ *
+ * Backend enveloppé : `{"data": <payload>, "message": ...}` → `response.data`
+ * devient `<payload>`. Les corps non-enveloppés (compat transition, binaire,
+ * 204 sans corps) restent strictement inchangés.
+ */
+function unwrapResponse<T>(response: AxiosResponse<T>): AxiosResponse<T> {
+  const body: unknown = response.data
+  if (body !== null && typeof body === 'object' && !Array.isArray(body) && 'data' in body) {
+    return { ...response, data: (body as ApiEnvelope<T>).data }
+  }
+  return response
+}
 
 // Request interceptor - Add auth token
 http.interceptors.request.use(
@@ -49,11 +68,17 @@ http.interceptors.response.use(
     // Reset retry counter on successful response
     retryAttempts = 0
     isRetrying = false
-    return response
+    // STORY-126.3 : unwrap de l'enveloppe {"data, message"} (spec 09)
+    return unwrapResponse(response)
   },
   async (error: AxiosError<ApiError>) => {
     if (error.response) {
       const { status, data } = error.response
+
+      // STORY-126.3 : erreurs spec 09 sous `error.message` / `error.code` ;
+      // `detail` conservé en fallback de transition (pré-126.2)
+      const errMessage = data?.error?.message ?? (data as { detail?: string } | undefined)?.detail
+      const errCode = data?.error?.code
 
       // Handle 401 - Unauthorized with exponential backoff retry logic
       if (status === 401) {
@@ -61,9 +86,7 @@ http.interceptors.response.use(
 
         // Ignore 401 errors on authentication endpoints (login, register, logout)
         // These are expected when credentials are invalid
-        if (requestUrl.includes('/auth/login') ||
-            requestUrl.includes('/auth/register') ||
-            requestUrl.includes('/auth/logout')) {
+        if (requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register') || requestUrl.includes('/auth/logout')) {
           console.warn('401 on auth endpoint, rejecting without retry')
           return Promise.reject(error)
         }
@@ -111,7 +134,7 @@ http.interceptors.response.use(
           const currentTime = Date.now() / 1000
 
           // If token is expired by more than 5 minutes, don't retry
-          if (payload.exp && (currentTime - payload.exp) > 300) {
+          if (payload.exp && currentTime - payload.exp > 300) {
             console.warn('Token expired by more than 5 minutes, logging out')
             retryAttempts = 0
             const authStore = useAuthStore()
@@ -125,9 +148,7 @@ http.interceptors.response.use(
           const delay = RETRY_DELAYS[retryAttempts]
           retryAttempts++
 
-          console.warn(
-            `Token validation issue, retrying in ${delay}ms (attempt ${retryAttempts}/${MAX_RETRY_ATTEMPTS})`
-          )
+          console.warn(`Token validation issue, retrying in ${delay}ms (attempt ${retryAttempts}/${MAX_RETRY_ATTEMPTS})`)
 
           return new Promise((resolve, reject) => {
             setTimeout(async () => {
@@ -139,7 +160,10 @@ http.interceptors.response.use(
                 // Success! Reset counters
                 retryAttempts = 0
                 isRetrying = false
-                resolve(response)
+                // STORY-126.3 : le retry contourne l'instance `http`
+                // (axios.request nu) → unwrap explicite pour garder le
+                // même format de sortie côté consommateurs
+                resolve(unwrapResponse(response))
               } catch (retryError) {
                 isRetrying = false
 
@@ -169,17 +193,17 @@ http.interceptors.response.use(
 
       // Handle 403 - Forbidden
       if (status === 403) {
-        console.error('Access forbidden:', data.detail)
+        console.error('Access forbidden:', errMessage, errCode ?? '')
       }
 
       // Handle 404 - Not Found
       if (status === 404) {
-        console.error('Resource not found:', data.detail)
+        console.error('Resource not found:', errMessage, errCode ?? '')
       }
 
       // Handle 500 - Server Error
       if (status >= 500) {
-        console.error('Server error:', data.detail)
+        console.error('Server error:', errMessage, errCode ?? '')
       }
     } else if (error.request) {
       console.error('Network error: No response received')

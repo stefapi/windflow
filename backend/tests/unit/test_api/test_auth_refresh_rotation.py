@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.organization import Organization
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
+from tests.conftest import unwrap
 
 LOGIN_URL = "/api/v1/auth/login"
 REFRESH_URL = "/api/v1/auth/refresh"
@@ -55,7 +56,7 @@ async def _login(client: AsyncClient, user: User) -> dict:
         LOGIN_URL, data={"username": user.username, "password": USER_PASSWORD}
     )
     assert response.status_code == 200, response.text
-    return response.json()
+    return unwrap(response)
 
 
 async def _active_tokens(db_session: AsyncSession, user_id: str) -> list:
@@ -161,7 +162,7 @@ class TestLoginPersistance:
             },
         )
         assert response.status_code == 201, response.text
-        body = response.json()
+        body = unwrap(response)
         user_id = body["user"]["id"]
 
         rows = (
@@ -191,7 +192,7 @@ class TestRefreshRotation:
 
         response = await client.post(REFRESH_URL, json={"refresh_token": old_refresh})
         assert response.status_code == 200, response.text
-        rotated = response.json()
+        rotated = unwrap(response)
 
         # Nouveau couple complet, refresh nouveau distinct de l'ancien
         assert rotated["access_token"]
@@ -202,7 +203,7 @@ class TestRefreshRotation:
         # L'ancien est consommé : re-soumission → 401 générique
         replay = await client.post(REFRESH_URL, json={"refresh_token": old_refresh})
         assert replay.status_code == 401
-        assert replay.json()["detail"] == "INVALID_OR_EXPIRED_TOKEN"
+        assert replay.json()["error"]["message"] == "INVALID_OR_EXPIRED_TOKEN"
 
     async def test_refresh_unknown_token_returns_401(
         self, client: AsyncClient, test_user: User
@@ -212,7 +213,7 @@ class TestRefreshRotation:
             REFRESH_URL, json={"refresh_token": "wf_rt_totally-unknown-token"}
         )
         assert response.status_code == 401
-        assert response.json()["detail"] == "INVALID_OR_EXPIRED_TOKEN"
+        assert response.json()["error"]["message"] == "INVALID_OR_EXPIRED_TOKEN"
 
     async def test_refresh_expired_token_returns_401(
         self, client: AsyncClient, db_session: AsyncSession, test_user: User
@@ -232,7 +233,7 @@ class TestRefreshRotation:
             REFRESH_URL, json={"refresh_token": body["refresh_token"]}
         )
         assert response.status_code == 401
-        assert response.json()["detail"] == "INVALID_OR_EXPIRED_TOKEN"
+        assert response.json()["error"]["message"] == "INVALID_OR_EXPIRED_TOKEN"
 
     async def test_refresh_reuse_revokes_family(
         self, client: AsyncClient, db_session: AsyncSession, test_user: User
@@ -245,7 +246,7 @@ class TestRefreshRotation:
 
         rotated = await client.post(REFRESH_URL, json={"refresh_token": old_refresh})
         assert rotated.status_code == 200
-        new_refresh = rotated.json()["refresh_token"]
+        new_refresh = unwrap(rotated)["refresh_token"]
         assert await _active_tokens(db_session, test_user.id)  # nouveau actif
 
         # Réutilisation de l'ancien → 401 + famille révoquée
@@ -274,7 +275,7 @@ class TestRefreshRotation:
             REFRESH_URL, json={"refresh_token": body["refresh_token"]}
         )
         assert response.status_code == 401
-        assert response.json()["detail"] == "INVALID_OR_EXPIRED_TOKEN"
+        assert response.json()["error"]["message"] == "INVALID_OR_EXPIRED_TOKEN"
 
         # Défense : aucune ligne active ne survit pour un compte désactivé
         actives = await _active_tokens(db_session, test_user.id)
@@ -310,7 +311,7 @@ class TestLogoutRevocation:
 
         logout = await client.post(LOGOUT_URL, headers=headers)
         assert logout.status_code == 200, logout.text
-        assert logout.json()["message"] == "Successfully logged out"
+        assert unwrap(logout)["message"] == "Successfully logged out"
 
         # Tous les refresh tokens de l'utilisateur sont révoqués en base
         actives = await _active_tokens(db_session, test_user.id)
@@ -352,7 +353,7 @@ class TestLogoutRevocation:
             },
         )
         assert login_b.status_code == 200, login_b.text
-        body_b = login_b.json()
+        body_b = unwrap(login_b)
 
         # A se connecte à son tour
         body_a = await _login(client, test_user)

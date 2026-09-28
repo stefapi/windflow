@@ -91,6 +91,54 @@ with skip and limit parameters.
 """,
     tags=["docker"],
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
+    responses={
+        200: {
+            "description": (
+                "List of containers — enveloppe spec 09"
+            ),
+            "content": {
+                "application/json": {
+                    "example": {
+                        "data": [
+                            {
+                                "id": "a1b2c3d4e5f6",
+                                "name": "windflow-api",
+                                "image": "windflow/api:latest",
+                                "status": "running",
+                            }
+                        ],
+                        "message": None,
+                    }
+                }
+            },
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "INVALID_OR_EXPIRED_TOKEN",
+                            "message": "Not authenticated",
+                        }
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Docker daemon error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "INTERNAL_ERROR",
+                            "message": "Docker daemon connection failed",
+                        }
+                    }
+                }
+            },
+        },
+    },
 )
 async def list_containers(
     request: Request,

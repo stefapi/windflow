@@ -27,6 +27,7 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
+from tests.conftest import unwrap
 
 IMPORT_FILE_CONTENT: bytes = (
     b'{"version": "1.0", "stack": {"name": "imported-stack", '
@@ -131,7 +132,7 @@ class TestViewerReads:
                 "/api/v1/compute/stats", headers=_auth_headers(user)
             )
         assert response.status_code == 200, response.text
-        assert response.json()["total_containers"] == 1
+        assert unwrap(response)["total_containers"] == 1
 
     async def test_viewer_200_compute_global(
         self, client: AsyncClient, db_session: AsyncSession
@@ -164,7 +165,7 @@ class TestViewerReads:
             "/api/v1/stats/dashboard", headers=_auth_headers(user)
         )
         assert response.status_code == 200, response.text
-        assert response.json()["total_targets"] == 0
+        assert unwrap(response)["total_targets"] == 0
 
     async def test_viewer_200_workflows(
         self, client: AsyncClient, db_session: AsyncSession
@@ -176,7 +177,7 @@ class TestViewerReads:
 
         response = await client.get("/api/v1/workflows/", headers=_auth_headers(user))
         assert response.status_code == 200, response.text
-        assert response.json() == []
+        assert unwrap(response) == []
 
     async def test_viewer_403_adopt(
         self, client: AsyncClient, db_session: AsyncSession
@@ -192,7 +193,7 @@ class TestViewerReads:
             headers=_auth_headers(user),
         )
         assert response.status_code == 403
-        assert response.json()["detail"] == "Not enough permissions"
+        assert response.json()["error"]["message"] == "Not enough permissions"
 
 
 # --- Operator / Admin : écritures ---------------------------------------------
@@ -228,7 +229,7 @@ class TestWriteMatrix:
             headers=_auth_headers(user),
         )
         assert response.status_code == 200, response.text
-        assert response.json()["name"] == "imported-stack"
+        assert unwrap(response)["name"] == "imported-stack"
 
     async def test_admin_200_adopt(self, client: AsyncClient, db_session: AsyncSession):
         """Gestion : POST /discovery/adopt avec admin → 200 (service mocké)."""
@@ -253,7 +254,7 @@ class TestWriteMatrix:
                 headers=_auth_headers(user),
             )
         assert response.status_code == 200, response.text
-        assert response.json()["stack_id"] == "stk-1"
+        assert unwrap(response)["stack_id"] == "stk-1"
 
 
 # --- Export : lecture viewer ---------------------------------------------------
@@ -282,7 +283,7 @@ class TestExport:
             f"/api/v1/stacks/{stack.id}/export", headers=_auth_headers(user)
         )
         assert response.status_code == 200, response.text
-        assert response.json()["stack"]["name"] == "exported-stack"
+        assert unwrap(response)["stack"]["name"] == "exported-stack"
 
     async def test_viewer_404_export_stack_not_found(
         self, client: AsyncClient, db_session: AsyncSession

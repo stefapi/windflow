@@ -126,23 +126,28 @@ Authenticate a user and generate JWT tokens.
     },
     responses={
         200: {
-            "description": "Authentication successful",
+            "description": (
+                "Authentication successful — enveloppe spec 09"
+            ),
             "content": {
                 "application/json": {
                     "example": {
-                        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                        "token_type": "bearer",
-                        "expires_in": 1800,
-                        "user": {
-                            "id": "550e8400-e29b-41d4-a716-446655440000",
-                            "username": "admin",
-                            "email": "admin@windflow.io",
-                            "full_name": "Administrator",
-                            "is_active": True,
-                            "is_superuser": True,
-                            "organization_id": "660e8400-e29b-41d4-a716-446655440001",
+                        "data": {
+                            "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                            "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                            "token_type": "bearer",
+                            "expires_in": 1800,
+                            "user": {
+                                "id": "550e8400-e29b-41d4-a716-446655440000",
+                                "username": "admin",
+                                "email": "admin@windflow.io",
+                                "full_name": "Administrator",
+                                "is_active": True,
+                                "is_superuser": True,
+                                "organization_id": "660e8400-e29b-41d4-a716-446655440001",
+                            },
                         },
+                        "message": None,
                     }
                 }
             },
@@ -151,13 +156,24 @@ Authenticate a user and generate JWT tokens.
             "description": "Invalid credentials",
             "content": {
                 "application/json": {
-                    "example": {"detail": "Incorrect username or password"}
+                    "example": {
+                        "error": {
+                            "code": "INVALID_CREDENTIALS",
+                            "message": "Incorrect username or password",
+                        }
+                    }
                 }
             },
         },
         403: {
             "description": "Account inactive",
-            "content": {"application/json": {"example": {"detail": "Inactive user"}}},
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {"code": "PERMISSION_DENIED", "message": "Inactive user"}
+                    }
+                }
+            },
         },
         429: {
             "description": (
@@ -177,13 +193,25 @@ Authenticate a user and generate JWT tokens.
                         "rate_limited": {
                             "summary": "Per-IP rate limit exceeded",
                             "value": {
-                                "detail": "Too Many Requests. Maximum 5 login attempts per minute."
+                                "error": {
+                                    "code": "TOO_MANY_ATTEMPTS",
+                                    "message": (
+                                        "Too Many Requests. Maximum 5 login attempts "
+                                        "per minute."
+                                    ),
+                                }
                             },
                         },
                         "too_many_attempts": {
                             "summary": "Brute-force lockout (per-username counter)",
                             "value": {
-                                "detail": "TOO_MANY_ATTEMPTS: too many failed login attempts, try again later"
+                                "error": {
+                                    "code": "TOO_MANY_ATTEMPTS",
+                                    "message": (
+                                        "TOO_MANY_ATTEMPTS: too many failed login "
+                                        "attempts, try again later"
+                                    ),
+                                }
                             },
                         },
                     }
@@ -194,7 +222,12 @@ Authenticate a user and generate JWT tokens.
             "description": "Internal server error",
             "content": {
                 "application/json": {
-                    "example": {"detail": "An unexpected error occurred"}
+                    "example": {
+                        "error": {
+                            "code": "INTERNAL_ERROR",
+                            "message": "An unexpected error occurred",
+                        }
+                    }
                 }
             },
         },

@@ -79,35 +79,74 @@ dedicated background job (default: keep forever).
 """,
     responses={
         200: {
-            "description": "Paginated audit entries",
+            "description": (
+                "Paginated audit entries — enveloppe spec 09 (page sous data)"
+            ),
             "content": {
                 "application/json": {
                     "example": {
-                        "items": [
-                            {
-                                "id": "3f1c9e2a-7b4d-4e8f-9a0b-1c2d3e4f5a6b",
-                                "user_id": "9d2c8a4f-1b3e-4f5a-8a7b-2c9d0e1f2a3b",
-                                "organization_id": None,
-                                "action": "stack.deleted",
-                                "resource_type": "stack",
-                                "resource_id": "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d",
-                                "details": {"name": "production-nginx"},
-                                "ip_address": "203.0.113.10",
-                                "correlation_id": "f0e1d2c3-b4a5-4968-8776-5544332211ff",
-                                "created_at": "2026-09-25T14:22:05Z",
-                            }
-                        ],
-                        "total": 128,
-                        "skip": 0,
-                        "limit": 100,
+                        "data": {
+                            "items": [
+                                {
+                                    "id": "3f1c9e2a-7b4d-4e8f-9a0b-1c2d3e4f5a6b",
+                                    "user_id": "9d2c8a4f-1b3e-4f5a-8a7b-2c9d0e1f2a3b",
+                                    "organization_id": None,
+                                    "action": "stack.deleted",
+                                    "resource_type": "stack",
+                                    "resource_id": "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d",
+                                    "details": {"name": "production-nginx"},
+                                    "ip_address": "203.0.113.10",
+                                    "correlation_id": "f0e1d2c3-b4a5-4968-8776-5544332211ff",
+                                    "created_at": "2026-09-25T14:22:05Z",
+                                }
+                            ],
+                            "total": 128,
+                            "skip": 0,
+                            "limit": 100,
+                        },
+                        "message": None,
                     }
                 }
             },
         },
-        401: {"description": "Not authenticated"},
-        403: {"description": "Not a Super Admin (spec 08 — system administration)"},
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "INVALID_OR_EXPIRED_TOKEN",
+                            "message": "Not authenticated",
+                        }
+                    }
+                }
+            },
+        },
+        403: {
+            "description": "Not a Super Admin (spec 08 — system administration)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "PERMISSION_DENIED",
+                            "message": "Not enough permissions",
+                        }
+                    }
+                }
+            },
+        },
         422: {
-            "description": "Invalid query parameter (since not ISO, limit out of bounds…)"
+            "description": "Invalid query parameter (since not ISO, limit out of bounds…)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Validation Error",
+                        }
+                    }
+                }
+            },
         },
     },
 )

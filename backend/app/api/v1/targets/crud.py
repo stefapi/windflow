@@ -53,31 +53,36 @@ Default limit is 100 targets per request.
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
     responses={
         200: {
-            "description": "List of targets retrieved successfully",
+            "description": (
+                "List of targets — enveloppe spec 09"
+            ),
             "content": {
                 "application/json": {
-                    "example": [
-                        {
-                            "id": "550e8400-e29b-41d4-a716-446655440000",
-                            "name": "production-docker",
-                            "type": "docker",
-                            "host": "docker.prod.example.com",
-                            "port": 2376,
-                            "is_active": True,
-                            "organization_id": "660e8400-e29b-41d4-a716-446655440001",
-                            "created_at": "2026-01-15T10:30:00Z",
-                        },
-                        {
-                            "id": "770e8400-e29b-41d4-a716-446655440002",
-                            "name": "staging-k8s",
-                            "type": "kubernetes",
-                            "host": "k8s.staging.example.com",
-                            "port": 6443,
-                            "is_active": True,
-                            "organization_id": "660e8400-e29b-41d4-a716-446655440001",
-                            "created_at": "2026-01-20T14:20:00Z",
-                        },
-                    ]
+                    "example": {
+                        "data": [
+                            {
+                                "id": "550e8400-e29b-41d4-a716-446655440000",
+                                "name": "production-docker",
+                                "type": "docker",
+                                "host": "docker.prod.example.com",
+                                "port": 2376,
+                                "is_active": True,
+                                "organization_id": "660e8400-e29b-41d4-a716-446655440001",
+                                "created_at": "2026-01-15T10:30:00Z",
+                            },
+                            {
+                                "id": "770e8400-e29b-41d4-a716-446655440002",
+                                "name": "staging-k8s",
+                                "type": "kubernetes",
+                                "host": "k8s.staging.example.com",
+                                "port": 6443,
+                                "is_active": True,
+                                "organization_id": "660e8400-e29b-41d4-a716-446655440001",
+                                "created_at": "2026-01-20T14:20:00Z",
+                            },
+                        ],
+                        "message": None,
+                    }
                 }
             },
         },
@@ -86,8 +91,10 @@ Default limit is 100 targets per request.
             "content": {
                 "application/json": {
                     "example": {
-                        "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token",
+                        "error": {
+                            "code": "INVALID_OR_EXPIRED_TOKEN",
+                            "message": "Missing or invalid authentication token",
+                        }
                     }
                 }
             },

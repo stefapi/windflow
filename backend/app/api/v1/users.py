@@ -106,38 +106,43 @@ Use `skip` and `limit` parameters for pagination:
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
     responses={
         200: {
-            "description": "List of users retrieved successfully",
+            "description": (
+                "List of users — enveloppe spec 09 (liste paginée sous data)"
+            ),
             "content": {
                 "application/json": {
                     "example": {
-                        "items": [
-                            {
-                                "id": "550e8400-e29b-41d4-a716-446655440000",
-                                "username": "admin",
-                                "email": "admin@windflow.io",
-                                "full_name": "Administrator",
-                                "is_active": True,
-                                "is_superuser": True,
-                                "organization_id": "660e8400-e29b-41d4-a716-446655440001",
-                                "created_at": "2026-01-01T10:00:00Z",
-                                "updated_at": "2026-01-15T14:30:00Z",
-                            },
-                            {
-                                "id": "770e8400-e29b-41d4-a716-446655440002",
-                                "username": "john_doe",
-                                "email": "john@windflow.io",
-                                "full_name": "John Doe",
-                                "is_active": True,
-                                "is_superuser": False,
-                                "organization_id": "660e8400-e29b-41d4-a716-446655440001",
-                                "created_at": "2026-01-10T09:15:00Z",
-                                "updated_at": "2026-01-20T11:45:00Z",
-                            },
-                        ],
-                        "total": 2,
-                        "page": 1,
-                        "size": 100,
-                        "pages": 1,
+                        "data": {
+                            "items": [
+                                {
+                                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                                    "username": "admin",
+                                    "email": "admin@windflow.io",
+                                    "full_name": "Administrator",
+                                    "is_active": True,
+                                    "is_superuser": True,
+                                    "organization_id": "660e8400-e29b-41d4-a716-446655440001",
+                                    "created_at": "2026-01-01T10:00:00Z",
+                                    "updated_at": "2026-01-15T14:30:00Z",
+                                },
+                                {
+                                    "id": "770e8400-e29b-41d4-a716-446655440002",
+                                    "username": "john_doe",
+                                    "email": "john@windflow.io",
+                                    "full_name": "John Doe",
+                                    "is_active": True,
+                                    "is_superuser": False,
+                                    "organization_id": "660e8400-e29b-41d4-a716-446655440001",
+                                    "created_at": "2026-01-10T09:15:00Z",
+                                    "updated_at": "2026-01-20T11:45:00Z",
+                                },
+                            ],
+                            "total": 2,
+                            "page": 1,
+                            "size": 100,
+                            "pages": 1,
+                        },
+                        "message": None,
                     }
                 }
             },
@@ -145,7 +150,14 @@ Use `skip` and `limit` parameters for pagination:
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {"example": {"detail": "Not authenticated"}}
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "INVALID_OR_EXPIRED_TOKEN",
+                            "message": "Not authenticated",
+                        }
+                    }
+                }
             },
         },
         429: {

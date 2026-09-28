@@ -15,6 +15,7 @@ from app.models.organization import Organization
 from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.services.user_organization_service import UserOrganizationService
+from tests.conftest import unwrap
 
 
 class TestLoginNonRegression:
@@ -36,7 +37,7 @@ class TestLoginNonRegression:
                 data={"username": identifier, "password": "testpassword123"},
             )
             assert response.status_code == 200, response.text
-            body = response.json()
+            body = unwrap(response)
             assert body["access_token"]
             # Contrat conservé : organization_id = org primaire
             assert body["user"]["organization_id"] == primary_org
@@ -52,7 +53,7 @@ class TestLoginNonRegression:
             data={"username": test_user.username, "password": "testpassword123"},
         )
         assert response.status_code == 200
-        decoded = decode_access_token(response.json()["access_token"])
+        decoded = decode_access_token(unwrap(response)["access_token"])
         assert decoded is not None
         assert decoded.user_id == test_user.id
         assert decoded.is_superuser is False
@@ -94,7 +95,7 @@ class TestRegisterSwitch:
             },
         )
         assert response.status_code == 201, response.text
-        user_id = response.json()["user"]["id"]
+        user_id = unwrap(response)["user"]["id"]
 
         link = (
             await db_session.execute(
@@ -151,7 +152,7 @@ class TestRegisterSwitch:
         )
         assert response.status_code == 201, response.text
         # is_superuser du body ignoré (schéma : défaut False sans champ exposé)
-        assert response.json()["user"]["is_superuser"] is False
+        assert unwrap(response)["user"]["is_superuser"] is False
 
 
 class TestAuthMe:
@@ -201,7 +202,7 @@ class TestAuthMe:
 
         response = await authenticated_client.get("/api/v1/auth/me")
         assert response.status_code == 200, response.text
-        assert response.json()["organization_id"] == test_organization.id
+        assert unwrap(response)["organization_id"] == test_organization.id
 
     async def test_me_response_does_not_expose_sensitive_fields(
         self, authenticated_client
@@ -210,7 +211,7 @@ class TestAuthMe:
         dans la réponse."""
         response = await authenticated_client.get("/api/v1/auth/me")
         assert response.status_code == 200
-        body = response.json()
+        body = unwrap(response)
         assert "hashed_password" not in body
         assert "password" not in body
 

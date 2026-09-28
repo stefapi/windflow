@@ -36,6 +36,7 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
+from tests.conftest import error_message
 
 # Préfixe unique pour ne pas entrer en collision avec les routes réelles
 _TEST_PREFIX = "/test-rbac-1221"
@@ -150,7 +151,7 @@ class TestRequireRoleHierarchy:
 
         resp_o = await client.get(f"{_TEST_PREFIX}/operator", headers=headers)
         assert resp_o.status_code == 403
-        assert resp_o.json()["detail"] == "Not enough permissions"
+        assert error_message(resp_o) == "Not enough permissions"
 
         assert (
             await client.get(f"{_TEST_PREFIX}/admin", headers=headers)
@@ -246,7 +247,7 @@ class TestRequireRoleAuthChain:
             f"{_TEST_PREFIX}/viewer", headers=_auth_headers(_token_for(user))
         )
         assert resp.status_code == 403
-        assert resp.json()["detail"] == "Inactive user"
+        assert error_message(resp) == "Inactive user"
 
 
 # --- Tests disable_auth -------------------------------------------------------

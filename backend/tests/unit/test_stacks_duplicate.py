@@ -14,6 +14,7 @@ from app.models.stack import Stack
 from app.models.user import User
 from app.schemas.stack import StackCreate
 from app.services.stack_service import StackService
+from tests.conftest import error_message, unwrap
 
 
 @pytest.fixture
@@ -68,7 +69,7 @@ class TestDuplicateStack:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["name"] == "Duplicated Stack"
         assert data["template"] == test_stack.template
         assert "duplicate" in data["tags"]
@@ -88,7 +89,7 @@ class TestDuplicateStack:
         )
 
         assert response.status_code == 404
-        assert "non trouvé" in response.json()["detail"].lower()
+        assert "non trouvé" in error_message(response).lower()
 
     @pytest.mark.asyncio
     async def test_duplicate_stack_name_conflict(
@@ -103,7 +104,7 @@ class TestDuplicateStack:
         )
 
         assert response.status_code == 409
-        assert "existe déjà" in response.json()["detail"]
+        assert "existe déjà" in error_message(response)
 
     @pytest.mark.asyncio
     async def test_duplicate_stack_different_org(
@@ -122,7 +123,7 @@ class TestDuplicateStack:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["organization_id"] == second_organization.id
         assert data["name"] == "Duplicated in Other Org"
 

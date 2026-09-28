@@ -31,6 +31,44 @@ List all scheduled tasks, optionally filtered by organization.
 ## Access Control
 - **Minimum role**: Viewer — read-only access for any authenticated user
 """,
+    responses={
+        200: {
+            "description": (
+                "Scheduled tasks — enveloppe spec 09"
+            ),
+            "content": {
+                "application/json": {
+                    "example": {
+                        "data": [
+                            {
+                                "id": "3f2c8a4f-1b3e-4f5a-8a7b-2c9d0e1f2a3b",
+                                "name": "cleanup-logs",
+                                "task_type": "cleanup_logs",
+                                "cron_expression": "0 3 * * *",
+                                "parameters": {},
+                                "enabled": True,
+                                "organization_id": None,
+                            }
+                        ],
+                        "message": None,
+                    }
+                }
+            },
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "INVALID_OR_EXPIRED_TOKEN",
+                            "message": "Unauthorized",
+                        }
+                    }
+                }
+            },
+        },
+    },
 )
 async def list_schedules(
     organization_id: Optional[str] = Query(None),

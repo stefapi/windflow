@@ -86,6 +86,7 @@ async def _create_admin_of_org(
 
 
 import pytest
+from tests.conftest import unwrap
 
 
 @pytest.fixture(autouse=True)
@@ -130,7 +131,7 @@ class TestAdminForbiddenMatrix:
             f"{PREFIX}/definitions", headers=_auth_headers(user)
         )
         assert response.status_code == 403
-        assert response.json()["detail"] == "Not enough permissions"
+        assert response.json()["error"]["message"] == "Not enough permissions"
 
     async def test_operator_403_get_definitions(
         self, client: AsyncClient, db_session: AsyncSession
@@ -253,7 +254,7 @@ class TestSuperuserAccess:
         assert response.status_code == 200, response.text
         # Liste non vide (le YAML de démo est détecté, éventuellement en
         # erreur de validation de schéma — le contrat RBAC est le 200)
-        assert isinstance(response.json(), list) and len(response.json()) >= 1
+        assert isinstance(unwrap(response), list) and len(unwrap(response)) >= 1
 
     async def test_superuser_200_imported(
         self, client: AsyncClient, db_session: AsyncSession
@@ -263,7 +264,7 @@ class TestSuperuserAccess:
 
         response = await client.get(f"{PREFIX}/imported", headers=_auth_headers(user))
         assert response.status_code == 200, response.text
-        assert response.json() == []
+        assert unwrap(response) == []
 
     async def test_superuser_200_sync_status(
         self, client: AsyncClient, db_session: AsyncSession

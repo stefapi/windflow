@@ -137,24 +137,29 @@ List all Docker Compose stacks available in the current user's organization.
 """,
     responses={
         200: {
-            "description": "List of stacks retrieved successfully",
+            "description": (
+                "List of stacks — enveloppe spec 09"
+            ),
             "content": {
                 "application/json": {
-                    "example": [
-                        {
-                            "id": "550e8400-e29b-41d4-a716-446655440000",
-                            "version": "1.0.0",
-                            "category": "web",
-                            "name": "nginx-stack",
-                            "description": "Nginx web server",
-                            "icon_url": "https://cdn.windflow.io/icons/nginx.svg",
-                            "author": "WindFlow Team",
-                            "license": "MIT",
-                            "rating": 4.8,
-                            "tags": ["web", "server"],
-                            "downloads": 150,
-                        }
-                    ]
+                    "example": {
+                        "data": [
+                            {
+                                "id": "550e8400-e29b-41d4-a716-446655440000",
+                                "version": "1.0.0",
+                                "category": "web",
+                                "name": "nginx-stack",
+                                "description": "Nginx web server",
+                                "icon_url": "https://cdn.windflow.io/icons/nginx.svg",
+                                "author": "WindFlow Team",
+                                "license": "MIT",
+                                "rating": 4.8,
+                                "tags": ["web", "server"],
+                                "downloads": 150,
+                            }
+                        ],
+                        "message": None,
+                    }
                 }
             },
         },
@@ -163,8 +168,10 @@ List all Docker Compose stacks available in the current user's organization.
             "content": {
                 "application/json": {
                     "example": {
-                        "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token",
+                        "error": {
+                            "code": "INVALID_OR_EXPIRED_TOKEN",
+                            "message": "Missing or invalid authentication token",
+                        }
                     }
                 }
             },

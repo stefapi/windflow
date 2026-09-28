@@ -33,6 +33,7 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
+from tests.conftest import unwrap
 
 # --- Helpers --------------------------------------------------------------
 
@@ -146,7 +147,7 @@ class TestViewerMatrix:
 
         response = await client.get("/api/v1/deployments", headers=_auth_headers(user))
         assert response.status_code == 200
-        body = response.json()
+        body = unwrap(response)
         assert body["total"] == 1
         # DeploymentResponse n'expose pas organization_id : identification
         # par id (le seed n'a créé qu'un seul déploiement, dans son org).
@@ -164,7 +165,7 @@ class TestViewerMatrix:
             f"/api/v1/deployments/{deployment.id}", headers=_auth_headers(user)
         )
         assert response.status_code == 200
-        assert response.json()["id"] == deployment.id
+        assert unwrap(response)["id"] == deployment.id
 
     async def test_viewer_403_delete_deployment(
         self, client: AsyncClient, db_session: AsyncSession
@@ -176,7 +177,7 @@ class TestViewerMatrix:
             headers=_auth_headers(user),
         )
         assert response.status_code == 403
-        assert response.json()["detail"] == "Not enough permissions"
+        assert response.json()["error"]["message"] == "Not enough permissions"
 
 
 # --- Operator : création OK, gestion 403 --------------------------------------
@@ -209,7 +210,7 @@ class TestOperatorMatrix:
 
         assert response.status_code == 201, response.text
         orchestrator.assert_awaited_once()
-        assert response.json()["name"] == "op-deployment"
+        assert unwrap(response)["name"] == "op-deployment"
 
     async def test_operator_403_update_deployment(
         self, client: AsyncClient, db_session: AsyncSession

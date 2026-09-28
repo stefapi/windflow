@@ -12,11 +12,11 @@ Fournit les fixtures pour:
 import asyncio
 import shutil
 from pathlib import Path
-from typing import AsyncGenerator, Generator
+from typing import Any, AsyncGenerator, Generator
 
 import pytest
 from alembic import command as alembic_command
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, Response
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.database import get_alembic_config, get_db
@@ -30,6 +30,62 @@ from app.services.user_service import UserService
 
 # Configuration pytest-asyncio
 pytest_plugins = ("pytest_asyncio",)
+
+
+# --- STORY-126.2 : helpers d'unwrap des enveloppes spec 09 --------------------
+#
+# Enveloppes spec 09 systématiques (STORY-126.2, flag retiré par 126.3) :
+# les réponses 2xx de /api/v1/* vivent sous {"data": ..., "message": ...}
+# et les erreurs sous {"error": {"code", "message"}}. Helpers simples
+# (pas des fixtures), importés par les suites via
+# ``from tests.conftest import unwrap, error_code``.
+
+
+def unwrap(response: Response) -> Any:
+    """Retourne ``body["data"]`` si l'enveloppe est présente, sinon le body.
+
+    Migration mécanique des tests pré-126.2 : ``response.json()`` devient
+    ``unwrap(response)``. Tolère le format nu (flag OFF) pour un lancement
+    local en compat temporaire ; en flag ON une enveloppe manquante fait
+    remonter la clé réellement attendue (détection de régression).
+
+    Args:
+        response: Réponse httpx d'un endpoint /api/v1/*.
+
+    Returns:
+        Le payload utile (contenu de ``data``), ou le body nu en legacy.
+    """
+    body = response.json()
+    if isinstance(body, dict) and "data" in body:
+        return body["data"]
+    return body
+
+
+def error_code(response: Response) -> str:
+    """Retourne ``body["error"]["code"]`` (échoue si pas d'enveloppe).
+
+    Strict par design (STORY-126.2) : une erreur non enveloppée est une
+    régression du contrat spec 09.
+
+    Args:
+        response: Réponse httpx en erreur (4xx/5xx).
+
+    Returns:
+        Le code machine spec 09 (ex. ``PERMISSION_DENIED``).
+    """
+    return response.json()["error"]["code"]
+
+
+def error_message(response: Response) -> str:
+    """Retourne ``body["error"]["message"]`` (message lisible spec 09).
+
+    Args:
+        response: Réponse httpx en erreur (4xx/5xx).
+
+    Returns:
+        Le message lisible (ex. ``"Not enough permissions"``).
+    """
+    return response.json()["error"]["message"]
 
 
 @pytest.fixture(autouse=True)
@@ -359,8 +415,9 @@ async def _login_role_client(client: AsyncClient, username: str) -> None:
         data={"username": username, "password": _ROLE_USER_PASSWORD},
     )
     assert response.status_code == 200, response.text
+    # STORY-126.2 : le login répond en enveloppe — unwrap du token
     client.headers.update(
-        {"Authorization": f"Bearer {response.json()['access_token']}"}
+        {"Authorization": f"Bearer {unwrap(response)['access_token']}"}
     )
 
 
@@ -496,8 +553,8 @@ async def authenticated_client(
     )
 
     assert response.status_code == 200
-    token_data = response.json()
-    access_token = token_data["access_token"]
+    # STORY-126.2 : le login répond en enveloppe — unwrap du token
+    access_token = unwrap(response)["access_token"]
 
     # Ajouter le token aux headers
     client.headers.update({"Authorization": f"Bearer {access_token}"})
@@ -529,8 +586,8 @@ async def admin_client(
     )
 
     assert response.status_code == 200
-    token_data = response.json()
-    access_token = token_data["access_token"]
+    # STORY-126.2 : le login répond en enveloppe — unwrap du token
+    access_token = unwrap(response)["access_token"]
 
     # Ajouter le token aux headers
     client.headers.update({"Authorization": f"Bearer {access_token}"})

@@ -36,6 +36,7 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
+from tests.conftest import unwrap
 
 # --- Helpers --------------------------------------------------------------
 
@@ -241,7 +242,7 @@ class TestCrossOrganizationIsolation:
             "/api/v1/stacks/", headers=_auth_headers(isolation_setup["admin_a"])
         )
         assert response.status_code == 200
-        stacks = response.json()
+        stacks = unwrap(response)
         stack_ids = {s["id"] for s in stacks}
         assert (
             isolation_setup["stack_b"].id not in stack_ids
@@ -258,7 +259,7 @@ class TestCrossOrganizationIsolation:
             "/api/v1/deployments", headers=_auth_headers(isolation_setup["viewer_b"])
         )
         assert response.status_code == 200
-        items = response.json()["items"]
+        items = unwrap(response)["items"]
         item_ids = {i["id"] for i in items}
         assert isolation_setup["deployment_a"].id not in item_ids
         assert isolation_setup["deployment_b"].id in item_ids

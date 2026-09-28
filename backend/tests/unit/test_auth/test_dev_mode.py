@@ -9,6 +9,7 @@ from fastapi import HTTPException
 
 from app.auth.dependencies import get_current_user, get_current_user_ws
 from app.models.user import User
+from tests.conftest import unwrap
 
 
 @pytest.mark.asyncio
@@ -198,4 +199,5 @@ class TestDevMode:
             json={"refresh_token": response.refresh_token},
         )
         assert refresh.status_code == 200, refresh.text
-        assert refresh.json()["refresh_token"] != response.refresh_token
+        assert unwrap(refresh)["access_token"]
+        assert unwrap(refresh)["refresh_token"] != response.refresh_token

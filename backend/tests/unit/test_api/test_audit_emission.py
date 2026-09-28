@@ -48,6 +48,7 @@ from app.models.deployment import Deployment
 from app.models.stack import Stack
 from app.models.stack_version import StackVersion
 from app.models.user import User
+from tests.conftest import unwrap
 
 USER_PASSWORD = "testpassword123"
 
@@ -270,7 +271,7 @@ class TestAuthAudit:
             API_KEYS_URL, json={"name": "audit-emission-key"}, headers=headers
         )
         assert created.status_code == 201, created.text
-        key_id = created.json()["id"]
+        key_id = unwrap(created)["id"]
 
         revoked = await client.delete(f"{API_KEYS_URL}/{key_id}", headers=headers)
         assert revoked.status_code == 200, revoked.text
@@ -484,7 +485,7 @@ class TestDeploymentsAudit:
         line = lines[0]
         assert line.user_id == operator_user.id
         assert line.resource_type == "deployment"
-        assert line.resource_id == response.json()["id"]
+        assert line.resource_id == unwrap(response)["id"]
         assert line.organization_id == test_organization.id
 
     async def test_deployment_terminal_transitions_system_actor(
@@ -720,7 +721,7 @@ class TestResilienceAndSecrets:
             API_KEYS_URL, json={"name": "secret-hygiene-key"}, headers=headers
         )
         assert created.status_code == 201, created.text
-        raw_key = created.json()["key"]
+        raw_key = unwrap(created)["key"]
         assert raw_key.startswith("wf_ak_")
 
         entries = (
@@ -777,7 +778,7 @@ class TestResilienceAndSecrets:
             API_KEYS_URL, json={"name": "caplog-hygiene-key"}, headers=headers
         )
         assert created.status_code == 201, created.text
-        raw_key = created.json()["key"]
+        raw_key = unwrap(created)["key"]
 
         assert wrong_password not in caplog.text
         assert USER_PASSWORD not in caplog.text

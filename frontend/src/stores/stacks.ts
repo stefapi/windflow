@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { stacksApi } from '@/services/api'
-import type { Stack, StackCreate, StackUpdate } from '@/types/api'
+import type { PaginatedResponse, Stack, StackCreate, StackUpdate } from '@/types/api'
 
 export const useStacksStore = defineStore('stacks', () => {
   const stacks = ref<Stack[]>([])
@@ -10,19 +10,21 @@ export const useStacksStore = defineStore('stacks', () => {
   const error = ref<string | null>(null)
 
   // Computed: active stacks (not archived)
-  const activeStacks = computed(() => stacks.value.filter(s => !s.is_archived))
+  const activeStacks = computed(() => stacks.value.filter((s) => !s.is_archived))
 
   // Computed: archived stacks
-  const archivedStacks = computed(() => stacks.value.filter(s => s.is_archived))
+  const archivedStacks = computed(() => stacks.value.filter((s) => s.is_archived))
 
   async function fetchStacks(organizationId?: string): Promise<void> {
     loading.value = true
     error.value = null
     try {
       const response = await stacksApi.list({ organization_id: organizationId })
-      // Backend returns List[StackResponse] directly, not wrapped in {items:[]}
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      stacks.value = (response.data as any).items || response.data
+      // STORY-126.3 : l'unwrap centralisé (http.ts) déplie l'enveloppe spec 09
+      // — response.data est soit List[Stack] (réponse liste du backend), soit
+      // {items: [...]} (format paginé) ; les deux sont gérés.
+      const body: unknown = response.data
+      stacks.value = Array.isArray(body) ? body : ((body as PaginatedResponse<Stack>).items ?? [])
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch stacks'
       throw err
@@ -65,7 +67,7 @@ export const useStacksStore = defineStore('stacks', () => {
     error.value = null
     try {
       const response = await stacksApi.update(id, data)
-      const index = stacks.value.findIndex(s => s.id === id)
+      const index = stacks.value.findIndex((s) => s.id === id)
       if (index !== -1) stacks.value[index] = response.data
       if (currentStack.value?.id === id) currentStack.value = response.data
     } catch (err: unknown) {
@@ -81,7 +83,7 @@ export const useStacksStore = defineStore('stacks', () => {
     error.value = null
     try {
       await stacksApi.delete(id)
-      stacks.value = stacks.value.filter(s => s.id !== id)
+      stacks.value = stacks.value.filter((s) => s.id !== id)
       if (currentStack.value?.id === id) currentStack.value = null
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to delete stack'
@@ -96,7 +98,7 @@ export const useStacksStore = defineStore('stacks', () => {
     error.value = null
     try {
       await stacksApi.archive(id)
-      const stack = stacks.value.find(s => s.id === id)
+      const stack = stacks.value.find((s) => s.id === id)
       if (stack) {
         stack.is_archived = true
         stack.archived_at = new Date().toISOString()
@@ -117,7 +119,7 @@ export const useStacksStore = defineStore('stacks', () => {
     error.value = null
     try {
       await stacksApi.unarchive(id)
-      const stack = stacks.value.find(s => s.id === id)
+      const stack = stacks.value.find((s) => s.id === id)
       if (stack) {
         stack.is_archived = false
         stack.archived_at = null

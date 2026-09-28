@@ -28,6 +28,7 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
+from tests.conftest import unwrap
 
 # --- Helpers --------------------------------------------------------------
 
@@ -144,7 +145,7 @@ class TestLastSuperadminProtection:
             headers=_auth_headers(escalation_setup["superadmin"]),
         )
         assert response.status_code == 409, response.text
-        assert "last superadmin" in response.json()["detail"].lower()
+        assert "last superadmin" in response.json()["error"]["message"].lower()
 
     async def test_last_superadmin_cannot_be_deactivated(
         self, client: AsyncClient, escalation_setup
@@ -156,7 +157,7 @@ class TestLastSuperadminProtection:
             headers=_auth_headers(escalation_setup["superadmin"]),
         )
         assert response.status_code == 409, response.text
-        assert "last superadmin" in response.json()["detail"].lower()
+        assert "last superadmin" in response.json()["error"]["message"].lower()
 
     async def test_last_superadmin_cannot_be_deleted(
         self, client: AsyncClient, db_session: AsyncSession, escalation_setup
@@ -193,7 +194,7 @@ class TestLastSuperadminProtection:
             headers=_auth_headers(second),
         )
         assert resp_self.status_code == 409, resp_self.text
-        assert "last superadmin" in resp_self.json()["detail"].lower()
+        assert "last superadmin" in resp_self.json()["error"]["message"].lower()
         # Le compte du dernier superadmin est intact
         still = await UserService.get_by_id(db_session, second.id)
         assert still is not None
@@ -278,7 +279,7 @@ class TestOrgAdminEscalationGuards:
             headers=_auth_headers(db["admin_a"]),
         )
         assert response.status_code == 200, response.text
-        assert response.json()["role"] == "operator"
+        assert unwrap(response)["role"] == "operator"
 
     async def test_admin_cannot_add_member_with_equal_role(
         self, client: AsyncClient, db_session: AsyncSession, escalation_setup
@@ -401,4 +402,4 @@ class TestRoleChangeInvalidatesCache:
             headers=_auth_headers(db["viewer_a"]),
         )
         assert after.status_code == 200, after.text
-        assert after.json()["role"] == "viewer"
+        assert unwrap(after)["role"] == "viewer"

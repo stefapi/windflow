@@ -19,6 +19,7 @@ from app.schemas.compute import (
     TargetGroup,
     TargetMetrics,
 )
+from tests.conftest import unwrap
 
 # =============================================================================
 # Fixture module-level : désactiver le mode dev (disable_auth=False)
@@ -128,7 +129,7 @@ class TestComputeStatsEndpoint:
             response = await authenticated_client.get("/api/v1/compute/stats")
 
         assert response.status_code == 200
-        body = response.json()
+        body = unwrap(response)
         assert body["total_containers"] == 10
         assert body["running_containers"] == 7
         assert body["stacks_count"] == 3
@@ -150,7 +151,7 @@ class TestComputeStatsEndpoint:
             response = await authenticated_client.get("/api/v1/compute/stats")
 
         assert response.status_code == 200
-        body = response.json()
+        body = unwrap(response)
         expected_fields = {
             "total_containers",
             "running_containers",
@@ -210,7 +211,7 @@ class TestComputeGlobalEndpoint:
             response = await authenticated_client.get("/api/v1/compute/global")
 
         assert response.status_code == 200
-        body = response.json()
+        body = unwrap(response)
         assert "managed_stacks" in body
         assert "discovered_items" in body
         assert "standalone_containers" in body
@@ -230,7 +231,7 @@ class TestComputeGlobalEndpoint:
             )
 
         assert response.status_code == 200
-        body = response.json()
+        body = unwrap(response)
         assert isinstance(body, list)
         assert len(body) == 1
         assert body[0]["target_id"] == "t1"

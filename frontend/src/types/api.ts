@@ -371,11 +371,25 @@ export interface RefreshTokenResponse {
 }
 
 // API Response types
+// STORY-126.3 : depuis les enveloppes spec 09, les charges utiles vivent sous
+// `data` — l'interceptor axios les déplie centralement, ce type décrit donc la
+// valeur POST-unwrap (structure {items, total, skip, limit} inchangée ;
+// STORY-128 la convertira en `pagination{page, per_page, total}`).
 export interface PaginatedResponse<T> {
   items: T[]
   total: number
   skip: number
   limit: number
+}
+
+/**
+ * STORY-126.3 : enveloppe spec 09 des réponses 2xx — `{"data": ..., "message": ...}`.
+ * Dépliée centralement par l'interceptor axios (`unwrapResponse`), ce type
+ * n'apparaît qu'aux frontières de test/mock.
+ */
+export interface ApiEnvelope<T> {
+  data: T
+  message: string | null
 }
 
 // Scheduled Task types
@@ -413,9 +427,20 @@ export interface ScheduledTaskUpdate {
   enabled?: boolean
 }
 
+/**
+ * STORY-126.3 : corps d'erreur spec 09 — `{"error": {code, message, details?},
+ * correlation_id?}`. `detail` (pré-126.2) reste toléré en fallback de
+ * transition par l'interceptor.
+ */
 export interface ApiError {
-  detail: string
-  status_code: number
+  error?: {
+    code: string
+    message: string
+    details?: unknown
+  }
+  correlation_id?: string
+  /** @deprecated format legacy pré-126.2 — fallback de transition uniquement */
+  detail?: string
 }
 
 // Dashboard types
@@ -975,16 +1000,16 @@ export interface ContainerRenameResponse {
 
 /** Requête POST create container — correspond à ContainerCreateRequest backend */
 export interface ContainerCreateRequest {
-  name: string              // pattern: ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$
+  name: string // pattern: ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$
   image: string
   command?: string[]
-  env?: string[]            // format KEY=VALUE
+  env?: string[] // format KEY=VALUE
   ports?: Record<string, Record<string, string>>
   volumes?: Record<string, string>
   labels?: Record<string, string>
-  restart_policy?: string   // 'no' | 'always' | 'on-failure' | 'unless-stopped'
-  network_mode?: string     // défaut 'bridge'
-  privileged?: boolean      // défaut false
+  restart_policy?: string // 'no' | 'always' | 'on-failure' | 'unless-stopped'
+  network_mode?: string // défaut 'bridge'
+  privileged?: boolean // défaut false
 }
 
 /** Requête POST promote — correspond à ContainerPromoteRequest backend */

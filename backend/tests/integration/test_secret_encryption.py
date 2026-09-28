@@ -31,6 +31,7 @@ from app.models.stack import Stack
 from app.models.target import Target, TargetStatus, TargetType
 from app.schemas.deployment import DeploymentCreate
 from app.services.deployment_service import DeploymentService
+from tests.conftest import unwrap
 
 # Secrets factices de test — jamais utilisés hors de ces tests.
 LEGACY_PASSWORD = "LegacyClearTextPassword123!"
@@ -315,7 +316,7 @@ class TestMaskingAcrossApiEndpoints:
                 },
             )
         assert create_response.status_code == 201, create_response.text
-        created = create_response.json()
+        created = unwrap(create_response)
         deployment_id = created["id"]
 
         # La réponse de création est déjà masquée.
@@ -330,7 +331,7 @@ class TestMaskingAcrossApiEndpoints:
         # ── GET /deployments/{id} : détail masqué ──────────────────────
         detail_response = await admin_client.get(f"/api/v1/deployments/{deployment_id}")
         assert detail_response.status_code == 200
-        detail = detail_response.json()
+        detail = unwrap(detail_response)
         assert detail["config"]["DB_PASSWORD"] == "***"
         assert detail["variables"]["API_SECRET"] == "***"
         for secret in secrets:
@@ -353,7 +354,7 @@ class TestMaskingAcrossApiEndpoints:
             "/api/v1/targets", follow_redirects=True
         )
         assert targets_response.status_code == 200
-        targets_text = str(targets_response.json())
+        targets_text = str(unwrap(targets_response))
         for secret in secrets:
             assert secret not in targets_text
         assert "credentials" not in targets_text
@@ -364,7 +365,7 @@ class TestMaskingAcrossApiEndpoints:
             f"/api/v1/targets/{test_target.id}", follow_redirects=True
         )
         assert target_response.status_code == 200
-        target_detail = str(target_response.json())
+        target_detail = str(unwrap(target_response))
         assert "credentials" not in target_detail
         assert "password" not in target_detail.lower()
 

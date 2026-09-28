@@ -8,6 +8,7 @@ from app.core.bruteforce_protection import bruteforce_protector
 from app.core.rate_limit import _memory_limiter
 from app.main import app
 from app.models.user import User
+from tests.conftest import error_code, unwrap
 
 
 @pytest.mark.asyncio
@@ -22,7 +23,7 @@ class TestAuthAPI:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert "access_token" in data
         assert data["token_type"] == "bearer"
         assert len(data["access_token"]) > 0
@@ -35,7 +36,7 @@ class TestAuthAPI:
         )
 
         assert response.status_code == 401
-        assert "detail" in response.json()
+        assert "error" in response.json()
 
     async def test_login_nonexistent_user(self, client: AsyncClient):
         """Test de login avec utilisateur inexistant."""
@@ -45,7 +46,7 @@ class TestAuthAPI:
         )
 
         assert response.status_code == 401
-        assert "detail" in response.json()
+        assert "error" in response.json()
 
     async def test_login_missing_credentials(self, client: AsyncClient):
         """Test de login avec credentials manquantes."""
@@ -58,7 +59,7 @@ class TestAuthAPI:
         response = await authenticated_client.get("/api/v1/users/me")
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert "id" in data
         assert "email" in data
         assert "username" in data
@@ -68,7 +69,7 @@ class TestAuthAPI:
         response = await client.get("/api/v1/users/me")
 
         assert response.status_code == 401
-        assert "detail" in response.json()
+        assert "error" in response.json()
 
     async def test_invalid_token(self, client: AsyncClient):
         """Test avec token JWT invalide."""
@@ -76,14 +77,14 @@ class TestAuthAPI:
         response = await client.get("/api/v1/users/me")
 
         assert response.status_code == 401
-        assert "detail" in response.json()
+        assert "error" in response.json()
 
     async def test_superuser_access(self, admin_client: AsyncClient):
         """Test d'accès avec droits superuser."""
         response = await admin_client.get("/api/v1/users/me")
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["is_superuser"] is True
 
 
@@ -142,7 +143,7 @@ class TestBruteforceProtection:
         response = await self._login(client, test_user.username, "testpassword123")
 
         assert response.status_code == 429
-        assert "TOO_MANY_ATTEMPTS" in response.json()["detail"]
+        assert error_code(response) == "TOO_MANY_ATTEMPTS"
         retry_after = response.headers.get("Retry-After")
         assert retry_after is not None
         assert int(retry_after) > 0
@@ -208,7 +209,7 @@ class TestBruteforceProtection:
             response = await self._login(ip_a, test_user.username, "testpassword123")
 
         assert response.status_code == 429
-        assert "TOO_MANY_ATTEMPTS" in response.json()["detail"]
+        assert error_code(response) == "TOO_MANY_ATTEMPTS"
 
     async def test_lockout_expires_after_5_minutes(
         self, client: AsyncClient, test_user: User, monkeypatch
@@ -258,7 +259,7 @@ class TestBruteforceProtection:
         response = await self._login(client, test_user.username, "wrongpassword")
 
         assert response.status_code == 401
-        assert response.json()["detail"] == "Incorrect username or password"
+        assert response.json()["error"]["message"] == "Incorrect username or password"
 
     async def test_lockout_applies_to_unknown_username(self, client: AsyncClient):
         """Anti-énumération : username inexistant → même comportement (429 au 6e)."""
@@ -268,7 +269,7 @@ class TestBruteforceProtection:
         response = await self._login(client, "ghost-user", "whatever")
 
         assert response.status_code == 429
-        assert "TOO_MANY_ATTEMPTS" in response.json()["detail"]
+        assert error_code(response) == "TOO_MANY_ATTEMPTS"
 
     async def test_locked_response_does_not_leak_info(
         self, client: AsyncClient, test_user: User
@@ -281,10 +282,10 @@ class TestBruteforceProtection:
         body = response.text
 
         assert response.status_code == 429
-        assert set(response.json().keys()) == {"detail"}  # aucun champ additionnel
+        assert set(response.json().keys()) == {"error", "correlation_id"}  # aucun champ additionnel
         assert test_user.username not in body  # pas de username cible divulgué
         assert "testpassword123" not in body  # jamais le mot de passe soumis
-        assert "TOO_MANY_ATTEMPTS" in response.json()["detail"]
+        assert error_code(response) == "TOO_MANY_ATTEMPTS"
         retry_after = response.headers.get("Retry-After")
         assert retry_after is not None
         assert retry_after.isdigit()

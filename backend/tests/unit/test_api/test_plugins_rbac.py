@@ -34,6 +34,7 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
+from tests.conftest import unwrap
 
 INSTALL_PAYLOAD: dict = {
     "source": "https://registry.windflow.io/plugins/demo/1.0.0",
@@ -122,7 +123,7 @@ class TestViewerMatrix:
 
         response = await client.get("/api/v1/plugins/", headers=_auth_headers(user))
         assert response.status_code == 200, response.text
-        assert isinstance(response.json(), list)
+        assert isinstance(unwrap(response), list)
 
     async def test_viewer_200_list_registry(
         self, client: AsyncClient, db_session: AsyncSession
@@ -138,7 +139,7 @@ class TestViewerMatrix:
                 "/api/v1/registry/plugins", headers=_auth_headers(user)
             )
         assert response.status_code == 200, response.text
-        assert response.json() == []
+        assert unwrap(response) == []
 
     async def test_viewer_403_install_plugin(
         self, client: AsyncClient, db_session: AsyncSession
@@ -152,7 +153,7 @@ class TestViewerMatrix:
             headers=_auth_headers(user),
         )
         assert response.status_code == 403
-        assert response.json()["detail"] == "Not enough permissions"
+        assert response.json()["error"]["message"] == "Not enough permissions"
 
     async def test_viewer_403_configure_plugin(
         self, client: AsyncClient, db_session: AsyncSession
@@ -222,7 +223,7 @@ class TestAdminMatrix:
                 headers=_auth_headers(user),
             )
         assert response.status_code == 202, response.text
-        assert response.json()["id"] == "plg-1"
+        assert unwrap(response)["id"] == "plg-1"
 
     async def test_admin_200_configure_plugin(
         self, client: AsyncClient, db_session: AsyncSession
@@ -240,7 +241,7 @@ class TestAdminMatrix:
                 headers=_auth_headers(user),
             )
         assert response.status_code == 200, response.text
-        assert response.json()["id"] == "plg-1"
+        assert unwrap(response)["id"] == "plg-1"
 
     async def test_admin_204_uninstall_plugin(
         self, client: AsyncClient, db_session: AsyncSession

@@ -8,6 +8,7 @@ from httpx import AsyncClient
 
 from app.models.stack import Stack
 from app.models.target import Target
+from tests.conftest import unwrap
 
 ORCH_PATCH = (
     "app.services.deployment_orchestrator.DeploymentOrchestrator.start_deployment"
@@ -37,7 +38,7 @@ class TestDeploymentsAPI:
                 },
             )
         assert response.status_code == 201
-        data = response.json()
+        data = unwrap(response)
         assert data["name"] == "API Test Deployment"
         assert data["stack_id"] == test_stack.id
         assert data["target_id"] == test_target.id
@@ -58,13 +59,13 @@ class TestDeploymentsAPI:
                     "variables": {},
                 },
             )
-        deployment_id = create_response.json()["id"]
+        deployment_id = unwrap(create_response)["id"]
 
         response = await authenticated_client.get(
             f"/api/v1/deployments/{deployment_id}"
         )
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["id"] == deployment_id
         assert data["name"] == "Deployment to Get"
 
@@ -93,7 +94,7 @@ class TestDeploymentsAPI:
 
         response = await authenticated_client.get("/api/v1/deployments")
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert isinstance(data, dict)
         assert "items" in data
         assert "total" in data
@@ -122,7 +123,7 @@ class TestDeploymentsAPI:
 
         response = await authenticated_client.get("/api/v1/deployments?skip=1&limit=2")
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert "items" in data
         assert len(data["items"]) == 2
         assert data["skip"] == 1
@@ -174,7 +175,7 @@ class TestDeploymentsAPI:
                     "variables": {},
                 },
             )
-        deployment_id = create_response.json()["id"]
+        deployment_id = unwrap(create_response)["id"]
 
         response = await authenticated_client.delete(
             f"/api/v1/deployments/{deployment_id}"
@@ -189,5 +190,5 @@ class TestDeploymentsAPI:
         )
         assert get_response.status_code in (200, 404)
         if get_response.status_code == 200:
-            data = get_response.json()
+            data = unwrap(get_response)
             assert data["status"] in ("failed", "stopped")

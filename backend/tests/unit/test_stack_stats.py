@@ -9,6 +9,7 @@ Teste les statistiques détaillées par stack :
 """
 
 import pytest
+from tests.conftest import unwrap
 
 
 # =============================================================================
@@ -59,7 +60,7 @@ class TestGetStackStatsEndpoint:
             "/api/v1/stats/stacks/unknown-stack-id"
         )
         assert response.status_code == 200
-        body = response.json()
+        body = unwrap(response)
         # Pas de déploiements pour une stack inconnue
         assert body["deployments_by_status"] == {}
         assert body["deployments_last_30_days"] == 0
@@ -71,7 +72,7 @@ class TestGetStackStatsEndpoint:
             "/api/v1/stats/stacks/some-stack-id"
         )
         assert response.status_code == 200
-        body = response.json()
+        body = unwrap(response)
 
         # Vérifier la présence des deux champs du schéma
         assert "deployments_by_status" in body

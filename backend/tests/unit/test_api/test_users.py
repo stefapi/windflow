@@ -13,6 +13,7 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
+from tests.conftest import unwrap
 
 
 async def _make_user_in(
@@ -63,7 +64,7 @@ class TestListUsersScoping:
 
         response = await authenticated_client.get("/api/v1/users/")
         assert response.status_code == 200, response.text
-        listed_ids = {item["id"] for item in response.json()["items"]}
+        listed_ids = {item["id"] for item in unwrap(response)["items"]}
         assert test_user.id in listed_ids
         assert other_user.id in listed_ids, "la 2e appartenance doit être scopée"
 
@@ -90,7 +91,7 @@ class TestGetUserIsolation:
 
         response = await authenticated_client.get(f"/api/v1/users/{colleague.id}")
         assert response.status_code == 200, response.text
-        assert response.json()["id"] == colleague.id
+        assert unwrap(response)["id"] == colleague.id
 
     async def test_superuser_access_unaffected(
         self, admin_client, db_session, test_organization
@@ -180,7 +181,7 @@ class TestUpdateUserReassignment:
             json={"user_ids": [test_user.id], "organization_id": new_org.id},
         )
         assert response.status_code == 200, response.text
-        assert response.json()["success"] == [test_user.id]
+        assert unwrap(response)["success"] == [test_user.id]
 
         links = (
             (

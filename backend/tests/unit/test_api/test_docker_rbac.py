@@ -41,6 +41,7 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
+from tests.conftest import unwrap
 
 # 35 opérations Docker attendues (spec 08, inventaire vérifié de la story)
 EXPECTED_DOCKER_OPERATIONS: frozenset[tuple[str, str]] = frozenset(
@@ -156,7 +157,7 @@ class TestViewerMatrix:
             "/api/v1/docker/containers/abc123", headers=_auth_headers(user)
         )
         assert response.status_code == 403
-        assert response.json()["detail"] == "Not enough permissions"
+        assert response.json()["error"]["message"] == "Not enough permissions"
 
     async def test_viewer_403_create_container(
         self, client: AsyncClient, db_session: AsyncSession
@@ -209,7 +210,7 @@ class TestViewerMatrix:
             )
 
         assert response.status_code == 200
-        assert response.json() == []
+        assert unwrap(response) == []
 
     async def test_viewer_200_container_logs(
         self, client: AsyncClient, db_session: AsyncSession
@@ -232,7 +233,7 @@ class TestViewerMatrix:
             )
 
         assert response.status_code == 200
-        assert response.json()["logs"] == "line1"
+        assert unwrap(response)["logs"] == "line1"
 
     async def test_viewer_200_system_ping(
         self, client: AsyncClient, db_session: AsyncSession
@@ -251,7 +252,7 @@ class TestViewerMatrix:
             )
 
         assert response.status_code == 200
-        assert response.json()["available"] is True
+        assert unwrap(response)["available"] is True
 
 
 # --- Operator : opérationnel OK, gestion 403 ---------------------------------
@@ -284,7 +285,7 @@ class TestOperatorMatrix:
         assert resp_start.status_code == 204
 
         assert resp_batch.status_code == 200
-        assert resp_batch.json()["affected"] == 1
+        assert unwrap(resp_batch)["affected"] == 1
         # start direct + batch partagent le mock : 2 appels au total
         assert docker.start_container.await_count == 2
         docker.start_container.assert_any_await("abc123")

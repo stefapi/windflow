@@ -23,6 +23,7 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
+from tests.conftest import unwrap
 
 # --- Helpers --------------------------------------------------------------
 
@@ -146,7 +147,7 @@ class TestListMembersMatrix:
             headers=_auth_headers(orgs_setup["viewer_a"]),
         )
         assert response.status_code == 200, response.text
-        assert isinstance(response.json(), list)
+        assert isinstance(unwrap(response), list)
 
     async def test_viewer_cannot_list_foreign_org_members(
         self, client: AsyncClient, orgs_setup
@@ -191,7 +192,7 @@ class TestMemberWritesMatrix:
             headers=_auth_headers(orgs_setup["admin_a"]),
         )
         assert response.status_code == 201, response.text
-        assert response.json()["role"] == "viewer"
+        assert unwrap(response)["role"] == "viewer"
 
     async def test_admin_cannot_add_member_in_foreign_org(
         self, client: AsyncClient, orgs_setup
@@ -215,7 +216,7 @@ class TestMemberWritesMatrix:
             headers=_auth_headers(orgs_setup["admin_a"]),
         )
         assert response.status_code == 200, response.text
-        assert response.json()["role"] == "operator"
+        assert unwrap(response)["role"] == "operator"
 
     async def test_admin_cannot_update_member_in_foreign_org(
         self, client: AsyncClient, orgs_setup
@@ -344,7 +345,7 @@ class TestUpdateOrganizationMatrix:
             headers=_auth_headers(orgs_setup["admin_a"]),
         )
         assert response.status_code == 200, response.text
-        assert response.json()["description"] == "Updated by org admin"
+        assert unwrap(response)["description"] == "Updated by org admin"
 
     async def test_admin_cannot_update_foreign_org(
         self, client: AsyncClient, orgs_setup

@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `GET /api/v1/admin/audit` (super_admin uniquement — spec 08 § Système) : pagination `{items, total, skip, limit}` plafonnée 100, filtres bornés `user_id`/`action`/`resource_type`/`since`, OpenAPI documenté ; lecture seule stricte (l'audit n'est pas falsifiable depuis l'API, `details` masqué structurellement à l'écriture). Garde-fou routes admin incrémenté 15 → 16.
   - Boucle lifespan dédiée `_periodic_audit_purge` (pattern STORY-123.4, non fusionnée avec la purge refresh tokens) : purge par âge uniquement selon `AUDIT_RETENTION_DAYS` ; **démarrage conditionnel** — défaut illimité = job non démarré + log unique ; intervalle `AUDIT_PURGE_INTERVAL_HOURS` ; cancellation au shutdown.
   - Tests : endpoint (200 paginé + ordre, 401, 403 admin d'org/viewer/operator, 422 × 7, page vide, filtres, pagination sans chevauchement) + rétention courte (1 j) — 41 tests story verts, 1552 au total.
+
+### Changed
+
+- **BREAKING — STORY-126.2 + STORY-126.3 : enveloppes de réponse API v1 (spec 09)** — toutes les réponses `/api/v1/*` sont désormais transportées dans une enveloppe standardisée. Concerne l'API, le frontend et le CLI livrés dans la même release.
+  - **Succès (2xx JSON)** : avant `{"id": "app_1", "status": "running"}` → après `{"data": {"id": "app_1", "status": "running"}, "message": null}`.
+  - **Listes paginées** : avant `{"items": [...], "total": 87}` → après `{"data": [...], "pagination": {"page": 1, "per_page": 20, "total": 87, "pages": 5}}` (harmonisation complète en STORY-128).
+  - **Erreurs** : avant `{"detail": "Not found"}` → après `{"error": {"code": "NOT_FOUND", "message": "App not found"}, "correlation_id": "…"}` avec codes machines stables (`INVALID_CREDENTIALS`, `PERMISSION_DENIED`, `CONFLICT`, `VALIDATION_ERROR`, …).
+  - **Migration consommateurs** : (1) déplier `response.data` pour récupérer la charge utile — fait centralement par l'interceptor axios côté frontend et `_handle_response` côté CLI, les stores/vues restent inchangés ; (2) lire les messages d'erreur via `.error.message` (`.detail` n'est plus émis par le backend) ; (3) les réponses `204 No Content` et les canaux WebSocket (format `type`/`data`) sont inchangés.
+  - Le flag transitoire `API_ENVELOPE_ENABLED` (introduit en STORY-126.1, activé par défaut en 126.2) est **retiré** : le format enveloppe est systématique, plus de mode legacy.
+
 - **STORY-125.2 — Émission d'audit sur les actions critiques** (P1-4, partie émission — EPIC-012) : branchement de `AuditService.log_from_request` sur le catalogue complet (20 actions / 18 points d'insertion).
   - Auth : `user.login` (après reset brute-force), `user.login_failed` aux 2 refus 401 (credentials invalides / user inactif — `user_id=None` si inconnu, `username` seul en `details`, jamais le password), `user.logout`, `api_key.created` / `api_key.revoked`.
   - Suppressions : `stack.deleted` (test de référence P1-4 : acteur, org de la stack, cible, `correlation_id` strictement égal au header `X-Correlation-ID`), `target.deleted`, `organization.deleted` (une ligne par org en bulk), `container.deleted`.

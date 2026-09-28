@@ -1,9 +1,11 @@
 """
 Middleware pour WindFlow Backend.
 
-Gestion des erreurs, logging structuré, sécurité, corrélation et timing.
+Gestion des erreurs, logging structuré, sécurité, corrélation, timing et
+enveloppes de réponse API (STORY-126.1).
 """
 
+from .api_response import api_response_middleware, build_error_payload
 from .correlation import correlation_middleware
 from .error_handler import error_handler_middleware
 from .logging_middleware import logging_middleware
@@ -16,4 +18,6 @@ __all__ = [
     "timing_middleware",
     "error_handler_middleware",
     "logging_middleware",
+    "api_response_middleware",
+    "build_error_payload",
 ]

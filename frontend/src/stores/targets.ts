@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { targetsApi } from '@/services/api'
-import type { ConnectionTestRequest, ConnectionTestResponse, HealthCheckResponse, HostReachabilityRequest, HostReachabilityResponse, Target, TargetCreate, TargetUpdate } from '@/types/api'
+import type { ConnectionTestRequest, ConnectionTestResponse, HealthCheckResponse, HostReachabilityRequest, HostReachabilityResponse, PaginatedResponse, Target, TargetCreate, TargetUpdate } from '@/types/api'
 
 /** Interval between automatic health checks (ms). */
 const HEALTH_POLL_INTERVAL = 60_000 // 1 minute
@@ -19,9 +19,9 @@ export const useTargetsStore = defineStore('targets', () => {
     error.value = null
     try {
       const response = await targetsApi.list({ organization_id: organizationId })
-      // Backend returns List[TargetResponse] directly, not wrapped in {items:[]}
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      targets.value = (response.data as any).items || response.data
+      // STORY-126.3 : post-unwrap spec 09, response.data est List[Target] ou {items}
+      const body: unknown = response.data
+      targets.value = Array.isArray(body) ? body : ((body as PaginatedResponse<Target>).items ?? [])
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch targets'
       throw err
@@ -64,7 +64,7 @@ export const useTargetsStore = defineStore('targets', () => {
     error.value = null
     try {
       const response = await targetsApi.update(id, data)
-      const index = targets.value.findIndex(t => t.id === id)
+      const index = targets.value.findIndex((t) => t.id === id)
       if (index !== -1) targets.value[index] = response.data
       if (currentTarget.value?.id === id) currentTarget.value = response.data
     } catch (err: unknown) {
@@ -80,7 +80,7 @@ export const useTargetsStore = defineStore('targets', () => {
     error.value = null
     try {
       await targetsApi.delete(id)
-      targets.value = targets.value.filter(t => t.id !== id)
+      targets.value = targets.value.filter((t) => t.id !== id)
       if (currentTarget.value?.id === id) currentTarget.value = null
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to delete target'
@@ -118,7 +118,7 @@ export const useTargetsStore = defineStore('targets', () => {
 
   /** Update a single target in the local list with health data */
   function _applyHealthResult(result: HealthCheckResponse): void {
-    const idx = targets.value.findIndex(t => t.id === result.target_id)
+    const idx = targets.value.findIndex((t) => t.id === result.target_id)
     if (idx !== -1) {
       const existing = targets.value[idx]!
       targets.value[idx] = {
@@ -153,7 +153,7 @@ export const useTargetsStore = defineStore('targets', () => {
 
   /** Run health checks for all known targets (used by polling) */
   async function healthCheckAll(): Promise<void> {
-    const ids = targets.value.map(t => t.id)
+    const ids = targets.value.map((t) => t.id)
     for (const id of ids) {
       try {
         const response = await targetsApi.healthCheck(id)
@@ -187,7 +187,7 @@ export const useTargetsStore = defineStore('targets', () => {
       const response = await targetsApi.scan(id)
 
       // Update target in the list
-      const index = targets.value.findIndex(t => t.id === id)
+      const index = targets.value.findIndex((t) => t.id === id)
       if (index !== -1) {
         targets.value[index] = response.data
       }

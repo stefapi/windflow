@@ -13,6 +13,7 @@ from httpx import AsyncClient
 
 from app.config import settings
 from app.models.plugin import Plugin, PluginStatus
+from tests.conftest import unwrap
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -90,7 +91,7 @@ class TestListPlugins:
         """Cas nominal : liste vide."""
         response = await admin_client.get("/api/v1/plugins/")
         assert response.status_code == 200
-        assert response.json() == []
+        assert unwrap(response) == []
 
     @pytest.mark.asyncio
     async def test_list_plugins_returns_401_without_token(
@@ -143,7 +144,7 @@ class TestGetPlugin:
 
         response = await admin_client.get(f"/api/v1/plugins/{plugin.id}")
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["name"] == "detail-plugin"
         assert data["id"] == plugin.id
 
@@ -180,7 +181,7 @@ class TestInstallPlugin:
             json={"manifest_yaml": VALID_MANIFEST_YAML},
         )
         assert response.status_code == 202
-        data = response.json()
+        data = unwrap(response)
         assert data["status"] == "installed"
         assert "id" in data
 
@@ -260,7 +261,7 @@ class TestUpdatePlugin:
             "/api/v1/plugins/install",
             json={"manifest_yaml": VALID_MANIFEST_YAML},
         )
-        plugin_id = install_response.json()["id"]
+        plugin_id = unwrap(install_response)["id"]
 
         # Mettre à jour
         response = await admin_client.put(
@@ -268,7 +269,7 @@ class TestUpdatePlugin:
             json={"version": "2.0.0"},
         )
         assert response.status_code == 202
-        data = response.json()
+        data = unwrap(response)
         assert data["status"] == "installed"
         assert "message" in data
 
@@ -322,7 +323,7 @@ class TestConfigurePlugin:
             "/api/v1/plugins/install",
             json={"manifest_yaml": VALID_MANIFEST_YAML},
         )
-        plugin_id = install_response.json()["id"]
+        plugin_id = unwrap(install_response)["id"]
 
         # Configurer
         response = await admin_client.put(
@@ -330,7 +331,7 @@ class TestConfigurePlugin:
             json={"config_values": {"host": "0.0.0.0", "port": 9090}},
         )
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["config_values"]["host"] == "0.0.0.0"
         assert data["config_values"]["port"] == 9090
 
@@ -362,7 +363,7 @@ class TestUninstallPlugin:
             "/api/v1/plugins/install",
             json={"manifest_yaml": VALID_MANIFEST_YAML},
         )
-        plugin_id = install_response.json()["id"]
+        plugin_id = unwrap(install_response)["id"]
 
         # Désinstaller
         response = await admin_client.delete(f"/api/v1/plugins/{plugin_id}/uninstall")
@@ -409,12 +410,12 @@ class TestPluginSecurity:
             },
         )
         assert install_response.status_code == 202
-        plugin_id = install_response.json()["id"]
+        plugin_id = unwrap(install_response)["id"]
 
         # Récupérer le détail — le password doit être masqué
         response = await admin_client.get(f"/api/v1/plugins/{plugin_id}")
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["config_values"]["api_key"] == "********"
         assert data["config_values"]["host"] == "localhost"
 
@@ -477,7 +478,7 @@ class TestInstallPluginDependencies:
             json={"manifest_yaml": MANIFEST_WITH_DEPENDENCIES},
         )
         assert response.status_code == 409
-        assert "docker" in response.json()["detail"].lower() or "dépendance" in response.json()["detail"].lower()
+        assert "docker" in response.json()["error"]["message"].lower() or "dépendance" in response.json()["error"]["message"].lower()
 
     @pytest.mark.asyncio
     async def test_install_plugin_returns_409_on_conflict(
@@ -528,7 +529,7 @@ extensions:
             json={"manifest_yaml": MANIFEST_WITH_DEPENDENCIES},
         )
         assert response.status_code == 202
-        data = response.json()
+        data = unwrap(response)
         assert data["status"] == "installed"
 
 
@@ -562,7 +563,7 @@ extensions:
             "/api/v1/plugins/install",
             json={"manifest_yaml": docker_manifest},
         )
-        docker_id = docker_resp.json()["id"]
+        docker_id = unwrap(docker_resp)["id"]
 
         # Installer le plugin qui dépend de docker
         await admin_client.post(
@@ -584,7 +585,7 @@ extensions:
             "/api/v1/plugins/install",
             json={"manifest_yaml": VALID_MANIFEST_YAML},
         )
-        plugin_id = install_resp.json()["id"]
+        plugin_id = unwrap(install_resp)["id"]
 
         # Désinstaller → 204
         response = await admin_client.delete(f"/api/v1/plugins/{plugin_id}/uninstall")
@@ -626,11 +627,11 @@ extensions:
             "/api/v1/plugins/install",
             json={"manifest_yaml": MANIFEST_WITH_DEPENDENCIES},
         )
-        plugin_id = resp.json()["id"]
+        plugin_id = unwrap(resp)["id"]
 
         response = await admin_client.get(f"/api/v1/plugins/{plugin_id}/dependencies")
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["plugin_id"] == plugin_id
         assert data["plugin_name"] == "plugin-with-deps"
         assert len(data["requires"]) >= 1

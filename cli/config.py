@@ -4,9 +4,10 @@ Gestion de la configuration pour le CLI WindFlow.
 Supporte une configuration hiérarchique avec fusion de multiples sources.
 """
 
-from typing import Any, Dict, Optional
-from pathlib import Path
 import os
+from pathlib import Path
+from typing import Any, Dict, Optional
+
 import yaml
 from pydantic import BaseModel, Field
 
@@ -15,19 +16,31 @@ class CLIConfig(BaseModel):
     """Configuration du CLI WindFlow."""
 
     # API
-    api_url: str = Field(default="http://localhost:8000", description="URL de l'API WindFlow")
-    api_timeout: int = Field(default=30, description="Timeout des requêtes API en secondes")
+    api_url: str = Field(
+        default="http://localhost:8000", description="URL de l'API WindFlow"
+    )
+    api_timeout: int = Field(
+        default=30, description="Timeout des requêtes API en secondes"
+    )
     api_prefix: str = Field(default="/api/v1", description="Préfixe des endpoints API")
 
     # Auth
-    auth_auto_refresh: bool = Field(default=True, description="Rafraîchir automatiquement les tokens")
+    auth_auto_refresh: bool = Field(
+        default=True, description="Rafraîchir automatiquement les tokens"
+    )
 
     # Output
-    output_format: str = Field(default="table", description="Format de sortie par défaut (table, json)")
+    output_format: str = Field(
+        default="table", description="Format de sortie par défaut (table, json)"
+    )
 
     # Defaults
-    default_organization: Optional[str] = Field(default=None, description="Organisation par défaut")
-    default_environment: Optional[str] = Field(default=None, description="Environnement par défaut")
+    default_organization: Optional[str] = Field(
+        default=None, description="Organisation par défaut"
+    )
+    default_environment: Optional[str] = Field(
+        default=None, description="Environnement par défaut"
+    )
 
     class Config:
         extra = "allow"
@@ -62,7 +75,7 @@ class ConfigManager:
 
         # 2. Fichier de configuration
         if self.config_file.exists():
-            with open(self.config_file, 'r', encoding='utf-8') as f:
+            with open(self.config_file, "r", encoding="utf-8") as f:
                 file_config = yaml.safe_load(f) or {}
                 config_data.update(self._flatten_config(file_config))
 
@@ -73,7 +86,9 @@ class ConfigManager:
         self._config = CLIConfig(**config_data)
         return self._config
 
-    def _flatten_config(self, config: Dict[str, Any], prefix: str = "") -> Dict[str, Any]:
+    def _flatten_config(
+        self, config: Dict[str, Any], prefix: str = ""
+    ) -> Dict[str, Any]:
         """Aplatit une configuration hiérarchique."""
         result = {}
         for key, value in config.items():
@@ -95,7 +110,7 @@ class ConfigManager:
             "WINDFLOW_DEFAULT_ENV": "default_environment",
         }
 
-        config = {}
+        config: dict[str, str | int | bool] = {}
         for env_var, config_key in env_mapping.items():
             value = os.getenv(env_var)
             if value is not None:
@@ -128,10 +143,10 @@ class ConfigManager:
             "defaults": {
                 "organization": config.default_organization,
                 "environment": config.default_environment,
-            }
+            },
         }
 
-        with open(self.config_file, 'w', encoding='utf-8') as f:
+        with open(self.config_file, "w", encoding="utf-8") as f:
             yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
 
         self._config = config

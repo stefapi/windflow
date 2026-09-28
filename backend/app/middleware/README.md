@@ -23,11 +23,15 @@ Request
   ↓
 5. Logging Middleware
   ↓
-6. Error Handler Middleware
+6. API Response Envelope Middleware (STORY-126.1)
   ↓
-7. Route Handler (endpoint function)
+7. Error Handler Middleware
   ↓
-6. Error Handler Middleware (catches exceptions)
+8. Route Handler (endpoint function)
+  ↓
+7. Error Handler Middleware (catches exceptions)
+  ↓
+6. API Response Envelope Middleware (envelopes 2xx JSON /api/v1 when flag on)
   ↓
 5. Logging Middleware (logs response)
   ↓
@@ -62,7 +66,10 @@ app.middleware("http")(correlation_middleware)
 # 5. Add Logging (executes FIFTH)
 app.middleware("http")(logging_middleware)
 
-# 6. Add Error Handler (executes LAST, catches all errors)
+# 6. Add API Response Envelope (executes SIXTH)
+app.middleware("http")(api_response_middleware)
+
+# 7. Add Error Handler (executes LAST, catches all errors)
 app.middleware("http")(error_handler_middleware)
 ```
 
@@ -93,9 +100,15 @@ app.middleware("http")(error_handler_middleware)
 - **Format**: JSON structured logging
 - **Includes**: Method, path, status, correlation ID
 
-### 6. Error Handler Middleware
+### 6. API Response Envelope Middleware (STORY-126.1)
+- **Purpose**: Wrap 2xx JSON responses of `/api/v1/*` in spec-09 envelopes `{"data": ..., "message": ...}` — systematic since STORY-126.2 (transitional flag removed by STORY-126.3)
+- **Position rationale**: Starlette applies the LAST registered middleware as the OUTERMOST. This middleware is registered BEFORE the error handler, making it more inner: on the way out it envelopes the response after correlation/timing (even more inner) have set their headers (copied into the enveloped response), while 500 responses produced by the outermost error handler never pass through it — no double envelope possible. Error responses (non-2xx) pass through untouched (handled by exception handlers).
+- **Skips**: WebSocket connections, non-`/api/v1` paths, non-2xx status, `204 No Content`, non-JSON content types, undecodable bodies
+- **Configuration**: none — envelopes are always on (flag removed by STORY-126.3)
+
+### 7. Error Handler Middleware
 - **Purpose**: Catch and format all exceptions
-- **Returns**: Standardized error responses
+- **Returns**: Standardized error responses (spec-09 envelope `{"error": {"code", "message"}}` — always, since STORY-126.3)
 - **Includes**: Correlation ID in error responses
 
 ## Best Practices

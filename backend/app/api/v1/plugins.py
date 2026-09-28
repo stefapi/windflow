@@ -50,8 +50,42 @@ _lifecycle_service = PluginLifecycleService()
     summary="Liste des plugins installés",
     description="Retourne la liste paginée des plugins installés pour l'organisation de l'utilisateur courant.",
     responses={
-        200: {"description": "Liste des plugins"},
-        401: {"description": "Authentification requise"},
+        200: {
+            "description": (
+                "Liste des plugins — enveloppe spec 09"
+            ),
+            "content": {
+                "application/json": {
+                    "example": {
+                        "data": [
+                            {
+                                "id": "9d2c8a4f-1b3e-4f5a-8a7b-2c9d0e1f2a3b",
+                                "name": "traefik",
+                                "version": "1.2.0",
+                                "display_name": "Traefik",
+                                "category": "access",
+                                "type": "hybrid",
+                                "status": "installed",
+                            }
+                        ],
+                        "message": None,
+                    }
+                }
+            },
+        },
+        401: {
+            "description": "Authentification requise",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "INVALID_OR_EXPIRED_TOKEN",
+                            "message": "Unauthorized",
+                        }
+                    }
+                }
+            },
+        },
     },
 )
 async def list_plugins(

@@ -28,6 +28,7 @@ from app.models.organization import Organization
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.services.refresh_token_service import RefreshTokenService
+from tests.conftest import unwrap
 
 LOGIN_URL = "/api/v1/auth/login"
 REFRESH_URL = "/api/v1/auth/refresh"
@@ -66,7 +67,7 @@ async def _login(
         LOGIN_URL, data={"username": user.username, "password": password}
     )
     assert response.status_code == 200, response.text
-    return response.json()
+    return unwrap(response)
 
 
 async def _active_tokens(db_session: AsyncSession, user_id: str) -> list:
@@ -138,7 +139,7 @@ class TestRefreshSecurity401:
 
         response = await client.post(REFRESH_URL, json={"refresh_token": token})
         assert response.status_code == 401, response.text
-        assert response.json()["detail"] == "INVALID_OR_EXPIRED_TOKEN"
+        assert response.json()["error"]["message"] == "INVALID_OR_EXPIRED_TOKEN"
 
 
 class TestNoPlaintextToken:
@@ -155,7 +156,7 @@ class TestNoPlaintextToken:
 
         rotated = await client.post(REFRESH_URL, json={"refresh_token": plain_login})
         assert rotated.status_code == 200, rotated.text
-        plain_rotated = rotated.json()["refresh_token"]
+        plain_rotated = unwrap(rotated)["refresh_token"]
         assert plain_rotated != plain_login
 
         # Balayage de TOUTES les lignes (base isolée par test)
@@ -209,7 +210,7 @@ class TestUserIsolation:
             REFRESH_URL, json={"refresh_token": body_b["refresh_token"]}
         )
         assert refresh_b.status_code == 200, refresh_b.text
-        assert refresh_b.json()["refresh_token"] != body_b["refresh_token"]
+        assert unwrap(refresh_b)["refresh_token"] != body_b["refresh_token"]
         assert await _active_tokens(db_session, test_superuser.id)
 
 
@@ -282,7 +283,7 @@ class TestExistingAuthFlows:
         # 4. Logout authentifié → 200
         logout = await client.post(
             LOGOUT_URL,
-            headers={"Authorization": f"Bearer {by_username.json()['access_token']}"},
+            headers={"Authorization": f"Bearer {unwrap(by_username)['access_token']}"},
         )
         assert logout.status_code == 200, logout.text
 

@@ -14,6 +14,7 @@ from httpx import AsyncClient
 from app.config import settings
 from app.models.plugin import Plugin, PluginStatus
 from app.models.plugin_hook_log import PluginHookLog
+from tests.conftest import unwrap
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -80,7 +81,7 @@ class TestGetHookLogs:
             f"/api/v1/plugins/{plugin.id}/hooks/logs"
         )
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert len(data) == 1
         assert data[0]["hook_name"] == "on_install"
         assert data[0]["status"] == "success"
@@ -121,7 +122,7 @@ class TestGetHookLogs:
             f"/api/v1/plugins/{plugin.id}/hooks/logs"
         )
         assert response.status_code == 200
-        assert response.json() == []
+        assert unwrap(response) == []
 
     @pytest.mark.asyncio
     async def test_get_hook_logs_returns_401_without_token(
@@ -266,7 +267,7 @@ class TestGetHookLogDetail:
             f"/api/v1/plugins/{plugin.id}/hooks/logs/{log.id}"
         )
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["id"] == log.id
         assert data["hook_name"] == "on_install"
         assert data["stdout"] == "Installation output here"
@@ -360,7 +361,7 @@ class TestHookLogsPagination:
             params={"skip": 0, "limit": 2},
         )
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert len(data) == 2
 
         # Tester skip=2, limit=2
@@ -369,7 +370,7 @@ class TestHookLogsPagination:
             params={"skip": 2, "limit": 2},
         )
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert len(data) == 2
 
         # Tester skip=4, limit=10
@@ -378,5 +379,5 @@ class TestHookLogsPagination:
             params={"skip": 4, "limit": 10},
         )
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert len(data) == 1

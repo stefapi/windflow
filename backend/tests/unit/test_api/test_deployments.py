@@ -23,6 +23,7 @@ from app.models.organization import Organization
 from app.models.stack import Stack
 from app.models.target import Target
 from app.models.user import User
+from tests.conftest import unwrap
 
 PLAIN_SECRET = "S3cr3t!Pass-103-3"
 PLAIN_TOKEN = "tok_api_103-3"
@@ -103,7 +104,7 @@ class TestDeploymentsApiNeverReturnsPlainValues:
         # Détail
         response = await admin_client.get(f"/api/v1/deployments/{deployment.id}")
         assert response.status_code == 200
-        payload = response.json()
+        payload = unwrap(response)
         assert payload["variables"]["db_password"] == "***"
         assert payload["variables"]["api_token"] == "***"
         assert payload["variables"]["domain"] == "app.example.com"
@@ -154,7 +155,7 @@ class TestDeploymentsApiNeverReturnsPlainValues:
 
         response = await admin_client.get(f"/api/v1/deployments/{deployment.id}")
         assert response.status_code == 200
-        assert response.json()["variables"]["db_password"] == "***"
+        assert unwrap(response)["variables"]["db_password"] == "***"
         assert PLAIN_SECRET not in response.text
 
     async def test_deployments_api_encrypted_at_rest(

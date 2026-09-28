@@ -395,16 +395,21 @@ After creating an organization, you typically need to:
     },
     responses={
         201: {
-            "description": "Organization created successfully",
+            "description": (
+                "Organization created successfully — enveloppe spec 09"
+            ),
             "content": {
                 "application/json": {
                     "example": {
-                        "id": "550e8400-e29b-41d4-a716-446655440000",
-                        "name": "Acme Corporation",
-                        "description": "Leading technology company",
-                        "is_active": True,
-                        "created_at": "2024-01-15T10:30:00Z",
-                        "updated_at": "2024-01-15T10:30:00Z",
+                        "data": {
+                            "id": "550e8400-e29b-41d4-a716-446655440000",
+                            "name": "Acme Corporation",
+                            "description": "Leading technology company",
+                            "is_active": True,
+                            "created_at": "2024-01-15T10:30:00Z",
+                            "updated_at": "2024-01-15T10:30:00Z",
+                        },
+                        "message": None,
                     }
                 }
             },
@@ -414,7 +419,10 @@ After creating an organization, you typically need to:
             "content": {
                 "application/json": {
                     "example": {
-                        "detail": "Validation error: name must be between 1 and 100 characters"
+                        "error": {
+                            "code": "INVALID_INPUT",
+                            "message": "Validation error: name must be between 1 and 100 characters",
+                        }
                     }
                 }
             },
@@ -422,13 +430,27 @@ After creating an organization, you typically need to:
         401: {
             "description": "Not authenticated",
             "content": {
-                "application/json": {"example": {"detail": "Not authenticated"}}
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "INVALID_OR_EXPIRED_TOKEN",
+                            "message": "Not authenticated",
+                        }
+                    }
+                }
             },
         },
         403: {
             "description": "Insufficient permissions - superuser required",
             "content": {
-                "application/json": {"example": {"detail": "Superuser access required"}}
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "PERMISSION_DENIED",
+                            "message": "Superuser access required",
+                        }
+                    }
+                }
             },
         },
         409: {
@@ -436,7 +458,13 @@ After creating an organization, you typically need to:
             "content": {
                 "application/json": {
                     "example": {
-                        "detail": "Organisation avec le nom 'Acme Corporation' existe déjà"
+                        "error": {
+                            "code": "CONFLICT",
+                            "message": (
+                                "Organisation avec le nom 'Acme Corporation' "
+                                "existe déjà"
+                            ),
+                        }
                     }
                 }
             },
@@ -446,7 +474,10 @@ After creating an organization, you typically need to:
             "content": {
                 "application/json": {
                     "example": {
-                        "detail": "Rate limit exceeded. Try again in 60 seconds."
+                        "error": {
+                            "code": "TOO_MANY_ATTEMPTS",
+                            "message": "Rate limit exceeded. Try again in 60 seconds.",
+                        }
                     }
                 }
             },
@@ -455,7 +486,12 @@ After creating an organization, you typically need to:
             "description": "Internal server error",
             "content": {
                 "application/json": {
-                    "example": {"detail": "An unexpected error occurred"}
+                    "example": {
+                        "error": {
+                            "code": "INTERNAL_ERROR",
+                            "message": "An unexpected error occurred",
+                        }
+                    }
                 }
             },
         },

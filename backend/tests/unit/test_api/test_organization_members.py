@@ -30,6 +30,7 @@ from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_organization_service import UserOrganizationService
 from app.services.user_service import UserService
+from tests.conftest import unwrap
 
 MEMBERS_BASE = "/api/v1/organizations"
 
@@ -150,7 +151,7 @@ class TestListMembers:
         )
 
         assert response.status_code == 200
-        members = response.json()
+        members = unwrap(response)
         # STORY-121.3 : le superadmin fixture est membre (role admin) de
         # l'organisation — les membres réels sont listés
         assert len(members) == 2
@@ -182,7 +183,7 @@ class TestListMembers:
         )
 
         assert response.status_code == 200
-        assert response.json() == []
+        assert unwrap(response) == []
 
     async def test_list_members_returns_401_without_token(
         self,
@@ -212,7 +213,7 @@ class TestListMembers:
         """Superuser bypass : 200 sur une organisation étrangère."""
         response = await admin_client.get(f"{MEMBERS_BASE}/{other_org.id}/users")
         assert response.status_code == 200
-        assert response.json() == []
+        assert unwrap(response) == []
 
     async def test_list_members_returns_404_unknown_organization(
         self,
@@ -240,7 +241,7 @@ class TestAddMember:
         )
 
         assert response.status_code == 201
-        body = response.json()
+        body = unwrap(response)
         assert body["user_id"] == target_user.id
         assert body["role"] == "viewer"
         assert body["joined_at"] is not None
@@ -264,7 +265,7 @@ class TestAddMember:
         )
 
         assert response.status_code == 201
-        assert response.json()["role"] == "operator"
+        assert unwrap(response)["role"] == "operator"
 
     async def test_add_member_returns_401_without_token(
         self,
@@ -399,7 +400,7 @@ class TestUpdateMemberRole:
         )
 
         assert response.status_code == 200
-        body = response.json()
+        body = unwrap(response)
         assert body["user_id"] == target_user.id
         assert body["role"] == "admin"
         # Persistance

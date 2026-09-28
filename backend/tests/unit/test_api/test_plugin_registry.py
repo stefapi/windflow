@@ -17,6 +17,7 @@ from httpx import AsyncClient
 
 from app.config import settings
 from app.schemas.plugin_registry import RegistryPluginEntry
+from tests.conftest import unwrap
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -108,7 +109,7 @@ class TestListRegistryPlugins:
             response = await admin_client.get("/api/v1/registry/plugins")
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert len(data) == 3
         assert data[0]["name"] == "traefik"
 
@@ -127,7 +128,7 @@ class TestListRegistryPlugins:
             response = await admin_client.get("/api/v1/registry/plugins")
 
         assert response.status_code == 200
-        assert response.json() == []
+        assert unwrap(response) == []
 
     @pytest.mark.asyncio
     async def test_list_registry_plugins_returns_401_without_token(
@@ -154,7 +155,7 @@ class TestListRegistryPlugins:
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert len(data) == 2
         assert all(p["category"] == "database" for p in data)
 
@@ -176,7 +177,7 @@ class TestListRegistryPlugins:
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert len(data) == 1
         assert data[0]["name"] == "traefik"
 
@@ -197,7 +198,7 @@ class TestListRegistryPlugins:
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert len(data) == 1
         assert data[0]["name"] == "postgresql"
 
@@ -223,7 +224,7 @@ class TestGetRegistryPluginDetail:
             response = await admin_client.get("/api/v1/registry/plugins/traefik")
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["name"] == "traefik"
         assert data["version"] == "1.2.0"
         assert data["display_name"] == "Traefik"
@@ -245,7 +246,7 @@ class TestGetRegistryPluginDetail:
             )
 
         assert response.status_code == 404
-        assert "non trouvé" in response.json()["detail"]
+        assert "non trouvé" in response.json()["error"]["message"]
 
     @pytest.mark.asyncio
     async def test_get_registry_plugin_detail_returns_401_without_token(
@@ -264,7 +265,7 @@ class TestGetRegistryPluginDetail:
             "/api/v1/registry/plugins/INVALID NAME!"
         )
         assert response.status_code == 422
-        assert "invalide" in response.json()["detail"].lower()
+        assert "invalide" in response.json()["error"]["message"].lower()
 
     @pytest.mark.asyncio
     async def test_get_registry_plugin_detail_includes_checksum_and_url(
@@ -281,7 +282,7 @@ class TestGetRegistryPluginDetail:
             response = await admin_client.get("/api/v1/registry/plugins/traefik")
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert "checksum_sha256" in data
         assert len(data["checksum_sha256"]) == 64
         assert "download_url" in data

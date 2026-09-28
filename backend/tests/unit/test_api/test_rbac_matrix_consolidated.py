@@ -28,7 +28,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.conftest import create_user_with_role
+from tests.conftest import create_user_with_role, unwrap
 
 from app.auth.jwt import create_access_token
 from app.core.cache import reset_role_cache
@@ -112,7 +112,7 @@ class TestViewerMatrix:
         """AC 2 littéral : DELETE /docker/containers/{id} avec viewer → 403."""
         response = await viewer_client.delete("/api/v1/docker/containers/abc123")
         assert response.status_code == 403
-        assert response.json()["detail"] == "Not enough permissions"
+        assert response.json()["error"]["message"] == "Not enough permissions"
 
     async def test_viewer_403_create_stack(self, viewer_client: AsyncClient):
         """Gestion : POST /stacks avec viewer → 403."""
@@ -255,7 +255,7 @@ class TestOrgAdminMatrix:
             json={**STACK_CREATE_PAYLOAD, "organization_id": str(test_organization.id)},
         )
         assert response.status_code == 201, response.text
-        assert response.json()["name"] == STACK_CREATE_PAYLOAD["name"]
+        assert unwrap(response)["name"] == STACK_CREATE_PAYLOAD["name"]
 
     async def test_admin_201_add_org_user(
         self,
@@ -285,7 +285,7 @@ class TestOrgAdminMatrix:
             json={"user_id": str(candidate.id), "role": "viewer"},
         )
         assert response.status_code == 201, response.text
-        assert response.json()["role"] == "viewer"
+        assert unwrap(response)["role"] == "viewer"
 
     async def test_admin_403_create_organization(self, org_admin_client: AsyncClient):
         """Instance : POST /organizations avec admin d'org → 403 (création = SA)."""
@@ -454,7 +454,7 @@ class TestAuthNonRegression:
             },
         )
         assert by_username.status_code == 200, by_username.text
-        assert "access_token" in by_username.json()
+        assert "access_token" in unwrap(by_username)
 
         by_email = await client.post(
             "/api/v1/auth/login",
@@ -464,7 +464,7 @@ class TestAuthNonRegression:
             },
         )
         assert by_email.status_code == 200, by_email.text
-        assert "access_token" in by_email.json()
+        assert "access_token" in unwrap(by_email)
 
     async def test_register_201(self, client: AsyncClient, db_session: AsyncSession):
         """Register public → 201 (rattachement org par défaut en viewer)."""
@@ -503,7 +503,7 @@ class TestAuthNonRegression:
             "/api/v1/auth/login",
             data={"username": viewer_user.username, "password": "rolepassword123"},
         )
-        token = login.json()["access_token"]
+        token = unwrap(login)["access_token"]
 
         response = await client.post(
             "/api/v1/auth/logout",

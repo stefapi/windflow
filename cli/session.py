@@ -2,10 +2,10 @@
 Gestion de la session et des tokens d'authentification pour le CLI WindFlow.
 """
 
-from typing import Optional, Dict, Any
-from pathlib import Path
-from datetime import datetime, timedelta
 import json
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 
 class Session:
@@ -30,7 +30,7 @@ class Session:
             return self._session_data
 
         try:
-            with open(self.session_file, 'r', encoding='utf-8') as f:
+            with open(self.session_file, "r", encoding="utf-8") as f:
                 self._session_data = json.load(f)
         except (json.JSONDecodeError, IOError):
             self._session_data = {}
@@ -41,7 +41,7 @@ class Session:
         """Sauvegarde la session dans le fichier."""
         self.ensure_session_dir()
 
-        with open(self.session_file, 'w', encoding='utf-8') as f:
+        with open(self.session_file, "w", encoding="utf-8") as f:
             json.dump(session_data, f, indent=2, ensure_ascii=False)
 
         self._session_data = session_data
@@ -50,7 +50,7 @@ class Session:
         self,
         access_token: str,
         refresh_token: Optional[str] = None,
-        expires_in: Optional[int] = None
+        expires_in: Optional[int] = None,
     ) -> None:
         """Enregistre les tokens d'authentification."""
         session = self.load()

@@ -34,6 +34,7 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
+from tests.conftest import unwrap
 
 STACK_CREATE_PAYLOAD_BASE: dict = {
     "name": "rbac-test-stack",
@@ -107,7 +108,7 @@ class TestViewerMatrix:
         user, _ = await _create_user_with_role(db_session, "stk-view-list", Role.VIEWER)
         response = await client.get("/api/v1/stacks/", headers=_auth_headers(user))
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        assert isinstance(unwrap(response), list)
 
     async def test_viewer_403_create_stack(
         self, client: AsyncClient, db_session: AsyncSession
@@ -120,7 +121,7 @@ class TestViewerMatrix:
             headers=_auth_headers(user),
         )
         assert response.status_code == 403
-        assert response.json()["detail"] == "Not enough permissions"
+        assert response.json()["error"]["message"] == "Not enough permissions"
 
     async def test_viewer_403_update_stack(
         self, client: AsyncClient, db_session: AsyncSession
@@ -184,7 +185,7 @@ class TestOperatorMatrix:
             )
 
         assert response.status_code == 200, response.text
-        assert response.json()["success"] is True
+        assert unwrap(response)["success"] is True
 
     async def test_operator_403_create_stack(
         self, client: AsyncClient, db_session: AsyncSession
@@ -231,7 +232,7 @@ class TestAdminMatrix:
             headers=_auth_headers(user),
         )
         assert response.status_code == 201, response.text
-        assert response.json()["name"] == STACK_CREATE_PAYLOAD_BASE["name"]
+        assert unwrap(response)["name"] == STACK_CREATE_PAYLOAD_BASE["name"]
 
         # La stack créée est rangée dans l'organisation de l'utilisateur
         # (vérifiée en persistance — StackSummaryResponse n'expose pas org).

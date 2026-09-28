@@ -34,6 +34,7 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
+from tests.conftest import unwrap
 
 CREATE_PAYLOAD_BASE: dict = {
     "name": "rbac-target",
@@ -125,8 +126,8 @@ class TestViewerMatrix:
 
         response = await client.get("/api/v1/targets/", headers=_auth_headers(user))
         assert response.status_code == 200, response.text
-        assert isinstance(response.json(), list)
-        assert len(response.json()) == 1
+        assert isinstance(unwrap(response), list)
+        assert len(unwrap(response)) == 1
 
     async def test_viewer_200_get_target(
         self, client: AsyncClient, db_session: AsyncSession
@@ -139,7 +140,7 @@ class TestViewerMatrix:
             f"/api/v1/targets/{target.id}", headers=_auth_headers(user)
         )
         assert response.status_code == 200, response.text
-        assert response.json()["id"] == target.id
+        assert unwrap(response)["id"] == target.id
 
     async def test_viewer_200_capabilities(
         self, client: AsyncClient, db_session: AsyncSession
@@ -165,7 +166,7 @@ class TestViewerMatrix:
             headers=_auth_headers(user),
         )
         assert response.status_code == 403
-        assert response.json()["detail"] == "Not enough permissions"
+        assert response.json()["error"]["message"] == "Not enough permissions"
 
     async def test_viewer_403_scan_target(
         self, client: AsyncClient, db_session: AsyncSession
@@ -227,7 +228,7 @@ class TestOperatorMatrix:
                 headers=_auth_headers(user),
             )
         assert response.status_code == 200, response.text
-        assert response.json()["success"] is True
+        assert unwrap(response)["success"] is True
 
     async def test_operator_403_create_target(
         self, client: AsyncClient, db_session: AsyncSession
@@ -265,7 +266,7 @@ class TestAdminMatrix:
                 headers=_auth_headers(user),
             )
         assert response.status_code == 201, response.text
-        assert response.json()["name"] == CREATE_PAYLOAD_BASE["name"]
+        assert unwrap(response)["name"] == CREATE_PAYLOAD_BASE["name"]
 
     async def test_admin_200_update_target(
         self, client: AsyncClient, db_session: AsyncSession
@@ -280,7 +281,7 @@ class TestAdminMatrix:
             headers=_auth_headers(user),
         )
         assert response.status_code == 200, response.text
-        assert response.json()["name"] == "renamed-target"
+        assert unwrap(response)["name"] == "renamed-target"
 
     async def test_admin_204_delete_target(
         self, client: AsyncClient, db_session: AsyncSession
@@ -309,7 +310,7 @@ class TestAdminMatrix:
                 f"/api/v1/targets/{target.id}/scan", headers=_auth_headers(user)
             )
         assert response.status_code == 200, response.text
-        assert response.json()["id"] == target.id
+        assert unwrap(response)["id"] == target.id
 
 
 # --- Cas d'erreur : 404 / 422 ------------------------------------------------

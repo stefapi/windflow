@@ -263,7 +263,7 @@ frontend-test-all: ## 🧪 Run all frontend tests (unit, integration, e2e)
 	cd $(FRONTEND_DIR) && $(PNPM) test:all
 
 frontend-typecheck: ## 🔍 Type check frontend code
-	cd $(FRONTEND_DIR) && $(PNPM) typecheck
+	cd $(FRONTEND_DIR) && $(PNPM) type-check
 
 frontend-sizecheck: ## 📊 Analyze frontend bundle size
 	cd $(FRONTEND_DIR) && $(PNPM) sizecheck

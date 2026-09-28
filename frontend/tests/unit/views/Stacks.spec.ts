@@ -18,9 +18,29 @@ vi.mock('@/services/api', () => ({
     listVersions: vi.fn().mockResolvedValue({ data: [] }),
     createVersion: vi.fn().mockResolvedValue({ data: {} }),
     restoreVersion: vi.fn().mockResolvedValue({ data: {} }),
-    export: vi.fn().mockResolvedValue({ data: { version: '1.0', stack: { name: 'Test Stack', description: null, version: '1.0', category: null, tags: [], template: '', variables: {}, icon_url: null, screenshots: [], documentation_url: null, author: null, license: null } } }),
+    export: vi
+      .fn()
+      .mockResolvedValue({
+        data: {
+          version: '1.0',
+          stack: { name: 'Test Stack', description: null, version: '1.0', category: null, tags: [], template: '', variables: {}, icon_url: null, screenshots: [], documentation_url: null, author: null, license: null },
+        },
+      }),
     import: vi.fn().mockResolvedValue({ data: { message: 'Stack imported successfully', stack_id: 'new-stack-1', name: 'Imported Stack' } }),
-    duplicate: vi.fn().mockResolvedValue({ data: { id: 'duplicated-stack-1', name: 'Test Stack (copy)', description: 'Copie de Test Stack: A test stack', compose_content: 'version: "3.8"', metadata: {}, organization_id: 'org-1', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' } }),
+    duplicate: vi
+      .fn()
+      .mockResolvedValue({
+        data: {
+          id: 'duplicated-stack-1',
+          name: 'Test Stack (copy)',
+          description: 'Copie de Test Stack: A test stack',
+          compose_content: 'version: "3.8"',
+          metadata: {},
+          organization_id: 'org-1',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+        },
+      }),
     archive: vi.fn().mockResolvedValue({ data: { success: true, message: 'Stack archived', stack_id: 'stack-1', stack_name: 'Test Stack', affected_services: 0, action: 'archive' } }),
     unarchive: vi.fn().mockResolvedValue({ data: { success: true, message: 'Stack unarchived', stack_id: 'stack-1', stack_name: 'Test Stack', affected_services: 0, action: 'unarchive' } }),
   },
@@ -343,9 +363,12 @@ describe('Stacks.vue', () => {
       const file = createFile('test.json', JSON.stringify({ version: '2.0', stack: { name: 'Test', template: 'yaml' } }))
       triggerFileSelect(wrapper, file)
 
-      await vi.waitFor(() => {
-        expect((wrapper.vm as unknown as Record<string, unknown>).importError).toBe('Invalid format: unsupported version (expected "1.0")')
-      }, { timeout: 2000 })
+      await vi.waitFor(
+        () => {
+          expect((wrapper.vm as unknown as Record<string, unknown>).importError).toBe('Invalid format: unsupported version (expected "1.0")')
+        },
+        { timeout: 2000 }
+      )
     })
 
     it('rejects JSON without stack section', async () => {
@@ -369,9 +392,12 @@ describe('Stacks.vue', () => {
       const file = createFile('test.json', JSON.stringify({ version: '1.0' }))
       triggerFileSelect(wrapper, file)
 
-      await vi.waitFor(() => {
-        expect((wrapper.vm as unknown as Record<string, unknown>).importError).toBe('Invalid format: "stack" section is missing')
-      }, { timeout: 2000 })
+      await vi.waitFor(
+        () => {
+          expect((wrapper.vm as unknown as Record<string, unknown>).importError).toBe('Invalid format: "stack" section is missing')
+        },
+        { timeout: 2000 }
+      )
     })
 
     it('rejects JSON without stack name', async () => {
@@ -395,9 +421,12 @@ describe('Stacks.vue', () => {
       const file = createFile('test.json', JSON.stringify({ version: '1.0', stack: { template: 'yaml' } }))
       triggerFileSelect(wrapper, file)
 
-      await vi.waitFor(() => {
-        expect((wrapper.vm as unknown as Record<string, unknown>).importError).toBe('Invalid format: stack name is required')
-      }, { timeout: 2000 })
+      await vi.waitFor(
+        () => {
+          expect((wrapper.vm as unknown as Record<string, unknown>).importError).toBe('Invalid format: stack name is required')
+        },
+        { timeout: 2000 }
+      )
     })
 
     it('accepts valid JSON file', async () => {
@@ -421,9 +450,12 @@ describe('Stacks.vue', () => {
       const file = createFile('test.json', JSON.stringify({ version: '1.0', stack: { name: 'My Stack', template: 'version: "3.8"\nservices:\n  web:\n    image: nginx' } }))
       triggerFileSelect(wrapper, file)
 
-      await vi.waitFor(() => {
-        expect((wrapper.vm as unknown as Record<string, unknown>).selectedImportFile).toBe(file)
-      }, { timeout: 2000 })
+      await vi.waitFor(
+        () => {
+          expect((wrapper.vm as unknown as Record<string, unknown>).selectedImportFile).toBe(file)
+        },
+        { timeout: 2000 }
+      )
       expect((wrapper.vm as unknown as Record<string, unknown>).importError).toBeNull()
     })
   })
@@ -491,7 +523,8 @@ describe('Stacks.vue', () => {
     it('displays backend error when API fails', async () => {
       const { stacksApi } = await import('@/services/api')
       ;(stacksApi.import as ReturnType<typeof vi.fn>).mockRejectedValueOnce({
-        response: { data: { detail: 'Stack already exists' } },
+        // STORY-126.3 : erreur spec 09 enveloppée
+        response: { data: { error: { code: 'CONFLICT', message: 'Stack already exists' } } },
       })
 
       const wrapper = mount(Stacks, {
@@ -844,7 +877,7 @@ describe('Stacks.vue', () => {
       })
     })
 
-    it('affiche un message d\'erreur si l\'API échoue', async () => {
+    it("affiche un message d'erreur si l'API échoue", async () => {
       const { dashboardApi } = await import('@/services/api')
       const { ElMessage } = await import('element-plus')
       ;(dashboardApi.getStackStats as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('API error'))

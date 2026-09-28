@@ -36,6 +36,7 @@ from app.auth.jwt import create_access_token
 from app.core.cache import reset_role_cache
 from app.models.audit_log import AuditLog
 from app.models.user import User
+from tests.conftest import unwrap
 
 ADMIN_AUDIT_URL = "/api/v1/admin/audit"
 
@@ -123,7 +124,7 @@ class TestListAuditEntriesAccess:
             ADMIN_AUDIT_URL, headers=await _auth_headers(test_superuser)
         )
         assert response.status_code == 200, response.text
-        body = response.json()
+        body = unwrap(response)
         assert set(body) == {"items", "total", "skip", "limit"}
         assert body["total"] == 4
         assert body["skip"] == 0
@@ -197,7 +198,7 @@ class TestListAuditEntriesValidation:
             ADMIN_AUDIT_URL, headers=await _auth_headers(test_superuser)
         )
         assert response.status_code == 200, response.text
-        body = response.json()
+        body = unwrap(response)
         assert body["items"] == []
         assert body["total"] == 0
 
@@ -222,14 +223,14 @@ class TestListAuditEntriesFiltersAndPagination:
             ADMIN_AUDIT_URL, params={"user_id": test_user.id}, headers=headers
         )
         assert by_user.status_code == 200, by_user.text
-        assert by_user.json()["total"] == 3
-        assert all(item["user_id"] == test_user.id for item in by_user.json()["items"])
+        assert unwrap(by_user)["total"] == 3
+        assert all(item["user_id"] == test_user.id for item in unwrap(by_user)["items"])
 
         # action : 2 user.login
         by_action = await client.get(
             ADMIN_AUDIT_URL, params={"action": "user.login"}, headers=headers
         )
-        assert by_action.json()["total"] == 2
+        assert unwrap(by_action)["total"] == 2
 
         # since (-36h) : les lignes de moins de 36h (2 user.login récents
         # + 1 deployment.failed « now ») — stack.deleted (-2j) exclue
@@ -238,8 +239,8 @@ class TestListAuditEntriesFiltersAndPagination:
             ADMIN_AUDIT_URL, params={"since": since}, headers=headers
         )
         assert by_since.status_code == 200, by_since.text
-        assert by_since.json()["total"] == 3
-        actions_since = {item["action"] for item in by_since.json()["items"]}
+        assert unwrap(by_since)["total"] == 3
+        actions_since = {item["action"] for item in unwrap(by_since)["items"]}
         assert actions_since == {"user.login", "deployment.failed"}
 
     async def test_list_audit_pagination_skip_limit(
@@ -258,7 +259,7 @@ class TestListAuditEntriesFiltersAndPagination:
             ADMIN_AUDIT_URL, params={"skip": 0, "limit": 2}, headers=headers
         )
         assert page1.status_code == 200, page1.text
-        body1 = page1.json()
+        body1 = unwrap(page1)
         assert body1["total"] == 4  # total filtré inchangé
         assert len(body1["items"]) == 2
         assert body1["skip"] == 0
@@ -267,7 +268,7 @@ class TestListAuditEntriesFiltersAndPagination:
         rest = await client.get(
             ADMIN_AUDIT_URL, params={"skip": 2, "limit": 2}, headers=headers
         )
-        body2 = rest.json()
+        body2 = unwrap(rest)
         assert len(body2["items"]) == 2
         assert body2["skip"] == 2
 

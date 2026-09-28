@@ -53,29 +53,34 @@ Deployments are returned in reverse chronological order (newest first).
 """,
     responses={
         200: {
-            "description": "Paginated list of deployments",
+            "description": (
+                "Paginated list of deployments — enveloppe spec 09"
+            ),
             "content": {
                 "application/json": {
                     "example": {
-                        "items": [
-                            {
-                                "id": "990e8400-e29b-41d4-a716-446655440000",
-                                "name": "production-api",
-                                "status": "running",
-                                "target_type": "docker",
-                                "created_at": "2026-01-02T22:30:00Z",
-                            },
-                            {
-                                "id": "880e8400-e29b-41d4-a716-446655440001",
-                                "name": "staging-web",
-                                "status": "pending",
-                                "target_type": "docker-compose",
-                                "created_at": "2026-01-02T21:15:00Z",
-                            },
-                        ],
-                        "total": 42,
-                        "skip": 0,
-                        "limit": 100,
+                        "data": {
+                            "items": [
+                                {
+                                    "id": "990e8400-e29b-41d4-a716-446655440000",
+                                    "name": "production-api",
+                                    "status": "running",
+                                    "target_type": "docker",
+                                    "created_at": "2026-01-02T22:30:00Z",
+                                },
+                                {
+                                    "id": "880e8400-e29b-41d4-a716-446655440001",
+                                    "name": "staging-web",
+                                    "status": "pending",
+                                    "target_type": "docker-compose",
+                                    "created_at": "2026-01-02T21:15:00Z",
+                                },
+                            ],
+                            "total": 42,
+                            "skip": 0,
+                            "limit": 100,
+                        },
+                        "message": None,
                     }
                 }
             },
@@ -85,8 +90,10 @@ Deployments are returned in reverse chronological order (newest first).
             "content": {
                 "application/json": {
                     "example": {
-                        "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token",
+                        "error": {
+                            "code": "INVALID_OR_EXPIRED_TOKEN",
+                            "message": "Missing or invalid authentication token",
+                        }
                     }
                 }
             },
@@ -96,8 +103,10 @@ Deployments are returned in reverse chronological order (newest first).
             "content": {
                 "application/json": {
                     "example": {
-                        "error": "Internal Server Error",
-                        "detail": "An unexpected error occurred",
+                        "error": {
+                            "code": "INTERNAL_ERROR",
+                            "message": "An unexpected error occurred",
+                        },
                         "correlation_id": "abc-126",
                     }
                 }
@@ -184,21 +193,26 @@ Returns complete deployment information including:
 """,
     responses={
         200: {
-            "description": "Deployment details",
+            "description": (
+                "Deployment details — enveloppe spec 09"
+            ),
             "content": {
                 "application/json": {
                     "example": {
-                        "id": "990e8400-e29b-41d4-a716-446655440000",
-                        "name": "production-api",
-                        "status": "running",
-                        "target_type": "docker",
-                        "created_at": "2026-01-02T22:30:00Z",
-                        "started_at": "2026-01-02T22:31:00Z",
-                        "stack": {
-                            "id": "550e8400-e29b-41d4-a716-446655440000",
-                            "name": "api-stack",
+                        "data": {
+                            "id": "990e8400-e29b-41d4-a716-446655440000",
+                            "name": "production-api",
+                            "status": "running",
+                            "target_type": "docker",
+                            "created_at": "2026-01-02T22:30:00Z",
+                            "started_at": "2026-01-02T22:31:00Z",
+                            "stack": {
+                                "id": "550e8400-e29b-41d4-a716-446655440000",
+                                "name": "api-stack",
+                            },
+                            "configuration": {"replicas": 3, "memory": "512Mi"},
                         },
-                        "configuration": {"replicas": 3, "memory": "512Mi"},
+                        "message": None,
                     }
                 }
             },
@@ -208,8 +222,10 @@ Returns complete deployment information including:
             "content": {
                 "application/json": {
                     "example": {
-                        "error": "Unauthorized",
-                        "detail": "Missing or invalid authentication token",
+                        "error": {
+                            "code": "INVALID_OR_EXPIRED_TOKEN",
+                            "message": "Missing or invalid authentication token",
+                        }
                     }
                 }
             },
@@ -219,8 +235,10 @@ Returns complete deployment information including:
             "content": {
                 "application/json": {
                     "example": {
-                        "error": "Forbidden",
-                        "detail": "Access denied to this deployment",
+                        "error": {
+                            "code": "PERMISSION_DENIED",
+                            "message": "Access denied to this deployment",
+                        }
                     }
                 }
             },
@@ -230,8 +248,10 @@ Returns complete deployment information including:
             "content": {
                 "application/json": {
                     "example": {
-                        "error": "Not Found",
-                        "detail": "Deployment 990e8400-... not found",
+                        "error": {
+                            "code": "NOT_FOUND",
+                            "message": "Deployment 990e8400-... not found",
+                        }
                     }
                 }
             },
@@ -241,8 +261,10 @@ Returns complete deployment information including:
             "content": {
                 "application/json": {
                     "example": {
-                        "error": "Internal Server Error",
-                        "detail": "An unexpected error occurred",
+                        "error": {
+                            "code": "INTERNAL_ERROR",
+                            "message": "An unexpected error occurred",
+                        },
                         "correlation_id": "abc-127",
                     }
                 }

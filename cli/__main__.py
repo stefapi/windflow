@@ -13,18 +13,19 @@ Commandes disponibles:
 
 import argparse
 import sys
+
 from cli import __version__
 from cli.commands import (
-    setup_auth_parser,
     handle_auth_command,
-    setup_config_parser,
     handle_config_command,
-    setup_org_parser,
-    handle_org_command,
-    setup_env_parser,
-    handle_env_command,
-    setup_deploy_parser,
     handle_deploy_command,
+    handle_env_command,
+    handle_org_command,
+    setup_auth_parser,
+    setup_config_parser,
+    setup_deploy_parser,
+    setup_env_parser,
+    setup_org_parser,
 )
 from cli.utils import print_error
 
@@ -32,22 +33,17 @@ from cli.utils import print_error
 def create_parser() -> argparse.ArgumentParser:
     """Crée le parser principal de commandes."""
     parser = argparse.ArgumentParser(
-        prog='windflow',
-        description='WindFlow CLI - Interface en ligne de commande pour WindFlow',
-        epilog='Pour plus d\'informations sur une commande: windflow <command> --help'
+        prog="windflow",
+        description="WindFlow CLI - Interface en ligne de commande pour WindFlow",
+        epilog="Pour plus d'informations sur une commande: windflow <command> --help",
     )
 
     parser.add_argument(
-        '--version',
-        action='version',
-        version=f'%(prog)s {__version__}'
+        "--version", action="version", version=f"%(prog)s {__version__}"
     )
 
     # Sous-commandes
-    subparsers = parser.add_subparsers(
-        dest='command',
-        help='Commande à exécuter'
-    )
+    subparsers = parser.add_subparsers(dest="command", help="Commande à exécuter")
 
     # Configuration des parsers pour chaque commande
     setup_auth_parser(subparsers)
@@ -78,15 +74,15 @@ def main() -> int:
 
     # Router vers le gestionnaire approprié
     try:
-        if args.command == 'auth':
+        if args.command == "auth":
             return handle_auth_command(args)
-        elif args.command == 'config':
+        elif args.command == "config":
             return handle_config_command(args)
-        elif args.command == 'org':
+        elif args.command == "org":
             return handle_org_command(args)
-        elif args.command == 'env':
+        elif args.command == "env":
             return handle_env_command(args)
-        elif args.command == 'deploy':
+        elif args.command == "deploy":
             return handle_deploy_command(args)
         else:
             print_error(f"Commande inconnue: {args.command}")
@@ -99,5 +95,5 @@ def main() -> int:
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

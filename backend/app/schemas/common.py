@@ -1,24 +1,200 @@
 """
 Schemas Pydantic V2 communs et partagés.
 
-Modèles génériques pour la pagination, les réponses d'erreur
-et les structures de données partagées entre les endpoints.
+STORY-126.1 : enveloppes de réponse spec 09 (§ Format de réponse) —
+
+- Succès : ``{"data": ..., "message": ...}`` (``APIResponse``) ;
+- Listes paginées : ``{"data": [...], "pagination": {...}}``
+  (``PaginatedResponse`` + ``PaginationMeta``) ;
+- Erreurs : ``{"error": {"code": ..., "message": ..., "details"?}}``
+  (``ErrorResponse`` + ``ErrorDetail``).
+
+Ces enveloppes sont systématiques depuis STORY-126.2 (défaut actif) ;
+le flag transitoire ``API_ENVELOPE_ENABLED`` a été retiré par
+STORY-126.3 — il n'existe plus de mode legacy.
 """
 
-from datetime import datetime
-from typing import Any, List, Optional, TypeVar
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-T = TypeVar("T")
+
+class PaginationMeta(BaseModel):
+    """
+    Métadonnées de pagination spec 09 (modèle ``page``/``per_page``).
+
+    Contra à l'ancien format interne ``skip``/``limit`` — les listes
+    paginées exposent des pages 1-indexées.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"page": 1, "per_page": 20, "total": 87, "pages": 5}
+        }
+    )
+
+    page: int = Field(
+        ...,
+        ge=1,
+        description="Numéro de la page courante (1-indexé)",
+        json_schema_extra={"example": 1},
+    )
+    per_page: int = Field(
+        ...,
+        ge=1,
+        description="Nombre d'éléments par page",
+        json_schema_extra={"example": 20},
+    )
+    total: int = Field(
+        ...,
+        ge=0,
+        description="Nombre total d'éléments disponibles",
+        json_schema_extra={"example": 87},
+    )
+    pages: int = Field(
+        ...,
+        ge=0,
+        description="Nombre total de pages",
+        json_schema_extra={"example": 5},
+    )
+
+
+class APIResponse(BaseModel):
+    """
+    Enveloppe de réponse standard spec 09.
+
+    Toute réponse 2xx JSON de ``/api/v1/*`` est transportée sous
+    ``data`` ; ``message`` porte un message optionnel (``null`` par
+    défaut, alimenté par le header interne ``X-API-Message``).
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "data": {"id": "app_nextcloud", "status": "running"},
+                "message": None,
+            }
+        }
+    )
+
+    data: Any = Field(
+        default=None,
+        description="Charge utile de la réponse (objet, liste ou scalaire)",
+        json_schema_extra={"example": {"id": "app_nextcloud", "status": "running"}},
+    )
+    message: Optional[str] = Field(
+        default=None,
+        description="Message optionnel de la réponse (null par défaut)",
+        json_schema_extra={"example": None},
+    )
+
+
+class PaginatedResponse(BaseModel):
+    """
+    Enveloppe de réponse liste paginée spec 09.
+
+    La liste vit sous ``data`` ; les métadonnées de pagination sous
+    ``pagination`` (modèle :doc:`PaginationMeta`).
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "data": [{"id": "app_nextcloud"}, {"id": "app_pihole"}],
+                "pagination": {"page": 1, "per_page": 20, "total": 87, "pages": 5},
+            }
+        }
+    )
+
+    data: List[Any] = Field(
+        ...,
+        description="Liste des éléments de la page courante",
+        json_schema_extra={"example": [{"id": "app_nextcloud"}]},
+    )
+    pagination: PaginationMeta = Field(
+        ...,
+        description="Métadonnées de pagination",
+    )
+
+
+class ErrorDetail(BaseModel):
+    """
+    Détail d'une erreur spec 09 (§ Gestion des erreurs).
+
+    ``code`` est un code machine stable (ex. ``NOT_FOUND``,
+    ``VALIDATION_ERROR``) ; ``message`` un message lisible ;
+    ``details`` optionnel porte le contexte structuré (ex. liste
+    d'erreurs Pydantic pour les 422).
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "code": "NOT_FOUND",
+                "message": "App not found: abc123",
+                "details": None,
+            }
+        }
+    )
+
+    code: str = Field(
+        ...,
+        description="Code d'erreur machine stable (spec 09)",
+        json_schema_extra={"example": "NOT_FOUND"},
+    )
+    message: str = Field(
+        ...,
+        description="Message d'erreur lisible",
+        json_schema_extra={"example": "App not found: abc123"},
+    )
+    details: Optional[dict] = Field(
+        default=None,
+        description="Contexte structuré optionnel (ex. erreurs de validation Pydantic)",
+        json_schema_extra={
+            "example": {
+                "field": "name",
+                "issue": "String should have at least 1 character",
+            }
+        },
+    )
+
+
+class ErrorResponse(BaseModel):
+    """
+    Enveloppe d'erreur spec 09.
+
+    Toutes les réponses d'erreur ``/api/v1/*`` (4xx/5xx) suivent ce
+    format ; un ``correlation_id`` top-level est ajouté par le handler
+    pour le traçage distribué.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "App not found: abc123",
+                },
+                "correlation_id": "abc12345-6789-def0-1234-567890abcdef",
+            }
+        }
+    )
+
+    error: ErrorDetail = Field(
+        ...,
+        description="Détail de l'erreur (code, message, détails optionnels)",
+    )
 
 
 class PaginationParams(BaseModel):
     """
-    Paramètres de pagination pour les requêtes de liste.
+    Paramètres de pagination legacy ``skip``/``limit``.
 
-    Utilisé dans les query parameters des endpoints GET
-    qui retournent des listes paginées.
+    .. deprecated:: STORY-126.1
+        Format interne historique, sans consommateur backend — conservé
+        uniquement comme référence documentaire. Ne pas l'utiliser :
+        STORY-128 introduit la pagination canonique ``?page``/``?per_page``
+        (spec 09) accompagnée de ``PaginationMeta``.
     """
 
     model_config = ConfigDict(
@@ -34,122 +210,15 @@ class PaginationParams(BaseModel):
     skip: int = Field(
         default=0,
         ge=0,
-        description="Nombre d'éléments à ignorer (offset)",
+        description="Nombre d'éléments à ignorer (offset) — DEPRECATED, voir STORY-128",
         json_schema_extra={"example": 0},
     )
     limit: int = Field(
         default=20,
         ge=1,
         le=100,
-        description="Nombre maximum d'éléments à retourner (1-100)",
+        description="Nombre maximum d'éléments à retourner (1-100) — DEPRECATED, voir STORY-128",
         json_schema_extra={"example": 20},
-    )
-
-
-class PaginatedResponse(BaseModel):
-    """
-    Réponse paginée générique.
-
-    Encapsule une liste d'éléments avec les métadonnées
-    de pagination (total, skip, limit).
-    """
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "items": [],
-                "total": 42,
-                "skip": 0,
-                "limit": 20,
-                "has_more": True,
-            }
-        }
-    )
-
-    items: List[Any] = Field(..., description="Liste des éléments de la page courante")
-    total: int = Field(
-        ...,
-        ge=0,
-        description="Nombre total d'éléments disponibles",
-        json_schema_extra={"example": 42},
-    )
-    skip: int = Field(
-        ...,
-        ge=0,
-        description="Offset de la page courante",
-        json_schema_extra={"example": 0},
-    )
-    limit: int = Field(
-        ...,
-        ge=1,
-        description="Taille de la page courante",
-        json_schema_extra={"example": 20},
-    )
-    has_more: bool = Field(
-        ...,
-        description="Indique s'il existe d'autres pages",
-        json_schema_extra={"example": True},
-    )
-
-
-class ErrorResponse(BaseModel):
-    """
-    Format standard de réponse d'erreur.
-
-    Utilisé pour toutes les réponses d'erreur HTTP (4xx, 5xx).
-    Inclut un identifiant de corrélation pour le traçage distribué.
-    """
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {
-                    "error": "Not Found",
-                    "detail": "Deployment with ID '550e8400-e29b-41d4-a716-446655440000' not found",
-                    "correlation_id": "abc12345-6789-def0-1234-567890abcdef",
-                    "timestamp": "2026-01-02T22:30:00Z",
-                },
-                {
-                    "error": "Validation Error",
-                    "detail": [
-                        {
-                            "loc": ["body", "name"],
-                            "msg": "String should have at least 1 character",
-                            "type": "string_too_short",
-                        }
-                    ],
-                    "correlation_id": "def45678-9012-abc3-4567-890123456789",
-                    "timestamp": "2026-01-02T22:31:00Z",
-                },
-                {
-                    "error": "Unauthorized",
-                    "detail": "Invalid or expired token",
-                    "correlation_id": "ghi78901-2345-def6-7890-123456789abc",
-                    "timestamp": "2026-01-02T22:32:00Z",
-                },
-            ]
-        }
-    )
-
-    error: str = Field(
-        ...,
-        description="Type d'erreur (ex: Not Found, Validation Error, Unauthorized)",
-        json_schema_extra={"example": "Not Found"},
-    )
-    detail: Any = Field(
-        ...,
-        description="Détails de l'erreur (string ou liste d'erreurs de validation)",
-        json_schema_extra={"example": "Resource not found"},
-    )
-    correlation_id: Optional[str] = Field(
-        None,
-        description="ID de corrélation pour le traçage distribué",
-        json_schema_extra={"example": "abc12345-6789-def0-1234-567890abcdef"},
-    )
-    timestamp: Optional[datetime] = Field(
-        default=None,
-        description="Horodatage de l'erreur",
-        json_schema_extra={"example": "2026-01-02T22:30:00Z"},
     )
 
 
@@ -158,7 +227,8 @@ class HealthResponse(BaseModel):
     Réponse du endpoint de santé.
 
     Retourné par GET /health pour les systèmes de monitoring
-    et les load balancers.
+    et les load balancers (hors périmètre enveloppes — jamais
+    enveloppé, cf. STORY-126.1 garde-fous).
     """
 
     model_config = ConfigDict(

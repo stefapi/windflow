@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { workflowsApi } from '@/services/api'
-import type { Workflow, WorkflowCreate } from '@/types/api'
+import type { PaginatedResponse, Workflow, WorkflowCreate } from '@/types/api'
 
 export const useWorkflowsStore = defineStore('workflows', () => {
   const workflows = ref<Workflow[]>([])
@@ -14,12 +14,12 @@ export const useWorkflowsStore = defineStore('workflows', () => {
     error.value = null
     try {
       const response = await workflowsApi.list({ organization_id: organizationId })
-      // Backend returns List[WorkflowResponse] directly, not wrapped in {items:[]}
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      workflows.value = (response.data as any).items || response.data
+      // STORY-126.3 : post-unwrap spec 09, response.data est List[Workflow] ou {items}
+      const body: unknown = response.data
+      workflows.value = Array.isArray(body) ? body : ((body as PaginatedResponse<Workflow>).items ?? [])
     } catch (err: unknown) {
       // Handle 404 gracefully - workflows endpoint may not be implemented yet
-      if ((err as any)?.response?.status === 404) {
+      if ((err as { response?: { status?: number } })?.response?.status === 404) {
         workflows.value = []
         error.value = null
       } else {
@@ -66,7 +66,7 @@ export const useWorkflowsStore = defineStore('workflows', () => {
     error.value = null
     try {
       const response = await workflowsApi.update(id, data)
-      const index = workflows.value.findIndex(w => w.id === id)
+      const index = workflows.value.findIndex((w) => w.id === id)
       if (index !== -1) workflows.value[index] = response.data
       if (currentWorkflow.value?.id === id) currentWorkflow.value = response.data
     } catch (err: unknown) {
@@ -82,7 +82,7 @@ export const useWorkflowsStore = defineStore('workflows', () => {
     error.value = null
     try {
       await workflowsApi.delete(id)
-      workflows.value = workflows.value.filter(w => w.id !== id)
+      workflows.value = workflows.value.filter((w) => w.id !== id)
       if (currentWorkflow.value?.id === id) currentWorkflow.value = null
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to delete workflow'

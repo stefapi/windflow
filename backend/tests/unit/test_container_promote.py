@@ -14,6 +14,7 @@ from app.models.organization import Organization
 from app.models.stack import Stack
 from app.schemas.stack import StackCreate
 from app.services.stack_service import StackService
+from tests.conftest import error_message, unwrap
 
 
 def _make_container_inspect(
@@ -110,7 +111,7 @@ class TestPromoteContainer:
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is True
         assert data["stack_id"]
         assert data["stack_name"] == "My Promoted Stack"
@@ -155,7 +156,7 @@ class TestPromoteContainer:
             )
 
         assert response.status_code == 404
-        assert "non trouvé" in response.json()["detail"].lower()
+        assert "non trouvé" in error_message(response).lower()
 
     @pytest.mark.asyncio
     async def test_promote_returns_409_already_managed(
@@ -179,7 +180,7 @@ class TestPromoteContainer:
             )
 
         assert response.status_code == 409
-        assert "managé" in response.json()["detail"].lower()
+        assert "managé" in error_message(response).lower()
 
     @pytest.mark.asyncio
     async def test_promote_returns_409_name_conflict(
@@ -202,7 +203,7 @@ class TestPromoteContainer:
             )
 
         assert response.status_code == 409
-        assert "existe déjà" in response.json()["detail"].lower()
+        assert "existe déjà" in error_message(response).lower()
 
     @pytest.mark.asyncio
     async def test_promote_returns_422_empty_name(

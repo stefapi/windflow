@@ -4,9 +4,9 @@ Classe de base pour les services CLI modulaires.
 Permet d'étendre facilement le CLI avec de nouveaux services suivant un pattern cohérent.
 """
 
-from abc import ABC, abstractmethod
-from typing import Dict, Any, List
 import argparse
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List
 
 
 class CLIServiceBase(ABC):
@@ -186,7 +186,7 @@ class CLIServiceStore:
 service_store = CLIServiceStore()
 
 
-def register_service(service_class: type[CLIServiceBase]) -> None:
+def register_service(service_class: type[CLIServiceBase]) -> type[CLIServiceBase]:
     """
     Décorateur pour enregistrer automatiquement un service.
 

@@ -26,6 +26,7 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
+from tests.conftest import unwrap
 
 TASK_PAYLOAD_BASE: dict = {
     "name": "rbac-cleanup",
@@ -120,7 +121,7 @@ class TestViewerMatrix:
 
         response = await client.get("/api/v1/schedules", headers=_auth_headers(user))
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        assert isinstance(unwrap(response), list)
 
     async def test_viewer_403_create_schedule(
         self, client: AsyncClient, db_session: AsyncSession
@@ -133,7 +134,7 @@ class TestViewerMatrix:
             headers=_auth_headers(user),
         )
         assert response.status_code == 403
-        assert response.json()["detail"] == "Not enough permissions"
+        assert response.json()["error"]["message"] == "Not enough permissions"
 
 
 # --- Operator : toggle OK, gestion 403 --------------------------------------
@@ -153,7 +154,7 @@ class TestOperatorMatrix:
             f"/api/v1/schedules/{task.id}/toggle", headers=_auth_headers(user)
         )
         assert response.status_code == 200, response.text
-        assert response.json()["enabled"] is False
+        assert unwrap(response)["enabled"] is False
 
     async def test_operator_403_create_schedule(
         self, client: AsyncClient, db_session: AsyncSession
@@ -185,7 +186,7 @@ class TestAdminMatrix:
             headers=_auth_headers(user),
         )
         assert response.status_code == 201, response.text
-        assert response.json()["name"] == TASK_PAYLOAD_BASE["name"]
+        assert unwrap(response)["name"] == TASK_PAYLOAD_BASE["name"]
 
     async def test_admin_200_update_schedule(
         self, client: AsyncClient, db_session: AsyncSession
@@ -200,7 +201,7 @@ class TestAdminMatrix:
             headers=_auth_headers(user),
         )
         assert response.status_code == 200, response.text
-        assert response.json()["name"] == "renamed-task"
+        assert unwrap(response)["name"] == "renamed-task"
 
     async def test_admin_204_delete_schedule(
         self, client: AsyncClient, db_session: AsyncSession

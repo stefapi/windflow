@@ -40,6 +40,7 @@ from app.auth.jwt import API_KEY_PREFIX, MAX_API_KEY_LENGTH
 from app.core.cache import reset_role_cache
 from app.models.api_key import APIKey
 from app.models.user import User
+from tests.conftest import unwrap
 
 API_KEYS_URL = "/api/v1/auth/api-keys"
 ME_URL = "/api/v1/auth/me"
@@ -83,7 +84,7 @@ async def _create_key(
     """POST /auth/api-keys → 201 ; retourne le body (clé brute incluse)."""
     response = await client.post(API_KEYS_URL, json={"name": name}, headers=headers)
     assert response.status_code == 201, response.text
-    return response.json()
+    return unwrap(response)
 
 
 class TestCreateApiKey:
@@ -109,9 +110,9 @@ class TestCreateApiKey:
         # Affichage unique : le GET suivant ne retourne que les métadonnées
         listing = await client.get(API_KEYS_URL, headers=headers)
         assert listing.status_code == 200, listing.text
-        assert len(listing.json()) == 1
-        assert "key" not in listing.json()[0]
-        assert "key_hash" not in listing.json()[0]
+        assert len(unwrap(listing)) == 1
+        assert "key" not in unwrap(listing)[0]
+        assert "key_hash" not in unwrap(listing)[0]
         assert raw_key not in listing.text
 
         # Le hash en base ne contient jamais la valeur claire (rules 40)
@@ -153,7 +154,7 @@ class TestListApiKeys:
         response = await client.get(API_KEYS_URL, headers=headers)
         assert response.status_code == 200, response.text
 
-        keys = response.json()
+        keys = unwrap(response)
         assert len(keys) == 1
         entry = keys[0]
         assert set(entry.keys()) == {
@@ -192,7 +193,7 @@ class TestListApiKeys:
 
         response = await client.get(API_KEYS_URL, headers=headers)
         assert response.status_code == 200, response.text
-        entries = {e["id"]: e for e in response.json()}
+        entries = {e["id"]: e for e in unwrap(response)}
         assert body["id"] in entries
         assert entries[body["id"]]["expires_at"] is not None
         assert entries[body["id"]]["revoked"] is False
@@ -215,8 +216,8 @@ class TestListApiKeys:
         # Chacun ne voit que ses clés
         list_a = await client.get(API_KEYS_URL, headers=headers_a)
         list_b = await client.get(API_KEYS_URL, headers=headers_b)
-        assert [k["id"] for k in list_a.json()] == [key_a["id"]]
-        assert [k["id"] for k in list_b.json()] == [key_b["id"]]
+        assert [k["id"] for k in unwrap(list_a)] == [key_a["id"]]
+        assert [k["id"] for k in unwrap(list_b)] == [key_b["id"]]
 
         # A tente de révoquer la clé de B → 404 (traitée comme inexistante)
         delete = await client.delete(f"{API_KEYS_URL}/{key_b['id']}", headers=headers_a)
@@ -242,7 +243,7 @@ class TestRevokeApiKey:
         # Révocation par le propriétaire
         delete = await client.delete(f"{API_KEYS_URL}/{created['id']}", headers=headers)
         assert delete.status_code == 200, delete.text
-        assert delete.json()["revoked"] is True
+        assert unwrap(delete)["revoked"] is True
 
         # Révocation immédiate : la même clé → 401
         after = await client.get(ME_URL, headers={"X-API-Key": raw_key})
@@ -257,7 +258,7 @@ class TestRevokeApiKey:
         assert first.status_code == 200
         second = await client.delete(f"{API_KEYS_URL}/{created['id']}", headers=headers)
         assert second.status_code == 200, second.text
-        assert second.json()["revoked"] is True
+        assert unwrap(second)["revoked"] is True
 
     async def test_revoke_unknown_key_404(self, client: AsyncClient, test_user: User):
         """key_id inexistant → 404."""
@@ -280,7 +281,7 @@ class TestAuthViaApiKey:
 
         response = await client.get(ME_URL, headers={"X-API-Key": created["key"]})
         assert response.status_code == 200, response.text
-        assert response.json()["username"] == test_user.username
+        assert unwrap(response)["username"] == test_user.username
 
     async def test_auth_via_bearer_wf_ak(self, client: AsyncClient, test_user: User):
         """``Authorization: Bearer wf_ak_…`` authentifie (200) — la valeur
@@ -292,7 +293,7 @@ class TestAuthViaApiKey:
             ME_URL, headers={"Authorization": f"Bearer {created['key']}"}
         )
         assert response.status_code == 200, response.text
-        assert response.json()["username"] == test_user.username
+        assert unwrap(response)["username"] == test_user.username
 
     async def test_invalid_or_expired_key_401(
         self,
@@ -342,7 +343,7 @@ class TestAuthViaApiKey:
         headers = await _auth_headers(test_user)
         response = await client.get(ME_URL, headers=headers)
         assert response.status_code == 200, response.text
-        assert response.json()["username"] == test_user.username
+        assert unwrap(response)["username"] == test_user.username
 
     async def test_disabled_user_key_401(
         self,
@@ -377,7 +378,7 @@ class TestAuthViaApiKey:
 
         # last_used_at NULL à la création
         listing = await client.get(API_KEYS_URL, headers=headers)
-        entry = next(k for k in listing.json() if k["id"] == created["id"])
+        entry = next(k for k in unwrap(listing) if k["id"] == created["id"])
         assert entry["last_used_at"] is None
 
         # Utilisation de la clé sur une route protégée
@@ -386,7 +387,7 @@ class TestAuthViaApiKey:
 
         # Le GET suivant montre last_used_at alimenté
         listing = await client.get(API_KEYS_URL, headers=headers)
-        entry = next(k for k in listing.json() if k["id"] == created["id"])
+        entry = next(k for k in unwrap(listing) if k["id"] == created["id"])
         assert entry["last_used_at"] is not None
 
 
@@ -568,7 +569,7 @@ class TestTransversalInvariants:
 
         async def _last_used() -> str | None:
             listing = await client.get(API_KEYS_URL, headers=headers)
-            entry = next(k for k in listing.json() if k["id"] == created["id"])
+            entry = next(k for k in unwrap(listing) if k["id"] == created["id"])
             return entry["last_used_at"]
 
         assert await _last_used() is None  # jamais utilisée à la création

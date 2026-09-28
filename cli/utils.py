@@ -4,16 +4,17 @@ Utilitaires pour le CLI WindFlow.
 Fonctions d'aide pour le formatage, l'affichage et la manipulation des données.
 """
 
-from typing import Any, Dict, List, Optional
-from datetime import datetime
 import json
 import sys
-from rich.console import Console
-from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.panel import Panel
-from rich.syntax import Syntax
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 from rich import print as rich_print
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.syntax import Syntax
+from rich.table import Table
 
 # Console Rich globale
 console = Console()
@@ -22,8 +23,8 @@ console = Console()
 def format_timestamp(timestamp: str) -> str:
     """Formate un timestamp ISO pour l'affichage."""
     try:
-        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-        return dt.strftime('%Y-%m-%d %H:%M:%S')
+        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
     except (ValueError, AttributeError):
         return timestamp
 
@@ -95,7 +96,7 @@ def create_progress() -> Progress:
     return Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
-        console=console
+        console=console,
     )
 
 
@@ -107,11 +108,11 @@ def confirm(prompt: str, default: bool = False) -> bool:
     if not response:
         return default
 
-    return response in ('o', 'oui', 'y', 'yes')
+    return response in ("o", "oui", "y", "yes")
 
 
 def truncate(text: str, max_length: int = 50) -> str:
     """Tronque un texte si nécessaire."""
     if len(text) <= max_length:
         return text
-    return text[:max_length - 3] + "..."
+    return text[: max_length - 3] + "..."
