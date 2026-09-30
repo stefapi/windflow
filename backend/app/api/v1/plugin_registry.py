@@ -9,10 +9,14 @@ import logging
 import re
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
 from ...auth.rbac import require_viewer
 from ...config import settings as app_settings
+from ...core.exceptions import (
+    NotFoundError,
+    UnprocessableEntityError,
+)
 from ...core.rate_limit import conditional_rate_limiter
 from ...models.user import User
 from ...schemas.plugin_registry import (
@@ -133,20 +137,15 @@ async def get_registry_plugin_detail(
 
     # Validation kebab-case du paramètre (anti path traversal)
     if not _NAME_PATTERN.match(plugin_name):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Nom de plugin invalide : '{plugin_name}'. "
-            "Le nom doit être en kebab-case (lettres minuscules, chiffres et tirets).",
+        raise UnprocessableEntityError(
+            f"Nom de plugin invalide : '{plugin_name}'. Le nom doit être en kebab-case (lettres minuscules, chiffres et tirets).",
         )
 
     service = _get_registry_service()
     plugin = await service.get_plugin(plugin_name)
 
     if not plugin:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Plugin non trouvé dans le registre : {plugin_name}",
-        )
+        raise NotFoundError(f"Plugin non trouvé dans le registre : {plugin_name}")
 
     return RegistryPluginDetailResponse(
         name=plugin.name,

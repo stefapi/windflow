@@ -9,11 +9,14 @@ Expose deux endpoints d'agrégation :
 import logging
 from typing import Annotated, List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi import status as http_status
+from fastapi import APIRouter, Depends, Query
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.rbac import require_viewer
+from ...core.exceptions import (
+    PermissionDeniedError,
+)
 from ...database import get_db
 from ...models.user import User
 from ...schemas.compute import ComputeGlobalView, ComputeStatsResponse, TargetGroup
@@ -62,10 +65,7 @@ async def get_compute_stats(
         if not await UserOrganizationService.is_member(
             db, current_user, organization_id
         ):
-            raise HTTPException(
-                status_code=http_status.HTTP_403_FORBIDDEN,
-                detail="Accès refusé à cette organisation",
-            )
+            raise PermissionDeniedError("Accès refusé à cette organisation")
         org_filter: List[str] = [organization_id]
     else:
         org_filter = await UserOrganizationService.get_user_organization_ids(
@@ -158,10 +158,7 @@ async def get_compute_global(
         if not await UserOrganizationService.is_member(
             db, current_user, organization_id
         ):
-            raise HTTPException(
-                status_code=http_status.HTTP_403_FORBIDDEN,
-                detail="Accès refusé à cette organisation",
-            )
+            raise PermissionDeniedError("Accès refusé à cette organisation")
         org_filter: List[str] = [organization_id]
     else:
         org_filter = await UserOrganizationService.get_user_organization_ids(

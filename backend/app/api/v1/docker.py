@@ -13,7 +13,6 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
-    HTTPException,
     Query,
     Request,
     Response,
@@ -23,10 +22,16 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.rbac import require_admin, require_operator, require_viewer
+from ...core.exceptions import (
+    ConflictError,
+    InvalidInputError,
+    NotFoundError,
+    ServiceUnavailableError,
+    WindFlowException,
+)
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
-from ...services.audit_service import AuditService
 from ...schemas.docker import (
     BatchContainerActionRequest,
     BatchContainerActionResponse,
@@ -65,6 +70,7 @@ from ...schemas.docker import (
     VolumeResponse,
 )
 from ...schemas.stack import StackCreate
+from ...services.audit_service import AuditService
 from ...services.docker_client_service import get_docker_client
 from ...services.stack_service import StackService
 from ...services.user_organization_service import UserOrganizationService
@@ -93,9 +99,7 @@ with skip and limit parameters.
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
     responses={
         200: {
-            "description": (
-                "List of containers — enveloppe spec 09"
-            ),
+            "description": ("List of containers — enveloppe spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -181,16 +185,10 @@ async def list_containers(
 
     except ConnectionError as e:
         logger.error(f"Docker not available: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Docker n'est pas disponible: {str(e)}",
-        )
+        raise ServiceUnavailableError(f"Docker n'est pas disponible: {str(e)}")
     except Exception as e:
         logger.error(f"Error listing containers: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la liste des containers: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la liste des containers: {str(e)}")
     finally:
         await client.close()
 
@@ -243,19 +241,12 @@ async def get_container(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error getting container: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération du container: {str(e)}",
+        raise WindFlowException(
+            f"Erreur lors de la récupération du container: {str(e)}"
         )
     finally:
         await client.close()
@@ -325,20 +316,11 @@ async def create_container(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 409:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Container {container_data.name} existe déjà",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise ConflictError(f"Container {container_data.name} existe déjà")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error creating container: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la création du container: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la création du container: {str(e)}")
     finally:
         await client.close()
 
@@ -397,10 +379,7 @@ async def batch_start_containers(
         finally:
             await client.close()
     except ConnectionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Docker n'est pas disponible: {exc}",
-        )
+        raise ServiceUnavailableError(f"Docker n'est pas disponible: {exc}")
 
     message = f"{affected}/{len(batch_data.container_ids)} containers démarrés"
     if errors:
@@ -462,10 +441,7 @@ async def batch_stop_containers(
         finally:
             await client.close()
     except ConnectionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Docker n'est pas disponible: {exc}",
-        )
+        raise ServiceUnavailableError(f"Docker n'est pas disponible: {exc}")
 
     message = f"{affected}/{len(batch_data.container_ids)} containers arrêtés"
     if errors:
@@ -523,21 +499,12 @@ async def start_container(
             # l'audit de l'action demandée reste émis (ci-dessus).
             pass
         elif e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
+            raise NotFoundError(f"Container {container_id} non trouvé")
         else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Erreur Docker: {str(e)}",
-            )
+            raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error starting container: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors du démarrage: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors du démarrage: {str(e)}")
     finally:
         await client.close()
 
@@ -585,21 +552,12 @@ async def stop_container(
             # Container déjà arrêté — idempotent, audit déjà émis.
             pass
         elif e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
+            raise NotFoundError(f"Container {container_id} non trouvé")
         else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Erreur Docker: {str(e)}",
-            )
+            raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error stopping container: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de l'arrêt: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de l'arrêt: {str(e)}")
     finally:
         await client.close()
 
@@ -635,20 +593,11 @@ async def restart_container(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error restarting container: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors du redémarrage: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors du redémarrage: {str(e)}")
     finally:
         await client.close()
 
@@ -683,20 +632,11 @@ async def pause_container(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error pausing container: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la mise en pause: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la mise en pause: {str(e)}")
     finally:
         await client.close()
 
@@ -731,20 +671,11 @@ async def unpause_container(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error unpausing container: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la reprise: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la reprise: {str(e)}")
     finally:
         await client.close()
 
@@ -791,20 +722,11 @@ async def remove_container(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error removing container: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la suppression: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la suppression: {str(e)}")
     finally:
         await client.close()
 
@@ -885,30 +807,20 @@ async def recreate_container(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except RuntimeError as e:
         # Chemin critique : container supprimé mais recréation échouée
         logger.critical(
             f"Critical recreate failure for {container_id}: {e}",
             extra={"correlation_id": correlation_id},
         )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Container {container_id} supprimé mais la recréation a échoué: {str(e)}",
+        raise WindFlowException(
+            f"Container {container_id} supprimé mais la recréation a échoué: {str(e)}",
         )
     except Exception as e:
         logger.error(f"Error recreating container: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la recréation du container: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la recréation du container: {str(e)}")
     finally:
         await client.close()
 
@@ -952,20 +864,11 @@ async def update_restart_policy(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error updating restart policy: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la mise à jour: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la mise à jour: {str(e)}")
     finally:
         await client.close()
 
@@ -1013,20 +916,11 @@ async def update_resources(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error updating resources: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la mise à jour: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la mise à jour: {str(e)}")
     finally:
         await client.close()
 
@@ -1068,20 +962,11 @@ async def rename_container(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error renaming container: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors du renommage: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors du renommage: {str(e)}")
     finally:
         await client.close()
 
@@ -1130,20 +1015,13 @@ async def connect_container_to_network(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} ou réseau {connect_data.network_id} non trouvé",
+            raise NotFoundError(
+                f"Container {container_id} ou réseau {connect_data.network_id} non trouvé"
             )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error connecting container to network: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la connexion au réseau: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la connexion au réseau: {str(e)}")
     finally:
         await client.close()
 
@@ -1191,20 +1069,13 @@ async def disconnect_container_from_network(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} ou réseau {disconnect_data.network_id} non trouvé",
+            raise NotFoundError(
+                f"Container {container_id} ou réseau {disconnect_data.network_id} non trouvé",
             )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error disconnecting container from network: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la déconnexion du réseau: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la déconnexion du réseau: {str(e)}")
     finally:
         await client.close()
 
@@ -1248,10 +1119,7 @@ async def promote_container(
         # 2. Check if container is already managed
         labels = container_info.get("Config", {}).get("Labels") or {}
         if labels.get("windflow.managed"):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Ce container est déjà managé par WindFlow",
-            )
+            raise ConflictError("Ce container est déjà managé par WindFlow")
 
         # 3. Build Compose template from container config
         host_config = container_info.get("HostConfig", {})
@@ -1348,9 +1216,8 @@ async def promote_container(
             session, current_user
         )
         if primary_org is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Aucune organisation : rattachez d'abord votre compte",
+            raise InvalidInputError(
+                "Aucune organisation : rattachez d'abord votre compte"
             )
 
         # 4. Check name uniqueness
@@ -1358,9 +1225,8 @@ async def promote_container(
             session, promote_data.name, primary_org
         )
         if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Une stack avec le nom '{promote_data.name}' existe déjà",
+            raise ConflictError(
+                f"Une stack avec le nom '{promote_data.name}' existe déjà"
             )
 
         # 5. Create the stack
@@ -1390,24 +1256,15 @@ async def promote_container(
             stack_name=stack.name,
         )
 
-    except HTTPException:
+    except WindFlowException:
         raise
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error promoting container: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la promotion: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la promotion: {str(e)}")
     finally:
         await client.close()
 
@@ -1458,20 +1315,11 @@ async def get_container_shells(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error detecting shells: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la détection des shells: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la détection des shells: {str(e)}")
 
 
 @router.get(
@@ -1514,20 +1362,11 @@ async def get_container_stats(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error getting container stats: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des stats: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la récupération des stats: {str(e)}")
     finally:
         await client.close()
 
@@ -1622,19 +1461,12 @@ async def get_container_processes(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error getting container processes: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des processus: {str(e)}",
+        raise WindFlowException(
+            f"Erreur lors de la récupération des processus: {str(e)}"
         )
     finally:
         await client.close()
@@ -1687,20 +1519,11 @@ async def get_container_logs(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Container {container_id} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Container {container_id} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error getting container logs: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des logs: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la récupération des logs: {str(e)}")
     finally:
         await client.close()
 
@@ -1771,10 +1594,7 @@ async def list_images(
 
     except Exception as e:
         logger.error(f"Error listing images: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la liste des images: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la liste des images: {str(e)}")
     finally:
         await client.close()
 
@@ -1841,20 +1661,11 @@ async def get_image(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Image {image_id} non trouvée",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Image {image_id} non trouvée")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error inspecting image {image_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de l'inspection de l'image: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de l'inspection de l'image: {str(e)}")
     finally:
         await client.close()
 
@@ -1907,10 +1718,7 @@ async def pull_image(
 
     except Exception as e:
         logger.error(f"Error pulling image: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors du pull: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors du pull: {str(e)}")
     finally:
         await client.close()
 
@@ -1948,20 +1756,11 @@ async def remove_image(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Image {image_id} non trouvée",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Image {image_id} non trouvée")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error removing image: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la suppression: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la suppression: {str(e)}")
     finally:
         await client.close()
 
@@ -1993,10 +1792,8 @@ async def load_image(
         "application/octet-stream",
         "application/gzip",
     ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Type de fichier non supporté: {content_type}. "
-            "Attendu: application/x-tar ou application/octet-stream",
+        raise InvalidInputError(
+            f"Type de fichier non supporté: {content_type}. Attendu: application/x-tar ou application/octet-stream",
         )
 
     try:
@@ -2020,10 +1817,7 @@ async def load_image(
 
     except Exception as e:
         logger.error(f"Error loading image: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors du chargement de l'image: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors du chargement de l'image: {str(e)}")
 
 
 @router.get(
@@ -2071,20 +1865,11 @@ async def save_image(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Image {image_id} non trouvée",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Image {image_id} non trouvée")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error saving image {image_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de l'export de l'image: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de l'export de l'image: {str(e)}")
     finally:
         await client.close()
 
@@ -2140,10 +1925,7 @@ async def list_volumes(
 
     except Exception as e:
         logger.error(f"Error listing volumes: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la liste des volumes: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la liste des volumes: {str(e)}")
     finally:
         await client.close()
 
@@ -2192,20 +1974,11 @@ async def create_volume(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 409:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Volume {volume_data.name} existe déjà",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise ConflictError(f"Volume {volume_data.name} existe déjà")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error creating volume: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la création: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la création: {str(e)}")
     finally:
         await client.close()
 
@@ -2242,20 +2015,11 @@ async def remove_volume(
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Volume {volume_name} non trouvé",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+            raise NotFoundError(f"Volume {volume_name} non trouvé")
+        raise WindFlowException(f"Erreur Docker: {str(e)}")
     except Exception as e:
         logger.error(f"Error removing volume: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la suppression: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la suppression: {str(e)}")
     finally:
         await client.close()
 
@@ -2315,10 +2079,7 @@ async def list_networks(
 
     except Exception as e:
         logger.error(f"Error listing networks: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la liste des réseaux: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la liste des réseaux: {str(e)}")
     finally:
         await client.close()
 
@@ -2373,10 +2134,7 @@ async def get_system_info(
 
     except Exception as e:
         logger.error(f"Error getting system info: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des infos: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la récupération des infos: {str(e)}")
     finally:
         await client.close()
 
@@ -2417,9 +2175,8 @@ async def get_version(request: Request, current_user: User = Depends(require_vie
 
     except Exception as e:
         logger.error(f"Error getting version: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération de la version: {str(e)}",
+        raise WindFlowException(
+            f"Erreur lors de la récupération de la version: {str(e)}"
         )
     finally:
         await client.close()

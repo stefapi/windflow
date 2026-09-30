@@ -5,9 +5,9 @@ Tests pour le mode développement sans authentification.
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import HTTPException
 
 from app.auth.dependencies import get_current_user, get_current_user_ws
+from app.core.exceptions import AuthenticationError, WindFlowException
 from app.models.user import User
 from tests.conftest import unwrap
 
@@ -68,12 +68,13 @@ class TestDevMode:
                 # Pas de superadmin en base
                 mock_user_service.get_first_superadmin = AsyncMock(return_value=None)
 
-                # Doit lever une HTTPException
-                with pytest.raises(HTTPException) as exc_info:
+                # Doit lever une WindFlowException typée (STORY-127 : 500
+                # INTERNAL_ERROR enveloppé par le handler global)
+                with pytest.raises(WindFlowException) as exc_info:
                     await get_current_user(token="fake-token", session=mock_session)
 
                 assert exc_info.value.status_code == 500
-                assert "No superadmin user found" in exc_info.value.detail
+                assert "No superadmin user found" in exc_info.value.message
 
     async def test_get_current_user_ws_with_disable_auth(self):
         """Test que get_current_user_ws retourne le premier superadmin quand DISABLE_AUTH=true."""
@@ -134,8 +135,9 @@ class TestDevMode:
                     # Simuler un token invalide
                     mock_decode.return_value = None
 
-                    # Doit lever une HTTPException (credentials invalides)
-                    with pytest.raises(HTTPException) as exc_info:
+                    # Doit lever une AuthenticationError typée (STORY-127 :
+                    # 401 + WWW-Authenticate portés par la classe)
+                    with pytest.raises(AuthenticationError) as exc_info:
                         await get_current_user(
                             token="invalid-token", session=mock_session
                         )

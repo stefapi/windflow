@@ -4,10 +4,17 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ....auth.rbac import require_admin, require_viewer
+from ....core.exceptions import (
+    ConflictError,
+    InvalidInputError,
+    NotFoundError,
+    PermissionDeniedError,
+    WindFlowException,
+)
 from ....core.rate_limit import conditional_rate_limiter
 from ....database import get_db
 from ....models.user import User
@@ -53,9 +60,7 @@ Default limit is 100 targets per request.
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
     responses={
         200: {
-            "description": (
-                "List of targets — enveloppe spec 09"
-            ),
+            "description": ("List of targets — enveloppe spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -293,17 +298,12 @@ async def get_target(
     )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée",
-        )
+        raise NotFoundError(f"Cible {target_id} non trouvée")
 
     if not await UserOrganizationService.is_member(
         session, current_user, target.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
-        )
+        raise PermissionDeniedError("Accès refusé à cette cible")
 
     return TargetResponse.model_validate(target)
 
@@ -521,16 +521,10 @@ async def create_target(
         session, current_user
     )
     if primary_org is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aucune organisation : rattachez d'abord votre compte",
-        )
+        raise InvalidInputError("Aucune organisation : rattachez d'abord votre compte")
     existing = await TargetService.get_by_name(session, primary_org, target_data.name)
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cible avec le nom '{target_data.name}' existe déjà",
-        )
+        raise ConflictError(f"Cible avec le nom '{target_data.name}' existe déjà")
 
     target = await TargetService.create(
         session, target_data, organization_id=primary_org
@@ -746,17 +740,12 @@ async def update_target(
     )
     existing_target = await TargetService.get_by_id(session, target_id)
     if not existing_target:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée",
-        )
+        raise NotFoundError(f"Cible {target_id} non trouvée")
 
     if not await UserOrganizationService.is_member(
         session, current_user, existing_target.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
-        )
+        raise PermissionDeniedError("Accès refusé à cette cible")
 
     if target_data.name and target_data.name != existing_target.name:
         # STORY-121.3 : unicité vérifiée dans l'organisation de la cible
@@ -764,17 +753,11 @@ async def update_target(
             session, existing_target.organization_id, target_data.name
         )
         if existing_name:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cible avec le nom '{target_data.name}' existe déjà",
-            )
+            raise ConflictError(f"Cible avec le nom '{target_data.name}' existe déjà")
 
     target = await TargetService.update(session, target_id, target_data)
     if target is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erreur lors de la mise à jour de la cible",
-        )
+        raise WindFlowException("Erreur lors de la mise à jour de la cible")
     return TargetResponse.model_validate(target)
 
 
@@ -888,17 +871,12 @@ async def delete_target(
     )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée",
-        )
+        raise NotFoundError(f"Cible {target_id} non trouvée")
 
     if not await UserOrganizationService.is_member(
         session, current_user, target.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
-        )
+        raise PermissionDeniedError("Accès refusé à cette cible")
 
     await TargetService.delete(session, target_id)
 

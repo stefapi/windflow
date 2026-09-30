@@ -8,12 +8,16 @@ Remplace les scripts seed_stacks.py et check_stacks.py.
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ....auth.rbac import require_super_admin
+from ....core.exceptions import (
+    ConflictError,
+    NotFoundError,
+)
 from ....database import get_db
 from ....models.deployment import Deployment
 from ....models.organization import Organization
@@ -123,10 +127,7 @@ async def list_stack_definitions(
     stacks_dir = Path(__file__).parent.parent.parent.parent / "stacks_definitions"
 
     if not stacks_dir.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Répertoire stacks_definitions non trouvé: {stacks_dir}",
-        )
+        raise NotFoundError(f"Répertoire stacks_definitions non trouvé: {stacks_dir}")
 
     definitions = []
     yaml_files = list(stacks_dir.glob("*.yaml"))
@@ -200,10 +201,7 @@ async def validate_stack_definitions(
     stacks_dir = Path(__file__).parent.parent.parent.parent / "stacks_definitions"
 
     if not stacks_dir.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Répertoire stacks_definitions non trouvé",
-        )
+        raise NotFoundError("Répertoire stacks_definitions non trouvé")
 
     yaml_files = list(stacks_dir.glob("*.yaml"))
     valid_count = 0
@@ -259,18 +257,14 @@ async def import_stacks(
     org = result.scalar_one_or_none()
 
     if not org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aucune organisation trouvée. Initialisez d'abord la base de données.",
+        raise NotFoundError(
+            "Aucune organisation trouvée. Initialisez d'abord la base de données."
         )
 
     stacks_dir = Path(__file__).parent.parent.parent.parent / "stacks_definitions"
 
     if not stacks_dir.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Répertoire stacks_definitions non trouvé",
-        )
+        raise NotFoundError("Répertoire stacks_definitions non trouvé")
 
     results: List[ImportResult] = []
 
@@ -279,10 +273,7 @@ async def import_stacks(
         yaml_file = stacks_dir / f"{stack_name}.yaml"
 
         if not yaml_file.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Stack non trouvé: {stack_name}.yaml",
-            )
+            raise NotFoundError(f"Stack non trouvé: {stack_name}.yaml")
 
         try:
             stack, created = await StackService.upsert_from_yaml(
@@ -479,9 +470,7 @@ async def auto_sync_stacks(
     org = result.scalar_one_or_none()
 
     if not org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Aucune organisation trouvée"
-        )
+        raise NotFoundError("Aucune organisation trouvée")
 
     stacks_dir = Path(__file__).parent.parent.parent.parent / "stacks_definitions"
     results: List[ImportResult] = []
@@ -625,10 +614,7 @@ async def export_stack_yaml(
     stack = await StackService.get_by_id(db, stack_id)
 
     if not stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack non trouvé: {stack_id}",
-        )
+        raise NotFoundError(f"Stack non trouvé: {stack_id}")
 
     # Construire la structure YAML
     yaml_data = {
@@ -712,10 +698,7 @@ async def toggle_stack_visibility(
     stack = await StackService.get_by_id(db, stack_id)
 
     if not stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack non trouvé: {stack_id}",
-        )
+        raise NotFoundError(f"Stack non trouvé: {stack_id}")
 
     stack.is_public = not stack.is_public
     await db.commit()
@@ -746,20 +729,14 @@ async def duplicate_stack(
     original_stack = await StackService.get_by_id(db, stack_id)
 
     if not original_stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack non trouvé: {stack_id}",
-        )
+        raise NotFoundError(f"Stack non trouvé: {stack_id}")
 
     # Vérifier que le nouveau nom n'existe pas déjà
     target_org_id = organization_id or original_stack.organization_id
     existing = await StackService.get_by_name(db, new_name, target_org_id)
 
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Un stack nommé '{new_name}' existe déjà",
-        )
+        raise ConflictError(f"Un stack nommé '{new_name}' existe déjà")
 
     # Créer la copie
     stack_data = StackCreate(  # type: ignore[call-arg]
@@ -803,10 +780,7 @@ async def delete_stack(
     stack = await StackService.get_by_id(db, stack_id)
 
     if not stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack non trouvé: {stack_id}",
-        )
+        raise NotFoundError(f"Stack non trouvé: {stack_id}")
 
     # Vérifier s'il y a des déploiements
     result = await db.execute(
@@ -815,9 +789,8 @@ async def delete_stack(
     deployment_count = result.scalar()
 
     if deployment_count > 0 and not force:  # type: ignore[operator]
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Impossible de supprimer: {deployment_count} déploiement(s) existent. Utilisez force=true pour forcer.",
+        raise ConflictError(
+            f"Impossible de supprimer: {deployment_count} déploiement(s) existent. Utilisez force=true pour forcer.",
         )
 
     await db.delete(stack)
@@ -921,10 +894,7 @@ async def get_stack_usage(
     stack = await StackService.get_by_id(db, stack_id)
 
     if not stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack non trouvé: {stack_id}",
-        )
+        raise NotFoundError(f"Stack non trouvé: {stack_id}")
 
     # Nombre total de déploiements
     total_result = await db.execute(

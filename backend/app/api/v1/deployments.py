@@ -6,10 +6,17 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.rbac import require_admin, require_operator, require_viewer
+from ...core.exceptions import (
+    ConflictError,
+    InvalidInputError,
+    NotFoundError,
+    PermissionDeniedError,
+    WindFlowException,
+)
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
@@ -53,9 +60,7 @@ Deployments are returned in reverse chronological order (newest first).
 """,
     responses={
         200: {
-            "description": (
-                "Paginated list of deployments — enveloppe spec 09"
-            ),
+            "description": ("Paginated list of deployments — enveloppe spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -193,9 +198,7 @@ Returns complete deployment information including:
 """,
     responses={
         200: {
-            "description": (
-                "Deployment details — enveloppe spec 09"
-            ),
+            "description": ("Deployment details — enveloppe spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -300,10 +303,7 @@ async def get_deployment(
                 "deployment_id": str(deployment_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Déploiement {deployment_id} non trouvé",
-        )
+        raise NotFoundError(f"Déploiement {deployment_id} non trouvé")
 
     # Vérifier que le déploiement appartient à la même organisation
     if not await UserOrganizationService.is_member(
@@ -317,10 +317,7 @@ async def get_deployment(
                 "deployment_id": str(deployment_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à ce déploiement",
-        )
+        raise PermissionDeniedError("Accès refusé à ce déploiement")
 
     return deployment
 
@@ -437,10 +434,7 @@ async def get_deployment_logs(
                 "deployment_id": str(deployment_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Déploiement {deployment_id} non trouvé",
-        )
+        raise NotFoundError(f"Déploiement {deployment_id} non trouvé")
 
     # Vérifier que le déploiement appartient à la même organisation
     if not await UserOrganizationService.is_member(
@@ -454,10 +448,7 @@ async def get_deployment_logs(
                 "deployment_id": str(deployment_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à ce déploiement",
-        )
+        raise PermissionDeniedError("Accès refusé à ce déploiement")
 
     return DeploymentLogsResponse(
         deployment_id=deployment.id,
@@ -686,10 +677,7 @@ async def create_deployment(
         session, current_user
     )
     if primary_org is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aucune organisation : rattachez d'abord votre compte",
-        )
+        raise InvalidInputError("Aucune organisation : rattachez d'abord votre compte")
 
     # STORY-122.3 (AC 4) : isolation cross-organisation — la stack référencée
     # doit appartenir à une organisation de l'utilisateur (pattern stacks.py
@@ -698,10 +686,7 @@ async def create_deployment(
         session, str(deployment_data.stack_id)
     )
     if not referenced_stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack {deployment_data.stack_id} non trouvée",
-        )
+        raise NotFoundError(f"Stack {deployment_data.stack_id} non trouvée")
     if not await UserOrganizationService.is_member(
         session, current_user, referenced_stack.organization_id
     ):
@@ -713,17 +698,13 @@ async def create_deployment(
                 "stack_id": str(deployment_data.stack_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette stack",
-        )
+        raise PermissionDeniedError("Accès refusé à cette stack")
 
     # Vérifier que le nom n'existe pas déjà dans l'organisation (seulement si fourni)
     if deployment_data.name:
         if primary_org is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Aucune organisation : rattachez d'abord votre compte",
+            raise InvalidInputError(
+                "Aucune organisation : rattachez d'abord votre compte"
             )
         existing = await DeploymentService.get_by_name(
             session, primary_org, deployment_data.name
@@ -736,9 +717,8 @@ async def create_deployment(
                     "user_id": str(current_user.id),
                 },
             )
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Déploiement avec le nom '{deployment_data.name}' existe déjà",
+            raise ConflictError(
+                f"Déploiement avec le nom '{deployment_data.name}' existe déjà"
             )
 
     try:
@@ -766,7 +746,10 @@ async def create_deployment(
             organization_id=primary_org,
             resource_type="deployment",
             resource_id=str(deployment.id),
-            details={"name": deployment_data.name, "stack_id": str(deployment_data.stack_id)},
+            details={
+                "name": deployment_data.name,
+                "stack_id": str(deployment_data.stack_id),
+            },
         )
 
         return deployment
@@ -775,7 +758,7 @@ async def create_deployment(
             f"Failed to create deployment: {str(e)}",
             extra={"correlation_id": correlation_id, "user_id": str(current_user.id)},
         )
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise NotFoundError(str(e))
 
 
 @router.put(
@@ -944,10 +927,7 @@ async def update_deployment(
                 "deployment_id": str(deployment_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Déploiement {deployment_id} non trouvé",
-        )
+        raise NotFoundError(f"Déploiement {deployment_id} non trouvé")
 
     # Vérifier les permissions (STORY-121.3 : appartenance via l'association)
     if not await UserOrganizationService.is_member(
@@ -961,10 +941,7 @@ async def update_deployment(
                 "deployment_id": str(deployment_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à ce déploiement",
-        )
+        raise PermissionDeniedError("Accès refusé à ce déploiement")
 
     # Si changement de nom, vérifier qu'il n'existe pas déjà
     if deployment_data.name and deployment_data.name != existing_deployment.name:
@@ -980,9 +957,8 @@ async def update_deployment(
                     "user_id": str(current_user.id),
                 },
             )
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Déploiement avec le nom '{deployment_data.name}' existe déjà",
+            raise ConflictError(
+                f"Déploiement avec le nom '{deployment_data.name}' existe déjà"
             )
 
     deployment = await DeploymentService.update(
@@ -1129,10 +1105,7 @@ async def retry_deployment(
                 "deployment_id": str(deployment_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Déploiement {deployment_id} non trouvé",
-        )
+        raise NotFoundError(f"Déploiement {deployment_id} non trouvé")
 
     # Vérifier les permissions
     if not await UserOrganizationService.is_member(
@@ -1146,10 +1119,7 @@ async def retry_deployment(
                 "deployment_id": str(deployment_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à ce déploiement",
-        )
+        raise PermissionDeniedError("Accès refusé à ce déploiement")
 
     # Vérifier que le déploiement est en statut FAILED ou PENDING
     if deployment.status.value not in ["failed", "pending"]:
@@ -1161,9 +1131,8 @@ async def retry_deployment(
                 "status": deployment.status.value,
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Le déploiement doit être en statut 'failed' ou 'pending' pour être réessayé (statut actuel: {deployment.status.value})",
+        raise InvalidInputError(
+            f"Le déploiement doit être en statut 'failed' ou 'pending' pour être réessayé (statut actuel: {deployment.status.value})",
         )
 
     # Relancer le déploiement existant
@@ -1179,10 +1148,7 @@ async def retry_deployment(
                 "deployment_id": str(deployment_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Échec de la relance du déploiement",
-        )
+        raise WindFlowException("Échec de la relance du déploiement")
 
     # Récupérer le déploiement mis à jour
     updated_deployment = await DeploymentService.get_by_id(session, str(deployment_id))
@@ -1329,10 +1295,7 @@ async def cancel_deployment(
                 "deployment_id": str(deployment_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Déploiement {deployment_id} non trouvé",
-        )
+        raise NotFoundError(f"Déploiement {deployment_id} non trouvé")
 
     # Vérifier les permissions
     if not await UserOrganizationService.is_member(
@@ -1346,10 +1309,7 @@ async def cancel_deployment(
                 "deployment_id": str(deployment_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à ce déploiement",
-        )
+        raise PermissionDeniedError("Accès refusé à ce déploiement")
 
     # Vérifier que le déploiement peut être annulé
     if deployment.status.value not in ["pending", "deploying"]:
@@ -1361,9 +1321,8 @@ async def cancel_deployment(
                 "status": deployment.status.value,
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Le déploiement ne peut pas être annulé (statut actuel: {deployment.status.value})",
+        raise InvalidInputError(
+            f"Le déploiement ne peut pas être annulé (statut actuel: {deployment.status.value})",
         )
 
     # Annuler le déploiement via l'orchestrateur
@@ -1514,10 +1473,7 @@ async def delete_deployment(
                 "deployment_id": str(deployment_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Déploiement {deployment_id} non trouvé",
-        )
+        raise NotFoundError(f"Déploiement {deployment_id} non trouvé")
 
     # Vérifier les permissions
     if not await UserOrganizationService.is_member(
@@ -1531,10 +1487,7 @@ async def delete_deployment(
                 "deployment_id": str(deployment_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à ce déploiement",
-        )
+        raise PermissionDeniedError("Accès refusé à ce déploiement")
 
     await DeploymentService.delete(session, str(deployment_id))
 

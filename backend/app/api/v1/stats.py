@@ -6,11 +6,14 @@ import time
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.rbac import require_viewer
+from ...core.exceptions import (
+    PermissionDeniedError,
+)
 from ...database import get_db
 from ...models.deployment import Deployment
 from ...models.stack import Stack
@@ -56,10 +59,7 @@ async def get_dashboard_stats(
         if not await UserOrganizationService.is_member(
             db, current_user, organization_id
         ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Accès refusé à cette organisation",
-            )
+            raise PermissionDeniedError("Accès refusé à cette organisation")
         org_filter: Optional[List[str]] = [organization_id]
     else:
         org_filter = await UserOrganizationService.get_user_organization_ids(

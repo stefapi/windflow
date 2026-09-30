@@ -31,6 +31,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .api.v1 import api_router
 from .config import enforce_production_secrets, settings
+from .core.exceptions import WindFlowException
 from .database import db
 from .middleware import (
     api_response_middleware,
@@ -40,6 +41,7 @@ from .middleware import (
     logging_middleware,
     security_headers_middleware,
     timing_middleware,
+    windflow_exception_handler,
 )
 from .schemas.common import (
     APIResponse,
@@ -628,6 +630,17 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
             correlation_id=correlation_id,
         ),
     )
+
+
+# STORY-127 : handler global des WindFlowException (hiérarchie typée de
+# core/exceptions.py) — implémentation partagée dans
+# ``middleware/error_handler.py`` (réutilisée par les apps de test
+# minimales). Routage Starlette par MRO : un handler sur la classe base
+# attrape toutes les sous-classes. Il vit dans l'ExceptionMiddleware
+# (interne), donc AVANT le error_handler_middleware externe (cf.
+# ``middleware/README.md``) — une exception typée ne devient jamais un
+# 500 générique.
+app.add_exception_handler(WindFlowException, windflow_exception_handler)
 
 
 if __name__ == "__main__":

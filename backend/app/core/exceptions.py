@@ -2,18 +2,221 @@
 Exceptions de base pour l'application WindFlow.
 
 Toutes les exceptions métier doivent hériter de :class:`WindFlowException`.
+
+Hiérarchie (STORY-127, spec 09 § Gestion des erreurs) :
+
+- ``WindFlowException`` — base, 500 ``INTERNAL_ERROR`` par défaut ;
+- ``APIError`` — racine des erreurs API typées ;
+- ``NotFoundError`` — 404 ``NOT_FOUND`` (signature ``(resource, resource_id)``) ;
+- ``ConflictError`` — 409 ``CONFLICT`` ;
+- ``InvalidInputError`` — 400 ``INVALID_INPUT`` ;
+- ``UnprocessableEntityError`` — 422 ``VALIDATION_ERROR`` ;
+- ``PermissionDeniedError`` — 403 ``PERMISSION_DENIED`` ;
+- ``AuthenticationError`` — 401 ``INVALID_OR_EXPIRED_TOKEN`` + ``WWW-Authenticate`` ;
+- ``RateLimitError`` — 429 ``TOO_MANY_ATTEMPTS`` ;
+- ``ServiceUnavailableError`` — 503 ``SERVICE_UNAVAILABLE``.
+
+Exceptions techniques spécialisées (non destinées à être exposées telles
+quelles en HTTP) : ``CommandExecutionError``, ``SecretEncryptionError``,
+``SecretDecryptionError``, ``InvalidRefreshTokenError``,
+``InvalidApiKeyError`` — une non-interception remonte en 500 enveloppé
+``INTERNAL_ERROR`` via le handler global de ``main.py``.
+
+``core/`` reste framework-agnostic (rules 55) : aucune dépendance
+FastAPI/Starlette ici — la traduction HTTP (statut, headers, enveloppe
+spec 09 ``{"error": {"code", "message"}}``) est faite par le handler
+global enregistré dans ``main.py``.
 """
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 
 class WindFlowException(Exception):
-    """Exception de base pour toutes les erreurs WindFlow."""
+    """Exception de base pour toutes les erreurs WindFlow.
+
+    Attributes:
+        message: Message lisible (jamais de donnée sensible — rules 40).
+        details: Contexte structuré optionnel (dict, défaut ``{}``).
+        status_code: Statut HTTP cible utilisé par le handler global
+            de ``main.py`` (défaut ``500``).
+        error_code: Code machine spec 09 (défaut ``INTERNAL_ERROR``).
+        headers: Headers HTTP par défaut de la classe (ex.
+            ``WWW-Authenticate`` pour les 401) — aucun par défaut.
+    """
+
+    status_code: int = 500
+    error_code: str = "INTERNAL_ERROR"
+    headers: ClassVar[dict[str, str] | None] = None
 
     def __init__(self, message: str = "", *, details: dict | None = None):
         super().__init__(message)
         self.message = message
         self.details = details or {}
+
+
+class APIError(WindFlowException):
+    """Racine des erreurs API typées (spec 09 § Classes d'erreur).
+
+    Les sous-classes ancrent le couple (statut HTTP, code machine) via
+    les attributs de classe ``status_code``/``error_code`` ; le handler
+    global de ``main.py`` convertit toute instance non interceptée en
+    enveloppe ``{"error": {"code", "message", "details"?}}`` en
+    préservant le ``correlation_id``.
+
+    Args:
+        message: Message lisible transporté dans ``error.message``.
+        details: Contexte structuré optionnel (``error.details``).
+        code: Override du code machine pour cette instance (ex.
+            ``INVALID_CREDENTIALS`` sur le login) — prime sur le
+            ``error_code`` de la classe.
+        headers: Headers HTTP additionnels (ex. ``Retry-After``) —
+            sinon les headers par défaut de la classe s'appliquent.
+    """
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        details: dict | None = None,
+        code: str | None = None,
+        headers: dict[str, str] | None = None,
+    ):
+        super().__init__(message, details=details)
+        self.code = code or type(self).error_code
+        default_headers = type(self).headers
+        self.http_headers = (
+            headers
+            if headers is not None
+            else (dict(default_headers) if default_headers is not None else None)
+        )
+
+
+class NotFoundError(APIError):
+    """Levée lorsqu'une ressource demandée est introuvable — 404.
+
+    Sémantique ``404 NOT_FOUND`` générique. Utilisée pour les
+    lectures/révoquations **scoped** : une ressource appartenant à un
+    autre utilisateur est traitée comme inexistante (on ne révèle pas
+    son existence — anti-énumération, rules 40). La ressource visée
+    est identifiée par son type et son id dans ``details`` (jamais par
+    un secret).
+
+    Deux formes d'appel :
+
+    - ``NotFoundError(resource, resource_id)`` — signature historique
+      (STORY-124, consommateurs services) : message
+      ``f"{resource} not found: {resource_id}"`` et ``details``
+      ``{"resource", "resource_id"}`` ;
+    - ``NotFoundError(message)`` — forme message libre (sweep
+      STORY-127) : préserve au caractère près le message textuel
+      historique de l'``HTTPException`` remplacée (convention « même
+      statut / même message », non-régression stricte).
+    """
+
+    status_code = 404
+    error_code = "NOT_FOUND"
+
+    def __init__(
+        self,
+        resource_or_message: str,
+        resource_id: str | None = None,
+    ) -> None:
+        if resource_id is not None:
+            self.resource = resource_or_message
+            self.resource_id = resource_id
+            super().__init__(
+                f"{resource_or_message} not found: {resource_id}",
+                details={
+                    "resource": resource_or_message,
+                    "resource_id": resource_id,
+                },
+            )
+        else:
+            self.resource = ""
+            self.resource_id = ""
+            super().__init__(resource_or_message)
+
+
+class ConflictError(APIError):
+    """Levée en cas de conflit de ressource — 409 ``CONFLICT``.
+
+    Ex. slug dupliqué, plugin déjà installé, conteneur déjà géré par
+    WindFlow (docker.py).
+    """
+
+    status_code = 409
+    error_code = "CONFLICT"
+
+
+class InvalidInputError(APIError):
+    """Levée pour une entrée invalide — 400 ``INVALID_INPUT``.
+
+    Format/paramètre invalide, JSON illisible, valeur incohérente
+    (distinct de la validation de schéma Pydantic → 422).
+    """
+
+    status_code = 400
+    error_code = "INVALID_INPUT"
+
+
+class UnprocessableEntityError(APIError):
+    """Levée pour une entité non traitable — 422 ``VALIDATION_ERROR``.
+
+    Validation sémantique au-delà du schéma. Nom choisi pour éviter la
+    collision d'import avec ``pydantic.ValidationError``.
+    """
+
+    status_code = 422
+    error_code = "VALIDATION_ERROR"
+
+
+class PermissionDeniedError(APIError):
+    """Levée pour un accès refusé — 403 ``PERMISSION_DENIED``.
+
+    Rôle insuffisant (RBAC — source de vérité API, spec 08), compte
+    inactif, ressource appartenant à une autre organisation.
+    """
+
+    status_code = 403
+    error_code = "PERMISSION_DENIED"
+
+
+class AuthenticationError(APIError):
+    """Levée pour un défaut d'authentification — 401.
+
+    Porte par défaut le header ``WWW-Authenticate: Bearer`` (spec 09).
+    Code de classe ``INVALID_OR_EXPIRED_TOKEN`` ; sur ``/auth/login``,
+    lever avec ``code="INVALID_CREDENTIALS"`` (l'override d'instance
+    prime, et le handler global applique de toute façon la
+    spécialisation login de ``_status_to_code``).
+    """
+
+    status_code = 401
+    error_code = "INVALID_OR_EXPIRED_TOKEN"
+    headers = {"WWW-Authenticate": "Bearer"}
+
+
+class RateLimitError(APIError):
+    """Levée en cas de quota dépassé — 429 ``TOO_MANY_ATTEMPTS``.
+
+    Passer ``headers={"Retry-After": "..."}`` le cas échéant pour
+    informer le client du délai avant nouvel essai.
+    """
+
+    status_code = 429
+    error_code = "TOO_MANY_ATTEMPTS"
+
+
+class ServiceUnavailableError(APIError):
+    """Levée lorsqu'une dépendance est indisponible — 503.
+
+    Ex. daemon Docker injoignable (ping), connexion perdue.
+    """
+
+    status_code = 503
+    error_code = "SERVICE_UNAVAILABLE"
 
 
 class CommandExecutionError(WindFlowException):
@@ -22,7 +225,9 @@ class CommandExecutionError(WindFlowException):
     Attributes:
         command: La commande ayant échoué.
         exit_status: Code de retour du processus.
-        stderr: Sortie d'erreur standard (déstrippée).
+        stderr: Sortie d'erreur standard (déstrippée) — jamais
+            exposée dans le payload HTTP (le handler global la retire
+            des ``details`` ; rules 40).
     """
 
     def __init__(
@@ -94,20 +299,20 @@ class InvalidApiKeyError(WindFlowException):
         super().__init__(reason)
 
 
-class NotFoundError(WindFlowException):
-    """Levée lorsqu'une ressource demandée est introuvable.
-
-    Sémantique ``404`` générique. Utilisée pour les lectures/révoquations
-    **scoped** : une ressource appartenant à un autre utilisateur est
-    traitée comme inexistante (on ne révèle pas son existence —
-    anti-énumération, rules 40). La ressource visée est identifiée par
-    son type et son id dans ``details`` (jamais par un secret).
-    """
-
-    def __init__(self, resource: str, resource_id: str) -> None:
-        self.resource = resource
-        self.resource_id = resource_id
-        super().__init__(
-            f"{resource} not found: {resource_id}",
-            details={"resource": resource, "resource_id": resource_id},
-        )
+__all__ = [
+    "APIError",
+    "AuthenticationError",
+    "CommandExecutionError",
+    "ConflictError",
+    "InvalidApiKeyError",
+    "InvalidInputError",
+    "InvalidRefreshTokenError",
+    "NotFoundError",
+    "PermissionDeniedError",
+    "RateLimitError",
+    "SecretDecryptionError",
+    "SecretEncryptionError",
+    "ServiceUnavailableError",
+    "UnprocessableEntityError",
+    "WindFlowException",
+]

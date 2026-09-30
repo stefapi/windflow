@@ -15,6 +15,8 @@ from httpx import ASGITransport, AsyncClient
 from app.api.v1.docker import router
 from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_admin, require_operator, require_viewer
+from app.core.exceptions import WindFlowException
+from app.middleware.error_handler import windflow_exception_handler
 
 
 def _make_mock_user():
@@ -79,6 +81,8 @@ def _make_client_response_error(status_code: int) -> aiohttp.ClientResponseError
 def app():
     """Crée une application FastAPI de test."""
     application = FastAPI()
+    # STORY-127 : exceptions typées → handler global requis
+    application.add_exception_handler(WindFlowException, windflow_exception_handler)
     application.include_router(router, prefix="/api/v1/docker")
     application.dependency_overrides[get_current_active_user] = (
         lambda: _make_mock_user()
@@ -150,7 +154,7 @@ class TestGetImageInspect:
                 response = await ac.get("/api/v1/docker/images/nonexistent:latest")
 
         assert response.status_code == 404
-        assert "non trouvée" in response.json()["detail"]
+        assert "non trouvée" in response.json()["error"]["message"]
 
     @pytest.mark.asyncio
     async def test_get_image_handles_docker_error(self, app):
@@ -168,7 +172,7 @@ class TestGetImageInspect:
                 response = await ac.get("/api/v1/docker/images/nginx:latest")
 
         assert response.status_code == 500
-        assert "Erreur" in response.json()["detail"]
+        assert "Erreur" in response.json()["error"]["message"]
 
     @pytest.mark.asyncio
     async def test_get_image_with_minimal_data(self, app):

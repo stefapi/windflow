@@ -4,10 +4,13 @@ API endpoints pour la gestion des tâches planifiées.
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.rbac import require_admin, require_operator, require_viewer
+from ...core.exceptions import (
+    NotFoundError,
+)
 from ...database import get_db
 from ...models.scheduled_task import TaskType
 from ...models.user import User
@@ -33,9 +36,7 @@ List all scheduled tasks, optionally filtered by organization.
 """,
     responses={
         200: {
-            "description": (
-                "Scheduled tasks — enveloppe spec 09"
-            ),
+            "description": ("Scheduled tasks — enveloppe spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -100,7 +101,7 @@ async def get_schedule(
     service = SchedulerService(db)
     task = await service.get_task(task_id)
     if not task:
-        raise HTTPException(status_code=404, detail="Tâche planifiée non trouvée")
+        raise NotFoundError("Tâche planifiée non trouvée")
     return task
 
 
@@ -155,7 +156,7 @@ async def update_schedule(
     service = SchedulerService(db)
     task = await service.update_task(task_id, **data.model_dump(exclude_none=True))
     if not task:
-        raise HTTPException(status_code=404, detail="Tâche planifiée non trouvée")
+        raise NotFoundError("Tâche planifiée non trouvée")
     return task
 
 
@@ -179,7 +180,7 @@ async def delete_schedule(
     service = SchedulerService(db)
     deleted = await service.delete_task(task_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Tâche planifiée non trouvée")
+        raise NotFoundError("Tâche planifiée non trouvée")
 
 
 @router.post(
@@ -202,5 +203,5 @@ async def toggle_schedule(
     service = SchedulerService(db)
     task = await service.toggle_task(task_id)
     if not task:
-        raise HTTPException(status_code=404, detail="Tâche planifiée non trouvée")
+        raise NotFoundError("Tâche planifiée non trouvée")
     return task

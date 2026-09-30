@@ -635,7 +635,12 @@ class TestBuildDeviceStats:
 
     def test_build_device_stats_invalid_entries(self):
         """Les entrées invalides (non-dict) sont ignorées."""
-        service_bytes = [None, "invalid", 42, {"major": 8, "minor": 0, "op": "read", "value": 100}]
+        service_bytes = [
+            None,
+            "invalid",
+            42,
+            {"major": 8, "minor": 0, "op": "read", "value": 100},
+        ]
 
         result = _build_device_stats(service_bytes, None)
         assert len(result) == 1

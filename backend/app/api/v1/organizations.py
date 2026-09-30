@@ -6,12 +6,18 @@ import logging
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_active_user
 from ...auth.rbac import require_admin, require_super_admin
+from ...core.exceptions import (
+    ConflictError,
+    InvalidInputError,
+    NotFoundError,
+    PermissionDeniedError,
+)
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...enums.rbac import Role
@@ -304,17 +310,11 @@ async def get_organization(
     if not current_user.is_superuser and not await UserOrganizationService.is_member(
         session, current_user, organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette organisation",
-        )
+        raise PermissionDeniedError("Accès refusé à cette organisation")
 
     organization = await OrganizationService.get_by_id(session, organization_id)
     if not organization:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {organization_id} non trouvée",
-        )
+        raise NotFoundError(f"Organisation {organization_id} non trouvée")
     return organization
 
 
@@ -395,9 +395,7 @@ After creating an organization, you typically need to:
     },
     responses={
         201: {
-            "description": (
-                "Organization created successfully — enveloppe spec 09"
-            ),
+            "description": ("Organization created successfully — enveloppe spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -535,9 +533,8 @@ async def create_organization(
     # Vérifier que le nom n'existe pas déjà
     existing = await OrganizationService.get_by_name(session, organization_data.name)
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Organisation avec le nom '{organization_data.name}' existe déjà",
+        raise ConflictError(
+            f"Organisation avec le nom '{organization_data.name}' existe déjà"
         )
 
     organization = await OrganizationService.create(session, organization_data)
@@ -745,17 +742,11 @@ async def update_organization(
     if not current_user.is_superuser and not await UserOrganizationService.is_member(
         session, current_user, organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette organisation",
-        )
+        raise PermissionDeniedError("Accès refusé à cette organisation")
     # Vérifier que l'organisation existe
     existing_org = await OrganizationService.get_by_id(session, organization_id)
     if not existing_org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {organization_id} non trouvée",
-        )
+        raise NotFoundError(f"Organisation {organization_id} non trouvée")
 
     # Si changement de nom, vérifier qu'il n'existe pas déjà
     if organization_data.name and organization_data.name != existing_org.name:
@@ -763,9 +754,8 @@ async def update_organization(
             session, organization_data.name
         )
         if existing_name:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Organisation avec le nom '{organization_data.name}' existe déjà",
+            raise ConflictError(
+                f"Organisation avec le nom '{organization_data.name}' existe déjà"
             )
 
     organization = await OrganizationService.update(
@@ -895,10 +885,7 @@ async def delete_organization(
     # Vérifier que l'organisation existe
     organization = await OrganizationService.get_by_id(session, organization_id)
     if not organization:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {organization_id} non trouvée",
-        )
+        raise NotFoundError(f"Organisation {organization_id} non trouvée")
 
     await OrganizationService.delete(session, organization_id)
 
@@ -992,16 +979,10 @@ async def bulk_delete_organizations(
 
     # Validate request
     if not bulk_data.organization_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La liste des organisations ne peut pas être vide",
-        )
+        raise InvalidInputError("La liste des organisations ne peut pas être vide")
 
     if len(bulk_data.organization_ids) > 100:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 100 organisations par requête",
-        )
+        raise InvalidInputError("Maximum 100 organisations par requête")
 
     # Perform bulk delete
     success: List[str] = []
@@ -1207,17 +1188,11 @@ async def list_organization_members(
     if not current_user.is_superuser and not await UserOrganizationService.is_member(
         session, current_user, organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette organisation",
-        )
+        raise PermissionDeniedError("Accès refusé à cette organisation")
 
     organization = await OrganizationService.get_by_id(session, organization_id)
     if not organization:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {organization_id} non trouvée",
-        )
+        raise NotFoundError(f"Organisation {organization_id} non trouvée")
 
     logger.info(
         f"Listing members of organization {organization_id}",
@@ -1407,25 +1382,16 @@ async def add_organization_member(
     if not current_user.is_superuser and not await UserOrganizationService.is_member(
         session, current_user, organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette organisation",
-        )
+        raise PermissionDeniedError("Accès refusé à cette organisation")
 
     organization = await OrganizationService.get_by_id(session, organization_id)
     if not organization:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {organization_id} non trouvée",
-        )
+        raise NotFoundError(f"Organisation {organization_id} non trouvée")
 
     # Check explicite de l'utilisateur cible (404 distinct du 409)
     target_user = await UserService.get_by_id(session, str(member_data.user_id))
     if target_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Utilisateur {member_data.user_id} introuvable",
-        )
+        raise NotFoundError(f"Utilisateur {member_data.user_id} introuvable")
 
     # Anti-escalade (AC 3, spec 08 § Protection contre l'escalade) :
     # un acteur non-superuser ne peut ajouter un membre qu'avec un rôle
@@ -1440,10 +1406,7 @@ async def add_organization_member(
         ):
             # Double garde : l'isolation is_member a déjà filtré, mais un
             # non-admin membre (viewer/operator) ne doit pas passer.
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions",
-            )
+            raise PermissionDeniedError("Not enough permissions")
         if ROLE_HIERARCHY[member_data.role.value] >= ROLE_HIERARCHY[actor_role]:
             logger.warning(
                 "Escalation attempt blocked: role equal or higher than actor",
@@ -1455,9 +1418,8 @@ async def add_organization_member(
                     "requested_role": member_data.role.value,
                 },
             )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot assign a role equal or higher than your own",
+            raise PermissionDeniedError(
+                "Cannot assign a role equal or higher than your own"
             )
 
     try:
@@ -1465,10 +1427,7 @@ async def add_organization_member(
             session, organization_id, member_data
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
+        raise ConflictError(str(exc))
 
     # STORY-122.1 : invalidation cache rôle (TTL max 300 s sinon)
     await AuthorizationService.invalidate_user_role_cache(str(member_data.user_id))
@@ -1661,26 +1620,17 @@ async def update_organization_member_role(
     if not current_user.is_superuser and not await UserOrganizationService.is_member(
         session, current_user, organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette organisation",
-        )
+        raise PermissionDeniedError("Accès refusé à cette organisation")
 
     organization = await OrganizationService.get_by_id(session, organization_id)
     if not organization:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {organization_id} non trouvée",
-        )
+        raise NotFoundError(f"Organisation {organization_id} non trouvée")
 
     membership = await UserOrganizationService.get_membership(
         session, organization_id, user_id
     )
     if not membership:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Membre {user_id} introuvable dans cette organisation",
-        )
+        raise NotFoundError(f"Membre {user_id} introuvable dans cette organisation")
 
     # Anti-escalade (AC 3, spec 08 § Protection contre l'escalade) :
     # un acteur non-superuser ne peut ni attribuer un rôle >= au sien,
@@ -1693,10 +1643,7 @@ async def update_organization_member_role(
         )
         if actor_role is None:
             # Double garde : is_member a déjà filtré les non-membres.
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Accès refusé à cette organisation",
-            )
+            raise PermissionDeniedError("Accès refusé à cette organisation")
         new_role_level = ROLE_HIERARCHY[role_data.role.value]
         current_role_level = ROLE_HIERARCHY[_role_str(membership.role)]
         actor_level = ROLE_HIERARCHY[actor_role]
@@ -1713,9 +1660,8 @@ async def update_organization_member_role(
                     "requested_role": role_data.role.value,
                 },
             )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot assign a role equal or higher than your own",
+            raise PermissionDeniedError(
+                "Cannot assign a role equal or higher than your own"
             )
 
     previous_role = _role_str(membership.role)
@@ -1857,26 +1803,17 @@ async def remove_organization_member(
     if not current_user.is_superuser and not await UserOrganizationService.is_member(
         session, current_user, organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette organisation",
-        )
+        raise PermissionDeniedError("Accès refusé à cette organisation")
 
     organization = await OrganizationService.get_by_id(session, organization_id)
     if not organization:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation {organization_id} non trouvée",
-        )
+        raise NotFoundError(f"Organisation {organization_id} non trouvée")
 
     membership = await UserOrganizationService.get_membership(
         session, organization_id, user_id
     )
     if not membership:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Membre {user_id} introuvable dans cette organisation",
-        )
+        raise NotFoundError(f"Membre {user_id} introuvable dans cette organisation")
 
     await UserOrganizationService.remove_member(session, membership)
 

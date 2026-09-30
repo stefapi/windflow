@@ -13,7 +13,6 @@ from typing import Annotated, Optional
 from fastapi import (
     Depends,
     Header,
-    HTTPException,
     Query,
     WebSocket,
     WebSocketException,
@@ -23,7 +22,12 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
-from ..core.exceptions import InvalidApiKeyError
+from ..core.exceptions import (
+    AuthenticationError,
+    InvalidApiKeyError,
+    PermissionDeniedError,
+    WindFlowException,
+)
 from ..database import db as database
 from ..database import get_db
 from ..models.user import User
@@ -86,9 +90,10 @@ async def get_current_user(
     if settings.disable_auth:
         user = await UserService.get_first_superadmin(session)
         if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No superadmin user found in database for development mode",
+            # STORY-127 : erreur interne de configuration dev → 500
+            # INTERNAL_ERROR enveloppé (handler global WindFlowException)
+            raise WindFlowException(
+                "No superadmin user found in database for development mode"
             )
         return user
 
@@ -108,18 +113,11 @@ async def get_current_user(
         try:
             return await ApiKeyService.verify(session, api_key)
         except InvalidApiKeyError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            ) from None
+            # STORY-127 : 401 typé (WWW-Authenticate porté par la classe)
+            raise AuthenticationError("Could not validate credentials") from None
 
     # Mode production avec authentification JWT normale
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    credentials_exception = AuthenticationError("Could not validate credentials")
 
     # Décoder le token
     if token is None:
@@ -152,9 +150,7 @@ async def get_current_active_user(
         HTTPException: Si l'utilisateur est inactif
     """
     if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
-        )
+        raise PermissionDeniedError("Inactive user")
     return current_user
 
 
@@ -174,9 +170,7 @@ async def require_superuser(
         HTTPException: Si l'utilisateur n'est pas superutilisateur
     """
     if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions"
-        )
+        raise PermissionDeniedError("Not enough permissions")
     return current_user
 
 

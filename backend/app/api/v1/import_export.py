@@ -4,12 +4,18 @@ Endpoints API pour l'import/export de stacks.
 
 import json
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.rbac import require_admin, require_viewer
+from ...core.exceptions import (
+    InvalidInputError,
+    NotFoundError,
+    PermissionDeniedError,
+    WindFlowException,
+)
 from ...database import get_db
 from ...models.stack import Stack
 from ...models.user import User
@@ -39,18 +45,14 @@ async def export_stack(
     stack = result.scalar_one_or_none()
 
     if not stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Stack not found"
-        )
+        raise NotFoundError("Stack not found")
 
     # Vérifier les permissions (STORY-121.3 : appartenance via
     # l'association — superuser bypass intégré à is_member)
     if not await UserOrganizationService.is_member(
         db, current_user, stack.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
-        )
+        raise PermissionDeniedError("Access denied")
 
     # Format d'export
     export_data = {
@@ -112,9 +114,8 @@ async def import_stack(
             db, current_user
         )
         if primary_org is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Aucune organisation : rattachez d'abord votre compte",
+            raise InvalidInputError(
+                "Aucune organisation : rattachez d'abord votre compte"
             )
 
         # Créer le nouveau stack
@@ -146,13 +147,8 @@ async def import_stack(
         }
 
     except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON file"
-        )
+        raise InvalidInputError("Invalid JSON file")
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise InvalidInputError(str(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Import failed: {str(e)}",
-        )
+        raise WindFlowException(f"Import failed: {str(e)}")

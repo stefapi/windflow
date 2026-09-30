@@ -13,10 +13,15 @@ from typing import Optional
 from uuid import uuid4
 
 import yaml
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.exceptions import (
+    ConflictError,
+    NotFoundError,
+    ServiceUnavailableError,
+    WindFlowException,
+)
 from ..models.deployment import Deployment, DeploymentStatus
 from ..models.stack import Stack
 from ..schemas.adoption import (
@@ -255,9 +260,8 @@ async def get_adoption_data(
         # Créer un client Docker
         docker = DockerClientService()
         if not await docker.ping():
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Docker n'est pas accessible. Vérifiez que Docker est en cours d'exécution.",
+            raise ServiceUnavailableError(
+                "Docker n'est pas accessible. Vérifiez que Docker est en cours d'exécution.",
             )
 
         # Lister tous les containers
@@ -297,10 +301,8 @@ async def get_adoption_data(
                     break
 
         if not matched_containers:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Objet découvert '{item_id}' introuvable. "
-                "Il a peut-être été supprimé ou Docker a été redémarré.",
+            raise NotFoundError(
+                f"Objet découvert '{item_id}' introuvable. Il a peut-être été supprimé ou Docker a été redémarré.",
             )
 
         # Construire les données de chaque service
@@ -363,13 +365,12 @@ async def get_adoption_data(
             generated_compose=generated_compose,
         )
 
-    except HTTPException:
+    except WindFlowException:
         raise
     except Exception as e:
         logger.error(f"Erreur lors de la collecte des données d'adoption: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Erreur lors de la collecte des données: {str(e)}",
+        raise ServiceUnavailableError(
+            f"Erreur lors de la collecte des données: {str(e)}"
         )
     finally:
         if docker:
@@ -417,10 +418,7 @@ async def adopt_discovered_item(
         )
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Une stack nommée '{request.stack_name}' existe déjà.",
-        )
+        raise ConflictError(f"Une stack nommée '{request.stack_name}' existe déjà.")
 
     # 2. Collecter les containers Docker correspondants
     docker: Optional[DockerClientService] = None
@@ -431,10 +429,7 @@ async def adopt_discovered_item(
     try:
         docker = DockerClientService()
         if not await docker.ping():
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Docker n'est pas accessible.",
-            )
+            raise ServiceUnavailableError("Docker n'est pas accessible.")
 
         all_containers = await docker.list_containers(all=True)
 
@@ -466,9 +461,8 @@ async def adopt_discovered_item(
                     break
 
         if not container_ids:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Objet découvert '{request.discovered_id}' introuvable.",
+            raise NotFoundError(
+                f"Objet découvert '{request.discovered_id}' introuvable."
             )
 
         # Si pas de compose_content fourni, générer un aperçu
@@ -486,14 +480,11 @@ async def adopt_discovered_item(
                     )
             compose_content = _generate_compose_preview(services_data)
 
-    except HTTPException:
+    except WindFlowException:
         raise
     except Exception as e:
         logger.error(f"Erreur lors de la vérification Docker: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Erreur Docker: {str(e)}",
-        )
+        raise ServiceUnavailableError(f"Erreur Docker: {str(e)}")
 
     # 3. Créer la Stack en DB
     stack_id = str(uuid4())

@@ -269,7 +269,7 @@ class TestGetAdoptionData:
     @pytest.mark.asyncio
     async def test_docker_unavailable(self) -> None:
         """Retourne 503 si Docker n'est pas accessible."""
-        from fastapi import HTTPException
+        from app.core.exceptions import ServiceUnavailableError
 
         from app.services.adoption_service import get_adoption_data
 
@@ -281,7 +281,7 @@ class TestGetAdoptionData:
             mock_docker.close = AsyncMock()
             MockDocker.return_value = mock_docker
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(ServiceUnavailableError) as exc_info:
                 await get_adoption_data(
                     mock_db, "org1", "composition", "compose:myproject@local"
                 )
@@ -290,7 +290,7 @@ class TestGetAdoptionData:
     @pytest.mark.asyncio
     async def test_composition_not_found(self) -> None:
         """Retourne 404 si le projet compose n'existe pas."""
-        from fastapi import HTTPException
+        from app.core.exceptions import NotFoundError
 
         from app.services.adoption_service import get_adoption_data
 
@@ -303,7 +303,7 @@ class TestGetAdoptionData:
             mock_docker.close = AsyncMock()
             MockDocker.return_value = mock_docker
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(NotFoundError) as exc_info:
                 await get_adoption_data(
                     mock_db, "org1", "composition", "compose:nonexistent@local"
                 )
@@ -354,7 +354,7 @@ class TestAdoptDiscoveredItem:
     @pytest.mark.asyncio
     async def test_duplicate_name(self) -> None:
         """Retourne 409 si le nom de stack existe déjà."""
-        from fastapi import HTTPException
+        from app.core.exceptions import ConflictError
 
         from app.services.adoption_service import adopt_discovered_item
 
@@ -370,7 +370,7 @@ class TestAdoptDiscoveredItem:
             stack_name="existing-stack",
         )
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ConflictError) as exc_info:
             await adopt_discovered_item(mock_db, "org1", request)
         assert exc_info.value.status_code == 409
 

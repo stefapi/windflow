@@ -14,6 +14,8 @@ from httpx import ASGITransport, AsyncClient
 from app.api.v1.docker import router
 from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_operator
+from app.core.exceptions import WindFlowException
+from app.middleware.error_handler import windflow_exception_handler
 from app.schemas.docker import ContainerShellResponse
 
 
@@ -33,6 +35,8 @@ class TestContainerShellsEndpoint:
     def app(self):
         """Crée une application FastAPI de test."""
         app = FastAPI()
+        # STORY-127 : exceptions typées → handler global requis
+        app.add_exception_handler(WindFlowException, windflow_exception_handler)
         app.include_router(router, prefix="/api/v1/docker")
         return app
 
@@ -135,7 +139,7 @@ class TestContainerShellsEndpoint:
         app.dependency_overrides.clear()
 
         assert response.status_code == 404
-        assert "non trouvé" in response.json()["detail"]
+        assert "non trouvé" in response.json()["error"]["message"]
 
     @pytest.mark.asyncio
     async def test_get_container_shells_response_schema(self, app, mock_shells):

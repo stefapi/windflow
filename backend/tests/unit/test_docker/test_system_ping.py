@@ -31,6 +31,8 @@ def _delegate_rbac_deps(application) -> None:
         application.dependency_overrides[_rbac_dep] = _via_active_user
 
 
+from app.core.exceptions import WindFlowException
+from app.middleware.error_handler import windflow_exception_handler
 from app.models.user import User
 from app.services.docker_client_service import DockerClientService
 
@@ -50,6 +52,8 @@ def _make_mock_user() -> User:
 def app():
     """Create a minimal FastAPI app with Docker router and auth override."""
     _app = FastAPI()
+    # STORY-127 : exceptions typées → handler global requis
+    _app.add_exception_handler(WindFlowException, windflow_exception_handler)
     _app.include_router(router, prefix="/docker")
     # Override auth dependency for all tests by default
     _app.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()

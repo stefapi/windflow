@@ -16,6 +16,8 @@ from httpx import ASGITransport, AsyncClient
 from app.api.v1.docker import router
 from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_admin, require_operator, require_viewer
+from app.core.exceptions import WindFlowException
+from app.middleware.error_handler import windflow_exception_handler
 
 
 def _make_mock_user():
@@ -110,6 +112,8 @@ def _make_network_info(idx: int):
 def app():
     """Crée une application FastAPI de test."""
     application = FastAPI()
+    # STORY-127 : exceptions typées → handler global requis
+    application.add_exception_handler(WindFlowException, windflow_exception_handler)
     application.include_router(router, prefix="/api/v1/docker")
     application.dependency_overrides[get_current_active_user] = (
         lambda: _make_mock_user()
@@ -250,6 +254,8 @@ class TestContainerPagination:
     async def test_pagination_returns_401_without_token(self, app):
         """Sécurité : accès sans authentification → 401."""
         unauth_app = FastAPI()
+        # STORY-127 : exceptions typées → handler global requis
+        unauth_app.add_exception_handler(WindFlowException, windflow_exception_handler)
         unauth_app.include_router(router, prefix="/api/v1/docker")
         unauth_app.dependency_overrides[get_current_active_user] = lambda: _raise_401()
         for _rbac_dep in (require_viewer, require_operator, require_admin):
@@ -347,6 +353,8 @@ class TestImagePagination:
     async def test_pagination_returns_401_without_token(self, app):
         """Sécurité : accès sans authentification → 401."""
         unauth_app = FastAPI()
+        # STORY-127 : exceptions typées → handler global requis
+        unauth_app.add_exception_handler(WindFlowException, windflow_exception_handler)
         unauth_app.include_router(router, prefix="/api/v1/docker")
         unauth_app.dependency_overrides[get_current_active_user] = lambda: _raise_401()
         for _rbac_dep in (require_viewer, require_operator, require_admin):
@@ -412,6 +420,8 @@ class TestVolumePagination:
     async def test_pagination_returns_401_without_token(self, app):
         """Sécurité : accès sans authentification → 401."""
         unauth_app = FastAPI()
+        # STORY-127 : exceptions typées → handler global requis
+        unauth_app.add_exception_handler(WindFlowException, windflow_exception_handler)
         unauth_app.include_router(router, prefix="/api/v1/docker")
         unauth_app.dependency_overrides[get_current_active_user] = lambda: _raise_401()
         for _rbac_dep in (require_viewer, require_operator, require_admin):
@@ -477,6 +487,8 @@ class TestNetworkPagination:
     async def test_pagination_returns_401_without_token(self, app):
         """Sécurité : accès sans authentification → 401."""
         unauth_app = FastAPI()
+        # STORY-127 : exceptions typées → handler global requis
+        unauth_app.add_exception_handler(WindFlowException, windflow_exception_handler)
         unauth_app.include_router(router, prefix="/api/v1/docker")
         unauth_app.dependency_overrides[get_current_active_user] = lambda: _raise_401()
         for _rbac_dep in (require_viewer, require_operator, require_admin):

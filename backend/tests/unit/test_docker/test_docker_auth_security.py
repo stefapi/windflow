@@ -12,6 +12,8 @@ from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.docker import router
 from app.auth.dependencies import get_current_active_user
+from app.core.exceptions import WindFlowException
+from app.middleware.error_handler import windflow_exception_handler
 
 
 def _raise_401():
@@ -27,6 +29,8 @@ def _raise_401():
 def app():
     """Crée une app FastAPI avec auth override levant systématiquement 401."""
     _app = FastAPI()
+    # STORY-127 : exceptions typées → handler global requis
+    _app.add_exception_handler(WindFlowException, windflow_exception_handler)
     _app.include_router(router, prefix="/api/v1/docker")
     # Override auth to raise 401 (simulating no token)
     _app.dependency_overrides[get_current_active_user] = lambda: _raise_401()

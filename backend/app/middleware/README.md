@@ -111,6 +111,24 @@ app.middleware("http")(error_handler_middleware)
 - **Returns**: Standardized error responses (spec-09 envelope `{"error": {"code", "message"}}` — always, since STORY-126.3)
 - **Includes**: Correlation ID in error responses
 
+### Exception handlers (STORY-127) — inside the middleware stack
+
+The `@app.exception_handler(...)` handlers registered in `main.py` live in Starlette's **internal** `ExceptionMiddleware`, which wraps the route handler **inside** all `app.middleware("http")` layers. Execution on error:
+
+```
+Route handler raises WindFlowException (typed hierarchy from core/exceptions.py)
+  ↓
+ExceptionMiddleware (internal) — @app.exception_handler(WindFlowException)
+  → envelope {"error": {"code", "message", "details"?}, "correlation_id"?}
+  → status/headers from the exception (e.g. 401 + WWW-Authenticate: Bearer)
+  ↓
+Typed exceptions NEVER reach the outer error_handler_middleware
+```
+
+- **`WindFlowException` handler** (STORY-127): routes by MRO — one handler on the base class catches every subclass (`APIError`, `NotFoundError`, `ConflictError`, `PermissionDeniedError`, `AuthenticationError`, `RateLimitError`, `ServiceUnavailableError`, …). It reuses `build_error_payload` (same envelope format as STORY-126) and preserves `correlation_id`. Security (rules 40): `CommandExecutionError.stderr` is excluded from the HTTP payload (full details server-side log only); no stack trace is ever exposed.
+- **Fallback**: any `WindFlowException` subclass that would escape (should not happen) is caught by the outer `error_handler_middleware` as a generic 500 `INTERNAL_ERROR`.
+- **Unchanged handlers**: `StarletteHTTPException` (framework-level HTTP errors), `RequestValidationError` / pydantic `ValidationError` (422 with Pydantic errors in `error.details`).
+
 ## Best Practices
 
 1. **Never modify middleware order** without understanding implications

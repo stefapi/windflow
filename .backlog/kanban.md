@@ -3,7 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-012 : P1 — Socle structurant (remédiation backend)
-- [ ] STORY-127 : Hiérarchie d'exceptions — compléter `core/exceptions.py` et remplacer les `HTTPException` brutes (P1-5, partie exceptions)
 - [ ] STORY-128 : Pagination généralisée — `?page&per_page` sur toutes les listes non paginées (P1-6)
 - [ ] STORY-129 : Endpoints santé & mot de passe — `GET /system/ready` sans auth et `PUT /auth/password` (P1-7 + P1-8)
 - [ ] STORY-130 : Purge Celery + arbitrage Argon2 — suppression du double runtime fantôme et migration Argon2id (P1-10 + P1-11)
@@ -49,6 +48,7 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] STORY-127 : Hiérarchie d'exceptions — compléter `core/exceptions.py` et remplacer les `HTTPException` brutes (P1-5, partie exceptions)
 - [x] STORY-126.3 : Synchronisation des clients — frontend unwrap `data`, CLI, CHANGELOG versionné (P1-5 — STORY-126 découpée)
 - [x] STORY-126.2 : Activation des enveloppes — défaut `True`, adaptation suite backend, tests de contrat par router (P1-5 — STORY-126 découpée)
 - [x] STORY-126.1 : Socle enveloppes API — schémas spec 09, middleware/handlers derrière `api_envelope_enabled=False` (P1-5 — STORY-126 découpée)

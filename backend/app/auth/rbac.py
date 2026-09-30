@@ -29,7 +29,6 @@ from collections.abc import Callable
 
 from fastapi import (
     Depends,
-    HTTPException,
     Request,
     WebSocket,
     WebSocketException,
@@ -37,6 +36,7 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.exceptions import PermissionDeniedError
 from ..database import get_db
 from ..models.user import User
 from ..services.authorization_service import (
@@ -96,10 +96,9 @@ def require_role(minimum_role: str) -> Callable:
                     "path": request.url.path,
                 },
             )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions",
-            )
+            # STORY-127 : refus RBAC typé → 403 PERMISSION_DENIED
+            # enveloppé (handler global) — même statut, même message.
+            raise PermissionDeniedError("Not enough permissions")
         return current_user
 
     return role_checker

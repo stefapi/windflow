@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ....auth.rbac import require_viewer
+from ....core.exceptions import (
+    NotFoundError,
+    PermissionDeniedError,
+)
 from ....core.rate_limit import conditional_rate_limiter
 from ....database import get_db
 from ....enums.target import CapabilityType
@@ -113,17 +117,12 @@ async def health_check_target(
     )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée",
-        )
+        raise NotFoundError(f"Cible {target_id} non trouvée")
 
     if not await UserOrganizationService.is_member(
         session, current_user, target.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
-        )
+        raise PermissionDeniedError("Accès refusé à cette cible")
 
     new_status = await TargetService.check_health(session, target)
 
@@ -296,17 +295,12 @@ async def get_target_capabilities(
     )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée",
-        )
+        raise NotFoundError(f"Cible {target_id} non trouvée")
 
     if not await UserOrganizationService.is_member(
         session, current_user, target.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
-        )
+        raise PermissionDeniedError("Accès refusé à cette cible")
 
     capabilities = await TargetService.list_capabilities(
         db=session, target_id=target.id, capability_type=capability_type
@@ -474,26 +468,20 @@ async def get_target_capability_by_type(
     )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée",
-        )
+        raise NotFoundError(f"Cible {target_id} non trouvée")
 
     if not await UserOrganizationService.is_member(
         session, current_user, target.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
-        )
+        raise PermissionDeniedError("Accès refusé à cette cible")
 
     capabilities = await TargetService.list_capabilities(
         db=session, target_id=target.id, capability_type=capability_type
     )
 
     if not capabilities:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Capacité {capability_type.value} non trouvée pour cette cible",
+        raise NotFoundError(
+            f"Capacité {capability_type.value} non trouvée pour cette cible"
         )
 
     return TargetCapabilityResponse.model_validate(capabilities[0])
@@ -644,17 +632,12 @@ async def get_target_virtualization_capabilities(
     )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée",
-        )
+        raise NotFoundError(f"Cible {target_id} non trouvée")
 
     if not await UserOrganizationService.is_member(
         session, current_user, target.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
-        )
+        raise PermissionDeniedError("Accès refusé à cette cible")
 
     capabilities = await TargetService.list_capabilities(
         db=session, target_id=target.id

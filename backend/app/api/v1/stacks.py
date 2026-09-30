@@ -5,17 +5,24 @@ Routes de gestion des stacks Docker Compose.
 import logging
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.rbac import require_admin, require_operator, require_viewer
+from ...core.exceptions import (
+    ConflictError,
+    InvalidInputError,
+    NotFoundError,
+    PermissionDeniedError,
+    ServiceUnavailableError,
+    WindFlowException,
+)
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...helper.template_renderer import TemplateRenderer
 from ...models.stack_version import StackVersion
 from ...models.user import User
-from ...services.audit_service import AuditService
 from ...schemas.stack import (
     StackActionResponse,
     StackCreate,
@@ -27,6 +34,7 @@ from ...schemas.stack import (
     StackUpdate,
 )
 from ...schemas.stack_version import StackVersionCreate, StackVersionResponse
+from ...services.audit_service import AuditService
 from ...services.docker_client_service import DockerClientService
 from ...services.stack_service import StackService
 from ...services.user_organization_service import UserOrganizationService
@@ -137,9 +145,7 @@ List all Docker Compose stacks available in the current user's organization.
 """,
     responses={
         200: {
-            "description": (
-                "List of stacks — enveloppe spec 09"
-            ),
+            "description": ("List of stacks — enveloppe spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -399,18 +405,13 @@ async def get_stack(
 
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack {stack_id} non trouvée",
-        )
+        raise NotFoundError(f"Stack {stack_id} non trouvée")
 
     # Vérifier que la stack appartient à la même organisation
     if not await UserOrganizationService.is_member(
         session, current_user, stack.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette stack"
-        )
+        raise PermissionDeniedError("Accès refusé à cette stack")
 
     # Rendre les macros dans les variables avant de retourner
     return _render_stack_variables(stack)
@@ -790,16 +791,10 @@ async def create_stack(
         session, current_user
     )
     if primary_org is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aucune organisation : rattachez d'abord votre compte",
-        )
+        raise InvalidInputError("Aucune organisation : rattachez d'abord votre compte")
     existing = await StackService.get_by_name(session, primary_org, stack_data.name)
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Stack avec le nom '{stack_data.name}' existe déjà",
-        )
+        raise ConflictError(f"Stack avec le nom '{stack_data.name}' existe déjà")
 
     # STORY-122.3 (AC 4) : isolation — l'organisation cible du body doit
     # être une organisation de l'utilisateur (organization_id requis par
@@ -811,10 +806,7 @@ async def create_stack(
             session, current_user, stack_data.organization_id
         )
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette organisation",
-        )
+        raise PermissionDeniedError("Accès refusé à cette organisation")
 
     stack = await StackService.create(session, stack_data)
     return stack
@@ -1048,18 +1040,13 @@ async def update_stack(
     # Vérifier que la stack existe
     existing_stack = await StackService.get_by_id(session, stack_id)
     if not existing_stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack {stack_id} non trouvée",
-        )
+        raise NotFoundError(f"Stack {stack_id} non trouvée")
 
     # Vérifier les permissions (STORY-121.3 : appartenance via l'association)
     if not await UserOrganizationService.is_member(
         session, current_user, existing_stack.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette stack"
-        )
+        raise PermissionDeniedError("Accès refusé à cette stack")
 
     # Si changement de nom, vérifier qu'il n'existe pas déjà
     if stack_data.name and stack_data.name != existing_stack.name:
@@ -1068,10 +1055,7 @@ async def update_stack(
             session, existing_stack.organization_id, stack_data.name
         )
         if existing_name:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Stack avec le nom '{stack_data.name}' existe déjà",
-            )
+            raise ConflictError(f"Stack avec le nom '{stack_data.name}' existe déjà")
 
     # Créer une version automatique si le compose_content change
     if (
@@ -1208,18 +1192,13 @@ async def delete_stack(
     # Vérifier que la stack existe
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack {stack_id} non trouvée",
-        )
+        raise NotFoundError(f"Stack {stack_id} non trouvée")
 
     # Vérifier les permissions
     if not await UserOrganizationService.is_member(
         session, current_user, stack.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette stack"
-        )
+        raise PermissionDeniedError("Accès refusé à cette stack")
 
     await StackService.delete(session, stack_id)
 
@@ -1430,32 +1409,24 @@ async def regenerate_variable(
     # Vérifier que le stack existe
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Stack {stack_id} non trouvé"
-        )
+        raise NotFoundError(f"Stack {stack_id} non trouvé")
 
     # Vérifier les permissions
     if not await UserOrganizationService.is_member(
         session, current_user, stack.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à ce stack"
-        )
+        raise PermissionDeniedError("Accès refusé à ce stack")
 
     # Vérifier que la variable existe
     if not stack.variables or variable_name not in stack.variables:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Variable '{variable_name}' non trouvée dans le stack",
-        )
+        raise NotFoundError(f"Variable '{variable_name}' non trouvée dans le stack")
 
     variable_def = stack.variables[variable_name]
 
     # Vérifier que la variable a une valeur par défaut
     if "default" not in variable_def:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Variable '{variable_name}' n'a pas de valeur par défaut",
+        raise InvalidInputError(
+            f"Variable '{variable_name}' n'a pas de valeur par défaut"
         )
 
     default_value = variable_def["default"]
@@ -1465,9 +1436,8 @@ async def regenerate_variable(
 
     macro_pattern = re.compile(r"\{\{.*?\}\}")
     if not isinstance(default_value, str) or not macro_pattern.search(default_value):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Variable '{variable_name}' ne contient pas de macro à régénérer",
+        raise InvalidInputError(
+            f"Variable '{variable_name}' ne contient pas de macro à régénérer"
         )
 
     # Régénérer la valeur en rendant le template
@@ -1480,10 +1450,7 @@ async def regenerate_variable(
             "macro_template": default_value,
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la régénération de la macro: {str(e)}",
-        )
+        raise WindFlowException(f"Erreur lors de la régénération de la macro: {str(e)}")
 
 
 # ─── Stack Versioning ────────────────────────────────────────────────
@@ -1504,11 +1471,11 @@ async def list_stack_versions(
     """Liste l'historique des versions d'un stack."""
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
-        raise HTTPException(status_code=404, detail=f"Stack {stack_id} non trouvé")
+        raise NotFoundError(f"Stack {stack_id} non trouvé")
     if not await UserOrganizationService.is_member(
         session, current_user, stack.organization_id
     ):
-        raise HTTPException(status_code=403, detail="Accès refusé")
+        raise PermissionDeniedError("Accès refusé")
 
     stmt = (
         select(StackVersion)
@@ -1551,11 +1518,11 @@ async def create_stack_version(
     """Crée un snapshot manuel de la version actuelle du stack."""
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
-        raise HTTPException(status_code=404, detail=f"Stack {stack_id} non trouvé")
+        raise NotFoundError(f"Stack {stack_id} non trouvé")
     if not await UserOrganizationService.is_member(
         session, current_user, stack.organization_id
     ):
-        raise HTTPException(status_code=403, detail="Accès refusé")
+        raise PermissionDeniedError("Accès refusé")
 
     max_stmt = select(func.coalesce(func.max(StackVersion.version_number), 0)).where(
         StackVersion.stack_id == stack_id
@@ -1610,11 +1577,11 @@ async def restore_stack_version(
     """Restaure un stack à une version précédente."""
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
-        raise HTTPException(status_code=404, detail=f"Stack {stack_id} non trouvé")
+        raise NotFoundError(f"Stack {stack_id} non trouvé")
     if not await UserOrganizationService.is_member(
         session, current_user, stack.organization_id
     ):
-        raise HTTPException(status_code=403, detail="Accès refusé")
+        raise PermissionDeniedError("Accès refusé")
 
     version_stmt = select(StackVersion).where(
         StackVersion.id == version_id,
@@ -1622,7 +1589,7 @@ async def restore_stack_version(
     )
     version = (await session.execute(version_stmt)).scalar_one_or_none()
     if not version:
-        raise HTTPException(status_code=404, detail=f"Version {version_id} non trouvée")
+        raise NotFoundError(f"Version {version_id} non trouvée")
 
     # Sauvegarder l'état actuel avant restauration
     max_stmt = select(func.coalesce(func.max(StackVersion.version_number), 0)).where(
@@ -1682,37 +1649,25 @@ async def _get_stack_and_containers(
     """
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack {stack_id} non trouvée",
-        )
+        raise NotFoundError(f"Stack {stack_id} non trouvée")
     if not await UserOrganizationService.is_member(
         session, current_user, stack.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette stack",
-        )
+        raise PermissionDeniedError("Accès refusé à cette stack")
 
     # Récupérer les containers Docker associés
     try:
         docker = DockerClientService()
         if not await docker.ping():
             await docker.close()
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Docker n'est pas disponible",
-            )
+            raise ServiceUnavailableError("Docker n'est pas disponible")
         all_containers = await docker.list_containers(all=True)
         await docker.close()
-    except HTTPException:
+    except WindFlowException:
         raise
     except Exception as exc:
         logger.error(f"Docker indisponible : {exc}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Docker n'est pas disponible : {exc}",
-        )
+        raise ServiceUnavailableError(f"Docker n'est pas disponible : {exc}")
 
     # Filtrer par label windflow.stack_id
     stack_containers = [
@@ -2043,20 +1998,14 @@ async def duplicate_stack(
     original_stack = await StackService.get_by_id(session, stack_id)
 
     if not original_stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack non trouvé: {stack_id}",
-        )
+        raise NotFoundError(f"Stack non trouvé: {stack_id}")
 
     # Vérifier l'unicité du nom dans l'organisation cible
     target_org_id = data.organization_id or original_stack.organization_id
     existing = await StackService.get_by_name(session, data.new_name, target_org_id)
 
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Un stack nommé '{data.new_name}' existe déjà",
-        )
+        raise ConflictError(f"Un stack nommé '{data.new_name}' existe déjà")
 
     # Construire les données de la copie
     original_tags = list(original_stack.tags) if original_stack.tags else []
@@ -2133,10 +2082,7 @@ async def archive_stack(
     stack = await StackService.get_by_id(session, stack_id)
 
     if not stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack non trouvé: {stack_id}",
-        )
+        raise NotFoundError(f"Stack non trouvé: {stack_id}")
 
     if not await UserOrganizationService.is_member(
         session, current_user, stack.organization_id
@@ -2151,10 +2097,7 @@ async def archive_stack(
                 "user_org": "multiple",
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès non autorisé à ce stack",
-        )
+        raise PermissionDeniedError("Accès non autorisé à ce stack")
 
     updated_stack = await StackService.archive(session, stack_id)
 
@@ -2233,10 +2176,7 @@ async def unarchive_stack(
     stack = await StackService.get_by_id(session, stack_id)
 
     if not stack:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stack non trouvé: {stack_id}",
-        )
+        raise NotFoundError(f"Stack non trouvé: {stack_id}")
 
     if not await UserOrganizationService.is_member(
         session, current_user, stack.organization_id
@@ -2251,10 +2191,7 @@ async def unarchive_stack(
                 "user_org": "multiple",
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès non autorisé à ce stack",
-        )
+        raise PermissionDeniedError("Accès non autorisé à ce stack")
 
     updated_stack = await StackService.unarchive(session, stack_id)
 

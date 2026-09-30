@@ -8,15 +8,20 @@ list, get, install, update, configure, uninstall, hooks/logs.
 import logging
 from typing import List
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.rbac import require_admin, require_viewer
-from ...core.exceptions import WindFlowException
+from ...core.exceptions import (
+    ConflictError,
+    InvalidInputError,
+    NotFoundError,
+    PermissionDeniedError,
+    WindFlowException,
+)
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
-from ...services.audit_service import AuditService
 from ...schemas.plugin import (
     PluginActionResponse,
     PluginConfigureRequest,
@@ -29,6 +34,7 @@ from ...schemas.plugin import (
 )
 from ...schemas.plugin_hook_log import HookLogResponse, HookLogSummaryResponse
 from ...schemas.plugin_manifest import parse_dependency_string
+from ...services.audit_service import AuditService
 from ...services.plugin_dependency_service import PluginDependencyService
 from ...services.plugin_lifecycle_service import PluginLifecycleService
 from ...services.plugin_manager_service import PluginManagerService
@@ -51,9 +57,7 @@ _lifecycle_service = PluginLifecycleService()
     description="Retourne la liste paginée des plugins installés pour l'organisation de l'utilisateur courant.",
     responses={
         200: {
-            "description": (
-                "Liste des plugins — enveloppe spec 09"
-            ),
+            "description": ("Liste des plugins — enveloppe spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -159,10 +163,7 @@ async def get_plugin(
     )
     plugin = await PluginManagerService.get_plugin(db, plugin_id)
     if not plugin:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Plugin non trouvé : {plugin_id}",
-        )
+        raise NotFoundError(f"Plugin non trouvé : {plugin_id}")
     return PluginResponse.model_validate(plugin)
 
 
@@ -202,10 +203,7 @@ async def install_plugin(
         db, current_user
     )
     if primary_org is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aucune organisation : rattachez d'abord votre compte",
-        )
+        raise InvalidInputError("Aucune organisation : rattachez d'abord votre compte")
     logger.info(
         "install_plugin_requested",
         extra={
@@ -238,24 +236,12 @@ async def install_plugin(
         )
     except WindFlowException as exc:
         if exc.details.get("error_type") == "duplicate":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=exc.message,
-            ) from exc
+            raise ConflictError(exc.message)
         if exc.details.get("error_type") == "dependency_unsatisfied":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=exc.message,
-            ) from exc
+            raise ConflictError(exc.message)
         if exc.details.get("error_type") in ("validation", "yaml_syntax", "value"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=exc.message,
-            ) from exc
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=exc.message,
-        ) from exc
+            raise InvalidInputError(exc.message)
+        raise WindFlowException(exc.message)
 
 
 @router.put(
@@ -308,14 +294,8 @@ async def update_plugin(
         )
     except WindFlowException as exc:
         if exc.details.get("error_type") == "not_found":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=exc.message,
-            ) from exc
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=exc.message,
-        ) from exc
+            raise NotFoundError(exc.message)
+        raise WindFlowException(exc.message)
 
 
 @router.put(
@@ -362,14 +342,8 @@ async def configure_plugin(
         return PluginResponse.model_validate(plugin)
     except WindFlowException as exc:
         if exc.details.get("error_type") == "not_found":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=exc.message,
-            ) from exc
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=exc.message,
-        ) from exc
+            raise NotFoundError(exc.message)
+        raise WindFlowException(exc.message)
 
 
 @router.delete(
@@ -429,19 +403,10 @@ async def uninstall_plugin(
         )
     except WindFlowException as exc:
         if exc.details.get("error_type") == "not_found":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=exc.message,
-            ) from exc
+            raise NotFoundError(exc.message)
         if exc.details.get("error_type") == "has_dependents":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=exc.message,
-            ) from exc
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=exc.message,
-        ) from exc
+            raise ConflictError(exc.message)
+        raise WindFlowException(exc.message)
 
 
 # ── GET /plugins/{plugin_id}/dependencies ────────────────────────────────────
@@ -479,10 +444,7 @@ async def get_plugin_dependencies(
     )
     plugin = await PluginManagerService.get_plugin(db, plugin_id)
     if not plugin:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Plugin non trouvé : {plugin_id}",
-        )
+        raise NotFoundError(f"Plugin non trouvé : {plugin_id}")
 
     # Extraire les dépendances du manifest_data
     manifest_data = plugin.manifest_data or {}
@@ -557,10 +519,7 @@ async def get_plugin_dependencies(
         db, current_user
     )
     if primary_org_deps is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aucune organisation : rattachez d'abord votre compte",
-        )
+        raise InvalidInputError("Aucune organisation : rattachez d'abord votre compte")
     dependents = await _dependency_service.check_uninstall_dependents(
         db, plugin.name, primary_org_deps
     )
@@ -615,18 +574,14 @@ async def get_hook_logs(
     )
     plugin = await PluginManagerService.get_plugin(db, plugin_id)
     if not plugin:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Plugin non trouvé : {plugin_id}",
-        )
+        raise NotFoundError(f"Plugin non trouvé : {plugin_id}")
     # STORY-121.3 : isolation via l'appartenance (superuser bypass
     # intégré à is_member)
     if not await UserOrganizationService.is_member(
         db, current_user, plugin.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès interdit : ce plugin appartient à une autre organisation",
+        raise PermissionDeniedError(
+            "Accès interdit : ce plugin appartient à une autre organisation"
         )
 
     logs = await PluginLifecycleService.list_hook_logs(db, plugin_id, skip, limit)
@@ -668,24 +623,17 @@ async def get_hook_log_detail(
     )
     plugin = await PluginManagerService.get_plugin(db, plugin_id)
     if not plugin:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Plugin non trouvé : {plugin_id}",
-        )
+        raise NotFoundError(f"Plugin non trouvé : {plugin_id}")
     # STORY-121.3 : isolation via l'appartenance
     if not await UserOrganizationService.is_member(
         db, current_user, plugin.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès interdit : ce plugin appartient à une autre organisation",
+        raise PermissionDeniedError(
+            "Accès interdit : ce plugin appartient à une autre organisation"
         )
 
     log = await PluginLifecycleService.get_hook_log(db, log_id)
     if not log or log.plugin_id != plugin_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Log de hook non trouvé : {log_id}",
-        )
+        raise NotFoundError(f"Log de hook non trouvé : {log_id}")
 
     return HookLogResponse.model_validate(log)

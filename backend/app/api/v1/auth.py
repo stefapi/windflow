@@ -4,7 +4,7 @@ Routes d'authentification JWT.
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +12,15 @@ from ...auth.dependencies import get_current_active_user
 from ...auth.jwt import create_access_token, create_token_pair
 from ...config import settings
 from ...core.bruteforce_protection import bruteforce_protector
-from ...core.exceptions import InvalidRefreshTokenError, NotFoundError
+from ...core.exceptions import (
+    AuthenticationError,
+    ConflictError,
+    InvalidRefreshTokenError,
+    NotFoundError,
+    PermissionDeniedError,
+    RateLimitError,
+    WindFlowException,
+)
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
@@ -126,9 +134,7 @@ Authenticate a user and generate JWT tokens.
     },
     responses={
         200: {
-            "description": (
-                "Authentication successful — enveloppe spec 09"
-            ),
+            "description": ("Authentication successful — enveloppe spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -170,7 +176,10 @@ Authenticate a user and generate JWT tokens.
             "content": {
                 "application/json": {
                     "example": {
-                        "error": {"code": "PERMISSION_DENIED", "message": "Inactive user"}
+                        "error": {
+                            "code": "PERMISSION_DENIED",
+                            "message": "Inactive user",
+                        }
                     }
                 }
             },
@@ -245,9 +254,9 @@ async def login(
     if settings.disable_auth and not form_data.username and not form_data.password:
         user = await UserService.get_first_superadmin(session)
         if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No superadmin user found in database for development mode",
+            # STORY-127 : 500 typé → INTERNAL_ERROR enveloppé
+            raise WindFlowException(
+                "No superadmin user found in database for development mode"
             )
     else:
         client_ip = request.client.host if request.client else "unknown"
@@ -262,9 +271,9 @@ async def login(
                 form_data.username,
                 client_ip,
             )
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="TOO_MANY_ATTEMPTS: too many failed login attempts, try again later",
+            # STORY-127 : 429 typé — Retry-After transporté via headers
+            raise RateLimitError(
+                "TOO_MANY_ATTEMPTS: too many failed login attempts, try again later",
                 headers={"Retry-After": str(retry_after)},
             )
 
@@ -301,10 +310,11 @@ async def login(
                     "reason": "invalid_credentials",
                 },
             )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect username or password",
-                headers={"WWW-Authenticate": "Bearer"},
+            # STORY-127 : 401 typé — code INVALID_CREDENTIALS (login) via
+            # l'override d'instance (prime sur la spécialisation chemin)
+            raise AuthenticationError(
+                "Incorrect username or password",
+                code="INVALID_CREDENTIALS",
             )
 
         if not user.is_active:
@@ -319,9 +329,7 @@ async def login(
                 resource_id=str(user.id),
                 details={"username": form_data.username, "reason": "inactive_user"},
             )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
-            )
+            raise PermissionDeniedError("Inactive user")
 
         # Login réussi : réinitialisation du compteur d'échecs du username
         await bruteforce_protector.reset(key)
@@ -493,11 +501,8 @@ async def refresh_token(
             session, refresh_request.refresh_token
         )
     except InvalidRefreshTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="INVALID_OR_EXPIRED_TOKEN",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
+        # STORY-127 : 401 typé anti-énumération (message identique)
+        raise AuthenticationError("INVALID_OR_EXPIRED_TOKEN") from None
 
     # Utilisateur actif — cohérence conservée avec les vérifications
     # actuelles (AC 2). Défense : le token fraîchement émis est révoqué
@@ -505,11 +510,7 @@ async def refresh_token(
     user = await UserService.get_by_id(session, new_row.user_id)
     if not user or not user.is_active:
         await RefreshTokenService.revoke_all_for_user(session, new_row.user_id)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="INVALID_OR_EXPIRED_TOKEN",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise AuthenticationError("INVALID_OR_EXPIRED_TOKEN")
 
     # Access JWT seul — le refresh neuf vient de la rotation (claims
     # réduits STORY-121.3 : sans organization_id)
@@ -793,18 +794,12 @@ async def register(
     # Vérifier que l'email n'existe pas déjà
     existing_email = await UserService.get_by_email(session, user_data.email)
     if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"User with email '{user_data.email}' already exists",
-        )
+        raise ConflictError(f"User with email '{user_data.email}' already exists")
 
     # Vérifier que le username n'existe pas déjà
     existing_username = await UserService.get_by_username(session, user_data.username)
     if existing_username:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"User with username '{user_data.username}' already exists",
-        )
+        raise ConflictError(f"User with username '{user_data.username}' already exists")
 
     # Sécurité : l'auto-enregistrement ne peut jamais créer un
     # superuser — UserCreate expose le champ pour la création par un
@@ -824,11 +819,8 @@ async def register(
             session, settings.default_org_slug
         )
         if default_org is None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "Default organization not found — configure " "DEFAULT_ORG_SLUG"
-                ),
+            raise ConflictError(
+                "Default organization not found — configure " "DEFAULT_ORG_SLUG"
             )
         user_data.organization_id = default_org.id
     else:
@@ -838,9 +830,9 @@ async def register(
             session, user_data.organization_id
         )
         if target_org is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=(f"Organisation '{user_data.organization_id}' non trouvée"),
+            # STORY-127 : message historique préservé au caractère près
+            raise NotFoundError(
+                f"Organisation '{user_data.organization_id}' non trouvée"
             )
 
     # Créer l'utilisateur
@@ -1278,11 +1270,9 @@ async def revoke_api_key(
     # ``user_id == current_user.id`` posé par 124.2.
     try:
         revoked = await ApiKeyService.revoke(session, current_user.id, key_id)
-    except NotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="API key not found",
-        ) from None
+    except NotFoundError as exc:
+        # STORY-127 : re-raise typée — 404 enveloppé (message identique)
+        raise NotFoundError("API key not found") from exc
     # STORY-125.2 : audit de la révocation (après succès, idempotent — la
     # ligne est émise même sur re-révocation, reflétant l'action HTTP).
     await AuditService.log_from_request(

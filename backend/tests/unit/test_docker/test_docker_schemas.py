@@ -21,9 +21,9 @@ from app.schemas.docker import (
     ContainerLogsResponse,
     ContainerNetworkEndpointInfo,
     ContainerNetworkSettingsInfo,
-    ContainerRestartPolicyInfo,
     ContainerResourcesInfo,
     ContainerResponse,
+    ContainerRestartPolicyInfo,
     ContainerStateInfo,
     ContainerStatsResponse,
     DockerErrorResponse,
@@ -449,7 +449,12 @@ class TestContainerHealthInfo:
             "Status": "healthy",
             "FailingStreak": 0,
             "Log": [
-                {"Start": "2024-01-01T00:00:00Z", "End": "2024-01-01T00:00:01Z", "ExitCode": 0, "Output": "OK"},
+                {
+                    "Start": "2024-01-01T00:00:00Z",
+                    "End": "2024-01-01T00:00:01Z",
+                    "ExitCode": 0,
+                    "Output": "OK",
+                },
             ],
         }
         health = ContainerHealthInfo.from_docker_dict(data)
@@ -838,32 +843,40 @@ class TestContainerDetailResponse:
             created=now,
             path="/bin/sh",
             args=["-c", "echo hello"],
-            state=ContainerStateInfo.from_docker_dict({
-                "Status": "running",
-                "Running": True,
-                "Paused": False,
-                "Restarting": False,
-                "OOMKilled": False,
-                "Dead": False,
-                "ExitCode": 0,
-                "StartedAt": "2024-01-01T00:00:00Z",
-                "FinishedAt": "0001-01-01T00:00:00Z",
-            }),
+            state=ContainerStateInfo.from_docker_dict(
+                {
+                    "Status": "running",
+                    "Running": True,
+                    "Paused": False,
+                    "Restarting": False,
+                    "OOMKilled": False,
+                    "Dead": False,
+                    "ExitCode": 0,
+                    "StartedAt": "2024-01-01T00:00:00Z",
+                    "FinishedAt": "0001-01-01T00:00:00Z",
+                }
+            ),
             image="nginx:latest",
-            config=ContainerConfigInfo.from_docker_dict({
-                "Image": "nginx:latest",
-                "Env": ["PATH=/usr/local/bin"],
-                "Cmd": ["nginx"],
-            }),
-            host_config=ContainerHostConfigInfo.from_docker_dict({
-                "NetworkMode": "bridge",
-                "RestartPolicy": {"Name": "always"},
-            }),
-            network_settings=ContainerNetworkSettingsInfo.from_docker_dict({
-                "Networks": {
-                    "bridge": {"IPAddress": "172.17.0.2", "Gateway": "172.17.0.1"},
-                },
-            }),
+            config=ContainerConfigInfo.from_docker_dict(
+                {
+                    "Image": "nginx:latest",
+                    "Env": ["PATH=/usr/local/bin"],
+                    "Cmd": ["nginx"],
+                }
+            ),
+            host_config=ContainerHostConfigInfo.from_docker_dict(
+                {
+                    "NetworkMode": "bridge",
+                    "RestartPolicy": {"Name": "always"},
+                }
+            ),
+            network_settings=ContainerNetworkSettingsInfo.from_docker_dict(
+                {
+                    "Networks": {
+                        "bridge": {"IPAddress": "172.17.0.2", "Gateway": "172.17.0.1"},
+                    },
+                }
+            ),
             mounts=[],
         )
         assert resp.name == "my-container"
@@ -925,7 +938,9 @@ class TestContainerDetailResponse:
             image="nginx:latest",
             config=ContainerConfigInfo.from_docker_dict(docker_config),
             host_config=ContainerHostConfigInfo.from_docker_dict(docker_host_config),
-            network_settings=ContainerNetworkSettingsInfo.from_docker_dict(docker_network_settings),
+            network_settings=ContainerNetworkSettingsInfo.from_docker_dict(
+                docker_network_settings
+            ),
             mounts=[{"Type": "bind", "Source": "/host", "Destination": "/data"}],
         )
 
@@ -934,7 +949,10 @@ class TestContainerDetailResponse:
         assert json_data["state"]["status"] == "running"
         assert json_data["config"]["hostname"] == "my-container"
         assert json_data["host_config"]["restart_policy"]["name"] == "unless-stopped"
-        assert json_data["network_settings"]["networks"]["bridge"]["ip_address"] == "172.17.0.5"
+        assert (
+            json_data["network_settings"]["networks"]["bridge"]["ip_address"]
+            == "172.17.0.5"
+        )
         assert len(json_data["mounts"]) == 1
 
     def _make_minimal_detail(self, **overrides):
@@ -946,7 +964,9 @@ class TestContainerDetailResponse:
             created=now,
             path="/bin/sh",
             args=[],
-            state=ContainerStateInfo.from_docker_dict({"Status": "running", "Running": True}),
+            state=ContainerStateInfo.from_docker_dict(
+                {"Status": "running", "Running": True}
+            ),
             image="nginx:latest",
             config=ContainerConfigInfo.from_docker_dict({}),
             host_config=ContainerHostConfigInfo.from_docker_dict({}),

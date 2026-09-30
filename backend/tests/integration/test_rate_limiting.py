@@ -11,10 +11,10 @@ Vérifie que le système de rate limiting est correctement configuré :
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
 from httpx import AsyncClient
 
 from app.core import rate_limit
+from app.core.exceptions import RateLimitError
 from app.core.rate_limit import _memory_limiter, conditional_rate_limiter
 
 
@@ -56,7 +56,7 @@ async def test_memory_limiter_429_kicks_in_without_redis():
     for _ in range(5):
         await limiter(request)  # autorisés
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RateLimitError) as exc_info:
         await limiter(request)
     assert exc_info.value.status_code == 429
 
@@ -68,9 +68,9 @@ async def test_memory_limiter_retry_after_header_present():
     request = _mock_request()
     for _ in range(3):
         await limiter(request)
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RateLimitError) as exc_info:
         await limiter(request)
-    assert exc_info.value.headers == {"Retry-After": "60"}
+    assert exc_info.value.http_headers == {"Retry-After": "60"}
 
 
 @pytest.mark.asyncio
@@ -90,7 +90,7 @@ async def test_conditional_rate_limiter_blocks_over_threshold():
     request = _mock_request()
     await limiter(request)
     await limiter(request)
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RateLimitError) as exc_info:
         await limiter(request)
     assert exc_info.value.status_code == 429
 
@@ -152,7 +152,7 @@ async def test_multiple_rapid_requests_low_threshold_memory_mode():
         try:
             await limiter(request)
             results.append("ok")
-        except HTTPException as e:
+        except RateLimitError as e:
             results.append(f"429:{e.status_code}")
 
     assert results == ["ok", "ok", "ok", "429:429"]

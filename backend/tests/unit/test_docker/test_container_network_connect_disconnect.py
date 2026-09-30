@@ -17,6 +17,8 @@ from httpx import ASGITransport, AsyncClient
 from app.api.v1.docker import router
 from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_admin, require_operator, require_viewer
+from app.core.exceptions import WindFlowException
+from app.middleware.error_handler import windflow_exception_handler
 
 # =============================================================================
 # Fixtures
@@ -46,6 +48,8 @@ def mock_docker_client():
 def app():
     """Crée une app FastAPI minimale avec le router Docker."""
     _app = FastAPI()
+    # STORY-127 : exceptions typées → handler global requis
+    _app.add_exception_handler(WindFlowException, windflow_exception_handler)
     _app.include_router(router, prefix="/api/v1/docker")
     _app.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
     # STORY-122.2 : routes Docker protégées par require_* — délégation au

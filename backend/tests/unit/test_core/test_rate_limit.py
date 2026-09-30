@@ -12,10 +12,10 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
 from fastapi_limiter.depends import RateLimiter
 
 from app.core import rate_limit
+from app.core.exceptions import RateLimitError
 from app.core.rate_limit import (
     MemoryRateLimiter,
     _memory_limiter,
@@ -159,7 +159,7 @@ class TestConditionalRateLimiterV2:
 
     @pytest.mark.asyncio
     async def test_memory_limiter_returns_429_after_threshold(self):
-        """AC 5 : 6e hit dans la fenêtre → HTTPException 429."""
+        """AC 5 : 6e hit dans la fenêtre → RateLimitError 429 (STORY-127)."""
         with patch.object(
             rate_limit.settings, "rate_limit_enabled", True
         ), patch.object(rate_limit.settings, "rate_limit_storage_url", None):
@@ -169,10 +169,10 @@ class TestConditionalRateLimiterV2:
         for _ in range(5):
             await limiter(request)  # pas d'exception
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RateLimitError) as exc_info:
             await limiter(request)
         assert exc_info.value.status_code == 429
-        assert exc_info.value.detail == "Too many requests"
+        assert exc_info.value.message == "Too many requests"
 
     @pytest.mark.asyncio
     async def test_memory_dependency_returns_429_with_retry_after(self):
@@ -185,9 +185,9 @@ class TestConditionalRateLimiterV2:
         request = _make_request()
         for _ in range(3):
             await limiter(request)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(RateLimitError) as exc_info:
             await limiter(request)
-        assert exc_info.value.headers == {"Retry-After": "60"}
+        assert exc_info.value.http_headers == {"Retry-After": "60"}
 
     @pytest.mark.asyncio
     async def test_memory_key_uses_ip_and_path(self):
@@ -211,7 +211,7 @@ class TestConditionalRateLimiterV2:
         request = _make_request()
         await limiter(request)
         await limiter(request)
-        with pytest.raises(HTTPException):
+        with pytest.raises(RateLimitError):
             await limiter(request)
 
         # Temps avancé au-delà de la fenêtre
@@ -229,7 +229,7 @@ class TestConditionalRateLimiterV2:
             limiter = conditional_rate_limiter(1, 60)
 
         await limiter(_make_request(host="1.1.1.1"))  # quota IP1 épuisé
-        with pytest.raises(HTTPException):
+        with pytest.raises(RateLimitError):
             await limiter(_make_request(host="1.1.1.1"))
         await limiter(_make_request(host="2.2.2.2"))  # IP2 OK
 
@@ -259,7 +259,7 @@ class TestConditionalRateLimiterV2:
         # strict = 5/min : 6e refusé
         for _ in range(5):
             await strict(request)
-        with pytest.raises(HTTPException):
+        with pytest.raises(RateLimitError):
             await strict(request)
 
         # moderate = 30/min, relaxed = 100/min : callables effectifs

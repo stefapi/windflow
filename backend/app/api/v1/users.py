@@ -7,12 +7,18 @@ import math
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_active_user
 from ...auth.rbac import require_super_admin, require_viewer
+from ...core.exceptions import (
+    ConflictError,
+    InvalidInputError,
+    NotFoundError,
+    PermissionDeniedError,
+)
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...models.user import User
@@ -382,20 +388,14 @@ async def get_user(
 
     user = await UserService.get_by_id(session, str(user_id))  # type: ignore[arg-type]
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Utilisateur {user_id} non trouvé",
-        )
+        raise NotFoundError(f"Utilisateur {user_id} non trouvé")
 
     # Vérifier que les utilisateurs partagent une organisation ou superuser
     # (STORY-121.3 : intersection des appartenances via l'association)
     if not current_user.is_superuser and not await _share_organization(
         session, current_user, user
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cet utilisateur",
-        )
+        raise PermissionDeniedError("Accès refusé à cet utilisateur")
 
     return await _user_response(session, user)
 
@@ -603,10 +603,7 @@ async def create_user(
     # Vérifier que l'email n'existe pas déjà
     existing = await UserService.get_by_email(session, user_data.email)
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Utilisateur avec l'email '{user_data.email}' existe déjà",
-        )
+        raise ConflictError(f"Utilisateur avec l'email '{user_data.email}' existe déjà")
 
     # Déterminer l'organisation cible selon les règles métier
     provided_org_id = user_data.organization_id
@@ -617,10 +614,7 @@ async def create_user(
             # Vérifier que l'organisation cible existe
             org = await OrganizationService.get_by_id(session, provided_org_id)
             if not org:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Organisation '{provided_org_id}' non trouvée",
-                )
+                raise NotFoundError(f"Organisation '{provided_org_id}' non trouvée")
         else:
             # Aucune organisation spécifiée : organisation primaire du
             # superadmin (STORY-121.3 — plus ancienne appartenance)
@@ -628,13 +622,8 @@ async def create_user(
                 session, current_user
             )
             if primary_org is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        "Aucune organisation cible : fournissez "
-                        "organization_id ou rattachez d'abord le compte "
-                        "à une organisation"
-                    ),
+                raise InvalidInputError(
+                    "Aucune organisation cible : fournissez organization_id ou rattachez d'abord le compte à une organisation",
                 )
             user_data.organization_id = primary_org
     else:
@@ -643,12 +632,8 @@ async def create_user(
         if provided_org_id and not await UserOrganizationService.is_member(
             session, current_user, provided_org_id
         ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    "Vous ne pouvez créer un utilisateur que dans votre "
-                    "propre organisation"
-                ),
+            raise PermissionDeniedError(
+                "Vous ne pouvez créer un utilisateur que dans votre propre organisation",
             )
         user_data.organization_id = (
             provided_org_id
@@ -657,13 +642,8 @@ async def create_user(
             )
         )
         if user_data.organization_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "Aucune organisation cible : fournissez "
-                    "organization_id ou rattachez d'abord votre compte "
-                    "à une organisation"
-                ),
+            raise InvalidInputError(
+                "Aucune organisation cible : fournissez organization_id ou rattachez d'abord votre compte à une organisation",
             )
 
     user = await UserService.create(session, user_data)
@@ -884,10 +864,7 @@ async def update_user(
     # Vérifier que l'utilisateur existe
     existing_user = await UserService.get_by_id(session, str(user_id))  # type: ignore[arg-type]
     if not existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Utilisateur {user_id} non trouvé",
-        )
+        raise NotFoundError(f"Utilisateur {user_id} non trouvé")
 
     # AC 3 : le dernier superadmin n'est ni démotable ni désactivable
     if existing_user.is_superuser:
@@ -904,28 +881,21 @@ async def update_user(
                     "target_user_id": str(user_id),
                 },
             )
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot demote or deactivate the last superadmin",
-            )
+            raise ConflictError("Cannot demote or deactivate the last superadmin")
 
     # Vérifier les permissions (organisation partagée ou superuser —
     # STORY-121.3 : intersection des appartenances)
     if not current_user.is_superuser and not await _share_organization(
         session, current_user, existing_user
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cet utilisateur",
-        )
+        raise PermissionDeniedError("Accès refusé à cet utilisateur")
 
     # Si changement d'email, vérifier qu'il n'existe pas déjà
     if user_data.email and user_data.email != existing_user.email:
         existing_email = await UserService.get_by_email(session, user_data.email)
         if existing_email:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Utilisateur avec l'email '{user_data.email}' existe déjà",
+            raise ConflictError(
+                f"Utilisateur avec l'email '{user_data.email}' existe déjà"
             )
 
     # STORY-121.3 : organization_id fourni = opération d'association
@@ -936,9 +906,8 @@ async def update_user(
             session, user_data.organization_id
         )
         if not target_org:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=(f"Organisation '{user_data.organization_id}' non trouvée"),
+            raise NotFoundError(
+                f"Organisation '{user_data.organization_id}' non trouvée"
             )
         await UserService.update_organization_many(
             session, [existing_user.id], user_data.organization_id
@@ -1074,18 +1043,12 @@ async def delete_user(
     )
     # Empêcher l'auto-suppression
     if user_id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Impossible de supprimer son propre compte",
-        )
+        raise InvalidInputError("Impossible de supprimer son propre compte")
 
     # Vérifier que l'utilisateur existe
     user = await UserService.get_by_id(session, str(user_id))  # type: ignore[arg-type]
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Utilisateur {user_id} non trouvé",
-        )
+        raise NotFoundError(f"Utilisateur {user_id} non trouvé")
 
     # AC 3 : le dernier superadmin n'est pas supprimable
     if user.is_superuser and await UserService.count_superadmins(session) <= 1:
@@ -1097,20 +1060,14 @@ async def delete_user(
                 "target_user_id": str(user_id),
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot delete the last superadmin",
-        )
+        raise ConflictError("Cannot delete the last superadmin")
 
     # Vérifier les permissions (organisation partagée ou superuser —
     # STORY-121.3 : intersection des appartenances)
     if not current_user.is_superuser and not await _share_organization(
         session, current_user, user
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cet utilisateur",
-        )
+        raise PermissionDeniedError("Accès refusé à cet utilisateur")
 
     await UserService.delete(session, user)
 
@@ -1186,16 +1143,10 @@ async def bulk_delete_users(
 
     # Validate request
     if not bulk_data.user_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La liste des utilisateurs ne peut pas être vide",
-        )
+        raise InvalidInputError("La liste des utilisateurs ne peut pas être vide")
 
     if len(bulk_data.user_ids) > 100:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 100 utilisateurs par requête",
-        )
+        raise InvalidInputError("Maximum 100 utilisateurs par requête")
 
     # Perform bulk delete
     success, failed = await UserService.delete_many(
@@ -1272,24 +1223,15 @@ async def bulk_assign_organization(
 
     # Validate request
     if not bulk_data.user_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La liste des utilisateurs ne peut pas être vide",
-        )
+        raise InvalidInputError("La liste des utilisateurs ne peut pas être vide")
 
     if len(bulk_data.user_ids) > 100:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 100 utilisateurs par requête",
-        )
+        raise InvalidInputError("Maximum 100 utilisateurs par requête")
 
     # Verify target organization exists
     target_org = await OrganizationService.get_by_id(session, bulk_data.organization_id)
     if not target_org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organisation '{bulk_data.organization_id}' non trouvée",
-        )
+        raise NotFoundError(f"Organisation '{bulk_data.organization_id}' non trouvée")
 
     # Perform bulk assignment
     success, failed = await UserService.update_organization_many(

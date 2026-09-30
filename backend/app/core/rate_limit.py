@@ -18,10 +18,11 @@ import time
 from collections import deque
 from typing import Callable
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 from fastapi_limiter.depends import RateLimiter
 
 from ..config import settings
+from .exceptions import RateLimitError
 
 logger = logging.getLogger("windflow.rate_limit")
 
@@ -185,9 +186,9 @@ def conditional_rate_limiter(times: int, seconds: int) -> Callable:
             client_host = request.client.host if request.client else "unknown"
             key = f"{client_host}:{request.url.path}"
             if not _memory_limiter.check(key, times, seconds):
-                raise HTTPException(
-                    status_code=429,
-                    detail="Too many requests",
+                # STORY-127 : 429 typé — Retry-After transporté via headers
+                raise RateLimitError(
+                    "Too many requests",
                     headers={"Retry-After": str(seconds)},
                 )
 

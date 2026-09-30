@@ -17,6 +17,8 @@ from httpx import ASGITransport, AsyncClient
 from app.api.v1.docker import router
 from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_admin, require_operator, require_viewer
+from app.core.exceptions import WindFlowException
+from app.middleware.error_handler import windflow_exception_handler
 from app.services.docker_client_service import ContainerDetail
 
 # =============================================================================
@@ -158,6 +160,8 @@ def _make_mock_user():
 def app():
     """Crée une app FastAPI minimale avec le router Docker."""
     _app = FastAPI()
+    # STORY-127 : exceptions typées → handler global requis
+    _app.add_exception_handler(WindFlowException, windflow_exception_handler)
     _app.include_router(router, prefix="/api/v1/docker")
     _app.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
     # STORY-122.2 : routes Docker protégées par require_* — délégation au
@@ -421,7 +425,7 @@ async def test_recreate_remove_succeeds_create_fails(app, mock_docker_client):
             )
 
     assert response.status_code == 500
-    detail = response.json()["detail"]
+    detail = response.json()["error"]["message"]
     assert "abc123def456" in detail
 
 
@@ -443,7 +447,7 @@ async def test_recreate_remove_succeeds_start_fails(app, mock_docker_client):
             )
 
     assert response.status_code == 500
-    detail = response.json()["detail"]
+    detail = response.json()["error"]["message"]
     assert "abc123def456" in detail
 
 

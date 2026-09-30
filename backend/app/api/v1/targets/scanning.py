@@ -6,10 +6,16 @@ import logging
 from typing import Any
 
 import asyncssh
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ....auth.rbac import require_admin
+from ....core.exceptions import (
+    ConflictError,
+    InvalidInputError,
+    NotFoundError,
+    PermissionDeniedError,
+)
 from ....core.rate_limit import conditional_rate_limiter
 from ....database import get_db
 from ....models.user import User
@@ -288,9 +294,8 @@ async def discover_target(
             session, current_user, discovery_request.organization_id
         )
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Impossible de découvrir une cible pour une autre organisation",
+        raise PermissionDeniedError(
+            "Impossible de découvrir une cible pour une autre organisation"
         )
     organization_id = (
         discovery_request.organization_id
@@ -299,19 +304,13 @@ async def discover_target(
         )
     )
     if organization_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aucune organisation : rattachez d'abord votre compte",
-        )
+        raise InvalidInputError("Aucune organisation : rattachez d'abord votre compte")
 
     existing = await TargetService.get_by_name(
         session, organization_id, discovery_request.name
     )
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cible avec le nom '{discovery_request.name}' existe déjà",
-        )
+        raise ConflictError(f"Cible avec le nom '{discovery_request.name}' existe déjà")
 
     scanner = TargetScannerService()
     host = discovery_request.host
@@ -581,17 +580,12 @@ async def scan_target(
     )
     target = await TargetService.get_by_id(session, target_id)
     if not target:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Cible {target_id} non trouvée",
-        )
+        raise NotFoundError(f"Cible {target_id} non trouvée")
 
     if not await UserOrganizationService.is_member(
         session, current_user, target.organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cette cible"
-        )
+        raise PermissionDeniedError("Accès refusé à cette cible")
 
     scanner = TargetScannerService()
     updated_target = await scanner.scan_and_update_target(target, session)

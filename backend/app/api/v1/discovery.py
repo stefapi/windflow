@@ -9,10 +9,14 @@ Endpoints :
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.rbac import require_admin, require_viewer
+from ...core.exceptions import (
+    InvalidInputError,
+    PermissionDeniedError,
+)
 from ...database import get_db
 from ...models.user import User
 from ...schemas.adoption import AdoptionRequest, AdoptionResponse, AdoptionWizardData
@@ -68,19 +72,13 @@ async def get_adoption_data(
     if organization_id and not await UserOrganizationService.is_member(
         db, current_user, organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette organisation",
-        )
+        raise PermissionDeniedError("Accès refusé à cette organisation")
     org_id = (
         organization_id
         or await UserOrganizationService.get_primary_organization_id(db, current_user)
     )
     if org_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aucune organisation : rattachez d'abord votre compte",
-        )
+        raise InvalidInputError("Aucune organisation : rattachez d'abord votre compte")
 
     return await adoption_service.get_adoption_data(
         db=db,
@@ -136,19 +134,13 @@ async def adopt_discovered_item(
     if organization_id and not await UserOrganizationService.is_member(
         db, current_user, organization_id
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé à cette organisation",
-        )
+        raise PermissionDeniedError("Accès refusé à cette organisation")
     org_id = (
         organization_id
         or await UserOrganizationService.get_primary_organization_id(db, current_user)
     )
     if org_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aucune organisation : rattachez d'abord votre compte",
-        )
+        raise InvalidInputError("Aucune organisation : rattachez d'abord votre compte")
 
     return await adoption_service.adopt_discovered_item(
         db=db,

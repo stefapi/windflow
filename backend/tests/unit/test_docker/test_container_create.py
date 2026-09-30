@@ -20,6 +20,8 @@ from httpx import ASGITransport, AsyncClient
 from app.api.v1.docker import router
 from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_admin, require_operator, require_viewer
+from app.core.exceptions import WindFlowException
+from app.middleware.error_handler import windflow_exception_handler
 
 
 def _make_mock_user():
@@ -159,6 +161,8 @@ class TestContainerCreateEndpoint:
                     route.response_model = None
 
         app = FastAPI()
+        # STORY-127 : exceptions typées → handler global requis
+        app.add_exception_handler(WindFlowException, windflow_exception_handler)
         app.include_router(router, prefix="/api/v1/docker")
         app.dependency_overrides[get_current_active_user] = lambda: _make_mock_user()
         # STORY-122.2 : routes Docker protégées par require_* — délégation au
@@ -286,7 +290,7 @@ class TestContainerCreateEndpoint:
                 )
 
         assert response.status_code == 409
-        assert "existe déjà" in response.json()["detail"]
+        assert "existe déjà" in response.json()["error"]["message"]
 
     @pytest.mark.asyncio
     async def test_create_container_docker_unavailable(self, app):
