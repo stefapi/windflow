@@ -14,11 +14,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
+from tests.conftest import unwrap
 
 from app.config import settings
 from app.schemas.plugin_registry import RegistryPluginEntry
-from tests.conftest import unwrap
-
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -97,10 +96,9 @@ class TestListRegistryPlugins:
     async def test_list_registry_plugins_returns_200_authenticated(
         self, admin_client: AsyncClient, mock_plugins: List[RegistryPluginEntry]
     ) -> None:
-        """Cas nominal : liste accessible avec auth."""
-        with patch(
-            "app.api.v1.plugin_registry._get_registry_service"
-        ) as mock_get_svc:
+        """Cas nominal : liste accessible avec auth — contrat paginé STORY-128
+        (tri stable par nom : postgresql < redis < traefik)."""
+        with patch("app.api.v1.plugin_registry._get_registry_service") as mock_get_svc:
             svc = AsyncMock()
             svc.list_plugins = AsyncMock(return_value=mock_plugins)
             svc.search_plugins = AsyncMock(return_value=mock_plugins)
@@ -109,18 +107,20 @@ class TestListRegistryPlugins:
             response = await admin_client.get("/api/v1/registry/plugins")
 
         assert response.status_code == 200
-        data = unwrap(response)
-        assert len(data) == 3
-        assert data[0]["name"] == "traefik"
+        body = response.json()
+        assert isinstance(body["data"], list)
+        assert len(body["data"]) == 3
+        # Tri stable par name (STORY-128)
+        assert body["data"][0]["name"] == "postgresql"
+        assert body["pagination"]["total"] == 3
+        assert body["pagination"]["pages"] == 1
 
     @pytest.mark.asyncio
     async def test_list_registry_plugins_returns_empty_when_no_plugins(
         self, admin_client: AsyncClient
     ) -> None:
-        """Cas nominal : liste vide."""
-        with patch(
-            "app.api.v1.plugin_registry._get_registry_service"
-        ) as mock_get_svc:
+        """Cas nominal : liste vide (méta pagination exactes)."""
+        with patch("app.api.v1.plugin_registry._get_registry_service") as mock_get_svc:
             svc = AsyncMock()
             svc.list_plugins = AsyncMock(return_value=[])
             mock_get_svc.return_value = svc
@@ -128,7 +128,10 @@ class TestListRegistryPlugins:
             response = await admin_client.get("/api/v1/registry/plugins")
 
         assert response.status_code == 200
-        assert unwrap(response) == []
+        body = response.json()
+        assert body["data"] == []
+        assert body["pagination"]["total"] == 0
+        assert body["pagination"]["pages"] == 0
 
     @pytest.mark.asyncio
     async def test_list_registry_plugins_returns_401_without_token(
@@ -142,10 +145,9 @@ class TestListRegistryPlugins:
     async def test_list_registry_plugins_with_category_filter(
         self, admin_client: AsyncClient, mock_plugins: List[RegistryPluginEntry]
     ) -> None:
-        """Filtre par catégorie : ne retourne que les plugins de la catégorie."""
-        with patch(
-            "app.api.v1.plugin_registry._get_registry_service"
-        ) as mock_get_svc:
+        """Filtre par catégorie : filtrage AVANT pagination — total filtré
+        exact (AC 3)."""
+        with patch("app.api.v1.plugin_registry._get_registry_service") as mock_get_svc:
             svc = AsyncMock()
             svc.list_plugins = AsyncMock(return_value=mock_plugins)
             mock_get_svc.return_value = svc
@@ -155,9 +157,10 @@ class TestListRegistryPlugins:
             )
 
         assert response.status_code == 200
-        data = unwrap(response)
-        assert len(data) == 2
-        assert all(p["category"] == "database" for p in data)
+        body = response.json()
+        assert len(body["data"]) == 2
+        assert all(p["category"] == "database" for p in body["data"])
+        assert body["pagination"]["total"] == 2
 
     @pytest.mark.asyncio
     async def test_list_registry_plugins_with_query_search(
@@ -165,9 +168,7 @@ class TestListRegistryPlugins:
     ) -> None:
         """Recherche textuelle : utilise search_plugins du service."""
         search_results = [mock_plugins[0]]
-        with patch(
-            "app.api.v1.plugin_registry._get_registry_service"
-        ) as mock_get_svc:
+        with patch("app.api.v1.plugin_registry._get_registry_service") as mock_get_svc:
             svc = AsyncMock()
             svc.search_plugins = AsyncMock(return_value=search_results)
             mock_get_svc.return_value = svc
@@ -177,30 +178,34 @@ class TestListRegistryPlugins:
             )
 
         assert response.status_code == 200
-        data = unwrap(response)
-        assert len(data) == 1
-        assert data[0]["name"] == "traefik"
+        body = response.json()
+        assert len(body["data"]) == 1
+        assert body["data"][0]["name"] == "traefik"
+        assert body["pagination"]["total"] == 1
 
     @pytest.mark.asyncio
     async def test_list_registry_plugins_pagination(
         self, admin_client: AsyncClient, mock_plugins: List[RegistryPluginEntry]
     ) -> None:
-        """Pagination skip/limit."""
-        with patch(
-            "app.api.v1.plugin_registry._get_registry_service"
-        ) as mock_get_svc:
+        """Pagination page/per_page (STORY-128) — tri stable par nom :
+        page 2 de 3 éléments → redis."""
+        with patch("app.api.v1.plugin_registry._get_registry_service") as mock_get_svc:
             svc = AsyncMock()
             svc.list_plugins = AsyncMock(return_value=mock_plugins)
             mock_get_svc.return_value = svc
 
             response = await admin_client.get(
-                "/api/v1/registry/plugins", params={"skip": 1, "limit": 1}
+                "/api/v1/registry/plugins", params={"page": 2, "per_page": 1}
             )
 
         assert response.status_code == 200
-        data = unwrap(response)
-        assert len(data) == 1
-        assert data[0]["name"] == "postgresql"
+        body = response.json()
+        assert len(body["data"]) == 1
+        # Ordre trié : postgresql (p1), redis (p2), traefik (p3)
+        assert body["data"][0]["name"] == "redis"
+        assert body["pagination"]["total"] == 3
+        assert body["pagination"]["pages"] == 3
+        assert body["pagination"]["page"] == 2
 
 
 # ── Tests GET /registry/plugins/{plugin_name} ──────────────────────────────
@@ -214,9 +219,7 @@ class TestGetRegistryPluginDetail:
         self, admin_client: AsyncClient, mock_plugins: List[RegistryPluginEntry]
     ) -> None:
         """Cas nominal : détail plugin."""
-        with patch(
-            "app.api.v1.plugin_registry._get_registry_service"
-        ) as mock_get_svc:
+        with patch("app.api.v1.plugin_registry._get_registry_service") as mock_get_svc:
             svc = AsyncMock()
             svc.get_plugin = AsyncMock(return_value=mock_plugins[0])
             mock_get_svc.return_value = svc
@@ -234,16 +237,12 @@ class TestGetRegistryPluginDetail:
         self, admin_client: AsyncClient
     ) -> None:
         """Plugin inexistant → 404."""
-        with patch(
-            "app.api.v1.plugin_registry._get_registry_service"
-        ) as mock_get_svc:
+        with patch("app.api.v1.plugin_registry._get_registry_service") as mock_get_svc:
             svc = AsyncMock()
             svc.get_plugin = AsyncMock(return_value=None)
             mock_get_svc.return_value = svc
 
-            response = await admin_client.get(
-                "/api/v1/registry/plugins/nonexistent"
-            )
+            response = await admin_client.get("/api/v1/registry/plugins/nonexistent")
 
         assert response.status_code == 404
         assert "non trouvé" in response.json()["error"]["message"]
@@ -261,9 +260,7 @@ class TestGetRegistryPluginDetail:
         self, admin_client: AsyncClient
     ) -> None:
         """Name non kebab-case → 422."""
-        response = await admin_client.get(
-            "/api/v1/registry/plugins/INVALID NAME!"
-        )
+        response = await admin_client.get("/api/v1/registry/plugins/INVALID NAME!")
         assert response.status_code == 422
         assert "invalide" in response.json()["error"]["message"].lower()
 
@@ -272,9 +269,7 @@ class TestGetRegistryPluginDetail:
         self, admin_client: AsyncClient, mock_plugins: List[RegistryPluginEntry]
     ) -> None:
         """Vérifie présence checksum + download_url (AC 2)."""
-        with patch(
-            "app.api.v1.plugin_registry._get_registry_service"
-        ) as mock_get_svc:
+        with patch("app.api.v1.plugin_registry._get_registry_service") as mock_get_svc:
             svc = AsyncMock()
             svc.get_plugin = AsyncMock(return_value=mock_plugins[0])
             mock_get_svc.return_value = svc

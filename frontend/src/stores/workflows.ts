@@ -1,22 +1,26 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { workflowsApi } from '@/services/api'
-import type { PaginatedResponse, Workflow, WorkflowCreate } from '@/types/api'
+import type { LegacyListBody, PaginationMeta, Workflow, WorkflowCreate } from '@/types/api'
 
 export const useWorkflowsStore = defineStore('workflows', () => {
   const workflows = ref<Workflow[]>([])
   const currentWorkflow = ref<Workflow | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  // STORY-128 : métadonnées de pagination exposées pour l'UI (total/pages).
+  const pagination = ref<PaginationMeta | null>(null)
 
   async function fetchWorkflows(organizationId?: string): Promise<void> {
     loading.value = true
     error.value = null
     try {
       const response = await workflowsApi.list({ organization_id: organizationId })
-      // STORY-126.3 : post-unwrap spec 09, response.data est List[Workflow] ou {items}
+      // STORY-128 : post-unwrap, response.data est la liste (nouveau format
+      // paginé) ; fallback transition {items} legacy et liste nue tolérés.
       const body: unknown = response.data
-      workflows.value = Array.isArray(body) ? body : ((body as PaginatedResponse<Workflow>).items ?? [])
+      workflows.value = Array.isArray(body) ? body : ((body as LegacyListBody<Workflow>)?.items ?? [])
+      pagination.value = response.pagination ?? null
     } catch (err: unknown) {
       // Handle 404 gracefully - workflows endpoint may not be implemented yet
       if ((err as { response?: { status?: number } })?.response?.status === 404) {
@@ -111,6 +115,7 @@ export const useWorkflowsStore = defineStore('workflows', () => {
     currentWorkflow,
     loading,
     error,
+    pagination,
     fetchWorkflows,
     fetchWorkflow,
     createWorkflow,

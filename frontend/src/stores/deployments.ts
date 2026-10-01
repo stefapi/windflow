@@ -6,7 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { deploymentsApi } from '@/services/api'
-import type { Deployment, DeploymentCreate } from '@/types/api'
+import type { Deployment, DeploymentCreate, LegacyListBody, PaginationMeta } from '@/types/api'
 import { deploymentEvents } from '@/services/websocket'
 
 export const useDeploymentsStore = defineStore('deployments', () => {
@@ -15,6 +15,8 @@ export const useDeploymentsStore = defineStore('deployments', () => {
   const currentDeployment = ref<Deployment | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  // STORY-128 : métadonnées de pagination exposées pour l'UI (total/pages).
+  const pagination = ref<PaginationMeta | null>(null)
 
   // Actions
   async function fetchDeployments(organizationId?: string): Promise<void> {
@@ -23,8 +25,11 @@ export const useDeploymentsStore = defineStore('deployments', () => {
 
     try {
       const response = await deploymentsApi.list({ organization_id: organizationId })
-      // Backend returns DeploymentListResponse with {items, total, skip, limit}
-      deployments.value = response.data.items ?? []
+      // STORY-128 : post-unwrap, response.data est la liste (nouveau format
+      // paginé) ; fallback transition {items} legacy et liste nue tolérés.
+      const body: unknown = response.data
+      deployments.value = Array.isArray(body) ? body : ((body as LegacyListBody<Deployment>)?.items ?? [])
+      pagination.value = response.pagination ?? null
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch deployments'
       throw err
@@ -102,7 +107,7 @@ export const useDeploymentsStore = defineStore('deployments', () => {
     try {
       await deploymentsApi.delete(id)
       // Retirer le déploiement de la liste
-      deployments.value = deployments.value.filter(d => d.id !== id)
+      deployments.value = deployments.value.filter((d) => d.id !== id)
       // Réinitialiser currentDeployment si c'est celui qui a été supprimé
       if (currentDeployment.value?.id === id) {
         currentDeployment.value = null
@@ -116,7 +121,7 @@ export const useDeploymentsStore = defineStore('deployments', () => {
   }
 
   function updateDeploymentInList(deployment: Deployment): void {
-    const index = deployments.value.findIndex(d => d.id === deployment.id)
+    const index = deployments.value.findIndex((d) => d.id === deployment.id)
     if (index !== -1) {
       deployments.value[index] = deployment
     }
@@ -135,7 +140,7 @@ export const useDeploymentsStore = defineStore('deployments', () => {
     return deploymentEvents.subscribeToStatus(deploymentId, (data: unknown) => {
       const status = String(data)
       // Update deployment status in store
-      const deployment = deployments.value.find(d => d.id === deploymentId)
+      const deployment = deployments.value.find((d) => d.id === deploymentId)
       if (deployment) {
         deployment.status = status as Deployment['status']
       }
@@ -151,6 +156,7 @@ export const useDeploymentsStore = defineStore('deployments', () => {
     currentDeployment,
     loading,
     error,
+    pagination,
     fetchDeployments,
     fetchDeployment,
     createDeployment,

@@ -24,15 +24,17 @@ consulter.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ....auth.rbac import require_super_admin
 from ....database import get_db
+from ....helper.pagination import PaginationQuery, build_meta
 from ....models.user import User
-from ....schemas.audit import AuditLogListResponse
+from ....schemas.audit import AuditLogResponse
+from ....schemas.common import PaginatedResponse
 from ....services.audit_service import AuditService
 
 router = APIRouter()
@@ -40,7 +42,7 @@ router = APIRouter()
 
 @router.get(
     "",
-    response_model=AuditLogListResponse,
+    response_model=PaginatedResponse,
     status_code=status.HTTP_200_OK,
     summary="Consult the audit trail (paginated, filterable)",
     description="""
@@ -65,8 +67,9 @@ and the `X-Correlation-ID` of the triggering request.
 - `since`: inclusive lower bound on `created_at` (ISO 8601 datetime)
 
 ## Pagination
-`skip`/`limit` (max 100 per page), ordered by `created_at` descending —
-most recent entries first.
+- `?page=1&per_page=20` (max 100) — STORY-128 canonical format,
+  response envelope `PaginatedResponse{data, pagination{page, per_page, total, pages}}`
+- Ordered by `created_at` descending — most recent entries first.
 
 ## Note on `details`
 Sensitive values (passwords, tokens, secrets…) are masked **at write
@@ -171,12 +174,16 @@ async def list_audit_entries(
         None,
         description="Inclusive lower bound on created_at (ISO 8601)",
     ),
-    skip: int = Query(0, ge=0, description="Pagination offset"),
-    limit: int = Query(100, ge=1, le=100, description="Page size (max 100)"),
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     db: AsyncSession = Depends(get_db),
-) -> AuditLogListResponse:
+) -> PaginatedResponse:
     """
     Liste les lignes d'audit, filtrées et paginées (``created_at`` desc).
+
+    STORY-128 : ancien format ``{items, total, skip, limit}`` converti
+    vers l'enveloppe canonique ``{data, pagination{...}}`` (le service
+    reçoit l'offset calculé ``(page - 1) * per_page``).
 
     ## Access Control (STORY-125.3)
 
@@ -190,12 +197,10 @@ async def list_audit_entries(
         action=action,
         resource_type=resource_type,
         since=since,
-        skip=skip,
-        limit=limit,
+        skip=(page - 1) * per_page,
+        limit=per_page,
     )
-    return AuditLogListResponse(
-        items=entries,  # type: ignore[arg-type]  # ORM → from_attributes
-        total=total,
-        skip=skip,
-        limit=limit,
-    )
+    data: List[dict] = [
+        AuditLogResponse.model_validate(e).model_dump() for e in entries
+    ]
+    return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))

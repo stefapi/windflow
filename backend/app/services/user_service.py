@@ -223,21 +223,30 @@ class UserService:
 
     @staticmethod
     async def list_all(
-        db: AsyncSession, skip: int = 0, limit: int = 100
+        db: AsyncSession, page: int = 1, per_page: int = 20
     ) -> Tuple[List[User], int]:
         """
         Liste tous les utilisateurs de toutes les organisations (pour superusers).
 
+        STORY-128 : pagination canonique ``page``/``per_page`` avec tri
+        stable ``ORDER BY username`` (l'ancien listing sans ``order_by``
+        rendait les pages non déterministes).
+
         Args:
             db: Session de base de données async
-            skip: Nombre d'éléments à sauter (pagination)
-            limit: Nombre max d'éléments à retourner
+            page: Page demandée (1-indexée, bornée par le Query endpoint)
+            per_page: Taille de page (1-100, bornée par le Query endpoint)
 
         Returns:
             Tuple[List[User], int]: Liste d'utilisateurs et nombre total
         """
         # Requête pour les utilisateurs paginés
-        result = await db.execute(select(User).offset(skip).limit(limit))
+        result = await db.execute(
+            select(User)
+            .order_by(User.username)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
         users = list(result.scalars().all())
 
         # Requête pour le count total
@@ -250,8 +259,8 @@ class UserService:
     async def list_by_organization_ids(
         db: AsyncSession,
         organization_ids: List[str],
-        skip: int = 0,
-        limit: int = 100,
+        page: int = 1,
+        per_page: int = 20,
     ) -> Tuple[List[User], int]:
         """
         Liste les utilisateurs de plusieurs organisations via les associations.
@@ -259,12 +268,14 @@ class UserService:
         STORY-121.3 : scoping multi-appartenance — les utilisateurs dont
         l'id apparaît dans ``user_organizations`` pour l'une des
         organisations données (remplace le filtre sur la colonne héritée).
+        STORY-128 : pagination canonique ``page``/``per_page`` avec tri
+        stable ``ORDER BY username``.
 
         Args:
             db: Session de base de données async
             organization_ids: IDs des organisations (appartenances du demandeur)
-            skip: Nombre d'éléments à sauter (pagination)
-            limit: Nombre max d'éléments à retourner
+            page: Page demandée (1-indexée, bornée par le Query endpoint)
+            per_page: Taille de page (1-100, bornée par le Query endpoint)
 
         Returns:
             Tuple[List[User], int]: Liste d'utilisateurs et nombre total
@@ -276,7 +287,11 @@ class UserService:
             UserOrganization.organization_id.in_(organization_ids)
         )
         result = await db.execute(
-            select(User).where(User.id.in_(subq)).offset(skip).limit(limit)
+            select(User)
+            .where(User.id.in_(subq))
+            .order_by(User.username)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
         )
         users = list(result.scalars().all())
 

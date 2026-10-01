@@ -5,7 +5,7 @@
 
 import { ref, type Ref } from 'vue'
 import { usersApi } from '@/services/api'
-import type { User, UserCreate, UserUpdate } from '@/types/api'
+import type { LegacyListBody, User, UserCreate, UserUpdate } from '@/types/api'
 import { ElMessage } from 'element-plus'
 
 export interface UseUsersOptions {
@@ -23,7 +23,7 @@ export interface UseUsersReturn {
   loading: Ref<boolean>
   error: Ref<string | null>
   total: Ref<number>
-  fetchUsers: (skip?: number, limit?: number) => Promise<void>
+  fetchUsers: (page?: number, perPage?: number) => Promise<void>
   getUser: (id: string) => Promise<User | null>
   createUser: (data: UserCreate) => Promise<User | null>
   updateUser: (id: string, data: UserUpdate) => Promise<User | null>
@@ -34,7 +34,8 @@ export interface UseUsersReturn {
   refresh: () => Promise<void>
 }
 
-const DEFAULT_LIMIT = 100
+/** STORY-128 : taille de page canonique (max serveur = 100). */
+const DEFAULT_PER_PAGE = 100
 
 /**
  * Composable for managing users
@@ -53,18 +54,20 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersReturn {
 
   /**
    * Fetch all users
+   * STORY-128 : pagination `?page=&per_page=` — response.data est la liste
+   * (post-unwrap), response.pagination porte {total, pages}.
    */
-  async function fetchUsers(skip = 0, limit = DEFAULT_LIMIT): Promise<void> {
+  async function fetchUsers(page = 1, perPage = DEFAULT_PER_PAGE): Promise<void> {
     if (loading.value) return
 
     loading.value = true
     error.value = null
 
     try {
-      const response = await usersApi.list({ skip, limit })
-      // Backend returns paginated response
-      users.value = response.data.items
-      total.value = response.data.total
+      const response = await usersApi.list({ page, per_page: perPage })
+      const body: unknown = response.data
+      users.value = Array.isArray(body) ? body : ((body as LegacyListBody<User>)?.items ?? [])
+      total.value = response.pagination?.total ?? users.value.length
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la récupération des utilisateurs'
       error.value = errorMessage
@@ -82,7 +85,7 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersReturn {
       const response = await usersApi.get(id)
       return response.data
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la récupération de l\'utilisateur'
+      const errorMessage = err instanceof Error ? err.message : "Erreur lors de la récupération de l'utilisateur"
       ElMessage.error(errorMessage)
       return null
     }
@@ -100,7 +103,7 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersReturn {
       ElMessage.success('Utilisateur créé avec succès')
       return newUser
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la création de l\'utilisateur'
+      const errorMessage = err instanceof Error ? err.message : "Erreur lors de la création de l'utilisateur"
       ElMessage.error(errorMessage)
       return null
     }
@@ -113,14 +116,14 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersReturn {
     try {
       const response = await usersApi.update(id, data)
       const updatedUser = response.data
-      const index = users.value.findIndex(u => u.id === id)
+      const index = users.value.findIndex((u) => u.id === id)
       if (index !== -1) {
         users.value[index] = updatedUser
       }
       ElMessage.success('Utilisateur mis à jour avec succès')
       return updatedUser
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la mise à jour de l\'utilisateur'
+      const errorMessage = err instanceof Error ? err.message : "Erreur lors de la mise à jour de l'utilisateur"
       ElMessage.error(errorMessage)
       return null
     }
@@ -132,12 +135,12 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersReturn {
   async function deleteUser(id: string): Promise<boolean> {
     try {
       await usersApi.delete(id)
-      users.value = users.value.filter(u => u.id !== id)
+      users.value = users.value.filter((u) => u.id !== id)
       total.value--
       ElMessage.success('Utilisateur supprimé avec succès')
       return true
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la suppression de l\'utilisateur'
+      const errorMessage = err instanceof Error ? err.message : "Erreur lors de la suppression de l'utilisateur"
       ElMessage.error(errorMessage)
       return false
     }
@@ -167,7 +170,7 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersReturn {
       const result = response.data as BulkOperationResult
 
       // Remove deleted users from local state
-      users.value = users.value.filter(u => !result.success.includes(u.id))
+      users.value = users.value.filter((u) => !result.success.includes(u.id))
       total.value -= result.success.length
 
       if (result.failed.length === 0) {
@@ -194,7 +197,7 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersReturn {
 
       // Update organization_id for affected users in local state
       for (const userId of result.success) {
-        const index = users.value.findIndex(u => u.id === userId)
+        const index = users.value.findIndex((u) => u.id === userId)
         if (index !== -1) {
           users.value[index] = { ...users.value[index], organization_id: organizationId } as unknown as User
         }
@@ -208,7 +211,7 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersReturn {
 
       return result
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'affectation groupée'
+      const errorMessage = err instanceof Error ? err.message : "Erreur lors de l'affectation groupée"
       ElMessage.error(errorMessage)
       return { success: [], failed: userIds, message: errorMessage }
     }

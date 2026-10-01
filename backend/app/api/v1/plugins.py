@@ -21,7 +21,9 @@ from ...core.exceptions import (
 )
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
+from ...helper.pagination import PaginationQuery, build_meta
 from ...models.user import User
+from ...schemas.common import PaginatedResponse
 from ...schemas.plugin import (
     PluginActionResponse,
     PluginConfigureRequest,
@@ -52,12 +54,17 @@ _lifecycle_service = PluginLifecycleService()
 
 @router.get(
     "/",
-    response_model=List[PluginSummaryResponse],
+    response_model=PaginatedResponse,
     summary="Liste des plugins installés",
-    description="Retourne la liste paginée des plugins installés pour l'organisation de l'utilisateur courant.",
+    description=(
+        "Retourne la liste paginée des plugins installés pour l'organisation "
+        "de l'utilisateur courant — STORY-128 : enveloppe "
+        "`PaginatedResponse{data, pagination{page, per_page, total, pages}}`, "
+        "tri stable `ORDER BY name`."
+    ),
     responses={
         200: {
-            "description": ("Liste des plugins — enveloppe spec 09"),
+            "description": ("Page de plugins — enveloppe paginée spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -72,6 +79,12 @@ _lifecycle_service = PluginLifecycleService()
                                 "status": "installed",
                             }
                         ],
+                        "pagination": {
+                            "page": 1,
+                            "per_page": 20,
+                            "total": 3,
+                            "pages": 1,
+                        },
                         "message": None,
                     }
                 }
@@ -93,13 +106,14 @@ _lifecycle_service = PluginLifecycleService()
     },
 )
 async def list_plugins(
-    skip: int = 0,
-    limit: int = 100,
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_viewer),
     _rate_limit=Depends(conditional_rate_limiter(100, 60)),
-) -> List[PluginSummaryResponse]:
-    """Liste les plugins des organisations de l'utilisateur courant.
+) -> PaginatedResponse:
+    """Liste paginée des plugins de la première organisation de
+    l'utilisateur courant (STORY-128).
 
     ## Access Control (STORY-122.5)
 
@@ -111,24 +125,30 @@ async def list_plugins(
     # conservé ; multi-appartenance complète via les endpoints membres)
     org_ids = await UserOrganizationService.get_user_organization_ids(db, current_user)
     if not org_ids:
-        return []
+        return PaginatedResponse(
+            data=[], pagination=build_meta(page, per_page, total=0)
+        )
     primary_org = org_ids[0]
     logger.info(
         "list_plugins",
         extra={
             "user_id": current_user.id,
             "organization_count": len(org_ids),
-            "skip": skip,
-            "limit": limit,
+            "page": page,
+            "per_page": per_page,
         },
     )
     plugins = await PluginManagerService.list_plugins(
         db,
         organization_id=primary_org,
-        skip=skip,
-        limit=limit,
+        page=page,
+        per_page=per_page,
     )
-    return [PluginSummaryResponse.model_validate(p) for p in plugins]
+    total = await PluginManagerService.count_plugins(db, primary_org)
+    data: List[dict] = [
+        PluginSummaryResponse.model_validate(p).model_dump() for p in plugins
+    ]
+    return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))
 
 
 @router.get(
@@ -539,11 +559,15 @@ async def get_plugin_dependencies(
 
 @router.get(
     "/{plugin_id}/hooks/logs",
-    response_model=List[HookLogSummaryResponse],
+    response_model=PaginatedResponse,
     summary="Logs d'exécution des hooks d'un plugin",
-    description="Retourne la liste paginée des logs d'exécution des hooks lifecycle pour un plugin.",
+    description=(
+        "Retourne la liste paginée des logs d'exécution des hooks "
+        "lifecycle pour un plugin — STORY-128 : enveloppe "
+        "`PaginatedResponse{data, pagination{...}}`, tri `started_at desc`."
+    ),
     responses={
-        200: {"description": "Liste des logs de hooks"},
+        200: {"description": "Page de logs de hooks (enveloppe paginée)"},
         401: {"description": "Authentification requise"},
         403: {"description": "Accès interdit (plugin d'une autre organisation)"},
         404: {"description": "Plugin non trouvé"},
@@ -551,13 +575,14 @@ async def get_plugin_dependencies(
 )
 async def get_hook_logs(
     plugin_id: str,
-    skip: int = 0,
-    limit: int = 100,
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_viewer),
     _rate_limit=Depends(conditional_rate_limiter(100, 60)),
-) -> List[HookLogSummaryResponse]:
-    """Liste les logs d'exécution des hooks pour un plugin.
+) -> PaginatedResponse:
+    """Liste paginée des logs d'exécution des hooks pour un plugin
+    (STORY-128).
 
     ## Access Control (STORY-122.5)
 
@@ -568,8 +593,8 @@ async def get_hook_logs(
         extra={
             "plugin_id": plugin_id,
             "user_id": current_user.id,
-            "skip": skip,
-            "limit": limit,
+            "page": page,
+            "per_page": per_page,
         },
     )
     plugin = await PluginManagerService.get_plugin(db, plugin_id)
@@ -584,8 +609,14 @@ async def get_hook_logs(
             "Accès interdit : ce plugin appartient à une autre organisation"
         )
 
-    logs = await PluginLifecycleService.list_hook_logs(db, plugin_id, skip, limit)
-    return [HookLogSummaryResponse.model_validate(log) for log in logs]
+    logs = await PluginLifecycleService.list_hook_logs(
+        db, plugin_id, page=page, per_page=per_page
+    )
+    total = await PluginLifecycleService.count_hook_logs(db, plugin_id)
+    data: List[dict] = [
+        HookLogSummaryResponse.model_validate(log).model_dump() for log in logs
+    ]
+    return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))
 
 
 @router.get(

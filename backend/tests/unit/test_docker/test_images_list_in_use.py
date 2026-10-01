@@ -3,6 +3,8 @@ Tests unitaires pour l'enrichissement de la liste d'images avec in_use/container
 
 STORY-031.1 : Backend — API Images enrichie, inspect et import/export.
 Teste le cross-referencement images ↔ containers pour l'indicateur d'utilisation.
+STORY-128 : la liste répond sous l'enveloppe paginée ``{data, pagination}``
+(les assertions d'enrichissement portent sur ``body["data"]``).
 """
 
 from datetime import datetime
@@ -99,7 +101,7 @@ class TestListImagesInUse:
                 response = await ac.get("/api/v1/docker/images")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data) == 1
 
         image = data[0]
@@ -123,7 +125,7 @@ class TestListImagesInUse:
                 response = await ac.get("/api/v1/docker/images")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data) == 1
 
         image = data[0]
@@ -154,7 +156,7 @@ class TestListImagesInUse:
                 response = await ac.get("/api/v1/docker/images")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data) == 3
 
         # img1 : 2 containers
@@ -196,7 +198,7 @@ class TestListImagesInUse:
                 response = await ac.get("/api/v1/docker/images")
 
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert len(data) == 1
         assert data[0]["inUse"] is True
         assert data[0]["containersCount"] == 1
@@ -216,4 +218,7 @@ class TestListImagesInUse:
                 response = await ac.get("/api/v1/docker/images")
 
         assert response.status_code == 200
-        assert response.json() == []
+        body = response.json()
+        assert body["data"] == []
+        assert body["pagination"]["total"] == 0
+        assert body["pagination"]["pages"] == 0

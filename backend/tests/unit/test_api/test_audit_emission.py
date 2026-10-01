@@ -42,13 +42,13 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from tests.conftest import unwrap
 
 from app.models.audit_log import AuditLog
 from app.models.deployment import Deployment
 from app.models.stack import Stack
 from app.models.stack_version import StackVersion
 from app.models.user import User
-from tests.conftest import unwrap
 
 USER_PASSWORD = "testpassword123"
 

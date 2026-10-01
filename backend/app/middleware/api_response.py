@@ -12,6 +12,14 @@ Exclusions (garde-fous STORY-126.1) :
 - réponses non-JSON (export YAML/fichiers, ``application/x-tar``…) ;
 - corps JSON non décodable : restitution à l'identique.
 
+STORY-128 — anti double-enveloppement : un handler retournant déjà
+:class:`~app.schemas.common.PaginatedResponse` produit un corps
+``{"data": [...], "pagination": {...}}``. L'envelopper produirait
+``{data: {data: [...], pagination: {...}}, message: null}``. La fonction
+:func:`_is_paginated_body` (détection structurelle, symétrique du
+``_unwrap_payload`` CLI) fait passer ce corps tel quel en complétant
+``message: null`` si absent.
+
 Ce module porte également les helpers d'erreur partagés par les handlers
 d'exception de ``main.py`` et ``error_handler.py`` :
 - :func:`_status_to_code` : mapping statut HTTP → code machine spec 09 ;
@@ -114,6 +122,37 @@ def build_error_payload(
     return payload
 
 
+# Clés requises dans ``pagination`` pour la détection structurelle
+# d'un corps déjà paginé (sous-ensemble de PaginationMeta — STORY-128).
+_PAGINATION_META_KEYS = ("page", "per_page", "total", "pages")
+
+
+def _is_paginated_body(data: Any) -> bool:
+    """Détecte un corps déjà au format paginé spec 09 (STORY-128).
+
+    Détection structurelle stricte : un dict avec une clé ``data``
+    (liste) et une clé ``pagination`` (dict contenant les quatre clés
+    ``page``/``per_page``/``total``/``pages``). Symétrique du
+    ``_unwrap_payload`` CLI : un payload métier contenant par hasard
+    une clé ``data`` ou ``pagination`` seule n'est jamais confondu
+    avec une enveloppe paginée.
+
+    Args:
+        data: Corps JSON décodé d'une réponse 2xx.
+
+    Returns:
+        True si le corps est une ``PaginatedResponse`` déjà formée
+        (à laisser passer sans ré-enveloppement).
+    """
+    if not isinstance(data, dict):
+        return False
+    if "pagination" not in data or not isinstance(data["pagination"], dict):
+        return False
+    if not isinstance(data.get("data"), list):
+        return False
+    return all(key in data["pagination"] for key in _PAGINATION_META_KEYS)
+
+
 def _is_success_json(response: Response) -> bool:
     """Vérifie qu'une réponse est un succès 2xx JSON enveloppable (pas 204)."""
     if response.status_code == 204:
@@ -186,6 +225,16 @@ async def api_response_middleware(
             status_code=response.status_code,
             headers={k: v for k, v in response.headers.items()},
         )
+
+    # STORY-128 : corps déjà paginé → pas de double enveloppement ;
+    # on complète ``message: null`` si absent pour l'homogénéité du
+    # contrat (les clients lisent ``message`` sur tout 2xx).
+    if _is_paginated_body(data):
+        if "message" not in data:
+            data["message"] = None
+        paginated = JSONResponse(status_code=response.status_code, content=data)
+        _copy_transport_headers(response, paginated)
+        return paginated
 
     envelope = JSONResponse(
         status_code=response.status_code,

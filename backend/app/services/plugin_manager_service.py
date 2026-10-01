@@ -10,7 +10,7 @@ Valide le manifest via PluginManifestService avant installation.
 import logging
 from typing import List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.events import EventType
@@ -38,28 +38,51 @@ class PluginManagerService:
     async def list_plugins(
         db: AsyncSession,
         organization_id: str,
-        skip: int = 0,
-        limit: int = 100,
+        page: int = 1,
+        per_page: int = 20,
     ) -> List[Plugin]:
-        """Liste les plugins d'une organisation.
+        """Liste les plugins d'une organisation, paginés (STORY-128).
+
+        Tri stable ``ORDER BY name`` conservé.
 
         Args:
             db: Session de base de données.
             organization_id: ID de l'organisation.
-            skip: Nombre de résultats à ignorer (pagination).
-            limit: Nombre maximum de résultats.
+            page: Page demandée (1-indexée, bornée par le Query endpoint).
+            per_page: Taille de page (1-100, bornée par le Query endpoint).
 
         Returns:
-            Liste des plugins de l'organisation.
+            Liste des plugins de la page, triée par nom.
         """
         result = await db.execute(
             select(Plugin)
             .where(Plugin.organization_id == organization_id)
             .order_by(Plugin.name)
-            .offset(skip)
-            .limit(limit)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
         )
         return list(result.scalars().all())
+
+    @staticmethod
+    async def count_plugins(db: AsyncSession, organization_id: str) -> int:
+        """Compte les plugins d'une organisation (STORY-128).
+
+        ``COUNT`` avec le **même scoping** que :meth:`list_plugins`
+        (rules 40 — pas d'oracle de comptage).
+
+        Args:
+            db: Session de base de données.
+            organization_id: ID de l'organisation.
+
+        Returns:
+            Nombre total de plugins de l'organisation.
+        """
+        result = await db.execute(
+            select(func.count())
+            .select_from(Plugin)
+            .where(Plugin.organization_id == organization_id)
+        )
+        return int(result.scalar() or 0)
 
     @staticmethod
     async def get_plugin(db: AsyncSession, plugin_id: str) -> Optional[Plugin]:

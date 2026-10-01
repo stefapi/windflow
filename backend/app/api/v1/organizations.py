@@ -3,7 +3,7 @@ Routes de gestion des organisations.
 """
 
 import logging
-from typing import List
+from typing import Any, List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
@@ -21,8 +21,10 @@ from ...core.exceptions import (
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...enums.rbac import Role
+from ...helper.pagination import PaginationQuery, build_meta
 from ...models.user import User
 from ...models.user_organization import UserOrganization
+from ...schemas.common import PaginatedResponse
 from ...schemas.organization import (
     OrganizationCreate,
     OrganizationResponse,
@@ -63,9 +65,9 @@ class BulkOperationResponse(BaseModel):
 
 @router.get(
     "/",
-    response_model=List[OrganizationResponse],
+    response_model=PaginatedResponse,
     status_code=status.HTTP_200_OK,
-    summary="List all organizations",
+    summary="List all organizations (paginated)",
     description="""
 List all organizations in the system.
 
@@ -73,10 +75,10 @@ List all organizations in the system.
 - **Superuser only**: Only system administrators can list all organizations
 - Regular users can only access their own organization via GET /{organization_id}
 
-## Pagination
-- Use `skip` and `limit` parameters for pagination
-- Default limit: 100 organizations per page
-- Maximum limit: 1000 organizations per page
+## Pagination (STORY-128)
+- `?page=1&per_page=20` (max 100) — canonical format
+- Response envelope: `PaginatedResponse{data, pagination{page, per_page, total, pages}}`
+- Stable order: `ORDER BY name`
 
 ## Use Cases
 - System administration and monitoring
@@ -89,27 +91,36 @@ List all organizations in the system.
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
     responses={
         200: {
-            "description": "List of organizations retrieved successfully",
+            "description": "Paginated list of organizations — enveloppe spec 09",
             "content": {
                 "application/json": {
-                    "example": [
-                        {
-                            "id": "550e8400-e29b-41d4-a716-446655440000",
-                            "name": "Acme Corporation",
-                            "description": "Leading technology company",
-                            "is_active": True,
-                            "created_at": "2024-01-15T10:30:00Z",
-                            "updated_at": "2024-01-15T10:30:00Z",
+                    "example": {
+                        "data": [
+                            {
+                                "id": "550e8400-e29b-41d4-a716-446655440000",
+                                "name": "Acme Corporation",
+                                "description": "Leading technology company",
+                                "is_active": True,
+                                "created_at": "2024-01-15T10:30:00Z",
+                                "updated_at": "2024-01-15T10:30:00Z",
+                            },
+                            {
+                                "id": "660e8400-e29b-41d4-a716-446655440001",
+                                "name": "TechStart Inc",
+                                "description": "Innovative startup",
+                                "is_active": True,
+                                "created_at": "2024-02-20T14:20:00Z",
+                                "updated_at": "2024-02-20T14:20:00Z",
+                            },
+                        ],
+                        "pagination": {
+                            "page": 1,
+                            "per_page": 20,
+                            "total": 42,
+                            "pages": 3,
                         },
-                        {
-                            "id": "660e8400-e29b-41d4-a716-446655440001",
-                            "name": "TechStart Inc",
-                            "description": "Innovative startup",
-                            "is_active": True,
-                            "created_at": "2024-02-20T14:20:00Z",
-                            "updated_at": "2024-02-20T14:20:00Z",
-                        },
-                    ]
+                        "message": None,
+                    }
                 }
             },
         },
@@ -147,28 +158,29 @@ List all organizations in the system.
 )
 async def list_organizations(
     request: Request,
-    skip: int = 0,
-    limit: int = 100,
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     current_user: User = Depends(require_super_admin),
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Liste toutes les organisations (super_admin uniquement).
+    Liste paginée de toutes les organisations (super_admin uniquement).
 
     ## Access Control (STORY-122.4)
 
     Nécessite le rôle global ``super_admin`` (admin instance — matrice
-    spec 08 : liste globale des organisations).
+    spec 08 : liste globale des organisations). RBAC inchangé par
+    STORY-128 (la pagination n'ajoute aucun privilège).
 
     Args:
         request: Requête HTTP (pour correlation_id)
-        skip: Nombre d'éléments à ignorer pour la pagination
-        limit: Nombre maximum d'éléments à retourner
+        page: Page demandée (1-indexée, défaut 1)
+        per_page: Taille de page (1-100, défaut 20)
         current_user: Utilisateur courant (doit être super_admin)
         session: Session de base de données
 
     Returns:
-        List[OrganizationResponse]: Liste des organisations
+        PaginatedResponse: Page d'organisations + métadonnées
     """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
@@ -176,13 +188,20 @@ async def list_organizations(
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "skip": skip,
-            "limit": limit,
+            "page": page,
+            "per_page": per_page,
         },
     )
 
-    organizations = await OrganizationService.list_all(session, skip, limit)
-    return organizations
+    organizations = await OrganizationService.list_all(
+        session, (page - 1) * per_page, per_page
+    )
+    total = await OrganizationService.count_all(session)
+
+    data: List[Any] = [
+        OrganizationResponse.model_validate(o).model_dump() for o in organizations
+    ]
+    return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))
 
 
 @router.get(
@@ -1067,9 +1086,9 @@ def _member_to_response(link: UserOrganization) -> OrganizationMemberResponse:
 
 @router.get(
     "/{organization_id}/users",
-    response_model=List[OrganizationMemberResponse],
+    response_model=PaginatedResponse,
     status_code=status.HTTP_200_OK,
-    summary="List members of an organization",
+    summary="List members of an organization (paginated)",
     description="""
 List the members of an organization with their role and join date.
 
@@ -1079,9 +1098,10 @@ List the members of an organization with their role and join date.
   Forbidden error (superusers can list members of any organization)
 - Reading members is allowed for all roles (spec 08 permission matrix)
 
-## Pagination
-- Use `skip` and `limit` query parameters for pagination
-- Default limit: 100 members per page
+## Pagination (STORY-128)
+- `?page=1&per_page=20` (max 100) — canonical format
+- Response envelope: `PaginatedResponse{data, pagination{page, per_page, total, pages}}`
+- Stable order: `joined_at`
 
 ## Response Data
 Each member entry includes:
@@ -1096,19 +1116,28 @@ Sensitive fields (`hashed_password`, `keycloak_id`) are never exposed.
     dependencies=[Depends(conditional_rate_limiter(60, 60))],
     responses={
         200: {
-            "description": "List of members retrieved successfully",
+            "description": "Paginated list of members — enveloppe spec 09",
             "content": {
                 "application/json": {
-                    "example": [
-                        {
-                            "user_id": "770e8400-e29b-41d4-a716-446655440010",
-                            "username": "jdoe",
-                            "email": "jdoe@example.com",
-                            "full_name": "John Doe",
-                            "role": "viewer",
-                            "joined_at": "2026-09-08T10:00:00Z",
-                        }
-                    ]
+                    "example": {
+                        "data": [
+                            {
+                                "user_id": "770e8400-e29b-41d4-a716-446655440010",
+                                "username": "jdoe",
+                                "email": "jdoe@example.com",
+                                "full_name": "John Doe",
+                                "role": "viewer",
+                                "joined_at": "2026-09-08T10:00:00Z",
+                            }
+                        ],
+                        "pagination": {
+                            "page": 1,
+                            "per_page": 20,
+                            "total": 12,
+                            "pages": 1,
+                        },
+                        "message": None,
+                    }
                 }
             },
         },
@@ -1159,28 +1188,32 @@ Sensitive fields (`hashed_password`, `keycloak_id`) are never exposed.
 async def list_organization_members(
     request: Request,
     organization_id: UUID,
-    skip: int = 0,
-    limit: int = 100,
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Liste les membres d'une organisation avec leur rôle et date d'adhésion.
+    Liste paginée des membres d'une organisation (STORY-128).
+
+    Isolation cross-organisation conservée (superuser bypass — spec 08) ;
+    tri stable ``joined_at`` ; ``COUNT`` scopé à l'organisation.
 
     Args:
         request: Requête HTTP (pour correlation_id)
         organization_id: ID de l'organisation
-        skip: Nombre d'éléments à ignorer pour la pagination
-        limit: Nombre maximum d'éléments à retourner
+        page: Page demandée (1-indexée, défaut 1)
+        per_page: Taille de page (1-100, défaut 20)
         current_user: Utilisateur courant (doit être membre de l'organisation)
         session: Session de base de données
 
     Returns:
-        List[OrganizationMemberResponse]: Membres de l'organisation
+        PaginatedResponse: Page de membres + métadonnées
 
     Raises:
-        HTTPException: 403 si l'utilisateur n'appartient pas à l'organisation,
-            404 si l'organisation n'existe pas
+        PermissionDeniedError: 403 si l'utilisateur n'appartient pas à
+            l'organisation
+        NotFoundError: 404 si l'organisation n'existe pas
     """
     correlation_id = getattr(request.state, "correlation_id", None)
     # Isolation cross-organisation AVANT toute lecture
@@ -1200,15 +1233,18 @@ async def list_organization_members(
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
             "organization_id": str(organization_id),
-            "skip": skip,
-            "limit": limit,
+            "page": page,
+            "per_page": per_page,
         },
     )
 
     members = await UserOrganizationService.list_members(
-        session, organization_id, skip, limit
+        session, organization_id, (page - 1) * per_page, per_page
     )
-    return [_member_to_response(link) for link in members]
+    total = await UserOrganizationService.count_members(session, organization_id)
+
+    data: List[Any] = [_member_to_response(link).model_dump() for link in members]
+    return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))
 
 
 @router.post(

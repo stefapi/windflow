@@ -21,6 +21,7 @@ from uuid import uuid4
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import unwrap
 
 from app.config import settings
 from app.enums.rbac import Role
@@ -30,7 +31,6 @@ from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_organization_service import UserOrganizationService
 from app.services.user_service import UserService
-from tests.conftest import unwrap
 
 MEMBERS_BASE = "/api/v1/organizations"
 

@@ -23,12 +23,12 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import unwrap
 
 from app.models.organization import Organization
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.services.refresh_token_service import RefreshTokenService
-from tests.conftest import unwrap
 
 LOGIN_URL = "/api/v1/auth/login"
 REFRESH_URL = "/api/v1/auth/refresh"

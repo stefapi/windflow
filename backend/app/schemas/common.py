@@ -186,42 +186,6 @@ class ErrorResponse(BaseModel):
     )
 
 
-class PaginationParams(BaseModel):
-    """
-    Paramètres de pagination legacy ``skip``/``limit``.
-
-    .. deprecated:: STORY-126.1
-        Format interne historique, sans consommateur backend — conservé
-        uniquement comme référence documentaire. Ne pas l'utiliser :
-        STORY-128 introduit la pagination canonique ``?page``/``?per_page``
-        (spec 09) accompagnée de ``PaginationMeta``.
-    """
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {"skip": 0, "limit": 20},
-                {"skip": 40, "limit": 20},
-                {"skip": 0, "limit": 100},
-            ]
-        }
-    )
-
-    skip: int = Field(
-        default=0,
-        ge=0,
-        description="Nombre d'éléments à ignorer (offset) — DEPRECATED, voir STORY-128",
-        json_schema_extra={"example": 0},
-    )
-    limit: int = Field(
-        default=20,
-        ge=1,
-        le=100,
-        description="Nombre maximum d'éléments à retourner (1-100) — DEPRECATED, voir STORY-128",
-        json_schema_extra={"example": 20},
-    )
-
-
 class HealthResponse(BaseModel):
     """
     Réponse du endpoint de santé.

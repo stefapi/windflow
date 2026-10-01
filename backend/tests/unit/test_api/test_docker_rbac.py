@@ -31,6 +31,7 @@ Chaîne d'auth réelle : JWT ``create_access_token`` → ``get_current_user``
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import unwrap
 
 from app.auth.jwt import create_access_token
 from app.core.cache import reset_role_cache
@@ -41,7 +42,6 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
-from tests.conftest import unwrap
 
 # 35 opérations Docker attendues (spec 08, inventaire vérifié de la story)
 EXPECTED_DOCKER_OPERATIONS: frozenset[tuple[str, str]] = frozenset(

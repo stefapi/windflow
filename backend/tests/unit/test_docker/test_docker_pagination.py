@@ -1,9 +1,11 @@
 """
 Tests unitaires pour la pagination des listes Docker.
 
-STORY-035 : Pagination des listes Docker.
-Teste les paramètres skip/limit sur les 4 endpoints de listage :
-containers, images, volumes et networks.
+STORY-035 : Pagination des listes Docker (skip/limit — historique).
+STORY-128 : harmonisation au contrat paginé spec 09 — les 4 endpoints de
+listage (containers, images, volumes, networks) répondent désormais
+``{data: [...], pagination: {page, per_page, total, pages}}`` via
+``?page=&per_page=`` (défauts 1/20, bornes per_page 1-100).
 """
 
 from datetime import datetime
@@ -103,6 +105,16 @@ def _make_network_info(idx: int):
     return n
 
 
+def _assert_pagination_contract(body: dict) -> dict:
+    """Vérifie le contrat PaginatedResponse{data, pagination} spec 09."""
+    assert isinstance(body.get("data"), list), f"data doit être une liste : {body}"
+    pagination = body.get("pagination")
+    assert isinstance(pagination, dict), f"pagination manquant : {body}"
+    for key in ("page", "per_page", "total", "pages"):
+        assert key in pagination, f"pagination.{key} manquant : {pagination}"
+    return pagination
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -125,17 +137,30 @@ def app():
     return application
 
 
+@pytest.fixture
+def unauth_app():
+    """App sans authentification (401) pour les tests de sécurité."""
+    application = FastAPI()
+    # STORY-127 : exceptions typées → handler global requis
+    application.add_exception_handler(WindFlowException, windflow_exception_handler)
+    application.include_router(router, prefix="/api/v1/docker")
+    application.dependency_overrides[get_current_active_user] = lambda: _raise_401()
+    for _rbac_dep in (require_viewer, require_operator, require_admin):
+        application.dependency_overrides[_rbac_dep] = lambda: _raise_401()
+    return application
+
+
 # ===========================================================================
 # TestContainerPagination
 # ===========================================================================
 
 
 class TestContainerPagination:
-    """Tests de pagination pour GET /docker/containers."""
+    """Tests de pagination pour GET /docker/containers (contrat STORY-128)."""
 
     @pytest.mark.asyncio
-    async def test_default_pagination_returns_50_max(self, app):
-        """Sans paramètres, retourne max 50 éléments sur 60 mockés."""
+    async def test_default_pagination_returns_20(self, app):
+        """Sans paramètres, retourne les 20 premiers éléments (défaut spec 09)."""
         containers = [_make_container_info(i) for i in range(60)]
 
         mock_client = AsyncMock()
@@ -149,12 +174,17 @@ class TestContainerPagination:
                 response = await ac.get("/api/v1/docker/containers")
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 50
+        body = response.json()
+        pagination = _assert_pagination_contract(body)
+        assert len(body["data"]) == 20
+        assert pagination["page"] == 1
+        assert pagination["per_page"] == 20
+        assert pagination["total"] == 60
+        assert pagination["pages"] == 3
 
     @pytest.mark.asyncio
-    async def test_skip_parameter_works(self, app):
-        """skip=10 saute les 10 premiers éléments sur 60 mockés."""
+    async def test_page_2_skips_first_page(self, app):
+        """page=2 saute les 20 premiers éléments sur 60 mockés."""
         containers = [_make_container_info(i) for i in range(60)]
 
         mock_client = AsyncMock()
@@ -165,16 +195,17 @@ class TestContainerPagination:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
-                response = await ac.get("/api/v1/docker/containers?skip=10")
+                response = await ac.get("/api/v1/docker/containers?page=2")
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 50
-        assert data[0]["id"] == "container0010"
+        body = response.json()
+        _assert_pagination_contract(body)
+        assert len(body["data"]) == 20
+        assert body["data"][0]["id"] == "container0020"
 
     @pytest.mark.asyncio
-    async def test_limit_parameter_works(self, app):
-        """limit=5 retourne exactement 5 éléments."""
+    async def test_per_page_parameter_works(self, app):
+        """per_page=5 retourne exactement 5 éléments."""
         containers = [_make_container_info(i) for i in range(60)]
 
         mock_client = AsyncMock()
@@ -185,15 +216,18 @@ class TestContainerPagination:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
-                response = await ac.get("/api/v1/docker/containers?limit=5")
+                response = await ac.get("/api/v1/docker/containers?per_page=5")
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 5
+        body = response.json()
+        pagination = _assert_pagination_contract(body)
+        assert len(body["data"]) == 5
+        assert pagination["per_page"] == 5
+        assert pagination["pages"] == 12
 
     @pytest.mark.asyncio
-    async def test_skip_and_limit_combined(self, app):
-        """skip=5&limit=10 retourne 10 éléments à partir du 6ème."""
+    async def test_page_and_per_page_combined(self, app):
+        """page=2&per_page=10 retourne 10 éléments à partir du 11ème."""
         containers = [_make_container_info(i) for i in range(60)]
 
         mock_client = AsyncMock()
@@ -204,17 +238,18 @@ class TestContainerPagination:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
-                response = await ac.get("/api/v1/docker/containers?skip=5&limit=10")
+                response = await ac.get("/api/v1/docker/containers?page=2&per_page=10")
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 10
-        assert data[0]["id"] == "container0005"
-        assert data[9]["id"] == "container0014"
+        body = response.json()
+        _assert_pagination_contract(body)
+        assert len(body["data"]) == 10
+        assert body["data"][0]["id"] == "container0010"
+        assert body["data"][9]["id"] == "container0019"
 
     @pytest.mark.asyncio
-    async def test_skip_beyond_list_returns_empty(self, app):
-        """skip=999 au-delà du nombre total → liste vide."""
+    async def test_beyond_last_page_returns_empty(self, app):
+        """page au-delà de la dernière → 200 avec data: [] et méta exactes."""
         containers = [_make_container_info(i) for i in range(10)]
 
         mock_client = AsyncMock()
@@ -225,15 +260,84 @@ class TestContainerPagination:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
-                response = await ac.get("/api/v1/docker/containers?skip=999")
+                response = await ac.get("/api/v1/docker/containers?page=99")
 
         assert response.status_code == 200
-        assert response.json() == []
+        body = response.json()
+        pagination = _assert_pagination_contract(body)
+        assert body["data"] == []
+        assert pagination["total"] == 10
+        assert pagination["pages"] == 1
 
     @pytest.mark.asyncio
-    async def test_limit_1_returns_single(self, app):
-        """limit=1 retourne exactement 1 élément."""
+    async def test_per_page_1_returns_single(self, app):
+        """per_page=1 retourne exactement 1 élément."""
         containers = [_make_container_info(i) for i in range(10)]
+
+        mock_client = AsyncMock()
+        mock_client.list_containers = AsyncMock(return_value=containers)
+        mock_client.close = AsyncMock()
+
+        with patch("app.api.v1.docker.get_docker_client", return_value=mock_client):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as ac:
+                response = await ac.get("/api/v1/docker/containers?per_page=1")
+
+        assert response.status_code == 200
+        body = response.json()
+        _assert_pagination_contract(body)
+        assert len(body["data"]) == 1
+        assert body["data"][0]["id"] == "container0000"
+
+    @pytest.mark.asyncio
+    async def test_pagination_returns_401_without_token(self, unauth_app):
+        """Sécurité : accès sans authentification → 401."""
+        async with AsyncClient(
+            transport=ASGITransport(app=unauth_app), base_url="http://test"
+        ) as ac:
+            response = await ac.get("/api/v1/docker/containers")
+
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_invalid_page_zero_returns_422(self, app):
+        """Validation : page=0 → 422 (pagination 1-indexée)."""
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as ac:
+            response = await ac.get("/api/v1/docker/containers?page=0")
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_invalid_per_page_zero_returns_422(self, app):
+        """Validation : per_page=0 → 422."""
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as ac:
+            response = await ac.get("/api/v1/docker/containers?per_page=0")
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_invalid_per_page_over_100_returns_422(self, app):
+        """Validation : per_page=101 → 422."""
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as ac:
+            response = await ac.get("/api/v1/docker/containers?per_page=101")
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_legacy_skip_limit_rejected(self, app):
+        """STORY-128 : les paramètres legacy skip/limit ne sont plus admis
+        (ignorés par FastAPI — le contrat est page/per_page uniquement).
+        skip=-1&limit=0 n'invalide plus la requête : vérifie que la réponse
+        reste 200 avec le contrat paginé (les query params inconnus sont
+        ignorés par FastAPI, comportement standard)."""
+        containers = [_make_container_info(i) for i in range(5)]
 
         mock_client = AsyncMock()
         mock_client.list_containers = AsyncMock(return_value=containers)
@@ -246,57 +350,11 @@ class TestContainerPagination:
                 response = await ac.get("/api/v1/docker/containers?limit=1")
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
-        assert data[0]["id"] == "container0000"
-
-    @pytest.mark.asyncio
-    async def test_pagination_returns_401_without_token(self, app):
-        """Sécurité : accès sans authentification → 401."""
-        unauth_app = FastAPI()
-        # STORY-127 : exceptions typées → handler global requis
-        unauth_app.add_exception_handler(WindFlowException, windflow_exception_handler)
-        unauth_app.include_router(router, prefix="/api/v1/docker")
-        unauth_app.dependency_overrides[get_current_active_user] = lambda: _raise_401()
-        for _rbac_dep in (require_viewer, require_operator, require_admin):
-            unauth_app.dependency_overrides[_rbac_dep] = lambda: _raise_401()
-
-        async with AsyncClient(
-            transport=ASGITransport(app=unauth_app), base_url="http://test"
-        ) as ac:
-            response = await ac.get("/api/v1/docker/containers")
-
-        assert response.status_code == 401
-
-    @pytest.mark.asyncio
-    async def test_invalid_skip_negative_returns_422(self, app):
-        """Validation : skip=-1 → 422."""
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as ac:
-            response = await ac.get("/api/v1/docker/containers?skip=-1")
-
-        assert response.status_code == 422
-
-    @pytest.mark.asyncio
-    async def test_invalid_limit_zero_returns_422(self, app):
-        """Validation : limit=0 → 422."""
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as ac:
-            response = await ac.get("/api/v1/docker/containers?limit=0")
-
-        assert response.status_code == 422
-
-    @pytest.mark.asyncio
-    async def test_invalid_limit_over_100_returns_422(self, app):
-        """Validation : limit=101 → 422."""
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as ac:
-            response = await ac.get("/api/v1/docker/containers?limit=101")
-
-        assert response.status_code == 422
+        body = response.json()
+        pagination = _assert_pagination_contract(body)
+        # limit inconnu → defaults paginés appliqués (20 max sur 5 items)
+        assert len(body["data"]) == 5
+        assert pagination["total"] == 5
 
 
 # ===========================================================================
@@ -305,11 +363,11 @@ class TestContainerPagination:
 
 
 class TestImagePagination:
-    """Tests de pagination pour GET /docker/images."""
+    """Tests de pagination pour GET /docker/images (contrat STORY-128)."""
 
     @pytest.mark.asyncio
-    async def test_default_pagination_returns_50_max(self, app):
-        """Sans paramètres, retourne max 50 images sur 60 mockées."""
+    async def test_default_pagination_returns_20(self, app):
+        """Sans paramètres, retourne les 20 premières images (défaut spec 09)."""
         images = [_make_image_info(i) for i in range(60)]
 
         mock_client = AsyncMock()
@@ -324,12 +382,15 @@ class TestImagePagination:
                 response = await ac.get("/api/v1/docker/images")
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 50
+        body = response.json()
+        pagination = _assert_pagination_contract(body)
+        assert len(body["data"]) == 20
+        assert pagination["total"] == 60
+        assert pagination["pages"] == 3
 
     @pytest.mark.asyncio
-    async def test_skip_and_limit_combined(self, app):
-        """skip=5&limit=10 retourne 10 images à partir de la 6ème."""
+    async def test_page_and_per_page_combined(self, app):
+        """page=2&per_page=10 retourne 10 images à partir de la 11ème."""
         images = [_make_image_info(i) for i in range(60)]
 
         mock_client = AsyncMock()
@@ -341,25 +402,18 @@ class TestImagePagination:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
-                response = await ac.get("/api/v1/docker/images?skip=5&limit=10")
+                response = await ac.get("/api/v1/docker/images?page=2&per_page=10")
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 10
-        assert data[0]["id"] == f"img{5:012d}"
-        assert data[9]["id"] == f"img{14:012d}"
+        body = response.json()
+        _assert_pagination_contract(body)
+        assert len(body["data"]) == 10
+        assert body["data"][0]["id"] == f"img{10:012d}"
+        assert body["data"][9]["id"] == f"img{19:012d}"
 
     @pytest.mark.asyncio
-    async def test_pagination_returns_401_without_token(self, app):
+    async def test_pagination_returns_401_without_token(self, unauth_app):
         """Sécurité : accès sans authentification → 401."""
-        unauth_app = FastAPI()
-        # STORY-127 : exceptions typées → handler global requis
-        unauth_app.add_exception_handler(WindFlowException, windflow_exception_handler)
-        unauth_app.include_router(router, prefix="/api/v1/docker")
-        unauth_app.dependency_overrides[get_current_active_user] = lambda: _raise_401()
-        for _rbac_dep in (require_viewer, require_operator, require_admin):
-            unauth_app.dependency_overrides[_rbac_dep] = lambda: _raise_401()
-
         async with AsyncClient(
             transport=ASGITransport(app=unauth_app), base_url="http://test"
         ) as ac:
@@ -374,11 +428,11 @@ class TestImagePagination:
 
 
 class TestVolumePagination:
-    """Tests de pagination pour GET /docker/volumes."""
+    """Tests de pagination pour GET /docker/volumes (contrat STORY-128)."""
 
     @pytest.mark.asyncio
-    async def test_default_pagination_returns_50_max(self, app):
-        """Sans paramètres, retourne max 50 volumes sur 60 mockés."""
+    async def test_default_pagination_returns_20(self, app):
+        """Sans paramètres, retourne les 20 premiers volumes (défaut spec 09)."""
         volumes = [_make_volume_info(i) for i in range(60)]
 
         mock_client = AsyncMock()
@@ -392,12 +446,15 @@ class TestVolumePagination:
                 response = await ac.get("/api/v1/docker/volumes")
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 50
+        body = response.json()
+        pagination = _assert_pagination_contract(body)
+        assert len(body["data"]) == 20
+        assert pagination["total"] == 60
+        assert pagination["pages"] == 3
 
     @pytest.mark.asyncio
-    async def test_skip_and_limit_combined(self, app):
-        """skip=5&limit=10 retourne 10 volumes à partir du 6ème."""
+    async def test_page_and_per_page_combined(self, app):
+        """page=2&per_page=10 retourne 10 volumes à partir du 11ème."""
         volumes = [_make_volume_info(i) for i in range(60)]
 
         mock_client = AsyncMock()
@@ -408,25 +465,18 @@ class TestVolumePagination:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
-                response = await ac.get("/api/v1/docker/volumes?skip=5&limit=10")
+                response = await ac.get("/api/v1/docker/volumes?page=2&per_page=10")
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 10
-        assert data[0]["name"] == "volume-5"
-        assert data[9]["name"] == "volume-14"
+        body = response.json()
+        _assert_pagination_contract(body)
+        assert len(body["data"]) == 10
+        assert body["data"][0]["name"] == "volume-10"
+        assert body["data"][9]["name"] == "volume-19"
 
     @pytest.mark.asyncio
-    async def test_pagination_returns_401_without_token(self, app):
+    async def test_pagination_returns_401_without_token(self, unauth_app):
         """Sécurité : accès sans authentification → 401."""
-        unauth_app = FastAPI()
-        # STORY-127 : exceptions typées → handler global requis
-        unauth_app.add_exception_handler(WindFlowException, windflow_exception_handler)
-        unauth_app.include_router(router, prefix="/api/v1/docker")
-        unauth_app.dependency_overrides[get_current_active_user] = lambda: _raise_401()
-        for _rbac_dep in (require_viewer, require_operator, require_admin):
-            unauth_app.dependency_overrides[_rbac_dep] = lambda: _raise_401()
-
         async with AsyncClient(
             transport=ASGITransport(app=unauth_app), base_url="http://test"
         ) as ac:
@@ -441,11 +491,11 @@ class TestVolumePagination:
 
 
 class TestNetworkPagination:
-    """Tests de pagination pour GET /docker/networks."""
+    """Tests de pagination pour GET /docker/networks (contrat STORY-128)."""
 
     @pytest.mark.asyncio
-    async def test_default_pagination_returns_50_max(self, app):
-        """Sans paramètres, retourne max 50 réseaux sur 60 mockés."""
+    async def test_default_pagination_returns_20(self, app):
+        """Sans paramètres, retourne les 20 premiers réseaux (défaut spec 09)."""
         networks = [_make_network_info(i) for i in range(60)]
 
         mock_client = AsyncMock()
@@ -459,12 +509,15 @@ class TestNetworkPagination:
                 response = await ac.get("/api/v1/docker/networks")
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 50
+        body = response.json()
+        pagination = _assert_pagination_contract(body)
+        assert len(body["data"]) == 20
+        assert pagination["total"] == 60
+        assert pagination["pages"] == 3
 
     @pytest.mark.asyncio
-    async def test_skip_and_limit_combined(self, app):
-        """skip=5&limit=10 retourne 10 réseaux à partir du 6ème."""
+    async def test_page_and_per_page_combined(self, app):
+        """page=2&per_page=10 retourne 10 réseaux à partir du 11ème."""
         networks = [_make_network_info(i) for i in range(60)]
 
         mock_client = AsyncMock()
@@ -475,25 +528,18 @@ class TestNetworkPagination:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as ac:
-                response = await ac.get("/api/v1/docker/networks?skip=5&limit=10")
+                response = await ac.get("/api/v1/docker/networks?page=2&per_page=10")
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 10
-        assert data[0]["name"] == "network-5"
-        assert data[9]["name"] == "network-14"
+        body = response.json()
+        _assert_pagination_contract(body)
+        assert len(body["data"]) == 10
+        assert body["data"][0]["name"] == "network-10"
+        assert body["data"][9]["name"] == "network-19"
 
     @pytest.mark.asyncio
-    async def test_pagination_returns_401_without_token(self, app):
+    async def test_pagination_returns_401_without_token(self, unauth_app):
         """Sécurité : accès sans authentification → 401."""
-        unauth_app = FastAPI()
-        # STORY-127 : exceptions typées → handler global requis
-        unauth_app.add_exception_handler(WindFlowException, windflow_exception_handler)
-        unauth_app.include_router(router, prefix="/api/v1/docker")
-        unauth_app.dependency_overrides[get_current_active_user] = lambda: _raise_401()
-        for _rbac_dep in (require_viewer, require_operator, require_admin):
-            unauth_app.dependency_overrides[_rbac_dep] = lambda: _raise_401()
-
         async with AsyncClient(
             transport=ASGITransport(app=unauth_app), base_url="http://test"
         ) as ac:

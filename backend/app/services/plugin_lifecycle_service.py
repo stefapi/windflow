@@ -12,7 +12,7 @@ import os
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
@@ -284,28 +284,52 @@ class PluginLifecycleService:
     async def list_hook_logs(
         db: AsyncSession,
         plugin_id: str,
-        skip: int = 0,
-        limit: int = 100,
+        page: int = 1,
+        per_page: int = 20,
     ) -> List[PluginHookLog]:
-        """Liste les logs d'exécution des hooks pour un plugin.
+        """Liste les logs d'exécution des hooks pour un plugin, paginés
+        (STORY-128).
+
+        Tri ``started_at desc`` conservé (logs les plus récents d'abord).
 
         Args:
             db: Session de base de données.
             plugin_id: ID du plugin.
-            skip: Nombre de résultats à ignorer (pagination).
-            limit: Nombre maximum de résultats.
+            page: Page demandée (1-indexée, bornée par le Query endpoint).
+            per_page: Taille de page (1-100, bornée par le Query endpoint).
 
         Returns:
-            Liste des logs de hooks.
+            Liste des logs de hooks de la page.
         """
         result = await db.execute(
             select(PluginHookLog)
             .where(PluginHookLog.plugin_id == plugin_id)
             .order_by(PluginHookLog.started_at.desc())
-            .offset(skip)
-            .limit(limit)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
         )
         return list(result.scalars().all())
+
+    @staticmethod
+    async def count_hook_logs(db: AsyncSession, plugin_id: str) -> int:
+        """Compte les logs d'exécution des hooks d'un plugin (STORY-128).
+
+        ``COUNT`` avec le **même scoping** que :meth:`list_hook_logs`
+        (rules 40 — pas d'oracle de comptage).
+
+        Args:
+            db: Session de base de données.
+            plugin_id: ID du plugin.
+
+        Returns:
+            Nombre total de logs de hooks du plugin.
+        """
+        result = await db.execute(
+            select(func.count())
+            .select_from(PluginHookLog)
+            .where(PluginHookLog.plugin_id == plugin_id)
+        )
+        return int(result.scalar() or 0)
 
     @staticmethod
     async def get_hook_log(

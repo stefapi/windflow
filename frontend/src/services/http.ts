@@ -10,7 +10,7 @@
  */
 
 import axios, { type AxiosInstance, type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
-import type { ApiError, ApiEnvelope } from '@/types/api'
+import type { ApiError, ApiEnvelope, PaginationMeta } from '@/types/api'
 import { useAuthStore } from '@/stores/auth'
 
 // Retry configuration for 401 errors
@@ -39,11 +39,21 @@ const http: AxiosInstance = axios.create({
  * Backend enveloppé : `{"data": <payload>, "message": ...}` → `response.data`
  * devient `<payload>`. Les corps non-enveloppés (compat transition, binaire,
  * 204 sans corps) restent strictement inchangés.
+ *
+ * STORY-128 : les listes paginées répondent `{"data": [...], "pagination":
+ * {page, per_page, total, pages}}` — le bloc `pagination` est préservé et
+ * rattaché à `response.pagination` pour les stores/UI (le `data` de
+ * l'enveloppe reste la liste, comme pour toute enveloppe standard).
  */
 function unwrapResponse<T>(response: AxiosResponse<T>): AxiosResponse<T> {
   const body: unknown = response.data
   if (body !== null && typeof body === 'object' && !Array.isArray(body) && 'data' in body) {
-    return { ...response, data: (body as ApiEnvelope<T>).data }
+    const envelope = body as ApiEnvelope<T> & { pagination?: PaginationMeta }
+    const unwrapped: AxiosResponse<T> = { ...response, data: envelope.data }
+    if (envelope.pagination && typeof envelope.pagination === 'object') {
+      unwrapped.pagination = envelope.pagination
+    }
+    return unwrapped
   }
   return response
 }

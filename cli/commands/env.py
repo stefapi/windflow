@@ -90,17 +90,16 @@ def handle_list(org_id: str | None = None, output_format: str = "table") -> int:
         if org_id:
             params["organization_id"] = org_id
 
-        response = api_client.get("/environments", params=params)
+        # STORY-128 : liste paginée côté API — get_all assemble les pages
+        # (per_page=100) pour conserver un affichage complet.
+        result = api_client.get_all("/environments", params=params)
 
         if output_format == "json":
-            print_json(response)
+            print_json(result.items)
             return 0
 
         # Format tableau
-        # STORY-126.3 : post-unwrap spec 09 — liste directe ou {items: [...]}
-        environments = (
-            response if isinstance(response, list) else response.get("items", [])
-        )
+        environments = result.items
 
         if not environments:
             print_info("Aucun environnement trouvé")
@@ -121,7 +120,8 @@ def handle_list(org_id: str | None = None, output_format: str = "table") -> int:
             )
 
         print_table(headers, rows)
-        print_info(f"Total: {len(environments)} environnement(s)")
+        # STORY-128 : total réel de la collection (pas seulement la page).
+        print_info(f"Total: {result.total} environnement(s)")
 
         return 0
     except Exception as e:

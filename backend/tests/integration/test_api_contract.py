@@ -205,19 +205,21 @@ class TestStacksRouterContract:
 
 
 class TestDeploymentsRouterContract:
-    """deployments : GET /deployments → data.items (paginé) ; 404 inconnu."""
+    """deployments : GET /deployments → {data, pagination} (STORY-128) ; 404 inconnu."""
 
     async def test_list_deployments_enveloped(
         self, client: AsyncClient, test_user: User
     ):
-        """Liste deployments → 200 data contenant items (liste paginée sous data)."""
+        """Liste deployments → 200 contrat paginé STORY-128 : liste sous
+        ``data`` + bloc ``pagination`` au même niveau (pas ré-enveloppé)."""
         response = await client.get("/api/v1/deployments", headers=_bearer(test_user))
         assert response.status_code == 200, response.text
         body = response.json()
-        assert_success_envelope(body)
-        assert (
-            "items" in body["data"]
-        ), f"la liste paginée doit vivre sous data : {list(body['data'])}"
+        assert isinstance(body["data"], list), f"data doit être une liste : {body}"
+        pagination = body.get("pagination")
+        assert isinstance(pagination, dict), f"pagination manquant : {body}"
+        for key in ("page", "per_page", "total", "pages"):
+            assert key in pagination
 
     async def test_get_unknown_deployment_404_enveloped(
         self, client: AsyncClient, test_user: User
@@ -504,7 +506,7 @@ class TestPluginRegistryRouterContract:
 
 
 class TestAdminRouterContract:
-    """admin : /admin/audit viewer → 403 PERMISSION_DENIED ; super_admin → data.items."""
+    """admin : /admin/audit viewer → 403 PERMISSION_DENIED ; super_admin → {data, pagination} (STORY-128)."""
 
     async def test_admin_audit_viewer_403_enveloped(
         self, client: AsyncClient, viewer_user: User
@@ -518,13 +520,15 @@ class TestAdminRouterContract:
     async def test_admin_audit_superuser_enveloped(
         self, client: AsyncClient, test_superuser: User
     ):
-        """super_admin sur /admin/audit → 200 data.items (page paginée sous data)."""
+        """super_admin sur /admin/audit → 200 contrat paginé STORY-128 :
+        liste sous ``data`` + bloc ``pagination`` (pas ré-enveloppé)."""
         response = await client.get(
             "/api/v1/admin/audit", headers=_bearer(test_superuser)
         )
         assert response.status_code == 200, response.text
         body = response.json()
-        assert_success_envelope(body)
-        assert (
-            "items" in body["data"]
-        ), f"la liste paginée doit vivre sous data : {list(body['data'])}"
+        assert isinstance(body["data"], list), f"data doit être une liste : {body}"
+        pagination = body.get("pagination")
+        assert isinstance(pagination, dict), f"pagination manquant : {body}"
+        for key in ("page", "per_page", "total", "pages"):
+            assert key in pagination

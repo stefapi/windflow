@@ -7,7 +7,7 @@ liste des plugins disponibles et détail d'un plugin spécifique.
 
 import logging
 import re
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends
 
@@ -18,7 +18,9 @@ from ...core.exceptions import (
     UnprocessableEntityError,
 )
 from ...core.rate_limit import conditional_rate_limiter
+from ...helper.pagination import PaginationQuery, paginate_sequence
 from ...models.user import User
+from ...schemas.common import PaginatedResponse
 from ...schemas.plugin_registry import (
     RegistryPluginDetailResponse,
     RegistryPluginSummaryResponse,
@@ -42,23 +44,58 @@ def _get_registry_service() -> PluginRegistryService:
 
 @router.get(
     "/plugins",
-    response_model=List[RegistryPluginSummaryResponse],
+    response_model=PaginatedResponse,
     summary="Liste des plugins du registre officiel",
-    description="Retourne la liste des plugins disponibles dans le registre officiel WindFlow.",
+    description=(
+        "Retourne la liste paginée des plugins disponibles dans le registre "
+        "officiel WindFlow — STORY-128 : enveloppe "
+        "`PaginatedResponse{data, pagination{page, per_page, total, pages}}` ; "
+        "les filtres `category`/`query` sont appliqués AVANT la pagination "
+        "(`total` = taille de la liste filtrée, source YAML non SQL)."
+    ),
     responses={
-        200: {"description": "Liste des plugins du registre"},
+        200: {
+            "description": "Page de plugins du registre (enveloppe paginée)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "data": [
+                            {
+                                "name": "traefik",
+                                "version": "1.2.0",
+                                "display_name": "Traefik",
+                                "description": "Reverse proxy",
+                                "category": "access",
+                                "tags": ["proxy"],
+                            }
+                        ],
+                        "pagination": {
+                            "page": 1,
+                            "per_page": 20,
+                            "total": 42,
+                            "pages": 3,
+                        },
+                        "message": None,
+                    }
+                }
+            },
+        },
         401: {"description": "Authentification requise"},
     },
 )
 async def list_registry_plugins(
-    skip: int = 0,
-    limit: int = 100,
     category: Optional[str] = None,
     query: Optional[str] = None,
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     current_user: User = Depends(require_viewer),
     _rate_limit=Depends(conditional_rate_limiter(60, 60)),
-) -> List[RegistryPluginSummaryResponse]:
-    """Liste les plugins du registre officiel avec filtres optionnels.
+) -> PaginatedResponse:
+    """Liste paginée des plugins du registre officiel (STORY-128).
+
+    Filtres ``category``/``query`` appliqués **avant** le slicing mémoire
+    (``total = len(liste filtrée)`` — source YAML filesystem, aucun
+    ``COUNT`` SQL possible).
 
     ## Access Control (STORY-122.5)
 
@@ -69,8 +106,8 @@ async def list_registry_plugins(
         "list_registry_plugins",
         extra={
             "user_id": current_user.id,
-            "skip": skip,
-            "limit": limit,
+            "page": page,
+            "per_page": per_page,
             "category": category,
             "query": query,
         },
@@ -83,14 +120,15 @@ async def list_registry_plugins(
     else:
         plugins = await service.list_plugins()
 
-    # Filtre par catégorie si spécifié
+    # Filtre par catégorie si spécifié — AVANT la pagination pour que
+    # total reflète la liste filtrée (AC 3)
     if category:
         plugins = [p for p in plugins if p.category.value == category]
 
-    # Pagination
-    paginated = plugins[skip : skip + limit]
+    # Tri stable par nom (le registry n'a pas d'ordre garanti filesystem)
+    plugins = sorted(plugins, key=lambda p: p.name)
 
-    return [
+    summaries = [
         RegistryPluginSummaryResponse(
             name=p.name,
             version=p.version,
@@ -98,9 +136,10 @@ async def list_registry_plugins(
             description=p.description,
             category=p.category.value,
             tags=p.tags,
-        )
-        for p in paginated
+        ).model_dump()
+        for p in plugins
     ]
+    return paginate_sequence(summaries, page, per_page)
 
 
 @router.get(

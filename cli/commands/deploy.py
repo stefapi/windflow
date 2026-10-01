@@ -136,17 +136,16 @@ def handle_list(
         if status:
             params["status"] = status
 
-        response = api_client.get("/deployments", params=params)
+        # STORY-128 : liste paginée côté API — get_all assemble les pages
+        # (per_page=100) pour conserver un affichage complet.
+        result = api_client.get_all("/deployments", params=params)
 
         if output_format == "json":
-            print_json(response)
+            print_json(result.items)
             return 0
 
         # Format tableau
-        # STORY-126.3 : post-unwrap spec 09 — liste directe ou {items: [...]}
-        deployments = (
-            response if isinstance(response, list) else response.get("items", [])
-        )
+        deployments = result.items
 
         if not deployments:
             print_info("Aucun déploiement trouvé")
@@ -167,7 +166,8 @@ def handle_list(
             )
 
         print_table(headers, rows)
-        print_info(f"Total: {len(deployments)} déploiement(s)")
+        # STORY-128 : total réel de la collection (pas seulement la page).
+        print_info(f"Total: {result.total} déploiement(s)")
 
         return 0
     except Exception as e:

@@ -13,7 +13,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Sequence
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..enums.target import CapabilityType, TargetStatus
@@ -63,6 +63,67 @@ class TargetService:
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    @staticmethod
+    async def list_by_organizations(
+        db: AsyncSession,
+        organization_ids: list[str],
+        page: int = 1,
+        per_page: int = 20,
+    ) -> list[Target]:
+        """Liste les cibles d'un ensemble d'organisations (STORY-128).
+
+        Requête unique ``WHERE organization_id IN (...)`` avec tri stable
+        ``ORDER BY name`` — remplace la boucle par-organisation de
+        ``list_targets`` dont l'application de skip/limit **par org**
+        produisait des pages chevauchantes et un total faux.
+
+        Args:
+            db: Session de base de données async
+            organization_ids: Identifiants des organisations scopées
+                (appartenances de l'utilisateur)
+            page: Page demandée (1-indexée)
+            per_page: Taille de page (bornée 1-100 par le Query endpoint)
+
+        Returns:
+            Liste des cibles de la page, triée par nom
+        """
+        if not organization_ids:
+            return []
+        result = await db.execute(
+            select(Target)
+            .where(Target.organization_id.in_(organization_ids))
+            .order_by(Target.name)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def count_by_organizations(
+        db: AsyncSession, organization_ids: list[str]
+    ) -> int:
+        """Compte les cibles d'un ensemble d'organisations (STORY-128).
+
+        ``COUNT`` avec le **même scoping** que
+        :meth:`list_by_organizations` (rules 40 — pas d'oracle de
+        comptage cross-org).
+
+        Args:
+            db: Session de base de données async
+            organization_ids: Identifiants des organisations scopées
+
+        Returns:
+            Nombre total de cibles correspondant au scoping
+        """
+        if not organization_ids:
+            return 0
+        result = await db.execute(
+            select(func.count())
+            .select_from(Target)
+            .where(Target.organization_id.in_(organization_ids))
+        )
+        return int(result.scalar() or 0)
 
     # ─── Écriture ──────────────────────────────────────────────
 

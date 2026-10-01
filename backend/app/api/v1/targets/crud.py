@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import List
 
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +18,9 @@ from ....core.exceptions import (
 )
 from ....core.rate_limit import conditional_rate_limiter
 from ....database import get_db
+from ....helper.pagination import PaginationQuery, build_meta
 from ....models.user import User
+from ....schemas.common import PaginatedResponse
 from ....schemas.target import (
     TargetCreate,
     TargetResponse,
@@ -33,16 +36,19 @@ logger = logging.getLogger(__name__)
 
 @router.get(
     "/",
-    response_model=list[TargetResponse],
+    response_model=PaginatedResponse,
     status_code=status.HTTP_200_OK,
     summary="List deployment targets",
     description="""
-List all deployment targets for the current user's organization.
+List all deployment targets for the current user's organizations.
 
 ## Features
-- Paginated results with skip/limit parameters
-- Organization-scoped access (users only see their org's targets)
+- **Pagination**: `?page=1&per_page=20` (max 100) — STORY-128 canonical format,
+  response envelope `PaginatedResponse{data, pagination{page, per_page, total, pages}}`
+- **Organization-scoped access**: users only see their orgs' targets
+  (single scoped query, no per-org paging)
 - Returns all target types (Docker, SSH, Kubernetes, etc.)
+- **Stable order**: `ORDER BY name` — no duplicates/holes across pages
 
 ## Target Types
 - **Docker**: Docker daemon targets
@@ -51,16 +57,12 @@ List all deployment targets for the current user's organization.
 - **Docker Swarm**: Swarm clusters
 - **Nomad**: HashiCorp Nomad clusters
 
-## Pagination
-Use `skip` and `limit` parameters to paginate through large result sets.
-Default limit is 100 targets per request.
-
 **Authentication Required**
 """,
     dependencies=[Depends(conditional_rate_limiter(100, 60))],
     responses={
         200: {
-            "description": ("List of targets — enveloppe spec 09"),
+            "description": ("Paginated list of targets — enveloppe spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -86,6 +88,12 @@ Default limit is 100 targets per request.
                                 "created_at": "2026-01-20T14:20:00Z",
                             },
                         ],
+                        "pagination": {
+                            "page": 1,
+                            "per_page": 20,
+                            "total": 42,
+                            "pages": 3,
+                        },
                         "message": None,
                     }
                 }
@@ -132,12 +140,12 @@ Default limit is 100 targets per request.
 )
 async def list_targets(
     request: Request,
-    skip: int = 0,
-    limit: int = 100,
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
-) -> list[TargetResponse]:
-    """List deployment targets for the organization.
+) -> PaginatedResponse:
+    """Liste paginée des cibles de déploiement (STORY-128).
 
     ## Access Control (STORY-122.5)
 
@@ -146,29 +154,28 @@ async def list_targets(
     """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
-        "Listing targets for organization",
+        "Listing targets for user organizations",
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "skip": skip,
-            "limit": limit,
+            "page": page,
+            "per_page": per_page,
         },
     )
     # STORY-121.3 : scoping sur les organisations de l'utilisateur
-    # (appartenances via l'association ; agrégation multi-org)
+    # (appartenances via l'association ; STORY-128 : requête unique IN)
     org_ids = await UserOrganizationService.get_user_organization_ids(
         session, current_user
     )
-    targets = []
-    seen_ids: set[str] = set()
-    for org_id in org_ids:
-        for target in await TargetService.list_by_organization(
-            session, org_id, skip, limit
-        ):
-            if target.id not in seen_ids:
-                seen_ids.add(target.id)
-                targets.append(target)
-    return [TargetResponse.model_validate(t) for t in targets]
+    targets = await TargetService.list_by_organizations(
+        session, org_ids, page=page, per_page=per_page
+    )
+    total = await TargetService.count_by_organizations(session, org_ids)
+
+    data: List[dict] = [
+        TargetResponse.model_validate(t).model_dump() for t in targets
+    ]
+    return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))
 
 
 @router.get(

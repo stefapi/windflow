@@ -10,11 +10,10 @@ utilisent monkeypatch pour forcer l'authentification.
 
 import pytest
 from httpx import AsyncClient
+from tests.conftest import unwrap
 
 from app.config import settings
 from app.models.plugin import Plugin, PluginStatus
-from tests.conftest import unwrap
-
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -384,9 +383,7 @@ class TestUninstallPlugin:
         self, admin_client: AsyncClient
     ) -> None:
         """Cas d'erreur : plugin inexistant → 404."""
-        response = await admin_client.delete(
-            "/api/v1/plugins/nonexistent-id/uninstall"
-        )
+        response = await admin_client.delete("/api/v1/plugins/nonexistent-id/uninstall")
         assert response.status_code == 404
 
 
@@ -478,7 +475,10 @@ class TestInstallPluginDependencies:
             json={"manifest_yaml": MANIFEST_WITH_DEPENDENCIES},
         )
         assert response.status_code == 409
-        assert "docker" in response.json()["error"]["message"].lower() or "dépendance" in response.json()["error"]["message"].lower()
+        assert (
+            "docker" in response.json()["error"]["message"].lower()
+            or "dépendance" in response.json()["error"]["message"].lower()
+        )
 
     @pytest.mark.asyncio
     async def test_install_plugin_returns_409_on_conflict(
@@ -653,7 +653,5 @@ extensions:
         self, admin_client: AsyncClient
     ) -> None:
         """Plugin inexistant → 404."""
-        response = await admin_client.get(
-            "/api/v1/plugins/nonexistent-id/dependencies"
-        )
+        response = await admin_client.get("/api/v1/plugins/nonexistent-id/dependencies")
         assert response.status_code == 404

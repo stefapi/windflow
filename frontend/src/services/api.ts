@@ -31,7 +31,6 @@ import type {
   DeploymentLogsResponse,
   Workflow,
   WorkflowCreate,
-  PaginatedResponse,
   DashboardStats,
   StackStatsResponse,
   ScheduledTask,
@@ -93,38 +92,29 @@ export const authApi = {
     })
   },
 
-  refreshToken: (refreshToken: string) =>
-    http.post<LoginResponse>('/auth/refresh', { refresh_token: refreshToken }),
+  refreshToken: (refreshToken: string) => http.post<LoginResponse>('/auth/refresh', { refresh_token: refreshToken }),
 
-  register: (data: UserCreate) =>
-    http.post<User>('/auth/register', data),
+  register: (data: UserCreate) => http.post<User>('/auth/register', data),
 
-  getCurrentUser: () =>
-    http.get<User>('/auth/me'),
+  getCurrentUser: () => http.get<User>('/auth/me'),
 
-  logout: () =>
-    http.post('/auth/logout'),
+  logout: () => http.post('/auth/logout'),
 }
 
-// Users API
+// Users API — STORY-128 : listes paginées `?page=&per_page=`, post-unwrap
+// `response.data` est la liste et `response.pagination` porte les métadonnées.
 export const usersApi = {
-  list: (params?: { skip?: number; limit?: number }) =>
-    http.get<PaginatedResponse<User>>('/users', { params }),
+  list: (params?: { page?: number; per_page?: number }) => http.get<User[]>('/users', { params }),
 
-  get: (id: string) =>
-    http.get<User>(`/users/${id}`),
+  get: (id: string) => http.get<User>(`/users/${id}`),
 
-  create: (data: UserCreate) =>
-    http.post<User>('/users', data),
+  create: (data: UserCreate) => http.post<User>('/users', data),
 
-  update: (id: string, data: UserUpdate) =>
-    http.put<User>(`/users/${id}`, data),
+  update: (id: string, data: UserUpdate) => http.put<User>(`/users/${id}`, data),
 
-  delete: (id: string) =>
-    http.delete(`/users/${id}`),
+  delete: (id: string) => http.delete(`/users/${id}`),
 
-  bulkDelete: (userIds: string[]) =>
-    http.post<{ success: string[]; failed: string[]; message: string }>('/users/bulk/delete', { user_ids: userIds }),
+  bulkDelete: (userIds: string[]) => http.post<{ success: string[]; failed: string[]; message: string }>('/users/bulk/delete', { user_ids: userIds }),
 
   bulkAssignOrganization: (userIds: string[], organizationId: string) =>
     http.post<{ success: string[]; failed: string[]; message: string }>('/users/bulk/assign-organization', {
@@ -133,114 +123,79 @@ export const usersApi = {
     }),
 }
 
-// Organizations API
+// Organizations API — STORY-128 : pagination standard spec 09.
 export const organizationsApi = {
-  list: (params?: { skip?: number; limit?: number }) =>
-    http.get<PaginatedResponse<Organization>>('/organizations', { params }),
+  list: (params?: { page?: number; per_page?: number }) => http.get<Organization[]>('/organizations', { params }),
 
-  get: (id: string) =>
-    http.get<Organization>(`/organizations/${id}`),
+  get: (id: string) => http.get<Organization>(`/organizations/${id}`),
 
-  create: (data: OrganizationCreate) =>
-    http.post<Organization>('/organizations', data),
+  create: (data: OrganizationCreate) => http.post<Organization>('/organizations', data),
 
-  update: (id: string, data: OrganizationUpdate) =>
-    http.put<Organization>(`/organizations/${id}`, data),
+  update: (id: string, data: OrganizationUpdate) => http.put<Organization>(`/organizations/${id}`, data),
 
-  delete: (id: string) =>
-    http.delete(`/organizations/${id}`),
+  delete: (id: string) => http.delete(`/organizations/${id}`),
 
-  bulkDelete: (organizationIds: string[]) =>
-    http.post<{ success: string[]; failed: string[]; message: string }>('/organizations/bulk/delete', { organization_ids: organizationIds }),
+  bulkDelete: (organizationIds: string[]) => http.post<{ success: string[]; failed: string[]; message: string }>('/organizations/bulk/delete', { organization_ids: organizationIds }),
 }
 
-// Targets API
+// Targets API — STORY-128 : pagination standard spec 09.
 export const targetsApi = {
-  list: (params?: { skip?: number; limit?: number; organization_id?: string }) =>
-    http.get<PaginatedResponse<Target>>('/targets', { params }),
+  list: (params?: { page?: number; per_page?: number; organization_id?: string }) => http.get<Target[]>('/targets', { params }),
 
-  get: (id: string) =>
-    http.get<Target>(`/targets/${id}`),
+  get: (id: string) => http.get<Target>(`/targets/${id}`),
 
-  create: (data: TargetCreate) =>
-    http.post<Target>('/targets', data),
+  create: (data: TargetCreate) => http.post<Target>('/targets', data),
 
-  update: (id: string, data: TargetUpdate) =>
-    http.put<Target>(`/targets/${id}`, data),
+  update: (id: string, data: TargetUpdate) => http.put<Target>(`/targets/${id}`, data),
 
-  delete: (id: string) =>
-    http.delete(`/targets/${id}`),
+  delete: (id: string) => http.delete(`/targets/${id}`),
 
-  scan: (id: string) =>
-    http.post<Target>(`/targets/${id}/scan`),
+  scan: (id: string) => http.post<Target>(`/targets/${id}/scan`),
 
-  getCapabilities: (id: string) =>
-    http.get<TargetCapabilitiesResponse>(`/targets/${id}/capabilities`),
+  getCapabilities: (id: string) => http.get<TargetCapabilitiesResponse>(`/targets/${id}/capabilities`),
 
-  testReachability: (data: HostReachabilityRequest) =>
-    http.post<HostReachabilityResponse>('/targets/test-reachability', data),
-  testConnection: (data: ConnectionTestRequest) =>
-    http.post<ConnectionTestResponse>('/targets/test-connection', data),
+  testReachability: (data: HostReachabilityRequest) => http.post<HostReachabilityResponse>('/targets/test-reachability', data),
+  testConnection: (data: ConnectionTestRequest) => http.post<ConnectionTestResponse>('/targets/test-connection', data),
 
   /** Perform a lightweight TCP health check on a target */
-  healthCheck: (id: string) =>
-    http.post<HealthCheckResponse>(`/targets/${id}/health-check`),
+  healthCheck: (id: string) => http.post<HealthCheckResponse>(`/targets/${id}/health-check`),
 }
 
-// Stacks API
+// Stacks API — STORY-128 : pagination standard spec 09.
 export const stacksApi = {
-  list: (params?: { skip?: number; limit?: number; organization_id?: string }) =>
-    http.get<PaginatedResponse<Stack>>('/stacks', { params }),
+  list: (params?: { page?: number; per_page?: number; include_archived?: boolean; organization_id?: string }) => http.get<Stack[]>('/stacks', { params }),
 
-  get: (id: string) =>
-    http.get<Stack>(`/stacks/${id}`),
+  get: (id: string) => http.get<Stack>(`/stacks/${id}`),
 
-  create: (data: StackCreate) =>
-    http.post<Stack>('/stacks', data),
+  create: (data: StackCreate) => http.post<Stack>('/stacks', data),
 
-  update: (id: string, data: StackUpdate) =>
-    http.put<Stack>(`/stacks/${id}`, data),
+  update: (id: string, data: StackUpdate) => http.put<Stack>(`/stacks/${id}`, data),
 
-  delete: (id: string) =>
-    http.delete(`/stacks/${id}`),
+  delete: (id: string) => http.delete(`/stacks/${id}`),
 
-  validate: (data: { compose_content: string }) =>
-    http.post<{ valid: boolean; errors: string[] }>('/stacks/validate', data),
+  validate: (data: { compose_content: string }) => http.post<{ valid: boolean; errors: string[] }>('/stacks/validate', data),
 
-  regenerateVariable: (stackId: string, variableName: string) =>
-    http.post<{ variable_name: string; new_value: unknown; macro_template: string }>(
-      `/stacks/${stackId}/regenerate-variable/${variableName}`
-    ),
+  regenerateVariable: (stackId: string, variableName: string) => http.post<{ variable_name: string; new_value: unknown; macro_template: string }>(`/stacks/${stackId}/regenerate-variable/${variableName}`),
 
-  listVersions: (stackId: string) =>
-    http.get<StackVersion[]>(`/stacks/${stackId}/versions`),
+  listVersions: (stackId: string) => http.get<StackVersion[]>(`/stacks/${stackId}/versions`),
 
-  createVersion: (stackId: string, data: { change_summary?: string }) =>
-    http.post<StackVersion>(`/stacks/${stackId}/versions`, data),
+  createVersion: (stackId: string, data: { change_summary?: string }) => http.post<StackVersion>(`/stacks/${stackId}/versions`, data),
 
-  restoreVersion: (stackId: string, versionId: string) =>
-    http.post<Stack>(`/stacks/${stackId}/versions/${versionId}/restore`),
+  restoreVersion: (stackId: string, versionId: string) => http.post<Stack>(`/stacks/${stackId}/versions/${versionId}/restore`),
 
-  start: (id: string) =>
-    http.post<StackActionResponse>(`/stacks/${id}/start`),
+  start: (id: string) => http.post<StackActionResponse>(`/stacks/${id}/start`),
 
-  stop: (id: string) =>
-    http.post<StackActionResponse>(`/stacks/${id}/stop`),
+  stop: (id: string) => http.post<StackActionResponse>(`/stacks/${id}/stop`),
 
-  redeploy: (id: string, data: StackRedeployRequest) =>
-    http.post<StackRedeployResponse>(`/stacks/${id}/redeploy`, data),
+  redeploy: (id: string, data: StackRedeployRequest) => http.post<StackRedeployResponse>(`/stacks/${id}/redeploy`, data),
 
-  duplicate: (id: string, data: StackDuplicateRequest) =>
-    http.post<Stack>(`/stacks/${id}/duplicate`, data),
+  duplicate: (id: string, data: StackDuplicateRequest) => http.post<Stack>(`/stacks/${id}/duplicate`, data),
 
-  archive: (id: string) =>
-    http.post<StackActionResponse>(`/stacks/${id}/archive`),
+  archive: (id: string) => http.post<StackActionResponse>(`/stacks/${id}/archive`),
 
-  unarchive: (id: string) =>
-    http.post<StackActionResponse>(`/stacks/${id}/unarchive`),
+  unarchive: (id: string) => http.post<StackActionResponse>(`/stacks/${id}/unarchive`),
 
-  export: (id: string) =>
-    http.get<Record<string, unknown>>(`/stacks/${id}/export`),
+  export: (id: string) => http.get<Record<string, unknown>>(`/stacks/${id}/export`),
 
   import: (file: File) => {
     const formData = new FormData()
@@ -251,49 +206,36 @@ export const stacksApi = {
   },
 }
 
-// Deployments API
+// Deployments API — STORY-128 : pagination standard spec 09.
 export const deploymentsApi = {
-  list: (params?: { skip?: number; limit?: number; organization_id?: string }) =>
-    http.get<PaginatedResponse<Deployment>>('/deployments/', { params }),
+  list: (params?: { page?: number; per_page?: number; organization_id?: string }) => http.get<Deployment[]>('/deployments/', { params }),
 
-  get: (id: string) =>
-    http.get<Deployment>(`/deployments/${id}`),
+  get: (id: string) => http.get<Deployment>(`/deployments/${id}`),
 
-  create: (data: DeploymentCreate) =>
-    http.post<Deployment>('/deployments/', data),
+  create: (data: DeploymentCreate) => http.post<Deployment>('/deployments/', data),
 
-  cancel: (id: string) =>
-    http.post<Deployment>(`/deployments/${id}/cancel`),
+  cancel: (id: string) => http.post<Deployment>(`/deployments/${id}/cancel`),
 
-  getLogs: (id: string) =>
-    http.get<DeploymentLogsResponse>(`/deployments/${id}/logs`),
+  getLogs: (id: string) => http.get<DeploymentLogsResponse>(`/deployments/${id}/logs`),
 
-  retry: (id: string) =>
-    http.post<Deployment>(`/deployments/${id}/retry`),
+  retry: (id: string) => http.post<Deployment>(`/deployments/${id}/retry`),
 
-  delete: (id: string) =>
-    http.delete(`/deployments/${id}`),
+  delete: (id: string) => http.delete(`/deployments/${id}`),
 }
 
-// Workflows API
+// Workflows API — STORY-128 : pagination standard spec 09 (stub backend vide).
 export const workflowsApi = {
-  list: (params?: { skip?: number; limit?: number; organization_id?: string }) =>
-    http.get<PaginatedResponse<Workflow>>('/workflows', { params }),
+  list: (params?: { page?: number; per_page?: number; organization_id?: string }) => http.get<Workflow[]>('/workflows', { params }),
 
-  get: (id: string) =>
-    http.get<Workflow>(`/workflows/${id}`),
+  get: (id: string) => http.get<Workflow>(`/workflows/${id}`),
 
-  create: (data: WorkflowCreate) =>
-    http.post<Workflow>('/workflows', data),
+  create: (data: WorkflowCreate) => http.post<Workflow>('/workflows', data),
 
-  update: (id: string, data: Partial<WorkflowCreate>) =>
-    http.put<Workflow>(`/workflows/${id}`, data),
+  update: (id: string, data: Partial<WorkflowCreate>) => http.put<Workflow>(`/workflows/${id}`, data),
 
-  delete: (id: string) =>
-    http.delete(`/workflows/${id}`),
+  delete: (id: string) => http.delete(`/workflows/${id}`),
 
-  execute: (id: string, params?: Record<string, unknown>) =>
-    http.post<{ execution_id: string }>(`/workflows/${id}/execute`, params),
+  execute: (id: string, params?: Record<string, unknown>) => http.post<{ execution_id: string }>(`/workflows/${id}/execute`, params),
 }
 
 // Dashboard API
@@ -315,95 +257,67 @@ export const dashboardApi = {
     return http.get<DashboardStats>('/stats/dashboard', { params })
   },
 
-  getStackStats: (stackId: string) =>
-    http.get<StackStatsResponse>(`/stats/stacks/${stackId}`),
+  getStackStats: (stackId: string) => http.get<StackStatsResponse>(`/stats/stacks/${stackId}`),
 }
 
 // Docker Containers API
 export const containersApi = {
-  list: (all: boolean = true) =>
-    http.get<Container[]>('/docker/containers', { params: { all } }),
+  list: (all: boolean = true) => http.get<Container[]>('/docker/containers', { params: { all } }),
 
-  get: (id: string) =>
-    http.get<Container>(`/docker/containers/${id}`),
+  get: (id: string) => http.get<Container>(`/docker/containers/${id}`),
 
-  inspect: (id: string) =>
-    http.get<ContainerDetail>(`/docker/containers/${id}`),
+  inspect: (id: string) => http.get<ContainerDetail>(`/docker/containers/${id}`),
 
-  start: (id: string) =>
-    http.post<void>(`/docker/containers/${id}/start`),
+  start: (id: string) => http.post<void>(`/docker/containers/${id}/start`),
 
-  stop: (id: string, timeout: number = 10) =>
-    http.post<void>(`/docker/containers/${id}/stop`, null, { params: { timeout } }),
+  stop: (id: string, timeout: number = 10) => http.post<void>(`/docker/containers/${id}/stop`, null, { params: { timeout } }),
 
-  restart: (id: string, timeout: number = 10) =>
-    http.post<void>(`/docker/containers/${id}/restart`, null, { params: { timeout } }),
+  restart: (id: string, timeout: number = 10) => http.post<void>(`/docker/containers/${id}/restart`, null, { params: { timeout } }),
 
-  pause: (id: string) =>
-    http.post<void>(`/docker/containers/${id}/pause`),
+  pause: (id: string) => http.post<void>(`/docker/containers/${id}/pause`),
 
-  unpause: (id: string) =>
-    http.post<void>(`/docker/containers/${id}/unpause`),
+  unpause: (id: string) => http.post<void>(`/docker/containers/${id}/unpause`),
 
-  getStats: (id: string) =>
-    http.get(`/docker/containers/${id}/stats`),
+  getStats: (id: string) => http.get(`/docker/containers/${id}/stats`),
 
-  remove: (id: string, force: boolean = false) =>
-    http.delete<void>(`/docker/containers/${id}`, { params: { force } }),
+  remove: (id: string, force: boolean = false) => http.delete<void>(`/docker/containers/${id}`, { params: { force } }),
 
-  getLogs: (id: string, tail: number = 100, timestamps: boolean = false) =>
-    http.get<ContainerLogsResponse>(`/docker/containers/${id}/logs`, { params: { tail, timestamps } }),
+  getLogs: (id: string, tail: number = 100, timestamps: boolean = false) => http.get<ContainerLogsResponse>(`/docker/containers/${id}/logs`, { params: { tail, timestamps } }),
 
-  batchStart: (containerIds: string[]) =>
-    http.post<BatchContainerActionResponse>('/docker/containers/batch/start', { container_ids: containerIds }),
+  batchStart: (containerIds: string[]) => http.post<BatchContainerActionResponse>('/docker/containers/batch/start', { container_ids: containerIds }),
 
-  batchStop: (containerIds: string[]) =>
-    http.post<BatchContainerActionResponse>('/docker/containers/batch/stop', { container_ids: containerIds }),
+  batchStop: (containerIds: string[]) => http.post<BatchContainerActionResponse>('/docker/containers/batch/stop', { container_ids: containerIds }),
 
-  updateRestartPolicy: (id: string, data: ContainerUpdateRestartPolicyRequest) =>
-    http.patch<ContainerUpdateResponse>(`/docker/containers/${id}/restart-policy`, data),
+  updateRestartPolicy: (id: string, data: ContainerUpdateRestartPolicyRequest) => http.patch<ContainerUpdateResponse>(`/docker/containers/${id}/restart-policy`, data),
 
-  updateResources: (id: string, data: ContainerUpdateResourcesRequest) =>
-    http.patch<ContainerUpdateResponse>(`/docker/containers/${id}/resources`, data),
+  updateResources: (id: string, data: ContainerUpdateResourcesRequest) => http.patch<ContainerUpdateResponse>(`/docker/containers/${id}/resources`, data),
 
-  rename: (id: string, data: ContainerRenameRequest) =>
-    http.post<ContainerRenameResponse>(`/docker/containers/${id}/rename`, data),
+  rename: (id: string, data: ContainerRenameRequest) => http.post<ContainerRenameResponse>(`/docker/containers/${id}/rename`, data),
 
-  promote: (id: string, data: ContainerPromoteRequest) =>
-    http.post<ContainerPromoteResponse>(`/docker/containers/${id}/promote`, data),
+  promote: (id: string, data: ContainerPromoteRequest) => http.post<ContainerPromoteResponse>(`/docker/containers/${id}/promote`, data),
 
-  getShells: (id: string) =>
-    http.get<ContainerShell[]>(`/docker/containers/${id}/shells`),
+  getShells: (id: string) => http.get<ContainerShell[]>(`/docker/containers/${id}/shells`),
 
-  create: (data: ContainerCreateRequest) =>
-    http.post<ContainerDetail>('/docker/containers', data),
+  create: (data: ContainerCreateRequest) => http.post<ContainerDetail>('/docker/containers', data),
 
-  recreate: (id: string, data: ContainerRecreateRequest) =>
-    http.post<ContainerRecreateResponse>(`/docker/containers/${id}/recreate`, data),
+  recreate: (id: string, data: ContainerRecreateRequest) => http.post<ContainerRecreateResponse>(`/docker/containers/${id}/recreate`, data),
 
-  connectNetwork: (id: string, data: ContainerNetworkConnectRequest) =>
-    http.post<void>(`/docker/containers/${id}/networks/connect`, data),
+  connectNetwork: (id: string, data: ContainerNetworkConnectRequest) => http.post<void>(`/docker/containers/${id}/networks/connect`, data),
 
-  disconnectNetwork: (id: string, data: ContainerNetworkDisconnectRequest) =>
-    http.post<void>(`/docker/containers/${id}/networks/disconnect`, data),
+  disconnectNetwork: (id: string, data: ContainerNetworkDisconnectRequest) => http.post<void>(`/docker/containers/${id}/networks/disconnect`, data),
 }
 
 // Docker Images API
 export const imagesApi = {
-  list: (all: boolean = false) =>
-    http.get<ImageResponse[]>('/docker/images', { params: { all } }),
+  list: (all: boolean = false) => http.get<ImageResponse[]>('/docker/images', { params: { all } }),
 
-  pull: (data: ImagePullRequest) =>
-    http.post<ImagePullResponse>('/docker/images/pull', data),
+  pull: (data: ImagePullRequest) => http.post<ImagePullResponse>('/docker/images/pull', data),
 
-  remove: (imageId: string, force: boolean = false) =>
-    http.delete<void>(`/docker/images/${imageId}`, { params: { force } }),
+  remove: (imageId: string, force: boolean = false) => http.delete<void>(`/docker/images/${imageId}`, { params: { force } }),
 
-  get: (imageId: string) =>
-    http.get<ImageDetailResponse>(`/docker/images/${imageId}`),
+  get: (imageId: string) => http.get<ImageDetailResponse>(`/docker/images/${imageId}`),
 
-  save: (imageId: string) =>
-    http.get<Blob>(`/docker/images/${imageId}/save`, { responseType: 'blob' }),
+  save: (imageId: string) => http.get<Blob>(`/docker/images/${imageId}/save`, { responseType: 'blob' }),
 
   load: (file: File) => {
     const formData = new FormData()
@@ -413,36 +327,28 @@ export const imagesApi = {
     })
   },
 
-  batchRemove: (imageIds: string[], force: boolean = false) =>
-    Promise.all(imageIds.map((id) => http.delete<void>(`/docker/images/${id}`, { params: { force } }))),
+  batchRemove: (imageIds: string[], force: boolean = false) => Promise.all(imageIds.map((id) => http.delete<void>(`/docker/images/${id}`, { params: { force } }))),
 }
 
 // Docker Volumes API
 export const volumesApi = {
-  list: () =>
-    http.get<VolumeResponse[]>('/docker/volumes'),
+  list: () => http.get<VolumeResponse[]>('/docker/volumes'),
 
-  create: (data: VolumeCreateRequest) =>
-    http.post<VolumeResponse>('/docker/volumes', data),
+  create: (data: VolumeCreateRequest) => http.post<VolumeResponse>('/docker/volumes', data),
 
-  remove: (name: string, force?: boolean) =>
-    http.delete<void>(`/docker/volumes/${name}`, { params: { force } }),
+  remove: (name: string, force?: boolean) => http.delete<void>(`/docker/volumes/${name}`, { params: { force } }),
 }
 
 // Docker Networks API
 export const networksApi = {
-  list: () =>
-    http.get<NetworkResponse[]>('/docker/networks'),
+  list: () => http.get<NetworkResponse[]>('/docker/networks'),
 }
 
 // Docker System API
 export const dockerSystemApi = {
-  info: () =>
-    http.get<SystemInfoResponse>('/docker/system/info'),
-  version: () =>
-    http.get<SystemVersionResponse>('/docker/system/version'),
-  ping: () =>
-    http.get<PingResponse>('/docker/system/ping'),
+  info: () => http.get<SystemInfoResponse>('/docker/system/info'),
+  version: () => http.get<SystemVersionResponse>('/docker/system/version'),
+  ping: () => http.get<PingResponse>('/docker/system/ping'),
 }
 
 // Compute API
@@ -453,25 +359,10 @@ export const computeApi = {
     }),
 
   // Retourne ComputeGlobalView quand group_by est absent ou 'stack'
-  getGlobal: (params?: {
-    type?: ControlLevel
-    technology?: string
-    target_id?: string
-    status?: string
-    search?: string
-    organization_id?: string
-  }) =>
-    http.get<ComputeGlobalView>('/compute/global', { params }),
+  getGlobal: (params?: { type?: ControlLevel; technology?: string; target_id?: string; status?: string; search?: string; organization_id?: string }) => http.get<ComputeGlobalView>('/compute/global', { params }),
 
   // Retourne TargetGroup[] quand group_by='target'
-  getGlobalByTarget: (params?: {
-    type?: ControlLevel
-    technology?: string
-    target_id?: string
-    status?: string
-    search?: string
-    organization_id?: string
-  }) =>
+  getGlobalByTarget: (params?: { type?: ControlLevel; technology?: string; target_id?: string; status?: string; search?: string; organization_id?: string }) =>
     http.get<TargetGroup[]>('/compute/global', {
       params: { ...params, group_by: 'target' },
     }),
@@ -479,18 +370,10 @@ export const computeApi = {
 
 // Discovery / Adoption API
 export const discoveryApi = {
-  getAdoptionData: (
-    itemType: 'container' | 'composition' | 'helm_release',
-    itemId: string,
-    organizationId?: string,
-  ) =>
-    http.get<AdoptionWizardData>(
-      `/discovery/${itemType}/${encodeURIComponent(itemId)}/adoption-data`,
-      { params: organizationId ? { organization_id: organizationId } : {} },
-    ),
+  getAdoptionData: (itemType: 'container' | 'composition' | 'helm_release', itemId: string, organizationId?: string) =>
+    http.get<AdoptionWizardData>(`/discovery/${itemType}/${encodeURIComponent(itemId)}/adoption-data`, { params: organizationId ? { organization_id: organizationId } : {} }),
 
-  adopt: (data: AdoptionRequest) =>
-    http.post<AdoptionResponse>('/discovery/adopt', data),
+  adopt: (data: AdoptionRequest) => http.post<AdoptionResponse>('/discovery/adopt', data),
 }
 
 export default {

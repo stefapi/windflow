@@ -6,6 +6,7 @@ validation des organisations cibles (404), réaffectation via associations.
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import unwrap
 
 from app.enums.rbac import Role
 from app.models.organization import Organization
@@ -13,7 +14,6 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
-from tests.conftest import unwrap
 
 
 async def _make_user_in(
@@ -48,7 +48,8 @@ class TestListUsersScoping:
     async def test_list_users_scopes_to_all_memberships(
         self, authenticated_client, db_session, test_user, test_organization
     ):
-        """User membre de 2 orgs → users des 2 orgs listés."""
+        """User membre de 2 orgs → users des 2 orgs listés (contrat paginé
+        STORY-128 : liste sous ``data``)."""
         other_org = await _make_org(db_session, "scope-other")
         other_user = await _make_user_in(db_session, "scopedother", other_org)
         # test_user appartient déjà à test_organization (fixture) ; on
@@ -64,7 +65,8 @@ class TestListUsersScoping:
 
         response = await authenticated_client.get("/api/v1/users/")
         assert response.status_code == 200, response.text
-        listed_ids = {item["id"] for item in unwrap(response)["items"]}
+        body = response.json()
+        listed_ids = {item["id"] for item in body["data"]}
         assert test_user.id in listed_ids
         assert other_user.id in listed_ids, "la 2e appartenance doit être scopée"
 
@@ -107,9 +109,7 @@ class TestGetUserIsolation:
 class TestCreateUser:
     """Création : validation de l'organisation cible."""
 
-    async def test_create_user_validates_target_organization_404(
-        self, admin_client
-    ):
+    async def test_create_user_validates_target_organization_404(self, admin_client):
         """Org cible inexistante → 404 (aucun user créé)."""
         response = await admin_client.post(
             "/api/v1/users/",

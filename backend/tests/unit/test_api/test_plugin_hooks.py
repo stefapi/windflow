@@ -10,12 +10,11 @@ utilisent monkeypatch pour forcer l'authentification.
 
 import pytest
 from httpx import AsyncClient
+from tests.conftest import unwrap
 
 from app.config import settings
 from app.models.plugin import Plugin, PluginStatus
 from app.models.plugin_hook_log import PluginHookLog
-from tests.conftest import unwrap
-
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -77,9 +76,7 @@ class TestGetHookLogs:
         db_session.add(log)
         await db_session.commit()
 
-        response = await admin_client.get(
-            f"/api/v1/plugins/{plugin.id}/hooks/logs"
-        )
+        response = await admin_client.get(f"/api/v1/plugins/{plugin.id}/hooks/logs")
         assert response.status_code == 200
         data = unwrap(response)
         assert len(data) == 1
@@ -118,9 +115,7 @@ class TestGetHookLogs:
         await db_session.commit()
         await db_session.refresh(plugin)
 
-        response = await admin_client.get(
-            f"/api/v1/plugins/{plugin.id}/hooks/logs"
-        )
+        response = await admin_client.get(f"/api/v1/plugins/{plugin.id}/hooks/logs")
         assert response.status_code == 200
         assert unwrap(response) == []
 
@@ -151,9 +146,7 @@ class TestGetHookLogs:
         await db_session.commit()
         await db_session.refresh(plugin)
 
-        response = await client.get(
-            f"/api/v1/plugins/{plugin.id}/hooks/logs"
-        )
+        response = await client.get(f"/api/v1/plugins/{plugin.id}/hooks/logs")
         assert response.status_code == 401
 
     @pytest.mark.asyncio
@@ -204,9 +197,7 @@ class TestGetHookLogs:
         await db_session.commit()
         await db_session.refresh(plugin)
 
-        response = await admin_client.get(
-            f"/api/v1/plugins/{plugin.id}/hooks/logs"
-        )
+        response = await admin_client.get(f"/api/v1/plugins/{plugin.id}/hooks/logs")
         # STORY-121.3 : isolation via is_member — bypass superuser intégré
         # (l'ancienne égalité stricte refusait aussi le superuser, ce
         # qu'aucune spec ne requiert)
@@ -319,7 +310,7 @@ class TestHookLogsPagination:
         test_organization,
         test_superuser,
     ) -> None:
-        """Paramètres skip/limit fonctionnent correctement."""
+        """Paramètres page/per_page (STORY-128) — contrat {data, pagination}."""
         plugin = Plugin(
             name="pagination-test-plugin",
             version="1.0.0",
@@ -355,29 +346,31 @@ class TestHookLogsPagination:
             db_session.add(log)
         await db_session.commit()
 
-        # Tester skip=0, limit=2
+        # Page 1 (2 éléments)
         response = await admin_client.get(
             f"/api/v1/plugins/{plugin.id}/hooks/logs",
-            params={"skip": 0, "limit": 2},
+            params={"page": 1, "per_page": 2},
         )
         assert response.status_code == 200
-        data = unwrap(response)
-        assert len(data) == 2
+        body = response.json()
+        assert len(body["data"]) == 2
+        assert body["pagination"]["total"] == 5
 
-        # Tester skip=2, limit=2
+        # Page 2 (2 éléments)
         response = await admin_client.get(
             f"/api/v1/plugins/{plugin.id}/hooks/logs",
-            params={"skip": 2, "limit": 2},
+            params={"page": 2, "per_page": 2},
         )
         assert response.status_code == 200
-        data = unwrap(response)
-        assert len(data) == 2
+        body = response.json()
+        assert len(body["data"]) == 2
 
-        # Tester skip=4, limit=10
+        # Page 3 (reste : 1 élément)
         response = await admin_client.get(
             f"/api/v1/plugins/{plugin.id}/hooks/logs",
-            params={"skip": 4, "limit": 10},
+            params={"page": 3, "per_page": 2},
         )
         assert response.status_code == 200
-        data = unwrap(response)
-        assert len(data) == 1
+        body = response.json()
+        assert len(body["data"]) == 1
+        assert body["pagination"]["pages"] == 3

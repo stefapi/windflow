@@ -371,15 +371,22 @@ export interface RefreshTokenResponse {
 }
 
 // API Response types
-// STORY-126.3 : depuis les enveloppes spec 09, les charges utiles vivent sous
-// `data` — l'interceptor axios les déplie centralement, ce type décrit donc la
-// valeur POST-unwrap (structure {items, total, skip, limit} inchangée ;
-// STORY-128 la convertira en `pagination{page, per_page, total}`).
-export interface PaginatedResponse<T> {
-  items: T[]
+// STORY-128 : toutes les listes répondent désormais dans l'enveloppe paginée
+// spec 09 `{data: [...], pagination: {page, per_page, total, pages}}`. Ce type
+// décrit le corps BRUT pré-unwrap (frontières test/mock) — l'interceptor
+// axios déplie `data` en liste et rattache le bloc `pagination` à
+// `response.pagination`. L'ancien format `{items, total, skip, limit}` reste
+// toléré en fallback de transition (`LegacyListBody`).
+export interface PaginationMeta {
+  page: number
+  per_page: number
   total: number
-  skip: number
-  limit: number
+  pages: number
+}
+
+export interface PaginatedResponse<T> {
+  data: T[]
+  pagination: PaginationMeta
 }
 
 /**
@@ -390,6 +397,29 @@ export interface PaginatedResponse<T> {
 export interface ApiEnvelope<T> {
   data: T
   message: string | null
+}
+
+/**
+ * STORY-128 : les réponses paginées portent le bloc `pagination` au même
+ * niveau que `data`. L'interceptor axios le rattache à la réponse dépliée
+ * (`response.pagination`) — augmentation du type AxiosResponse officiellement
+ * supportée par axios (les génériques par défaut `any` reprennent la
+ * signature d'origine, seule la propriété optionnelle est ajoutée).
+ */
+/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any -- Génériques repris de la signature officielle axios (requis par l'augmentation de module), non utilisés dans le corps. */
+declare module 'axios' {
+  export interface AxiosResponse<T = any, D = any> {
+    pagination?: PaginationMeta
+  }
+}
+/* eslint-enable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any */
+
+/** Ancien format de liste `{items, total, skip, limit}` (pré-STORY-128). */
+export interface LegacyListBody<T> {
+  items: T[]
+  total?: number
+  skip?: number
+  limit?: number
 }
 
 // Scheduled Task types

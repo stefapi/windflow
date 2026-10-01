@@ -9,7 +9,7 @@ import unicodedata
 from typing import List, Optional, Union
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.organization import Organization
@@ -79,16 +79,38 @@ class OrganizationService:
         """
         Liste toutes les organisations avec pagination.
 
+        STORY-128 : tri stable ``ORDER BY name`` — sans tri déterministe,
+        la pagination produit des doublons/trous entre pages.
+
         Args:
             db: Session de base de données async
             skip: Nombre d'éléments à sauter (pagination)
             limit: Nombre max d'éléments à retourner
 
         Returns:
-            Liste d'organisations
+            Liste d'organisations triée par nom
         """
-        result = await db.execute(select(Organization).offset(skip).limit(limit))
+        result = await db.execute(
+            select(Organization).order_by(Organization.name).offset(skip).limit(limit)
+        )
         return list(result.scalars().all())
+
+    @staticmethod
+    async def count_all(db: AsyncSession) -> int:
+        """
+        Compte toutes les organisations (STORY-128).
+
+        ``COUNT`` global pour la liste super_admin (aucun filtre additionnel
+        — même périmètre que :meth:`list_all`).
+
+        Args:
+            db: Session de base de données async
+
+        Returns:
+            Nombre total d'organisations
+        """
+        result = await db.execute(select(func.count()).select_from(Organization))
+        return int(result.scalar() or 0)
 
     @staticmethod
     async def get_by_slug(db: AsyncSession, slug: str) -> Optional[Organization]:

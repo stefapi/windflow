@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.stack import Stack
@@ -51,6 +51,73 @@ class StackService:
             query = query.where(Stack.is_archived == False)  # noqa: E712
         result = await db.execute(query.offset(skip).limit(limit))
         return list(result.scalars().all())
+
+    @staticmethod
+    async def list_by_organizations(
+        db: AsyncSession,
+        organization_ids: List[str],
+        page: int = 1,
+        per_page: int = 20,
+        include_archived: bool = False,
+    ) -> List[Stack]:
+        """Liste les stacks d'un ensemble d'organisations (STORY-128).
+
+        Requête unique ``WHERE organization_id IN (...)`` avec tri stable
+        ``ORDER BY name`` — remplace la boucle par-organisation de
+        ``list_stacks`` dont l'application de skip/limit **par org**
+        produisait des pages chevauchantes et un total faux.
+
+        Args:
+            db: Session de base de données async
+            organization_ids: Identifiants des organisations scopées
+                (appartenances de l'utilisateur)
+            page: Page demandée (1-indexée)
+            per_page: Taille de page (bornée 1-100 par le Query endpoint)
+            include_archived: Inclure les stacks archivées
+
+        Returns:
+            Liste des stacks de la page, triée par nom
+        """
+        if not organization_ids:
+            return []
+        query = select(Stack).where(Stack.organization_id.in_(organization_ids))
+        if not include_archived:
+            query = query.where(Stack.is_archived == False)  # noqa: E712
+        query = query.order_by(Stack.name).offset((page - 1) * per_page).limit(per_page)
+        result = await db.execute(query)
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def count_by_organizations(
+        db: AsyncSession,
+        organization_ids: List[str],
+        include_archived: bool = False,
+    ) -> int:
+        """Compte les stacks d'un ensemble d'organisations (STORY-128).
+
+        ``COUNT`` avec les **mêmes filtres et le même scoping** que
+        :meth:`list_by_organizations` (rules 40 — pas d'oracle de
+        comptage cross-org).
+
+        Args:
+            db: Session de base de données async
+            organization_ids: Identifiants des organisations scopées
+            include_archived: Inclure les stacks archivées
+
+        Returns:
+            Nombre total de stacks correspondant aux filtres
+        """
+        if not organization_ids:
+            return 0
+        query = (
+            select(func.count())
+            .select_from(Stack)
+            .where(Stack.organization_id.in_(organization_ids))
+        )
+        if not include_archived:
+            query = query.where(Stack.is_archived == False)  # noqa: E712
+        result = await db.execute(query)
+        return int(result.scalar() or 0)
 
     @staticmethod
     async def create(db: AsyncSession, stack_data: StackCreate) -> Stack:

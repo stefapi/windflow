@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { targetsApi } from '@/services/api'
-import type { ConnectionTestRequest, ConnectionTestResponse, HealthCheckResponse, HostReachabilityRequest, HostReachabilityResponse, PaginatedResponse, Target, TargetCreate, TargetUpdate } from '@/types/api'
+import type { ConnectionTestRequest, ConnectionTestResponse, HealthCheckResponse, HostReachabilityRequest, HostReachabilityResponse, LegacyListBody, PaginationMeta, Target, TargetCreate, TargetUpdate } from '@/types/api'
 
 /** Interval between automatic health checks (ms). */
 const HEALTH_POLL_INTERVAL = 60_000 // 1 minute
@@ -12,6 +12,8 @@ export const useTargetsStore = defineStore('targets', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const healthCheckingIds = ref<Set<string>>(new Set())
+  // STORY-128 : métadonnées de pagination exposées pour l'UI (total/pages).
+  const pagination = ref<PaginationMeta | null>(null)
   let _pollTimer: ReturnType<typeof setInterval> | null = null
 
   async function fetchTargets(organizationId?: string): Promise<void> {
@@ -19,9 +21,11 @@ export const useTargetsStore = defineStore('targets', () => {
     error.value = null
     try {
       const response = await targetsApi.list({ organization_id: organizationId })
-      // STORY-126.3 : post-unwrap spec 09, response.data est List[Target] ou {items}
+      // STORY-128 : post-unwrap, response.data est la liste (nouveau format
+      // paginé) ; fallback transition {items} legacy et liste nue tolérés.
       const body: unknown = response.data
-      targets.value = Array.isArray(body) ? body : ((body as PaginatedResponse<Target>).items ?? [])
+      targets.value = Array.isArray(body) ? body : ((body as LegacyListBody<Target>)?.items ?? [])
+      pagination.value = response.pagination ?? null
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch targets'
       throw err
@@ -209,6 +213,7 @@ export const useTargetsStore = defineStore('targets', () => {
     currentTarget,
     loading,
     error,
+    pagination,
     fetchTargets,
     fetchTarget,
     createTarget,

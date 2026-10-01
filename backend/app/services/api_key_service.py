@@ -42,7 +42,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.jwt import API_KEY_PREFIX, MAX_API_KEY_LENGTH, generate_api_key
@@ -179,20 +179,26 @@ class ApiKeyService:
         )
 
     @staticmethod
-    async def list_for_user(db: AsyncSession, user_id: str) -> list[APIKeyResponse]:
-        """Liste les clés d'un utilisateur (scopé, sans secrets).
+    async def list_for_user(
+        db: AsyncSession, user_id: str, page: int = 1, per_page: int = 20
+    ) -> list[APIKeyResponse]:
+        """Liste les clés d'un utilisateur (scopé, sans secrets), paginées
+        (STORY-128).
 
         Les clés **expirées restent listées** avec leur ``expires_at``
         visible, ``revoked`` restant distinct de l'expiration
         (arbitrage n°2). Jamais ``key_hash`` ni la valeur de clé dans
-        les réponses.
+        les réponses. Tri ``created_at desc`` conservé (plus récentes
+        d'abord).
 
         Args:
             db: Session de base de données async
             user_id: Propriétaire (scoping obligatoire)
+            page: Page demandée (1-indexée, bornée par le Query endpoint)
+            per_page: Taille de page (1-100, bornée par le Query endpoint)
 
         Returns:
-            Clés de l'utilisateur, les plus récentes d'abord
+            Clés de la page, les plus récentes d'abord
         """
         rows = (
             (
@@ -200,12 +206,34 @@ class ApiKeyService:
                     select(APIKey)
                     .where(APIKey.user_id == user_id)
                     .order_by(APIKey.created_at.desc())
+                    .offset((page - 1) * per_page)
+                    .limit(per_page)
                 )
             )
             .scalars()
             .all()
         )
         return [APIKeyResponse.model_validate(row) for row in rows]
+
+    @staticmethod
+    async def count_for_user(db: AsyncSession, user_id: str) -> int:
+        """Compte les clés d'un utilisateur (STORY-128).
+
+        ``COUNT`` avec le **même scoping propriétaire** que
+        :meth:`list_for_user` (rules 40 — pas d'oracle de comptage
+        cross-user).
+
+        Args:
+            db: Session de base de données async
+            user_id: Propriétaire (scoping obligatoire)
+
+        Returns:
+            Nombre total de clés de l'utilisateur
+        """
+        result = await db.execute(
+            select(func.count()).select_from(APIKey).where(APIKey.user_id == user_id)
+        )
+        return int(result.scalar() or 0)
 
     @staticmethod
     async def revoke(db: AsyncSession, user_id: str, key_id: str) -> APIKeyResponse:

@@ -1,13 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { stacksApi } from '@/services/api'
-import type { PaginatedResponse, Stack, StackCreate, StackUpdate } from '@/types/api'
+import type { LegacyListBody, PaginationMeta, Stack, StackCreate, StackUpdate } from '@/types/api'
 
 export const useStacksStore = defineStore('stacks', () => {
   const stacks = ref<Stack[]>([])
   const currentStack = ref<Stack | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  // STORY-128 : métadonnées de pagination exposées pour l'UI (total/pages).
+  const pagination = ref<PaginationMeta | null>(null)
 
   // Computed: active stacks (not archived)
   const activeStacks = computed(() => stacks.value.filter((s) => !s.is_archived))
@@ -20,11 +22,12 @@ export const useStacksStore = defineStore('stacks', () => {
     error.value = null
     try {
       const response = await stacksApi.list({ organization_id: organizationId })
-      // STORY-126.3 : l'unwrap centralisé (http.ts) déplie l'enveloppe spec 09
-      // — response.data est soit List[Stack] (réponse liste du backend), soit
-      // {items: [...]} (format paginé) ; les deux sont gérés.
+      // STORY-128 : post-unwrap, response.data est la liste (nouveau format
+      // paginé) ; fallback transition {items} legacy et liste nue tolérés.
+      // response.pagination (rattaché par l'interceptor) expose total/pages.
       const body: unknown = response.data
-      stacks.value = Array.isArray(body) ? body : ((body as PaginatedResponse<Stack>).items ?? [])
+      stacks.value = Array.isArray(body) ? body : ((body as LegacyListBody<Stack>)?.items ?? [])
+      pagination.value = response.pagination ?? null
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch stacks'
       throw err
@@ -140,6 +143,7 @@ export const useStacksStore = defineStore('stacks', () => {
     currentStack,
     loading,
     error,
+    pagination,
     activeStacks,
     archivedStacks,
     fetchStacks,

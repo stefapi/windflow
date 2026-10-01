@@ -35,12 +35,12 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import unwrap
 
 from app.auth.jwt import API_KEY_PREFIX, MAX_API_KEY_LENGTH
 from app.core.cache import reset_role_cache
 from app.models.api_key import APIKey
 from app.models.user import User
-from tests.conftest import unwrap
 
 API_KEYS_URL = "/api/v1/auth/api-keys"
 ME_URL = "/api/v1/auth/me"

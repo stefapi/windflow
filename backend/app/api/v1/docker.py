@@ -13,7 +13,6 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
-    Query,
     Request,
     Response,
     UploadFile,
@@ -31,7 +30,9 @@ from ...core.exceptions import (
 )
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
+from ...helper.pagination import PaginationQuery, paginate_sequence
 from ...models.user import User
+from ...schemas.common import PaginatedResponse
 from ...schemas.docker import (
     BatchContainerActionRequest,
     BatchContainerActionResponse,
@@ -86,7 +87,7 @@ logger = logging.getLogger(__name__)
 
 @router.get(
     "/containers",
-    response_model=List[ContainerResponse],
+    response_model=PaginatedResponse,
     summary="List containers",
     description="""
 List all Docker containers (running and stopped). Supports pagination
@@ -147,16 +148,18 @@ with skip and limit parameters.
 async def list_containers(
     request: Request,
     all: bool = True,
-    skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
-    limit: int = Query(
-        50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"
-    ),
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     current_user: User = Depends(require_viewer),
-):
-    """Liste tous les containers Docker avec pagination."""
+) -> PaginatedResponse:
+    """Liste paginée des containers Docker (STORY-128).
+
+    Source Docker daemon (non SQL) : ``total = len(liste)`` via
+    ``paginate_sequence`` (slicing mémoire) — aucun ``COUNT`` possible.
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
-        f"Listing Docker containers (all={all}, skip={skip}, limit={limit})",
+        f"Listing Docker containers (all={all}, page={page}, per_page={per_page})",
         extra={"correlation_id": correlation_id},
     )
 
@@ -164,24 +167,28 @@ async def list_containers(
     try:
         containers = await client.list_containers(all=all)
 
-        return [
-            ContainerResponse(  # type: ignore[call-arg]
-                id=c.id,
-                name=c.name,
-                image=c.image,
-                image_id=c.image_id,
-                command=c.command,
-                created=c.created,
-                state=c.state,
-                status=c.status,
-                ports=c.ports,
-                labels=c.labels,
-                networks=c.networks,
-                mounts=c.mounts,
-                restart_count=c.restart_count,
-            )
-            for c in containers
-        ][skip : skip + limit]
+        return paginate_sequence(
+            [
+                ContainerResponse(  # type: ignore[call-arg]
+                    id=c.id,
+                    name=c.name,
+                    image=c.image,
+                    image_id=c.image_id,
+                    command=c.command,
+                    created=c.created,
+                    state=c.state,
+                    status=c.status,
+                    ports=c.ports,
+                    labels=c.labels,
+                    networks=c.networks,
+                    mounts=c.mounts,
+                    restart_count=c.restart_count,
+                ).model_dump()
+                for c in containers
+            ],
+            page,
+            per_page,
+        )
 
     except ConnectionError as e:
         logger.error(f"Docker not available: {e}")
@@ -1535,7 +1542,7 @@ async def get_container_logs(
 
 @router.get(
     "/images",
-    response_model=List[ImageResponse],
+    response_model=PaginatedResponse,
     summary="List images",
     description="""
 List all Docker images. Supports pagination with skip and limit parameters.
@@ -1549,16 +1556,18 @@ List all Docker images. Supports pagination with skip and limit parameters.
 async def list_images(
     request: Request,
     all: bool = False,
-    skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
-    limit: int = Query(
-        50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"
-    ),
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     current_user: User = Depends(require_viewer),
-):
-    """Liste toutes les images Docker avec indicateur d'utilisation par containers et pagination."""
+) -> PaginatedResponse:
+    """Liste paginée des images Docker avec usage (STORY-128).
+
+    Source Docker daemon (non SQL) : ``total = len(liste)`` via
+    ``paginate_sequence`` (slicing mémoire).
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
-        f"Listing Docker images (all={all}, skip={skip}, limit={limit})",
+        f"Listing Docker images (all={all}, page={page}, per_page={per_page})",
         extra={"correlation_id": correlation_id},
     )
 
@@ -1577,20 +1586,26 @@ async def list_images(
             normalized_id = c.image_id.replace("sha256:", "")[:12]
             image_usage[normalized_id] = image_usage.get(normalized_id, 0) + 1
 
-        return [
-            ImageResponse(  # type: ignore[call-arg]
-                id=img.id,
-                repo_tags=img.repo_tags,
-                repo_digests=img.repo_digests,
-                created=img.created,
-                size=img.size,
-                virtual_size=img.virtual_size,
-                labels=img.labels,
-                in_use=image_usage.get(img.id, 0) > 0,
-                containers_count=image_usage.get(img.id, 0),
-            )
-            for img in images
-        ][skip : skip + limit]
+        return paginate_sequence(
+            [
+                ImageResponse(  # type: ignore[call-arg]
+                    id=img.id,
+                    repo_tags=img.repo_tags,
+                    repo_digests=img.repo_digests,
+                    created=img.created,
+                    size=img.size,
+                    virtual_size=img.virtual_size,
+                    labels=img.labels,
+                    in_use=image_usage.get(img.id, 0) > 0,
+                    containers_count=image_usage.get(img.id, 0),
+                ).model_dump(
+                    by_alias=True
+                )  # contrat camelCase historique (inUse, containersCount…)
+                for img in images
+            ],
+            page,
+            per_page,
+        )
 
     except Exception as e:
         logger.error(f"Error listing images: {e}")
@@ -1881,7 +1896,7 @@ async def save_image(
 
 @router.get(
     "/volumes",
-    response_model=List[VolumeResponse],
+    response_model=PaginatedResponse,
     summary="List volumes",
     description="""
 List all Docker volumes. Supports pagination with skip and limit parameters.
@@ -1894,16 +1909,18 @@ List all Docker volumes. Supports pagination with skip and limit parameters.
 )
 async def list_volumes(
     request: Request,
-    skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
-    limit: int = Query(
-        50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"
-    ),
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     current_user: User = Depends(require_viewer),
-):
-    """Liste tous les volumes Docker avec pagination."""
+) -> PaginatedResponse:
+    """Liste paginée des volumes Docker (STORY-128).
+
+    Source Docker daemon (non SQL) : ``total = len(liste)`` via
+    ``paginate_sequence`` (slicing mémoire).
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
-        f"Listing Docker volumes (skip={skip}, limit={limit})",
+        f"Listing Docker volumes (page={page}, per_page={per_page})",
         extra={"correlation_id": correlation_id},
     )
 
@@ -1911,17 +1928,21 @@ async def list_volumes(
     try:
         volumes = await client.list_volumes()
 
-        return [
-            VolumeResponse(  # type: ignore[call-arg]
-                name=v.name,
-                driver=v.driver,
-                mountpoint=v.mountpoint,
-                created_at=v.created_at,
-                labels=v.labels,
-                scope=v.scope,
-            )
-            for v in volumes
-        ][skip : skip + limit]
+        return paginate_sequence(
+            [
+                VolumeResponse(  # type: ignore[call-arg]
+                    name=v.name,
+                    driver=v.driver,
+                    mountpoint=v.mountpoint,
+                    created_at=v.created_at,
+                    labels=v.labels,
+                    scope=v.scope,
+                ).model_dump()
+                for v in volumes
+            ],
+            page,
+            per_page,
+        )
 
     except Exception as e:
         logger.error(f"Error listing volumes: {e}")
@@ -2031,7 +2052,7 @@ async def remove_volume(
 
 @router.get(
     "/networks",
-    response_model=List[NetworkResponse],
+    response_model=PaginatedResponse,
     summary="List networks",
     description="""
 List all Docker networks. Supports pagination with skip and limit parameters.
@@ -2044,16 +2065,18 @@ List all Docker networks. Supports pagination with skip and limit parameters.
 )
 async def list_networks(
     request: Request,
-    skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
-    limit: int = Query(
-        50, ge=1, le=100, description="Nombre maximal d'éléments à retourner"
-    ),
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     current_user: User = Depends(require_viewer),
-):
-    """Liste tous les réseaux Docker avec pagination."""
+) -> PaginatedResponse:
+    """Liste paginée des réseaux Docker (STORY-128).
+
+    Source Docker daemon (non SQL) : ``total = len(liste)`` via
+    ``paginate_sequence`` (slicing mémoire).
+    """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
-        f"Listing Docker networks (skip={skip}, limit={limit})",
+        f"Listing Docker networks (page={page}, per_page={per_page})",
         extra={"correlation_id": correlation_id},
     )
 
@@ -2061,21 +2084,25 @@ async def list_networks(
     try:
         networks = await client.list_networks()
 
-        return [
-            NetworkResponse(
-                id=n.id,
-                name=n.name,
-                driver=n.driver,
-                scope=n.scope,
-                internal=n.internal,
-                attachable=n.attachable,
-                ingress=n.ingress,
-                created=n.created,
-                subnet=n.subnet,
-                gateway=n.gateway,
-            )
-            for n in networks
-        ][skip : skip + limit]
+        return paginate_sequence(
+            [
+                NetworkResponse(
+                    id=n.id,
+                    name=n.name,
+                    driver=n.driver,
+                    scope=n.scope,
+                    internal=n.internal,
+                    attachable=n.attachable,
+                    ingress=n.ingress,
+                    created=n.created,
+                    subnet=n.subnet,
+                    gateway=n.gateway,
+                ).model_dump()
+                for n in networks
+            ],
+            page,
+            per_page,
+        )
 
     except Exception as e:
         logger.error(f"Error listing networks: {e}")

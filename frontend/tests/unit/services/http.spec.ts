@@ -3,6 +3,9 @@
  * STORY-126.3 : réponses 2xx `{"data": ..., "message": ...}` → payload nu ;
  * erreurs `{"error": {code, message}}` lues via `.error.message` (fallback
  * `detail` legacy).
+ * STORY-128 : enveloppes paginées `{data, pagination}` — la liste est dépliée
+ * dans `response.data` ET le bloc `pagination` reste accessible via
+ * `response.pagination` pour les stores/UI.
  *
  * Stratégie : adaptateur axios mocké (roule la vraie chaîne d'interceptors
  * de l'instance `http`, y compris le retry 401 qui passe par axios.request).
@@ -80,6 +83,37 @@ describe('http interceptor — unwrap enveloppes spec 09 (STORY-126.3)', () => {
 
     const response = await http.get('/users')
     expect(response.data).toEqual(items)
+  })
+
+  it('STORY-128 : préserve le bloc pagination accessible sur la réponse dépliée', async () => {
+    const items = [{ id: 'u1' }, { id: 'u2' }]
+    const pagination = { page: 2, per_page: 20, total: 25, pages: 2 }
+    mockAdapter(() => ({ status: 200, data: { data: items, pagination, message: null } }))
+
+    const response = await http.get('/users')
+    expect(response.data).toEqual(items)
+    expect(response.pagination).toEqual(pagination)
+    expect(response.pagination?.total).toBe(25)
+  })
+
+  it('STORY-128 : pas de bloc pagination sur une enveloppe standard', async () => {
+    const payload = { id: 'stack-1' }
+    mockAdapter(() => ({ status: 200, data: { data: payload, message: null } }))
+
+    const response = await http.get('/stacks/stack-1')
+    expect(response.data).toEqual(payload)
+    expect(response.pagination).toBeUndefined()
+  })
+
+  it('STORY-128 : liste vide paginée — data: [] + méta exactes', async () => {
+    mockAdapter(() => ({
+      status: 200,
+      data: { data: [], pagination: { page: 1, per_page: 20, total: 0, pages: 0 } },
+    }))
+
+    const response = await http.get('/workflows')
+    expect(response.data).toEqual([])
+    expect(response.pagination).toEqual({ page: 1, per_page: 20, total: 0, pages: 0 })
   })
 
   it('laisse intact un corps non-enveloppé (compat transition)', async () => {

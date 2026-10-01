@@ -2,7 +2,7 @@
 API endpoints pour la gestion des tâches planifiées.
 """
 
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,8 +12,10 @@ from ...core.exceptions import (
     NotFoundError,
 )
 from ...database import get_db
+from ...helper.pagination import PaginationQuery, build_meta
 from ...models.scheduled_task import TaskType
 from ...models.user import User
+from ...schemas.common import PaginatedResponse
 from ...schemas.scheduled_task import (
     ScheduledTaskCreate,
     ScheduledTaskResponse,
@@ -26,17 +28,22 @@ router = APIRouter()
 
 @router.get(
     "/schedules",
-    response_model=list[ScheduledTaskResponse],
+    response_model=PaginatedResponse,
     summary="List scheduled tasks",
     description="""
-List all scheduled tasks, optionally filtered by organization.
+List scheduled tasks, optionally filtered by organization.
+
+## Pagination
+- `?page=1&per_page=20` (max 100) — STORY-128 canonical format,
+  response envelope `PaginatedResponse{data, pagination{page, per_page, total, pages}}`
+- **Stable order**: `ORDER BY name` — no duplicates/holes across pages
 
 ## Access Control
 - **Minimum role**: Viewer — read-only access for any authenticated user
 """,
     responses={
         200: {
-            "description": ("Scheduled tasks — enveloppe spec 09"),
+            "description": ("Paginated list of scheduled tasks — enveloppe spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -51,6 +58,12 @@ List all scheduled tasks, optionally filtered by organization.
                                 "organization_id": None,
                             }
                         ],
+                        "pagination": {
+                            "page": 1,
+                            "per_page": 20,
+                            "total": 12,
+                            "pages": 1,
+                        },
                         "message": None,
                     }
                 }
@@ -73,12 +86,35 @@ List all scheduled tasks, optionally filtered by organization.
 )
 async def list_schedules(
     organization_id: Optional[str] = Query(None),
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_viewer),
 ):
-    """Liste toutes les tâches planifiées."""
+    """Liste paginée des tâches planifiées (STORY-128).
+
+    Filtre ``organization_id`` combiné avec la pagination dans la même
+    requête ; ``total`` scopusé sur le même filtre (AC 3).
+
+    Args:
+        organization_id: Filtre optionnel par organisation
+        page: Page demandée (1-indexée, défaut 1)
+        per_page: Taille de page (1-100, défaut 20)
+        db: Session de base de données
+        current_user: Utilisateur courant
+
+    Returns:
+        PaginatedResponse: Page de tâches planifiées + métadonnées
+    """
     service = SchedulerService(db)
-    return await service.list_tasks(organization_id)
+    tasks = await service.list_tasks(
+        organization_id, page=page, per_page=per_page
+    )
+    total = await service.count_tasks(organization_id)
+    data: List[dict] = [
+        ScheduledTaskResponse.model_validate(t).model_dump() for t in tasks
+    ]
+    return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))
 
 
 @router.get(

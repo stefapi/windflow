@@ -5,7 +5,7 @@
 
 import { ref, type Ref } from 'vue'
 import { organizationsApi } from '@/services/api'
-import type { Organization, OrganizationCreate, OrganizationUpdate } from '@/types/api'
+import type { LegacyListBody, Organization, OrganizationCreate, OrganizationUpdate } from '@/types/api'
 import { ElMessage } from 'element-plus'
 
 export interface UseOrganizationsOptions {
@@ -22,7 +22,7 @@ export interface UseOrganizationsReturn {
   loading: Ref<boolean>
   error: Ref<string | null>
   total: Ref<number>
-  fetchOrganizations: (skip?: number, limit?: number) => Promise<void>
+  fetchOrganizations: (page?: number, perPage?: number) => Promise<void>
   getOrganization: (id: string) => Promise<Organization | null>
   createOrganization: (data: OrganizationCreate) => Promise<Organization | null>
   updateOrganization: (id: string, data: OrganizationUpdate) => Promise<Organization | null>
@@ -31,7 +31,8 @@ export interface UseOrganizationsReturn {
   refresh: () => Promise<void>
 }
 
-const DEFAULT_LIMIT = 100
+/** STORY-128 : taille de page canonique (max serveur = 100). */
+const DEFAULT_PER_PAGE = 100
 
 /**
  * Composable for managing organizations
@@ -50,19 +51,21 @@ export function useOrganizations(options: UseOrganizationsOptions = {}): UseOrga
 
   /**
    * Fetch all organizations
+   * STORY-128 : pagination `?page=&per_page=` — response.data est la liste
+   * (post-unwrap), response.pagination porte {total, pages}.
    */
-  async function fetchOrganizations(skip = 0, limit = DEFAULT_LIMIT): Promise<void> {
+  async function fetchOrganizations(page = 1, perPage = DEFAULT_PER_PAGE): Promise<void> {
     if (loading.value) return
 
     loading.value = true
     error.value = null
 
     try {
-      const response = await organizationsApi.list({ skip, limit })
-      // Backend returns a simple array, not a paginated response
-      const data = Array.isArray(response.data) ? response.data : response.data.items || []
+      const response = await organizationsApi.list({ page, per_page: perPage })
+      const body: unknown = response.data
+      const data = Array.isArray(body) ? body : ((body as LegacyListBody<Organization>)?.items ?? [])
       organizations.value = data
-      total.value = Array.isArray(response.data) ? data.length : (response.data.total || data.length)
+      total.value = response.pagination?.total ?? data.length
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la récupération des organisations'
       error.value = errorMessage
@@ -80,7 +83,7 @@ export function useOrganizations(options: UseOrganizationsOptions = {}): UseOrga
       const response = await organizationsApi.get(id)
       return response.data
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la récupération de l\'organisation'
+      const errorMessage = err instanceof Error ? err.message : "Erreur lors de la récupération de l'organisation"
       ElMessage.error(errorMessage)
       return null
     }
@@ -98,7 +101,7 @@ export function useOrganizations(options: UseOrganizationsOptions = {}): UseOrga
       ElMessage.success('Organisation créée avec succès')
       return newOrg
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la création de l\'organisation'
+      const errorMessage = err instanceof Error ? err.message : "Erreur lors de la création de l'organisation"
       ElMessage.error(errorMessage)
       return null
     }
@@ -111,14 +114,14 @@ export function useOrganizations(options: UseOrganizationsOptions = {}): UseOrga
     try {
       const response = await organizationsApi.update(id, data)
       const updatedOrg = response.data
-      const index = organizations.value.findIndex(o => o.id === id)
+      const index = organizations.value.findIndex((o) => o.id === id)
       if (index !== -1) {
         organizations.value[index] = updatedOrg
       }
       ElMessage.success('Organisation mise à jour avec succès')
       return updatedOrg
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la mise à jour de l\'organisation'
+      const errorMessage = err instanceof Error ? err.message : "Erreur lors de la mise à jour de l'organisation"
       ElMessage.error(errorMessage)
       return null
     }
@@ -130,12 +133,12 @@ export function useOrganizations(options: UseOrganizationsOptions = {}): UseOrga
   async function deleteOrganization(id: string): Promise<boolean> {
     try {
       await organizationsApi.delete(id)
-      organizations.value = organizations.value.filter(o => o.id !== id)
+      organizations.value = organizations.value.filter((o) => o.id !== id)
       total.value--
       ElMessage.success('Organisation supprimée avec succès')
       return true
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la suppression de l\'organisation'
+      const errorMessage = err instanceof Error ? err.message : "Erreur lors de la suppression de l'organisation"
       ElMessage.error(errorMessage)
       return false
     }
@@ -153,7 +156,7 @@ export function useOrganizations(options: UseOrganizationsOptions = {}): UseOrga
       result.failed = response.data.failed
 
       // Remove successfully deleted organizations from local state
-      organizations.value = organizations.value.filter(o => !result.success.includes(o.id))
+      organizations.value = organizations.value.filter((o) => !result.success.includes(o.id))
       total.value -= result.success.length
     } catch (err) {
       // If the bulk endpoint fails, all operations failed

@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import unwrap
 
 from app.core.secret_manager import SecretManager, reset_secret_manager
 from app.models.deployment import (
@@ -23,7 +24,6 @@ from app.models.organization import Organization
 from app.models.stack import Stack
 from app.models.target import Target
 from app.models.user import User
-from tests.conftest import unwrap
 
 PLAIN_SECRET = "S3cr3t!Pass-103-3"
 PLAIN_TOKEN = "tok_api_103-3"

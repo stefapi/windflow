@@ -1,4 +1,5 @@
 """Débogage ponctuel : reproduire le 500 du GET deployment en contexte pytest."""
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,7 +48,8 @@ async def test_debug_get_deployment_500(
 
     app = authenticated_client._transport.app  # noqa: SLF001
     # Rejouer la requête en propageant les exceptions applicatives
-    from httpx import ASGITransport, AsyncClient as AC
+    from httpx import ASGITransport
+    from httpx import AsyncClient as AC
 
     transport = ASGITransport(app=app, raise_app_exceptions=True)
     token = authenticated_client.headers.get("Authorization")

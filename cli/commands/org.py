@@ -60,17 +60,14 @@ def handle_org_command(args) -> int:
 def handle_list(output_format: str = "table") -> int:
     """Liste toutes les organisations."""
     try:
-        response = api_client.get("/organizations")
-
+        # STORY-128 : la liste est paginée côté API — get_all assemble les
+        # pages (per_page=100) pour conserver un affichage complet.
         if output_format == "json":
-            print_json(response)
+            print_json(api_client.get_all("/organizations").items)
             return 0
 
-        # Format tableau
-        # STORY-126.3 : post-unwrap spec 09 — liste directe ou {items: [...]}
-        organizations = (
-            response if isinstance(response, list) else response.get("items", [])
-        )
+        result = api_client.get_all("/organizations")
+        organizations = result.items
 
         if not organizations:
             print_info("Aucune organisation trouvée")
@@ -91,7 +88,8 @@ def handle_list(output_format: str = "table") -> int:
             )
 
         print_table(headers, rows)
-        print_info(f"Total: {len(organizations)} organisation(s)")
+        # STORY-128 : total réel de la collection (pas seulement la page).
+        print_info(f"Total: {result.total} organisation(s)")
 
         return 0
     except Exception as e:

@@ -4,8 +4,8 @@ Couvre l'AC 3 — consultation paginée filtrée du journal d'audit,
 strictement réservée au rôle global ``super_admin`` (spec 08 :
 administration système = Super Admin) :
 
-- **200 paginé** : ``{items, total, skip, limit}`` respectés, ordre
-  ``created_at`` décroissant ;
+- **200 paginé** (STORY-128 : contrat ``{data, pagination}`` via
+  ``?page=&per_page=``), ordre ``created_at`` décroissant ;
 - **401** sans token ; **403** pour viewer/operator **et admin
   d'organisation** (admin d'org ≠ super_admin — le journal couvre toutes
   les organisations) ;
@@ -36,7 +36,6 @@ from app.auth.jwt import create_access_token
 from app.core.cache import reset_role_cache
 from app.models.audit_log import AuditLog
 from app.models.user import User
-from tests.conftest import unwrap
 
 ADMIN_AUDIT_URL = "/api/v1/admin/audit"
 
@@ -116,22 +115,26 @@ class TestListAuditEntriesAccess:
         test_superuser: User,
         test_user: User,
     ):
-        """super_admin → 200, ``{items, total, skip, limit}`` respectés,
-        ordre ``created_at`` décroissant (plus récent d'abord)."""
+        """super_admin → 200, contrat paginé STORY-128 ``{data, pagination}``
+        respecté, ordre ``created_at`` décroissant (plus récent d'abord)."""
         await _seed_entries(db_session, test_user)
 
         response = await client.get(
             ADMIN_AUDIT_URL, headers=await _auth_headers(test_superuser)
         )
         assert response.status_code == 200, response.text
-        body = unwrap(response)
-        assert set(body) == {"items", "total", "skip", "limit"}
-        assert body["total"] == 4
-        assert body["skip"] == 0
-        assert body["limit"] == 100
-        assert len(body["items"]) == 4
+        # Le corps paginé passe le middleware tel quel (anti double-enveloppe)
+        body = response.json()
+        assert isinstance(body["data"], list)
+        pagination = body["pagination"]
+        assert set(pagination) == {"page", "per_page", "total", "pages"}
+        assert pagination["page"] == 1
+        assert pagination["per_page"] == 20
+        assert pagination["total"] == 4
+        assert pagination["pages"] == 1
+        assert len(body["data"]) == 4
         # Ordre décroissant : les deux lignes « now » avant « -1j »
-        actions = [item["action"] for item in body["items"]]
+        actions = [item["action"] for item in body["data"]]
         assert actions.index("user.login") < actions.index("stack.deleted")
 
     async def test_list_audit_returns_401_without_token(self, client: AsyncClient):
@@ -174,17 +177,17 @@ class TestListAuditEntriesValidation:
     async def test_list_audit_invalid_query_422(
         self, client: AsyncClient, test_superuser: User
     ):
-        """``since`` non-ISO, ``limit=0``/``101``, ``action`` > 50 → 422
-        (validation Pydantic native des Query)."""
+        """``since`` non-ISO, ``per_page=0``/``101``, ``action`` > 50,
+        ``page=0`` → 422 (validation Pydantic native des Query — STORY-128)."""
         headers = await _auth_headers(test_superuser)
         invalid_queries = [
             {"since": "not-a-date"},
-            {"limit": "0"},
-            {"limit": "101"},
+            {"per_page": "0"},
+            {"per_page": "101"},
             {"action": "x" * 51},
             {"user_id": "x" * 37},
             {"resource_type": "x" * 31},
-            {"skip": "-1"},
+            {"page": "0"},
         ]
         for params in invalid_queries:
             response = await client.get(ADMIN_AUDIT_URL, params=params, headers=headers)
@@ -193,18 +196,19 @@ class TestListAuditEntriesValidation:
     async def test_list_audit_empty_returns_empty_page(
         self, client: AsyncClient, test_superuser: User
     ):
-        """Aucune ligne en base → 200 avec ``items: []`` et ``total: 0``."""
+        """Aucune ligne en base → 200 avec ``data: []`` et ``total: 0``."""
         response = await client.get(
             ADMIN_AUDIT_URL, headers=await _auth_headers(test_superuser)
         )
         assert response.status_code == 200, response.text
-        body = unwrap(response)
-        assert body["items"] == []
-        assert body["total"] == 0
+        body = response.json()
+        assert body["data"] == []
+        assert body["pagination"]["total"] == 0
+        assert body["pagination"]["pages"] == 0
 
 
 class TestListAuditEntriesFiltersAndPagination:
-    """Filtres exacts et pagination skip/limit."""
+    """Filtres exacts et pagination page/per_page (STORY-128)."""
 
     async def test_list_audit_filters(
         self,
@@ -214,7 +218,7 @@ class TestListAuditEntriesFiltersAndPagination:
         test_user: User,
     ):
         """Filtres ``user_id``, ``action`` et ``since`` retournent le
-        sous-ensemble attendu (combinaison exacte)."""
+        sous-ensemble attendu (combinaison exacte, filtrage avant pagination)."""
         await _seed_entries(db_session, test_user)
         headers = await _auth_headers(test_superuser)
 
@@ -223,14 +227,15 @@ class TestListAuditEntriesFiltersAndPagination:
             ADMIN_AUDIT_URL, params={"user_id": test_user.id}, headers=headers
         )
         assert by_user.status_code == 200, by_user.text
-        assert unwrap(by_user)["total"] == 3
-        assert all(item["user_id"] == test_user.id for item in unwrap(by_user)["items"])
+        user_body = by_user.json()
+        assert user_body["pagination"]["total"] == 3
+        assert all(item["user_id"] == test_user.id for item in user_body["data"])
 
         # action : 2 user.login
         by_action = await client.get(
             ADMIN_AUDIT_URL, params={"action": "user.login"}, headers=headers
         )
-        assert unwrap(by_action)["total"] == 2
+        assert by_action.json()["pagination"]["total"] == 2
 
         # since (-36h) : les lignes de moins de 36h (2 user.login récents
         # + 1 deployment.failed « now ») — stack.deleted (-2j) exclue
@@ -239,41 +244,43 @@ class TestListAuditEntriesFiltersAndPagination:
             ADMIN_AUDIT_URL, params={"since": since}, headers=headers
         )
         assert by_since.status_code == 200, by_since.text
-        assert unwrap(by_since)["total"] == 3
-        actions_since = {item["action"] for item in unwrap(by_since)["items"]}
+        since_body = by_since.json()
+        assert since_body["pagination"]["total"] == 3
+        actions_since = {item["action"] for item in since_body["data"]}
         assert actions_since == {"user.login", "deployment.failed"}
 
-    async def test_list_audit_pagination_skip_limit(
+    async def test_list_audit_pagination_page_per_page(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
         test_superuser: User,
         test_user: User,
     ):
-        """``skip``/``limit`` bornés : page 1 de 2 puis reste — ``total``
-        reste le total filtré, pas celui de la page."""
+        """``page``/``per_page`` bornés : page 1 de 2 puis reste — ``total``
+        reste le total filtré, pas celui de la page (STORY-128)."""
         await _seed_entries(db_session, test_user)
         headers = await _auth_headers(test_superuser)
 
         page1 = await client.get(
-            ADMIN_AUDIT_URL, params={"skip": 0, "limit": 2}, headers=headers
+            ADMIN_AUDIT_URL, params={"page": 1, "per_page": 2}, headers=headers
         )
         assert page1.status_code == 200, page1.text
-        body1 = unwrap(page1)
-        assert body1["total"] == 4  # total filtré inchangé
-        assert len(body1["items"]) == 2
-        assert body1["skip"] == 0
-        assert body1["limit"] == 2
+        body1 = page1.json()
+        assert body1["pagination"]["total"] == 4  # total filtré inchangé
+        assert len(body1["data"]) == 2
+        assert body1["pagination"]["page"] == 1
+        assert body1["pagination"]["per_page"] == 2
+        assert body1["pagination"]["pages"] == 2
 
         rest = await client.get(
-            ADMIN_AUDIT_URL, params={"skip": 2, "limit": 2}, headers=headers
+            ADMIN_AUDIT_URL, params={"page": 2, "per_page": 2}, headers=headers
         )
-        body2 = unwrap(rest)
-        assert len(body2["items"]) == 2
-        assert body2["skip"] == 2
+        body2 = rest.json()
+        assert len(body2["data"]) == 2
+        assert body2["pagination"]["page"] == 2
 
         # Aucun chevauchement entre les pages
-        ids1 = {item["id"] for item in body1["items"]}
-        ids2 = {item["id"] for item in body2["items"]}
+        ids1 = {item["id"] for item in body1["data"]}
+        ids2 = {item["id"] for item in body2["data"]}
         assert not ids1 & ids2
         assert len(ids1 | ids2) == 4

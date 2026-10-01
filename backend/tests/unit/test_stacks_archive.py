@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import error_message, unwrap
 
 from app.models.organization import Organization
 from app.models.stack import Stack
@@ -17,7 +18,9 @@ from app.services.stack_service import StackService
 
 
 @pytest.fixture
-async def test_stack(db_session: AsyncSession, test_organization: Organization) -> Stack:
+async def test_stack(
+    db_session: AsyncSession, test_organization: Organization
+) -> Stack:
     """Crée un stack de test."""
     stack_data = StackCreate(
         name="Archive Test Stack",
@@ -69,7 +72,7 @@ class TestArchiveStack:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is True
         assert data["action"] == "archive"
         assert data["stack_id"] == test_stack.id
@@ -86,7 +89,7 @@ class TestArchiveStack:
         )
 
         assert response.status_code == 404
-        assert "non trouvé" in response.json()["detail"].lower()
+        assert "non trouvé" in error_message(response).lower()
 
     @pytest.mark.asyncio
     async def test_archive_stack_already_archived(
@@ -100,7 +103,7 @@ class TestArchiveStack:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is True
 
     @pytest.mark.asyncio
@@ -158,7 +161,7 @@ class TestUnarchiveStack:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is True
         assert data["action"] == "unarchive"
         assert "désarchivée" in data["message"].lower()
@@ -175,7 +178,7 @@ class TestUnarchiveStack:
         )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is True
 
 
@@ -188,12 +191,14 @@ class TestListStacksArchiveFilter:
         authenticated_client: AsyncClient,
         archived_stack: Stack,
     ):
-        """Lister les stacks exclut les archivées par défaut."""
+        """Lister les stacks exclut les archivées par défaut (STORY-128 :
+        liste paginée sous ``data`` — unwrap déplie l'enveloppe)."""
         response = await authenticated_client.get("/api/v1/stacks/")
 
         assert response.status_code == 200
-        data = response.json()
-        stack_ids = [s["id"] for s in data]
+        body = response.json()
+        assert "pagination" in body, f"contrat paginé STORY-128 : {list(body)}"
+        stack_ids = [s["id"] for s in body["data"]]
         assert archived_stack.id not in stack_ids
 
     @pytest.mark.asyncio
@@ -202,13 +207,15 @@ class TestListStacksArchiveFilter:
         authenticated_client: AsyncClient,
         archived_stack: Stack,
     ):
-        """Lister avec include_archived=true → toutes les stacks."""
+        """Lister avec include_archived=true → toutes les stacks (total
+        filtré exact — AC 3)."""
         response = await authenticated_client.get(
             "/api/v1/stacks/",
             params={"include_archived": "true"},
         )
 
         assert response.status_code == 200
-        data = response.json()
-        stack_ids = [s["id"] for s in data]
+        body = response.json()
+        assert "pagination" in body
+        stack_ids = [s["id"] for s in body["data"]]
         assert archived_stack.id in stack_ids

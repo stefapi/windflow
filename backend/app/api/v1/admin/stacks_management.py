@@ -19,9 +19,11 @@ from ....core.exceptions import (
     NotFoundError,
 )
 from ....database import get_db
+from ....helper.pagination import PaginationQuery, build_meta, paginate_sequence
 from ....models.deployment import Deployment
 from ....models.organization import Organization
 from ....models.stack import Stack
+from ....schemas.common import PaginatedResponse
 from ....schemas.stack import StackCreate, StackResponse
 from ....services.stack_loader_service import StackLoaderService
 from ....services.stack_service import StackService
@@ -109,12 +111,21 @@ class StacksOverview(BaseModel):
 # ============================================================================
 
 
-@router.get("/definitions", response_model=List[StackDefinitionInfo])
+@router.get(
+    "/definitions",
+    response_model=PaginatedResponse,
+    summary="List YAML stack definitions (paginated)",
+)
 async def list_stack_definitions(
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     current_user=Depends(require_super_admin),
-) -> List[StackDefinitionInfo]:
+) -> PaginatedResponse:
     """
-    Liste toutes les définitions YAML de stacks disponibles.
+    Liste paginée des définitions YAML de stacks disponibles (STORY-128).
+
+    Source filesystem (non SQL) : ``total = len(liste)`` via slicing
+    mémoire ``paginate_sequence``.
 
     ## Access Control (STORY-122.6)
 
@@ -180,7 +191,11 @@ async def list_stack_definitions(
                 )
             )
 
-    return definitions
+    # STORY-128 : tri stable par filename puis slicing mémoire
+    definitions.sort(key=lambda d: d.filename)
+    return paginate_sequence(
+        [d.model_dump() for d in definitions], page, per_page
+    )
 
 
 @router.post("/validate")
@@ -332,17 +347,25 @@ async def import_stacks(
     )
 
 
-@router.get("/imported", response_model=List[StackResponse])
+@router.get(
+    "/imported",
+    response_model=PaginatedResponse,
+    summary="List imported stacks (paginated)",
+)
 async def list_imported_stacks(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
     category: Optional[str] = Query(None),
     is_public: Optional[bool] = Query(None),
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(require_super_admin),
-) -> List[StackResponse]:
+) -> PaginatedResponse:
     """
-    Liste tous les stacks actuellement importés en base de données.
+    Liste paginée des stacks importés en base de données (STORY-128).
+
+    Tri stable ``ORDER BY name`` ; filtres ``category``/``is_public``
+    combinés dans la même requête que la pagination, ``COUNT`` avec
+    les mêmes filtres (AC 3).
 
     ## Access Control (STORY-122.6)
 
@@ -353,8 +376,9 @@ async def list_imported_stacks(
     Équivalent à: check_stacks.py
     """
     query = select(Stack)
+    count_query = select(func.count()).select_from(Stack)
 
-    # Filtres optionnels
+    # Filtres optionnels — appliqués à la liste ET au COUNT
     filters = []
     if category:
         filters.append(Stack.category == category)
@@ -363,13 +387,22 @@ async def list_imported_stacks(
 
     if filters:
         query = query.where(and_(*filters))
+        count_query = count_query.where(and_(*filters))
 
-    query = query.offset(skip).limit(limit)
+    query = (
+        query.order_by(Stack.name)
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    )
 
     result = await db.execute(query)
     stacks = result.scalars().all()
+    total = int((await db.execute(count_query)).scalar() or 0)
 
-    return [StackResponse.model_validate(stack) for stack in stacks]
+    data: List[dict] = [
+        StackResponse.model_validate(stack).model_dump() for stack in stacks
+    ]
+    return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))
 
 
 # ============================================================================

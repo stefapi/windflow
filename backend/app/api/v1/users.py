@@ -3,7 +3,6 @@ Routes de gestion des utilisateurs.
 """
 
 import logging
-import math
 from typing import List
 from uuid import UUID
 
@@ -21,8 +20,10 @@ from ...core.exceptions import (
 )
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
+from ...helper.pagination import PaginationQuery, build_meta
 from ...models.user import User
-from ...schemas.user import UserCreate, UserListResponse, UserResponse, UserUpdate
+from ...schemas.common import PaginatedResponse
+from ...schemas.user import UserCreate, UserResponse, UserUpdate
 from ...services.organization_service import OrganizationService
 from ...services.user_organization_service import UserOrganizationService
 from ...services.user_service import UserService
@@ -85,20 +86,20 @@ async def _share_organization(
 
 @router.get(
     "/",
-    response_model=UserListResponse,
+    response_model=PaginatedResponse,
     status_code=status.HTTP_200_OK,
     summary="List users",
     description="""
 List users with role-based visibility.
 
 ## Access Control
-- **Regular Users**: Can only see users from their own organization
+- **Regular Users**: Can only see users from their own organizations
 - **Superusers**: Can see ALL users from ALL organizations
 
 ## Pagination
-Use `skip` and `limit` parameters for pagination:
-- Default: Returns first 100 users
-- Maximum limit: 100 users per request
+- `?page=1&per_page=20` (max 100) — STORY-128 canonical format,
+  response envelope `PaginatedResponse{data, pagination{page, per_page, total, pages}}`
+- **Stable order**: `ORDER BY username` — no duplicates/holes across pages
 
 ## Use Cases
 - Display user directory in admin panel
@@ -113,39 +114,37 @@ Use `skip` and `limit` parameters for pagination:
     responses={
         200: {
             "description": (
-                "List of users — enveloppe spec 09 (liste paginée sous data)"
+                "Paginated list of users — enveloppe spec 09"
             ),
             "content": {
                 "application/json": {
                     "example": {
-                        "data": {
-                            "items": [
-                                {
-                                    "id": "550e8400-e29b-41d4-a716-446655440000",
-                                    "username": "admin",
-                                    "email": "admin@windflow.io",
-                                    "full_name": "Administrator",
-                                    "is_active": True,
-                                    "is_superuser": True,
-                                    "organization_id": "660e8400-e29b-41d4-a716-446655440001",
-                                    "created_at": "2026-01-01T10:00:00Z",
-                                    "updated_at": "2026-01-15T14:30:00Z",
-                                },
-                                {
-                                    "id": "770e8400-e29b-41d4-a716-446655440002",
-                                    "username": "john_doe",
-                                    "email": "john@windflow.io",
-                                    "full_name": "John Doe",
-                                    "is_active": True,
-                                    "is_superuser": False,
-                                    "organization_id": "660e8400-e29b-41d4-a716-446655440001",
-                                    "created_at": "2026-01-10T09:15:00Z",
-                                    "updated_at": "2026-01-20T11:45:00Z",
-                                },
-                            ],
-                            "total": 2,
+                        "data": [
+                            {
+                                "id": "550e8400-e29b-41d4-a716-446655440000",
+                                "username": "admin",
+                                "email": "admin@windflow.io",
+                                "full_name": "Administrator",
+                                "is_active": True,
+                                "is_superuser": True,
+                                "created_at": "2026-01-01T10:00:00Z",
+                                "updated_at": "2026-01-15T14:30:00Z",
+                            },
+                            {
+                                "id": "770e8400-e29b-41d4-a716-446655440002",
+                                "username": "john_doe",
+                                "email": "john@windflow.io",
+                                "full_name": "John Doe",
+                                "is_active": True,
+                                "is_superuser": False,
+                                "created_at": "2026-01-10T09:15:00Z",
+                                "updated_at": "2026-01-20T11:45:00Z",
+                            },
+                        ],
+                        "pagination": {
                             "page": 1,
-                            "size": 100,
+                            "per_page": 20,
+                            "total": 2,
                             "pages": 1,
                         },
                         "message": None,
@@ -180,13 +179,15 @@ Use `skip` and `limit` parameters for pagination:
 )
 async def list_users(
     request: Request,
-    skip: int = 0,
-    limit: int = 100,
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
-):
+) -> PaginatedResponse:
     """
-    List all users within the current user's organization.
+    Liste paginée des utilisateurs (STORY-128 — ancien format C
+    ``{items, total, page, size, pages}`` converti vers l'enveloppe
+    canonique ``{data, pagination{...}}``).
 
     ## Access Control (STORY-122.4)
 
@@ -200,14 +201,14 @@ async def list_users(
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
             "is_superuser": current_user.is_superuser,
-            "skip": skip,
-            "limit": limit,
+            "page": page,
+            "per_page": per_page,
         },
     )
 
     # Superusers voient tous les utilisateurs de toutes les organisations
     if current_user.is_superuser:
-        users, total = await UserService.list_all(session, skip, limit)
+        users, total = await UserService.list_all(session, page, per_page)
     else:
         # STORY-121.3 : scoping sur les appartenances (multi-org via
         # la table d'association) au lieu de la colonne héritée
@@ -215,16 +216,11 @@ async def list_users(
             session, current_user
         )
         users, total = await UserService.list_by_organization_ids(
-            session, org_ids, skip, limit
+            session, org_ids, page, per_page
         )
 
-    # Calculer les métadonnées de pagination
-    page = (skip // limit) + 1 if limit > 0 else 1
-    pages = math.ceil(total / limit) if limit > 0 else 1
-
-    return UserListResponse(
-        items=users, total=total, page=page, size=limit, pages=pages  # type: ignore[arg-type]
-    )
+    data: List[dict] = [UserResponse.model_validate(u).model_dump() for u in users]
+    return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))
 
 
 @router.get(

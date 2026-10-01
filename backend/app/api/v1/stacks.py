@@ -3,9 +3,9 @@ Routes de gestion des stacks Docker Compose.
 """
 
 import logging
-from typing import List
+from typing import Any, List
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,9 +20,11 @@ from ...core.exceptions import (
 )
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
+from ...helper.pagination import PaginationQuery, build_meta
 from ...helper.template_renderer import TemplateRenderer
 from ...models.stack_version import StackVersion
 from ...models.user import User
+from ...schemas.common import PaginatedResponse
 from ...schemas.stack import (
     StackActionResponse,
     StackCreate,
@@ -125,16 +127,19 @@ def _render_stack_variables(stack) -> StackResponse:
 
 @router.get(
     "/",
-    response_model=List[StackSummaryResponse],
+    response_model=PaginatedResponse,
     status_code=status.HTTP_200_OK,
     summary="List all stacks in organization",
     description="""
-List all Docker Compose stacks available in the current user's organization.
+List all Docker Compose stacks available in the current user's organizations.
 
 ## Features
-- **Pagination**: Use `skip` and `limit` parameters for pagination
-- **Organization Scoped**: Only returns stacks belonging to the user's organization
+- **Pagination**: `?page=1&per_page=20` (max 100) — STORY-128 canonical format,
+  response envelope `PaginatedResponse{data, pagination{page, per_page, total, pages}}`
+- **Organization Scoped**: Only returns stacks belonging to the user's organizations
+  (single scoped query, no per-org paging)
 - **Lightweight Response**: Returns only essential metadata for listing (id, name, version, category, etc.)
+- **Stable order**: `ORDER BY name` — no duplicates/holes across pages
 
 ## Use Cases
 - Display available stacks in the UI
@@ -145,7 +150,7 @@ List all Docker Compose stacks available in the current user's organization.
 """,
     responses={
         200: {
-            "description": ("List of stacks — enveloppe spec 09"),
+            "description": ("Paginated list of stacks — enveloppe spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -164,6 +169,12 @@ List all Docker Compose stacks available in the current user's organization.
                                 "downloads": 150,
                             }
                         ],
+                        "pagination": {
+                            "page": 1,
+                            "per_page": 20,
+                            "total": 87,
+                            "pages": 5,
+                        },
                         "message": None,
                     }
                 }
@@ -200,61 +211,65 @@ List all Docker Compose stacks available in the current user's organization.
 )
 async def list_stacks(
     request: Request,
-    skip: int = 0,
-    limit: int = 100,
-    include_archived: bool = False,
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
+    include_archived: bool = Query(False, description="Inclure les stacks archivées"),
     current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Liste les stacks Docker Compose de l'organisation.
+    Liste paginée des stacks Docker Compose des organisations de l'utilisateur.
 
     Retourne une version allégée des stacks pour le listing.
     Par défaut, les stacks archivées sont exclues.
 
+    STORY-128 : pagination canonique ``?page=&per_page=`` — requête unique
+    multi-org avec tri stable ``ORDER BY name`` et ``COUNT`` scopusé
+    (remplace l'agrégation par-org aux pages chevauchantes).
+
     Args:
         request: Requête HTTP (pour correlation_id)
-        skip: Nombre d'éléments à ignorer pour la pagination
-        limit: Nombre maximum d'éléments à retourner
+        page: Page demandée (1-indexée, défaut 1)
+        per_page: Taille de page (1-100, défaut 20)
         include_archived: Inclure les stacks archivées dans le résultat
         current_user: Utilisateur courant
         session: Session de base de données
 
     Returns:
-        List[StackListResponse]: Liste des stacks (champs restreints)
+        PaginatedResponse: Page de stacks (champs restreints) + métadonnées
     """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
-        "Listing stacks for organization",
+        "Listing stacks for user organizations",
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "skip": skip,
-            "limit": limit,
+            "page": page,
+            "per_page": per_page,
             "include_archived": include_archived,
         },
     )
 
     # STORY-121.3 : scoping sur les organisations de l'utilisateur
-    # (appartenances via l'association ; agrégation multi-org)
+    # (appartenances via l'association ; STORY-128 : requête unique IN)
     org_ids = await UserOrganizationService.get_user_organization_ids(
         session, current_user
     )
-    stacks = []
-    seen_ids: set[str] = set()
-    for org_id in org_ids:
-        for stack in await StackService.list_by_organization(
-            session,
-            org_id,
-            skip,
-            limit,
-            include_archived=include_archived,
-        ):
-            if stack.id not in seen_ids:
-                seen_ids.add(stack.id)
-                stacks.append(stack)
+    stacks = await StackService.list_by_organizations(
+        session,
+        org_ids,
+        page=page,
+        per_page=per_page,
+        include_archived=include_archived,
+    )
+    total = await StackService.count_by_organizations(
+        session, org_ids, include_archived=include_archived
+    )
 
-    return stacks
+    data: List[Any] = [
+        StackSummaryResponse.model_validate(s).model_dump() for s in stacks
+    ]
+    return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))
 
 
 @router.get(
@@ -1458,17 +1473,56 @@ async def regenerate_variable(
 
 @router.get(
     "/{stack_id}/versions",
-    response_model=List[StackVersionResponse],
-    summary="List stack versions",
+    response_model=PaginatedResponse,
+    summary="List stack versions (paginated)",
+    description="""
+Version history of a stack, most recent first — STORY-128 canonical
+pagination `?page=1&per_page=20` (max 100).
+
+## Access Control
+- **Minimum role**: Viewer — must be a member of the stack's organization
+  (cross-organization isolation preserved)
+""",
     tags=["stacks"],
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
+    responses={
+        200: {
+            "description": "Paginated version history — enveloppe spec 09",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "data": [
+                            {
+                                "id": "990e8400-e29b-41d4-a716-446655440010",
+                                "version_number": 3,
+                                "change_summary": "Manual snapshot",
+                            }
+                        ],
+                        "pagination": {
+                            "page": 1,
+                            "per_page": 20,
+                            "total": 3,
+                            "pages": 1,
+                        },
+                        "message": None,
+                    }
+                }
+            },
+        },
+    },
 )
 async def list_stack_versions(
     stack_id: str,
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
-) -> List[StackVersionResponse]:
-    """Liste l'historique des versions d'un stack."""
+) -> PaginatedResponse:
+    """Liste paginée de l'historique des versions d'un stack (STORY-128).
+
+    Tri ``version_number desc`` conservé ; ``COUNT`` scopé au stack
+    (même filtre que la liste).
+    """
     stack = await StackService.get_by_id(session, stack_id)
     if not stack:
         raise NotFoundError(f"Stack {stack_id} non trouvé")
@@ -1481,11 +1535,20 @@ async def list_stack_versions(
         select(StackVersion)
         .where(StackVersion.stack_id == stack_id)
         .order_by(StackVersion.version_number.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
     )
     result = await session.execute(stmt)
     versions = result.scalars().all()
 
-    return [
+    count_stmt = (
+        select(func.count())
+        .select_from(StackVersion)
+        .where(StackVersion.stack_id == stack_id)
+    )
+    total = int((await session.execute(count_stmt)).scalar() or 0)
+
+    data: List[Any] = [
         StackVersionResponse(
             id=v.id,
             stack_id=v.stack_id,
@@ -1496,9 +1559,10 @@ async def list_stack_versions(
             created_by=v.created_by,
             author_name=v.author.username if v.author else None,
             created_at=v.created_at,
-        )
+        ).model_dump()
         for v in versions
     ]
+    return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))
 
 
 @router.post(

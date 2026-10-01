@@ -9,13 +9,13 @@ from unittest.mock import AsyncMock, patch
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import unwrap
 
 from app.config import settings
 from app.models.organization import Organization
 from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.services.user_organization_service import UserOrganizationService
-from tests.conftest import unwrap
 
 
 class TestLoginNonRegression:
@@ -42,9 +42,7 @@ class TestLoginNonRegression:
             # Contrat conservé : organization_id = org primaire
             assert body["user"]["organization_id"] == primary_org
 
-    async def test_login_token_claims_have_no_organization(
-        self, client, test_user
-    ):
+    async def test_login_token_claims_have_no_organization(self, client, test_user):
         """Le token émis au login ne porte plus le claim organization_id."""
         from app.auth.jwt import decode_access_token
 
@@ -167,9 +165,7 @@ class TestAuthMe:
 
         from app.enums.rbac import Role
 
-        other_org = Organization(
-            name="Other Org", slug="other-org-me", description=""
-        )
+        other_org = Organization(name="Other Org", slug="other-org-me", description="")
         db_session.add(other_org)
         await db_session.flush()
         # STORY-121.3 : purger le rattachement posé par la fixture avant
@@ -177,9 +173,7 @@ class TestAuthMe:
         from sqlalchemy import delete
 
         await db_session.execute(
-            delete(UserOrganization).where(
-                UserOrganization.user_id == test_user.id
-            )
+            delete(UserOrganization).where(UserOrganization.user_id == test_user.id)
         )
         # Appartenance plus ancienne (primaire) : joined_at antérieur
         db_session.add(

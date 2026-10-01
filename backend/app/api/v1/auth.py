@@ -23,8 +23,10 @@ from ...core.exceptions import (
 )
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
+from ...helper.pagination import PaginationQuery, build_meta
 from ...models.user import User
 from ...schemas.api_key import APIKeyCreate, APIKeyCreated, APIKeyResponse
+from ...schemas.common import PaginatedResponse
 from ...schemas.user import (
     LoginResponse,
     RefreshResponse,
@@ -1090,7 +1092,7 @@ async def create_api_key(
 
 @router.get(
     "/api-keys",
-    response_model=list[APIKeyResponse],
+    response_model=PaginatedResponse,
     status_code=status.HTTP_200_OK,
     summary="List my API keys",
     description="""
@@ -1120,27 +1122,38 @@ Most recent first (`created_at` descending).
 """,
     responses={
         200: {
-            "description": "List of API keys (metadata only, no secrets)",
+            "description": (
+                "Paginated list of API keys (metadata only, no secrets)"
+            ),
             "content": {
                 "application/json": {
-                    "example": [
-                        {
-                            "id": "9d2c8a4f-1b3e-4f5a-8a7b-2c9d0e1f2a3b",
-                            "name": "CLI laptop",
-                            "expires_at": "2027-01-01T00:00:00Z",
-                            "last_used_at": "2026-09-15T14:22:05Z",
-                            "revoked": False,
-                            "created_at": "2026-09-15T10:00:00Z",
+                    "example": {
+                        "data": [
+                            {
+                                "id": "9d2c8a4f-1b3e-4f5a-8a7b-2c9d0e1f2a3b",
+                                "name": "CLI laptop",
+                                "expires_at": "2027-01-01T00:00:00Z",
+                                "last_used_at": "2026-09-15T14:22:05Z",
+                                "revoked": False,
+                                "created_at": "2026-09-15T10:00:00Z",
+                            },
+                            {
+                                "id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+                                "name": "Old CI key",
+                                "expires_at": "2026-01-01T00:00:00Z",
+                                "last_used_at": "2025-12-30T08:15:00Z",
+                                "revoked": False,
+                                "created_at": "2025-06-01T09:00:00Z",
+                            },
+                        ],
+                        "pagination": {
+                            "page": 1,
+                            "per_page": 20,
+                            "total": 2,
+                            "pages": 1,
                         },
-                        {
-                            "id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-                            "name": "Old CI key",
-                            "expires_at": "2026-01-01T00:00:00Z",
-                            "last_used_at": "2025-12-30T08:15:00Z",
-                            "revoked": False,
-                            "created_at": "2025-06-01T09:00:00Z",
-                        },
-                    ]
+                        "message": None,
+                    }
                 }
             },
         },
@@ -1173,13 +1186,24 @@ Most recent first (`created_at` descending).
 )
 async def list_api_keys(
     request: Request,
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
-):
-    """List the authenticated user's API keys (metadata only, no secrets)."""
+) -> PaginatedResponse:
+    """Liste paginée des clés API de l'utilisateur authentifié (STORY-128).
+
+    Métadonnées uniquement — jamais de secrets. Tri ``created_at desc``
+    (plus récentes d'abord), ``COUNT`` scopé propriétaire.
+    """
     # STORY-124.3 : clés expirées conservées (arbitrage) — revoked distinct
     # de l'expiration ; jamais key_hash ni key (schema APIKeyResponse).
-    return await ApiKeyService.list_for_user(session, current_user.id)
+    keys = await ApiKeyService.list_for_user(
+        session, current_user.id, page=page, per_page=per_page
+    )
+    total = await ApiKeyService.count_for_user(session, current_user.id)
+    data = [k.model_dump() for k in keys]
+    return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))
 
 
 @router.delete(

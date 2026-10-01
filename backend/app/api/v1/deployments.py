@@ -4,6 +4,7 @@ Routes de gestion des déploiements.
 
 import logging
 from datetime import datetime
+from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
@@ -19,10 +20,11 @@ from ...core.exceptions import (
 )
 from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
+from ...helper.pagination import PaginationQuery, build_meta
 from ...models.user import User
+from ...schemas.common import PaginatedResponse
 from ...schemas.deployment import (
     DeploymentCreate,
-    DeploymentListResponse,
     DeploymentLogsResponse,
     DeploymentResponse,
     DeploymentUpdate,
@@ -38,19 +40,19 @@ logger = logging.getLogger(__name__)
 
 @router.get(
     "",
-    response_model=DeploymentListResponse,
+    response_model=PaginatedResponse,
     summary="List all deployments",
     description="""
-List all deployments in the current user's organization.
+List all deployments in the current user's organizations.
 
 ## Pagination
-Returns a paginated response with `items`, `total`, `skip`, and `limit`.
-Use `skip` and `limit` query parameters to navigate pages:
-- Default: Returns first 100 deployments
-- Maximum limit: 1000 deployments per request
+- `?page=1&per_page=20` (max 100) — STORY-128 canonical format,
+  response envelope `PaginatedResponse{data, pagination{page, per_page, total, pages}}`
+- **Stable order**: `ORDER BY created_at desc, id desc` — no duplicates/holes across pages
 
 ## Filtering
-Results are automatically filtered by organization membership.
+Results are automatically filtered by organization membership
+(single scoped query, no per-org paging).
 
 ## Sorting
 Deployments are returned in reverse chronological order (newest first).
@@ -64,26 +66,27 @@ Deployments are returned in reverse chronological order (newest first).
             "content": {
                 "application/json": {
                     "example": {
-                        "data": {
-                            "items": [
-                                {
-                                    "id": "990e8400-e29b-41d4-a716-446655440000",
-                                    "name": "production-api",
-                                    "status": "running",
-                                    "target_type": "docker",
-                                    "created_at": "2026-01-02T22:30:00Z",
-                                },
-                                {
-                                    "id": "880e8400-e29b-41d4-a716-446655440001",
-                                    "name": "staging-web",
-                                    "status": "pending",
-                                    "target_type": "docker-compose",
-                                    "created_at": "2026-01-02T21:15:00Z",
-                                },
-                            ],
+                        "data": [
+                            {
+                                "id": "990e8400-e29b-41d4-a716-446655440000",
+                                "name": "production-api",
+                                "status": "running",
+                                "target_type": "docker",
+                                "created_at": "2026-01-02T22:30:00Z",
+                            },
+                            {
+                                "id": "880e8400-e29b-41d4-a716-446655440001",
+                                "name": "staging-web",
+                                "status": "pending",
+                                "target_type": "docker-compose",
+                                "created_at": "2026-01-02T21:15:00Z",
+                            },
+                        ],
+                        "pagination": {
+                            "page": 1,
+                            "per_page": 20,
                             "total": 42,
-                            "skip": 0,
-                            "limit": 100,
+                            "pages": 3,
                         },
                         "message": None,
                     }
@@ -123,40 +126,35 @@ Deployments are returned in reverse chronological order (newest first).
 )
 async def list_deployments(
     request: Request,
-    skip: int = 0,
-    limit: int = 100,
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
     current_user: User = Depends(require_viewer),
     session: AsyncSession = Depends(get_db),
-):
-    """List all deployments in organization."""
+) -> PaginatedResponse:
+    """Liste paginée des déploiements des organisations de l'utilisateur
+    (STORY-128 — ancien format B ``{items, total, skip, limit}`` converti
+    vers l'enveloppe canonique ``{data, pagination{...}}``)."""
     correlation_id = getattr(request.state, "correlation_id", None)
 
     logger.info(
-        "Listing deployments for organization",
+        "Listing deployments for user organizations",
         extra={
             "correlation_id": correlation_id,
             "user_id": str(current_user.id),
-            "skip": skip,
-            "limit": limit,
+            "page": page,
+            "per_page": per_page,
         },
     )
 
     # STORY-121.3 : scoping sur les organisations de l'utilisateur
-    # (appartenances via l'association ; agrégation multi-org)
+    # (appartenances via l'association ; STORY-128 : requête unique IN)
     org_ids = await UserOrganizationService.get_user_organization_ids(
         session, current_user
     )
-    total = 0
-    deployments = []
-    seen_ids: set[str] = set()
-    for org_id in org_ids:
-        total += await DeploymentService.count_by_organization(session, org_id)
-        for dep in await DeploymentService.list_by_organization(
-            session, org_id, skip, limit
-        ):
-            if dep.id not in seen_ids:
-                seen_ids.add(dep.id)
-                deployments.append(dep)
+    deployments = await DeploymentService.list_by_organizations(
+        session, org_ids, page=page, per_page=per_page
+    )
+    total = await DeploymentService.count_by_organizations(session, org_ids)
 
     logger.info(
         f"Retrieved {len(deployments)} deployments (total: {total})",
@@ -167,12 +165,10 @@ async def list_deployments(
         },
     )
 
-    return DeploymentListResponse(
-        items=[DeploymentResponse.model_validate(d) for d in deployments],
-        total=total,
-        skip=skip,
-        limit=limit,
-    )
+    data: List[dict] = [
+        DeploymentResponse.model_validate(d).model_dump() for d in deployments
+    ]
+    return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))
 
 
 @router.get(

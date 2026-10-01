@@ -195,6 +195,69 @@ class DeploymentService:
         return result.scalar_one()
 
     @staticmethod
+    async def list_by_organizations(
+        db: AsyncSession,
+        organization_ids: List[str],
+        page: int = 1,
+        per_page: int = 20,
+    ) -> List[Deployment]:
+        """Liste les déploiements d'un ensemble d'organisations (STORY-128).
+
+        Requête unique ``WHERE organization_id IN (...)`` avec tri
+        ``created_at desc, id desc`` (tie-breaker pour un tri stable) —
+        remplace la boucle par-organisation de ``list_deployments``
+        dont l'application de skip/limit **par org** produisait des
+        pages chevauchantes.
+
+        Args:
+            db: Session de base de données async
+            organization_ids: Identifiants des organisations scopées
+            page: Page demandée (1-indexée)
+            per_page: Taille de page (bornée 1-100 par le Query endpoint)
+
+        Returns:
+            Liste des déploiements de la page, plus récents d'abord
+        """
+        if not organization_ids:
+            return []
+        result = await db.execute(
+            select(Deployment)
+            .where(Deployment.organization_id.in_(organization_ids))
+            .order_by(Deployment.created_at.desc(), Deployment.id.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def count_by_organizations(
+        db: AsyncSession, organization_ids: List[str]
+    ) -> int:
+        """Compte les déploiements d'un ensemble d'organisations (STORY-128).
+
+        ``COUNT`` avec le **même scoping** que
+        :meth:`list_by_organizations` (rules 40 — pas d'oracle de
+        comptage cross-org).
+
+        Args:
+            db: Session de base de données async
+            organization_ids: Identifiants des organisations scopées
+
+        Returns:
+            Nombre total de déploiements correspondant au scoping
+        """
+        from sqlalchemy import func
+
+        if not organization_ids:
+            return 0
+        result = await db.execute(
+            select(func.count(Deployment.id)).where(
+                Deployment.organization_id.in_(organization_ids)
+            )
+        )
+        return int(result.scalar() or 0)
+
+    @staticmethod
     async def list_by_organization(
         db: AsyncSession, organization_id: str, skip: int = 0, limit: int = 100
     ) -> List[Deployment]:

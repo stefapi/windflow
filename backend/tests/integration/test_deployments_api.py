@@ -5,10 +5,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
+from tests.conftest import unwrap
 
 from app.models.stack import Stack
 from app.models.target import Target
-from tests.conftest import unwrap
 
 ORCH_PATCH = (
     "app.services.deployment_orchestrator.DeploymentOrchestrator.start_deployment"
@@ -78,7 +78,7 @@ class TestDeploymentsAPI:
     async def test_list_deployments(
         self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Target
     ):
-        """Test de listage des déploiements."""
+        """Test de listage des déploiements (contrat paginé STORY-128)."""
         with patch(ORCH_PATCH, new_callable=AsyncMock, return_value=None):
             for i in range(3):
                 await authenticated_client.post(
@@ -94,20 +94,15 @@ class TestDeploymentsAPI:
 
         response = await authenticated_client.get("/api/v1/deployments")
         assert response.status_code == 200
-        data = unwrap(response)
-        assert isinstance(data, dict)
-        assert "items" in data
-        assert "total" in data
-        assert "skip" in data
-        assert "limit" in data
-        assert isinstance(data["items"], list)
-        assert len(data["items"]) >= 3
-        assert data["total"] >= 3
+        body = response.json()
+        assert isinstance(body["data"], list)
+        assert len(body["data"]) >= 3
+        assert body["pagination"]["total"] >= 3
 
     async def test_list_deployments_with_pagination(
         self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Target
     ):
-        """Test de listage avec pagination."""
+        """Test de listage avec pagination page/per_page (STORY-128)."""
         with patch(ORCH_PATCH, new_callable=AsyncMock, return_value=None):
             for i in range(5):
                 await authenticated_client.post(
@@ -121,13 +116,14 @@ class TestDeploymentsAPI:
                     },
                 )
 
-        response = await authenticated_client.get("/api/v1/deployments?skip=1&limit=2")
+        response = await authenticated_client.get(
+            "/api/v1/deployments?page=2&per_page=2"
+        )
         assert response.status_code == 200
-        data = unwrap(response)
-        assert "items" in data
-        assert len(data["items"]) == 2
-        assert data["skip"] == 1
-        assert data["limit"] == 2
+        body = response.json()
+        assert len(body["data"]) == 2
+        assert body["pagination"]["page"] == 2
+        assert body["pagination"]["per_page"] == 2
 
     async def test_create_deployment_unauthenticated(
         self, client: AsyncClient, test_stack: Stack, test_target: Target

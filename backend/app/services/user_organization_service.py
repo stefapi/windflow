@@ -14,7 +14,7 @@ d'association : il est absent de l'enum ``Role`` (double barrière avec le
 from typing import List, Optional, Union
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -160,6 +160,32 @@ class UserOrganizationService:
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    @staticmethod
+    async def count_members(
+        db: AsyncSession,
+        organization_id: Union[UUID, str],
+    ) -> int:
+        """
+        Compte les membres d'une organisation (STORY-128).
+
+        ``COUNT`` scopé à l'organisation — même filtre que
+        :meth:`list_members` (rules 40 : pas d'oracle cross-org).
+
+        Args:
+            db: Session de base de données async
+            organization_id: ID de l'organisation
+
+        Returns:
+            Nombre total de membres de l'organisation
+        """
+        organization_id_str = _as_str_id(organization_id)
+        result = await db.execute(
+            select(func.count())
+            .select_from(UserOrganization)
+            .where(UserOrganization.organization_id == organization_id_str)
+        )
+        return int(result.scalar() or 0)
 
     @staticmethod
     async def add_member(

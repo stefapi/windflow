@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import unwrap
 
 from app.auth.jwt import create_access_token
 from app.core.cache import reset_role_cache
@@ -33,7 +34,6 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
-from tests.conftest import unwrap
 
 # --- Helpers --------------------------------------------------------------
 
@@ -140,18 +140,19 @@ class TestViewerMatrix:
     async def test_viewer_200_list_deployments(
         self, client: AsyncClient, db_session: AsyncSession
     ):
-        """Lecture : GET /deployments avec viewer → 200 (liste scopée)."""
+        """Lecture : GET /deployments avec viewer → 200 (liste scopée,
+        contrat paginé STORY-128)."""
         user, org = await _create_user_with_role(db_session, "dep-view-l", Role.VIEWER)
         stack, target = await _seed_stack_target(db_session, org)
         deployment = await _seed_deployment(db_session, org, stack, target)
 
         response = await client.get("/api/v1/deployments", headers=_auth_headers(user))
         assert response.status_code == 200
-        body = unwrap(response)
-        assert body["total"] == 1
+        body = response.json()
+        assert body["pagination"]["total"] == 1
         # DeploymentResponse n'expose pas organization_id : identification
         # par id (le seed n'a créé qu'un seul déploiement, dans son org).
-        assert body["items"][0]["id"] == deployment.id
+        assert body["data"][0]["id"] == deployment.id
 
     async def test_viewer_200_get_deployment(
         self, client: AsyncClient, db_session: AsyncSession

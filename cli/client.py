@@ -5,15 +5,40 @@ STORY-126.3 : l'API sert les enveloppes spec 09 — succès ``{"data": ...,
 "message": ...}`` et erreurs ``{"error": {"code", "message"}}``. Le client
 déplie centralement ``data`` (unwrap tolérant : un corps nu pré-126.2 passe
 tel quel) et lit ``error.message`` avec fallback ``detail`` legacy.
+
+STORY-128 : les endpoints de liste répondent ``{"data": [...], "pagination":
+{page, per_page, total, pages}}`` — :meth:`APIClient.get_paginated` conserve
+les métadonnées (le ``get`` générique ne livre que la liste) et
+:meth:`APIClient.get_all` assemble les pages pour les commandes d'affichage.
 """
 
-from typing import Any, Dict, Optional
+import math
+from typing import Any, Dict, List, NamedTuple, Optional
 
 import httpx
 
 from cli.config import config_manager
 from cli.session import session
 from cli.utils import print_error
+
+
+class PaginatedResult(NamedTuple):
+    """Résultat d'une requête paginée (STORY-128).
+
+    Attributes:
+        items: éléments de la(les) page(s) récupérée(s).
+        pagination: métadonnées ``{page, per_page, total, pages}`` de la
+            première page (``total`` reflète l'ensemble de la collection,
+            pas seulement ``len(items)``).
+    """
+
+    items: List[Any]
+    pagination: Dict[str, int]
+
+    @property
+    def total(self) -> int:
+        """Total réel de la collection (0 si métadonnées absentes)."""
+        return int(self.pagination.get("total", len(self.items)))
 
 
 class APIClient:
@@ -45,11 +70,19 @@ class APIClient:
 
         return headers
 
-    def _handle_response(self, response: httpx.Response) -> Any:
-        """Gère la réponse HTTP, déplie l'enveloppe spec 09 et les erreurs."""
+    def _handle_response(self, response: httpx.Response, unwrap: bool = True) -> Any:
+        """Gère la réponse HTTP, déplie l'enveloppe spec 09 et les erreurs.
+
+        Args:
+            response: réponse httpx à traiter.
+            unwrap: si ``False`` (STORY-128 ``get_paginated``), le corps
+                brut est retourné sans dépliage — l'appelant conserve
+                ainsi le bloc ``pagination``.
+        """
         try:
             response.raise_for_status()
-            return self._unwrap_payload(response.json())
+            body = response.json()
+            return self._unwrap_payload(body) if unwrap else body
         except httpx.HTTPStatusError as e:
             message = self._extract_error_message(e)
             if e.response.status_code == 401:
@@ -112,6 +145,82 @@ class APIClient:
         url = f"{self.config.api_prefix}{endpoint}"
         response = self.client.get(url, params=params)
         return self._handle_response(response)
+
+    def get_paginated(
+        self,
+        endpoint: str,
+        params: Optional[Dict[str, Any]] = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> PaginatedResult:
+        """GET un endpoint de liste paginé en conservant les métadonnées.
+
+        STORY-128 : contrairement à :meth:`get` (qui ne livre que la liste
+        post-unwrap), retourne un :class:`PaginatedResult` exposant ``items``
+        **et** ``pagination{page, per_page, total, pages}``.
+
+        Tolérant aux sources non paginées (liste nue pré-128 / enveloppe
+        standard) : ``pagination`` est alors déduit de la liste (total =
+        longueur).
+        """
+        merged = dict(params) if params else {}
+        merged.update({"page": page, "per_page": per_page})
+        url = f"{self.config.api_prefix}{endpoint}"
+        response = self.client.get(url, params=merged)
+        body = self._handle_response(response, unwrap=False)
+
+        if isinstance(body, dict) and isinstance(body.get("pagination"), dict):
+            data = body.get("data")
+            items = data if isinstance(data, list) else []
+            pagination: Dict[str, int] = {
+                "page": int(body["pagination"].get("page", page)),
+                "per_page": int(body["pagination"].get("per_page", per_page)),
+                "total": int(body["pagination"].get("total", len(items))),
+                "pages": int(body["pagination"].get("pages", 1)),
+            }
+            return PaginatedResult(items=items, pagination=pagination)
+
+        # Transition : liste nue ou enveloppe standard {data, message} déjà
+        # dépliée — métadonnées déduites localement.
+        payload = self._unwrap_payload(body)
+        items = payload if isinstance(payload, list) else []
+        total = len(items)
+        pages = math.ceil(total / per_page) if per_page > 0 else 0
+        return PaginatedResult(
+            items=items,
+            pagination={
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "pages": pages,
+            },
+        )
+
+    def get_all(
+        self,
+        endpoint: str,
+        params: Optional[Dict[str, Any]] = None,
+        page_size: int = 100,
+        max_pages: int = 50,
+    ) -> PaginatedResult:
+        """Assemble toutes les pages d'un endpoint de liste (STORY-128).
+
+        Boucle ``page=1..pages`` avec ``per_page=page_size`` (défaut 100 —
+        maximum serveur) et concatène les items ; le résultat expose le
+        ``total`` réel de la collection via :class:`PaginatedResult`.
+
+        ``max_pages`` borne la boucle (garde-fou contre un serveur qui
+        annoncerait un nombre de pages incohérent — 50×100 = 5000 items).
+        """
+        result = self.get_paginated(endpoint, params=params, page=1, per_page=page_size)
+        all_items: List[Any] = list(result.items)
+        pages = result.pagination.get("pages", 1)
+        for next_page in range(2, min(pages, max_pages) + 1):
+            page_result = self.get_paginated(
+                endpoint, params=params, page=next_page, per_page=page_size
+            )
+            all_items.extend(page_result.items)
+        return PaginatedResult(items=all_items, pagination=result.pagination)
 
     def post(self, endpoint: str, data: Optional[Dict[str, Any]] = None) -> Any:
         """Effectue une requête POST et retourne la charge utile (dépliée)."""

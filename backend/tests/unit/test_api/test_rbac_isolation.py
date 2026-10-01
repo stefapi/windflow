@@ -24,6 +24,7 @@ body) : le test d'isolation porte sur cette route réelle, avec le check
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import unwrap
 
 from app.auth.jwt import create_access_token
 from app.core.cache import reset_role_cache
@@ -36,7 +37,6 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
-from tests.conftest import unwrap
 
 # --- Helpers --------------------------------------------------------------
 
@@ -254,12 +254,13 @@ class TestCrossOrganizationIsolation:
         self, client: AsyncClient, isolation_setup
     ):
         """Contrôle croisé : GET /deployments de viewer-B ne contient que B
-        (identification par id — DeploymentResponse n'expose pas org)."""
+        (identification par id — DeploymentResponse n'expose pas org ;
+        contrat paginé STORY-128 : liste sous ``data``)."""
         response = await client.get(
             "/api/v1/deployments", headers=_auth_headers(isolation_setup["viewer_b"])
         )
         assert response.status_code == 200
-        items = unwrap(response)["items"]
+        items = response.json()["data"]
         item_ids = {i["id"] for i in items}
         assert isolation_setup["deployment_a"].id not in item_ids
         assert isolation_setup["deployment_b"].id in item_ids

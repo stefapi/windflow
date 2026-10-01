@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.scheduled_task import ScheduledTask, TaskType
@@ -24,14 +24,50 @@ class SchedulerService:
         self.db = db
 
     async def list_tasks(
-        self, organization_id: Optional[str] = None
+        self,
+        organization_id: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 20,
     ) -> list[ScheduledTask]:
-        """Liste toutes les tâches planifiées."""
-        query = select(ScheduledTask).order_by(ScheduledTask.created_at.desc())
+        """Liste les tâches planifiées, paginées (STORY-128).
+
+        Tri stable ``ORDER BY name`` (l'ancien ``created_at desc`` sans
+        tie-breaker rendait les pages non déterministes) ; le filtre
+        ``organization_id`` est combiné dans la même requête que la
+        pagination.
+
+        Args:
+            organization_id: Filtre optionnel par organisation
+            page: Page demandée (1-indexée, bornée par le Query endpoint)
+            per_page: Taille de page (1-100, bornée par le Query endpoint)
+
+        Returns:
+            Liste des tâches de la page, triée par nom
+        """
+        query = select(ScheduledTask).order_by(ScheduledTask.name)
+        if organization_id:
+            query = query.where(ScheduledTask.organization_id == organization_id)
+        query = query.offset((page - 1) * per_page).limit(per_page)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def count_tasks(self, organization_id: Optional[str] = None) -> int:
+        """Compte les tâches planifiées (STORY-128).
+
+        ``COUNT`` avec le **même filtre** ``organization_id`` que
+        :meth:`list_tasks` (rules 40 — pas d'oracle de comptage).
+
+        Args:
+            organization_id: Filtre optionnel par organisation
+
+        Returns:
+            Nombre total de tâches correspondant au filtre
+        """
+        query = select(func.count()).select_from(ScheduledTask)
         if organization_id:
             query = query.where(ScheduledTask.organization_id == organization_id)
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        return int(result.scalar() or 0)
 
     async def get_task(self, task_id: str) -> Optional[ScheduledTask]:
         """Récupère une tâche par son ID."""

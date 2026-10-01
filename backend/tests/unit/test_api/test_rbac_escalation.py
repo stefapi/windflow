@@ -19,6 +19,7 @@ Setup : org A avec admin-A, operator-A, viewer-A ; superadmin (unique).
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import unwrap
 
 from app.auth.jwt import create_access_token
 from app.core.cache import reset_role_cache
@@ -28,7 +29,6 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
-from tests.conftest import unwrap
 
 # --- Helpers --------------------------------------------------------------
 
