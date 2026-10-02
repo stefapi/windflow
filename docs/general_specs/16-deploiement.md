@@ -149,7 +149,11 @@ docker compose exec -T windflow-api alembic upgrade head
 docker compose exec -it windflow-api windflow admin create \
   --username admin --email admin@example.com
 
-# Tester
+# Attendre que l'API soit prête (signal canonique des orchestrateurs :
+# migrations appliquées + DB + dépendances optionnelles — STORY-129)
+curl -f http://localhost:8080/api/v1/system/ready
+
+# Vérification légère (santé applicative)
 curl http://localhost:8080/api/v1/system/health
 ```
 

@@ -15,6 +15,7 @@ from ...core.bruteforce_protection import bruteforce_protector
 from ...core.exceptions import (
     AuthenticationError,
     ConflictError,
+    InvalidInputError,
     InvalidRefreshTokenError,
     NotFoundError,
     PermissionDeniedError,
@@ -29,6 +30,8 @@ from ...schemas.api_key import APIKeyCreate, APIKeyCreated, APIKeyResponse
 from ...schemas.common import PaginatedResponse
 from ...schemas.user import (
     LoginResponse,
+    PasswordChangeRequest,
+    PasswordChangeResponse,
     RefreshResponse,
     RefreshTokenRequest,
     UserCreate,
@@ -973,6 +976,187 @@ async def get_current_user_profile(
     return await _user_response(session, current_user)
 
 
+@router.put(
+    "/password",
+    response_model=PasswordChangeResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Change my password",
+    description="""
+Change the password of the **currently authenticated user** (self-service,
+spec 07 — `PUT /password`).
+
+## Process
+1. Verifies the **current password** (400 `INVALID_INPUT` if wrong — the
+   user is authenticated, 401 would be misleading)
+2. Hashes the new password with **Argon2** and persists it
+3. **Revokes all refresh tokens** of the user (all other sessions must
+   re-authenticate with the new password — stolen-credential defense)
+4. Emits an audit event `user.password_changed`
+5. Returns the confirmation with the number of revoked refresh tokens
+
+## API keys are NOT affected
+Existing API keys (`wf_ak_...`) remain valid after a password change.
+Revoke them individually via `DELETE /auth/api-keys/{id}` if needed.
+
+## Structural isolation (rules 40)
+The request body contains **no user identifier** — only `current_password`
+and `new_password`. The endpoint always acts on the authenticated user;
+it is impossible to target another account.
+
+## Security Features
+- Current password required (defense against session hijacking)
+- Argon2 hashing (same scheme as login — never legacy bcrypt)
+- All refresh tokens revoked server-side (single-use opaque tokens)
+- Audit trail `user.password_changed` (no password material logged)
+- Rate limited (5 changes per minute)
+
+**Authentication Required** - Bearer JWT **or** `X-API-Key` (self-service
+for any authenticated role — no `require_role`)
+""",
+    dependencies=[Depends(conditional_rate_limiter(5, 60))],
+    responses={
+        200: {
+            "description": "Password updated — enveloppe spec 09",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "data": {
+                            "message": "Password updated successfully",
+                            "refresh_tokens_revoked": 2,
+                        },
+                        "message": None,
+                    }
+                }
+            },
+        },
+        400: {
+            "description": "Current password is incorrect",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "INVALID_INPUT",
+                            "message": "Current password is incorrect",
+                        }
+                    }
+                }
+            },
+        },
+        401: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "INVALID_OR_EXPIRED_TOKEN",
+                            "message": "Not authenticated",
+                        }
+                    }
+                }
+            },
+        },
+        422: {
+            "description": (
+                "Invalid body (missing field, weak new_password < 8 chars, "
+                "current_password empty)"
+            ),
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Validation Error",
+                            "details": [
+                                {
+                                    "loc": ["body", "new_password"],
+                                    "msg": "String should have at least 8 characters",
+                                    "type": "string_too_short",
+                                }
+                            ],
+                        }
+                    }
+                }
+            },
+        },
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "TOO_MANY_ATTEMPTS",
+                            "message": (
+                                "Too Many Requests. Maximum 5 requests per minute."
+                            ),
+                        }
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal server error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "INTERNAL_ERROR",
+                            "message": "An unexpected error occurred",
+                        }
+                    }
+                }
+            },
+        },
+    },
+    tags=["authentication"],
+)
+async def change_password(
+    request: Request,
+    password_data: PasswordChangeRequest,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Change the password of the authenticated user (self-service)."""
+    # 1. Vérifier l'ancien mot de passe — 400 (arbitrage n°4) : message
+    #    générique, jamais de distinction « utilisateur inconnu ».
+    if not UserService.verify_password(
+        password_data.current_password, current_user.hashed_password
+    ):
+        raise InvalidInputError("Current password is incorrect")
+
+    # 2. Écrire le nouveau hash — Argon2 via UserService.hash_password
+    #    (arbitrage n°1 : jamais helper/security.py bcrypt legacy).
+    current_user.hashed_password = UserService.hash_password(password_data.new_password)
+    await session.commit()
+
+    # 3. Révoquer toutes les sessions refresh (AC 3) — les clés API ne
+    #    sont PAS touchées (documenté dans la description OpenAPI).
+    revoked = await RefreshTokenService.revoke_all_for_user(session, current_user.id)
+
+    # 4. Auditer l'action critique (STORY-125.2) — jamais les mots de
+    #    passe dans les details (rules 40).
+    await AuditService.log_from_request(
+        request,
+        "user.password_changed",
+        user=current_user,
+        resource_type="user",
+        resource_id=str(current_user.id),
+        details={"refresh_tokens_revoked": revoked},
+    )
+
+    # 5. Log applicatif — identifiants uniquement, sans données sensibles.
+    logger.info(
+        "user.password_changed user_id=%s refresh_tokens_revoked=%d",
+        current_user.id,
+        revoked,
+    )
+
+    # 6. Réponse 200 (enveloppée par le middleware) — aucun champ sensible.
+    return PasswordChangeResponse(
+        message="Password updated successfully",
+        refresh_tokens_revoked=revoked,
+    )
+
+
 @router.post(
     "/api-keys",
     response_model=APIKeyCreated,
@@ -1122,9 +1306,7 @@ Most recent first (`created_at` descending).
 """,
     responses={
         200: {
-            "description": (
-                "Paginated list of API keys (metadata only, no secrets)"
-            ),
+            "description": ("Paginated list of API keys (metadata only, no secrets)"),
             "content": {
                 "application/json": {
                     "example": {

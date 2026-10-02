@@ -284,7 +284,9 @@ services:
       vault:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      # STORY-129 : readiness (migrations + DB + Redis optionnel) comme
+      # signal de démarrage canonique — /health racine reste en alias
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/system/ready"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -295,7 +297,7 @@ services:
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
       - "traefik.http.routers.api.middlewares=security-headers"
       - "traefik.http.services.api.loadbalancer.server.port=8000"
-      - "traefik.http.services.api.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.api.loadbalancer.healthcheck.path=/api/v1/system/ready"
       - "traefik.http.services.api.loadbalancer.healthcheck.interval=30s"
 
   windflow-worker:
@@ -350,7 +352,8 @@ services:
       vault:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      # STORY-129 : readiness canonique (même signal que windflow-api)
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/system/ready"]
       interval: 30s
       timeout: 10s
       retries: 3

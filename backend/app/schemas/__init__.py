@@ -5,6 +5,7 @@ Ce module contient tous les schémas de validation pour l'API REST.
 Utilise Pydantic V2 avec mode strict pour type safety maximale.
 """
 
+from ..enums.target import CapabilityType
 from .compute import (
     ComputeGlobalView,
     ComputeStatsResponse,
@@ -28,11 +29,12 @@ from .organization import (
     OrganizationUpdate,
 )
 from .stack import StackBase, StackCreate, StackResponse, StackUpdate
-from ..enums.target import CapabilityType
 from .target import TargetCreate, TargetResponse, TargetUpdate
 from .target_capability import TargetCapabilityBase, TargetCapabilityResponse
 from .user import (
     LoginResponse,
+    PasswordChangeRequest,
+    PasswordChangeResponse,
     Token,
     TokenData,
     UserBase,
@@ -45,6 +47,8 @@ from .user import (
 __all__ = [
     # User schemas
     "UserBase",
+    "PasswordChangeRequest",
+    "PasswordChangeResponse",
     "UserCreate",
     "UserUpdate",
     "UserResponse",

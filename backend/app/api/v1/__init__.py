@@ -19,6 +19,7 @@ from .plugins import router as plugins_router
 from .schedules import router as schedules_router
 from .stacks import router as stacks_router
 from .stats import router as stats_router
+from .system import router as system_router
 from .targets import router as targets_router
 from .users import router as users_router
 from .websockets import router as websockets_router
@@ -51,5 +52,6 @@ api_router.include_router(plugins_router, prefix="/plugins", tags=["plugins"])
 api_router.include_router(
     plugin_registry_router, prefix="/registry", tags=["plugin-registry"]
 )
+api_router.include_router(system_router, prefix="/system", tags=["system"])
 
 __all__ = ["api_router"]

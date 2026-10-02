@@ -337,7 +337,8 @@ format). See schemas `APIResponse`, `PaginatedResponse`, `ErrorResponse`,
 ## Support
 - Documentation: /docs
 - API Reference: /redoc
-- Health Check: /health
+- Health Check: /health (alias) and /api/v1/system/health (spec 09)
+- Readiness (orchestrators: compose healthchecks, Traefik, install): /api/v1/system/ready
 - GitHub: https://github.com/stefapi/windflow
     """.format(
         rate_limit=(
@@ -366,6 +367,13 @@ format). See schemas `APIResponse`, `PaginatedResponse`, `ErrorResponse`,
         },
         {"name": "users", "description": "User account management"},
         {"name": "health", "description": "Health checks and monitoring"},
+        {
+            "name": "system",
+            "description": (
+                "System health & readiness probes (no authentication) — "
+                "spec 09 exemptions"
+            ),
+        },
         {"name": "websocket", "description": "Real-time WebSocket connections"},
     ],
     swagger_ui_parameters={
@@ -494,39 +502,21 @@ async def health_check():
     """
     Health check endpoint for monitoring and load balancers.
 
+    STORY-129 : la logique est factorisée dans ``SystemService`` (délegation,
+    zéro duplication) et partagée avec ``/api/v1/system/health``. Le contrat
+    historique est préservé à l'identique (non-régression compose/traefik/
+    tests) — cette route racine reste le **alias** non enveloppé, le chemin
+    canonique spec 09 est ``/api/v1/system/health``.
+
     Returns:
         Health status including database and optional services
     """
-    health_status = {
-        "status": "healthy",
-        "version": settings.app_version,
-        "environment": settings.environment,
-        "services": {},
-    }
+    # STORY-129 : délégation au service commun (comportement identique)
+    from .services.system_service import SystemService
 
-    # Check database
-    db_healthy = await db.health_check()
-    health_status["services"]["database"] = {
-        "status": "healthy" if db_healthy else "unhealthy",
-        "type": "sqlite" if "sqlite" in settings.database_url else "postgresql",
-    }
-
-    # Check rate limiter
-    if settings.rate_limit_enabled and settings.rate_limit_storage_url:
-        try:
-            # Simple Redis ping
-            redis_client = redis.from_url(settings.rate_limit_storage_url)
-            await redis_client.ping()
-            health_status["services"]["rate_limiter"] = {"status": "healthy"}
-            await redis_client.close()
-        except Exception:
-            health_status["services"]["rate_limiter"] = {"status": "unhealthy"}
-
-    # Global status
-    if not db_healthy:
-        health_status["status"] = "unhealthy"
+    health_status = await SystemService.get_health()
+    if health_status["status"] != "healthy":
         return JSONResponse(status_code=503, content=health_status)
-
     return health_status
 
 

@@ -29,6 +29,11 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
         "/api/v1/auth/refresh",
         "/api/v1/auth/logout",
         "/api/v1/auth/register",
+        # STORY-129 : sondes système sans auth (exemptions spec 09 § Système
+        # — signal de démarrage consommé par les orchestrateurs compose/
+        # traefik/install ; payload anti-fingerprinting, aucun secret)
+        "/api/v1/system/health",
+        "/api/v1/system/ready",
     }
 )
 
@@ -51,7 +56,8 @@ PROTECTED_DEPENDENCY_NAMES: frozenset[str] = frozenset(
 EXPECTED_ROUTE_COUNTS: dict[str, int] = {
     # STORY-124.3 : +3 routes /api-keys (POST/GET/DELETE, protégées
     # get_current_active_user) — évolution explicite revue §2.G.
-    "auth": 8,
+    # STORY-129 : +1 PUT /password (self-service authentifié) — 8 → 9.
+    "auth": 9,
     "users": 8,
     "organizations": 10,
     "targets": 13,
@@ -68,6 +74,9 @@ EXPECTED_ROUTE_COUNTS: dict[str, int] = {
     "discovery": 2,
     "plugins": 9,
     "plugin_registry": 2,
+    # STORY-129 : router system — GET /health + GET /ready sans auth
+    # (exemptions spec 09, blanchies dans PUBLIC_PATHS).
+    "system": 2,
 }
 
 WS_GENERAL = "/api/v1/ws/"

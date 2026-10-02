@@ -397,6 +397,80 @@ class RefreshResponse(BaseModel):
     )
 
 
+class PasswordChangeRequest(BaseModel):
+    """Schema pour changement de mot de passe self-service (STORY-129).
+
+    Contrat d'isolation structurelle (rules 40) : **aucun identifiant
+    utilisateur** dans le body — l'endpoint ``PUT /auth/password`` agit
+    toujours sur l'utilisateur authentifié courant ; il est impossible
+    de cibler le compte d'un autre.
+
+    Bornes de validation :
+    - ``current_password`` : non vide, ``<= 128`` — l'ancien mot de passe
+      peut précéder la politique actuelle (pas de ``min_length=8``), la
+      borne haute protège du DoS sur la vérification Argon2 ;
+    - ``new_password`` : 8-100 caractères, **identique à
+      ``UserCreate.password``** (politique existante).
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "current_password": "OldSecureP@ss123",
+                    "new_password": "NewSecureP@ss456",
+                },
+            ]
+        }
+    )
+
+    current_password: str = Field(
+        ...,
+        min_length=1,
+        max_length=128,
+        description="Mot de passe actuel (requis — vérifié avant le changement)",
+        json_schema_extra={"example": "OldSecureP@ss123"},
+    )
+    new_password: str = Field(
+        ...,
+        min_length=8,
+        max_length=100,
+        description="Nouveau mot de passe (8-100 caractères, politique standard)",
+        json_schema_extra={"example": "NewSecureP@ss456"},
+    )
+
+
+class PasswordChangeResponse(BaseModel):
+    """Schema pour réponse de changement de mot de passe (STORY-129).
+
+    Aucun champ sensible : jamais de hash, de mot de passe, ni de token.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "message": "Password updated successfully",
+                "refresh_tokens_revoked": 3,
+            }
+        }
+    )
+
+    message: str = Field(
+        ...,
+        description="Message de confirmation",
+        json_schema_extra={"example": "Password updated successfully"},
+    )
+    refresh_tokens_revoked: int = Field(
+        ...,
+        description=(
+            "Nombre de refresh tokens révoqués par le changement de mot "
+            "de passe (toutes les sessions refresh existantes sont "
+            "invalidees)"
+        ),
+        json_schema_extra={"example": 3},
+    )
+
+
 class TokenData(BaseModel):
     """Schema pour données extraites du token JWT.
 
