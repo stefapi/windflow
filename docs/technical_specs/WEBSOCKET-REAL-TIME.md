@@ -272,15 +272,14 @@ réencapsule le message en `system.error` avec le type d'origine en métadonnée
 
 ## 5. Flux de données d'un déploiement
 
-*État actuel (implémenté)* — le chemin d'exécution réel (corrigé par X7 : il n'existe pas de tâche Celery
-de déploiement ; [`celery_app.py`](../../backend/app/celery_app.py) ne définit que `cleanup_logs`,
-`health_check_targets`, `retry_pending_deployments`) :
+*État actuel (implémenté)* — le chemin d'exécution réel (runtime asyncio unique, arbitrage F1 :
+l'orchestration vit intégralement dans le processus backend) :
 
 1. Le client crée un déploiement : `POST /api/v1/deployments` (`stack_id`, `target_id`, variables).
 2. `DeploymentService` crée l'enregistrement (`PENDING`) puis confie l'exécution au
    [`DeploymentOrchestrator`](../../backend/app/services/deployment_orchestrator.py), qui appelle
    [`deploy_stack_async()`](../../backend/app/tasks/background_tasks.py) — **tâche asyncio dans le processus
-   backend** (mode fallback « sans Celery »), avec retry automatique (`MAX_RETRIES`).
+   backend**, avec retry automatique (`MAX_RETRIES`).
 3. À chaque étape, le worker appelle [`DeploymentService.update_status()`](../../backend/app/services/deployment_service.py)
    (statut, logs cumulés, `user_id`).
 4. `update_status()` persiste puis émet :

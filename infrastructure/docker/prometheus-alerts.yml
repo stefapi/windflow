@@ -210,37 +210,3 @@ groups:
         annotations:
           summary: "Redis high memory usage"
           description: "Redis is using more than 90% of available memory (current: {{ $value }})."
-
-  - name: windflow_worker_alerts
-    interval: 30s
-    rules:
-      # Celery Worker Alerts (when enabled)
-      - alert: CeleryWorkerDown
-        expr: up{job="celery-worker"} == 0
-        for: 5m
-        labels:
-          severity: warning
-          component: workers
-        annotations:
-          summary: "Celery worker is down"
-          description: "A Celery worker has been down for more than 5 minutes."
-
-      - alert: CeleryQueueBacklog
-        expr: celery_queue_length > 100
-        for: 10m
-        labels:
-          severity: warning
-          component: workers
-        annotations:
-          summary: "Celery queue backlog"
-          description: "Celery queue has more than 100 pending tasks (current: {{ $value }})."
-
-      - alert: CeleryHighTaskFailureRate
-        expr: rate(celery_tasks_failed_total[10m]) / rate(celery_tasks_total[10m]) > 0.1
-        for: 5m
-        labels:
-          severity: warning
-          component: workers
-        annotations:
-          summary: "High Celery task failure rate"
-          description: "More than 10% of Celery tasks are failing (current rate: {{ $value }})."

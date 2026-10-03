@@ -28,7 +28,7 @@ Périmètre documentaire consolidé :
 - [`40-security.md`](../../.roo/rules/40-security.md) : vérifier l'alignement post-remédiation (Argon2 effectif, secrets chiffrés, brute-force, audit trail) ;
 - [`20-architecture-and-api.md`](../../.roo/rules/20-architecture-and-api.md) : mettre à jour si les endpoints/contrats ont changé (enveloppes, pagination, `/hosts`, dépréciation `/auth/me` de STORY-250) ;
 - [`35-testing-quality-gates.md`](../../.roo/rules/35-testing-quality-gates.md) : actualiser les zones de test (les « zones zéro » comblées par les vagues P2) ;
-- [`05-tech-stack.md`](../../.roo/rules/05-tech-stack.md) : retirer les mentions Celery/Dockerfile.worker si STORY-130 fait (⚠️ la skill `update-rules` peut être utilisée pour synchroniser les rules avec le code réel).
+- [`05-tech-stack.md`](../../.roo/rules/05-tech-stack.md) : retirer les mentions Celery/Dockerfile.worker si STORY-130.2 faite (⚠️ la skill `update-rules` peut être utilisée pour synchroniser les rules avec le code réel).
 
 **3. [`CHANGELOG.md`](../../CHANGELOG.md)** :
 - Tracer la remédiation backend : vagues P0-P2 (et P3 au fil de leur finalisation), breaking changes éventuels (enveloppes API STORY-126, dépréciations `/auth/me`, `/targets`).
@@ -41,7 +41,7 @@ Périmètre documentaire consolidé :
 ## Critères d'acceptation (AC)
 
 - [ ] AC 1 : [`backend_status.md`](../../docs/backend_status.md) régénéré/actualisé : chaque section obsolète corrigée (RBAC, secrets, Alembic, scheduler, bus, WS, modèle, plugins, observabilité, tests), nouvelle édition datée, plus aucun constat « pré-remédiation » non signalé comme résolu.
-- [ ] AC 2 : Les rules `.roo` ciblées (40, 20, 35, 05) sont à jour : plus de mention « Celery prévu mais non intégré » si STORY-130 fait, structure des endpoints/contrats alignée, zones de test réelles — cohérence rules ↔ code vérifiée.
+- [ ] AC 2 : Les rules `.roo` ciblées (40, 20, 35, 05) sont à jour : plus de mention « Celery prévu mais non intégré » si STORY-130.2 faite, structure des endpoints/contrats alignée, zones de test réelles — cohérence rules ↔ code vérifiée.
 - [ ] AC 3 : [`CHANGELOG.md`](../../CHANGELOG.md) trace la remédiation (vagues, fonctionnalités, breaking changes : enveloppes API, dépréciations `/auth/me` et `/targets`).
 - [ ] AC 4 : Relecture finale : plus d'écart « annoncé vs réel » sur les points traités par la remédiation (critère de done du plan P3-5) ; les écarts résiduels éventuels sont explicitement listés (renvoi vers STORY-254 pour le tableau de conformité final).
 - [ ] AC 5 : Documentation uniquement — aucun code modifié ; la CI documentaire (liens internes valides) reste verte.

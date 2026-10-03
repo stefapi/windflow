@@ -49,7 +49,7 @@ Extrait réel — [`docker-compose.minimal.yml`](../../docker-compose.minimal.ym
 
 Le socket Docker (`/var/run/docker.sock`) est monté dans l'API ; les données SQLite vivent dans le volume `windflow_data` (bind `./data/windflow`), les logs dans `windflow_logs`.
 
-*État actuel (implémenté)* vs *Cible (general_specs ch. 04)* : le mode léger canonique prévoit un worker Celery (1 process) à côté de l'API — le compose minimal actuel n'en définit pas (le worker n'existe que dans `docker-compose.prod.yml`) ; et la frontière cible place le reverse proxy côté Plugins (ch. 04), alors que Traefik est ici inclus au core compose. Écarts d'état, sans incidence sur le mécanisme décrit ici.
+*État actuel (implémenté)* vs *Cible (general_specs ch. 04)* : la cible historique prévoyait un worker dédié à côté de l'API — ce double runtime a été supprimé (STORY-130, arbitrage F1 : runtime asyncio unique assumé, cf. `docs/general_specs/04-architecture.md` en attente de mise à jour par STORY-252) ; et la frontière cible place le reverse proxy côté Plugins (ch. 04), alors que Traefik est ici inclus au core compose. Écarts d'état, sans incidence sur le mécanisme décrit ici.
 
 ## Briques d'infrastructure optionnelles (`docker-compose.extensions.yml`)
 
@@ -107,7 +107,7 @@ make status | logs | stop | restart
 Chaque cible `enable-*` lance `docker compose -f docker-compose.minimal.yml -f docker-compose.extensions.yml --profile <profil> up -d` ; le réseau `windflow-network` est créé au besoin.
 
 ⚠️ **Écarts connus (vérifiés dans le dépôt)** :
-- `make enable-workers` active les profils `cache` + `workers`, mais **aucun service `profiles: ["workers"]` n'est défini** dans `docker-compose.extensions.yml` — la cible ne démarre aucun worker. Les workers Celery ne sont définis que dans `docker-compose.prod.yml` (service `windflow-worker`, image `Dockerfile.worker`).
+- ~~`make enable-workers` / worker dédié~~ — écart **résolu par STORY-130** : la cible, le service compose `windflow-worker` et l'image dédiée ont été supprimés (runtime asyncio unique, arbitrage F1).
 - [`scripts/enable-extension.sh`](../../scripts/enable-extension.sh) est livré mais **désynchronisé** : il pilote des extensions `monitoring`/`logging`/`vault`/`sso`/`ai`/`kubernetes`/`swarm` via des variables `ENABLE_*` dans `.env` et appelle `--profile vault` (le profil réel s'appelle `secrets`), sur base `docker-compose.yml` (simple redirecteur d'aide) ; les profils `logging`, `ai`, `kubernetes`, `swarm` n'existent pas. Les variables `ENABLE_*` ne sont lues par aucun fichier compose. **Voie recommandée : les cibles `make`.**
 
 ## Variables d'environnement

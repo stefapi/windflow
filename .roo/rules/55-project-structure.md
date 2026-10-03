@@ -30,7 +30,6 @@ backend/
 │   ├── main.py               # Point d'entrée FastAPI, montage des routers
 │   ├── config.py             # Settings Pydantic-settings (env vars)
 │   ├── database.py           # Session async SQLAlchemy
-│   ├── celery_app.py         # Config Celery
 │   │
 │   ├── api/v1/               # Endpoints REST (routers FastAPI)
 │   │   └── *.py              # Un fichier par domaine (containers.py, stacks.py, auth.py…)
@@ -55,7 +54,7 @@ backend/
 │   ├── services/             # Logique métier (pas de dépendance HTTP directe)
 │   │   └── *.py              # Un fichier par domaine (docker_client_service.py…)
 │   │
-│   ├── tasks/                # Tâches Celery (async background)
+│   ├── tasks/                # Tâches async (asyncio runtime)
 │   │   └── *.py
 │   │
 │   ├── websocket/            # Handlers WebSocket (temps réel)

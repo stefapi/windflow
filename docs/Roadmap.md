@@ -97,7 +97,7 @@ Un plugin peut être :
 - PostgreSQL + SQLAlchemy 2.0 async + Redis
 - Auth JWT avec refresh tokens
 - Organisations, environnements, RBAC
-- Celery pour tâches asynchrones
+- Runtime asyncio pour tâches asynchrones
 
 **Interface :**
 - Web UI Vue.js 3 + TypeScript + Element Plus

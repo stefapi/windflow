@@ -6,8 +6,7 @@ Backend :
 - SQLAlchemy 2.0 async + Alembic
 - SQLite (aiosqlite `^0.21.0`) — DB par défaut, configurable vers PostgreSQL
 - PostgreSQL — optionnel via profil Docker `database`
-- Redis (cache + Streams pour event-driven)
-- Celery — ⚠️ prévu mais pas encore intégré (référencé dans Dockerfile.worker et celery_app.py mais non installable via Poetry)
+- Redis (cache + rate limiting)
 - CLI : argparse (pas click/typer)
 
 Dépendances backend notables :

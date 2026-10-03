@@ -1,7 +1,8 @@
 """
 Service de gestion des tâches planifiées.
 
-CRUD et exécution des tâches récurrentes via Celery Beat.
+CRUD et exécution des tâches récurrentes via le moteur scheduler
+asyncio (STORY-160).
 """
 
 import logging
@@ -162,7 +163,7 @@ class SchedulerService:
         return task
 
     async def get_enabled_tasks(self) -> list[ScheduledTask]:
-        """Récupère toutes les tâches actives pour Celery Beat."""
+        """Récupère toutes les tâches actives pour le moteur scheduler asyncio."""
         result = await self.db.execute(
             select(ScheduledTask).where(ScheduledTask.enabled == True)
         )

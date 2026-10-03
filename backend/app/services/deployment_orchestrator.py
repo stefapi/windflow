@@ -1,7 +1,8 @@
 """
 Service d'orchestration des déploiements avec asyncio.
 
-Remplace Celery pour la gestion des tâches de déploiement asynchrones.
+Orchestrateur asyncio canonique des déploiements (runtime unique,
+arbitrage F1 consommé le 2026-10-02 par STORY-130).
 Fournit retry automatique, recovery après crash, et tracking des tâches.
 """
 

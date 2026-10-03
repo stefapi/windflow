@@ -31,7 +31,7 @@ Vagrant.configure("2") do |config|
     debug.vm.network "forwarded_port", guest: 8000, host: 8000   # API Backend
     debug.vm.network "forwarded_port", guest: 3001, host: 3001   # Grafana
     debug.vm.network "forwarded_port", guest: 9090, host: 9091   # Prometheus
-    debug.vm.network "forwarded_port", guest: 5555, host: 5555   # Flower (Celery monitoring)
+    debug.vm.network "forwarded_port", guest: 5555, host: 5555
     debug.vm.network "forwarded_port", guest: 5432, host: 5432   # PostgreSQL
     debug.vm.network "forwarded_port", guest: 6379, host: 6479   # Redis
     debug.vm.network "forwarded_port", guest: 8200, host: 8200   # Vault
@@ -359,7 +359,6 @@ end
 #   API Docs:    http://localhost:8000/docs
 #   Grafana:     http://localhost:3001
 #   Prometheus:  http://localhost:9091
-#   Flower:      http://localhost:5555
 #
 # 📝 Debug Access:
 #   SSH User:    dockerdebug

@@ -12,7 +12,7 @@ def get_password_hash(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
-    except (ValueError, bcrypt.exceptions.SaltValidationError):
+    except ValueError:  # bcrypt >= 4.0 : salt/hash invalide → ValueError (STORY-130.1)
         return False
 
 

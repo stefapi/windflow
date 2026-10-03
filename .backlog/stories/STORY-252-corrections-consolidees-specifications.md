@@ -10,7 +10,7 @@
 
 En tant que responsable technique WindFlow, je veux appliquer aux spécifications générales les arbitrages validés du plan de remédiation (Argon2 remplace bcrypt — F2 ; JWT 15 min — F5 ; incorporation des surfaces HORS SPEC — F3 ; suppression des références Celery — F1 ; bus asyncio/Redis Pub/Sub — F6 ; annotation de phasage du modèle directeur — F4), afin que **les specs reflètent le code livré** et qu'il ne subsiste plus d'écart « annoncé vs réel » côté documentation contractuelle.
 
-**Problème constaté** : plusieurs specs divergent du code, soit parce que le code est meilleur (JWT 15 min réel vs 30 min spec), soit parce que le plan a arbitré (Celery abandonné, Argon2 adopté, surfaces API existantes à incorporer). Les corrections ont été **volontairement différées** jusqu'ici (répartition du plan : STORY-130, STORY-162, STORY-166, STORY-173 livrent le code et renvoient les corrections consolidées de specs à la vague P3).
+**Problème constaté** : plusieurs specs divergent du code, soit parce que le code est meilleur (JWT 15 min réel vs 30 min spec), soit parce que le plan a arbitré (Celery abandonné, Argon2 adopté, surfaces API existantes à incorporer). Les corrections ont été **volontairement différées** jusqu'ici (répartition du plan : STORY-130.1/130.2, STORY-162, STORY-166, STORY-173 livrent le code et renvoient les corrections consolidées de specs à la vague P3).
 
 ## Contexte technique
 
@@ -24,11 +24,11 @@ Modifications consolidées attendues, **chacune citée avec son chapitre** :
 | [`07-authentification.md`](../../docs/general_specs/07-authentification.md) | § Access token (JWT) + § Configuration (`ACCESS_TOKEN_EXPIRE_MINUTES=30`) + § Exemples (`expires_in: 1800`) | Durée access token **30 min → 15 min** (le code est plus sûr) | F5 |
 | [`09-api.md`](../../docs/general_specs/09-api.md) | § API Mode Infra — vue Compute + § Endpoints transverses + nouvelles sections | **Incorporation des surfaces HORS SPEC** : `/compute/*` (dont `browse`/`prune` de STORY-173), `/discovery/*`, `/stats/*`, import/export stacks, `admin/stacks-management`, `plugin_registry` — avec enveloppes/pagination conformes aux stories P1 | F3 |
 | [`09-api.md`](../../docs/general_specs/09-api.md) | § API par famille › Hosts | Documenter le **double nommage `/targets` → `/hosts`** avec période d'alias de compatibilité (livré par STORY-166) | F3/F4 |
-| [`04-architecture.md`](../../docs/general_specs/04-architecture.md) | § Architecture globale / § Architecture du core (runtime de tâches) | Supprimer les références **Celery** ; documenter le runtime **asyncio** unique (lifespan + scheduler engine) — si STORY-130 est fait | F1 |
+| [`04-architecture.md`](../../docs/general_specs/04-architecture.md) | § Architecture globale / § Architecture du core (runtime de tâches) | Supprimer les références **Celery** ; documenter le runtime **asyncio** unique (lifespan + scheduler engine) — si STORY-130.2 est faite | F1 |
 | [`04-architecture.md`](../../docs/general_specs/04-architecture.md) | § Communication et temps réel › Bus d'événements internes | Préciser : interface `Bus` canonique, implémentation **in-memory (asyncio) par défaut + Redis Pub/Sub optionnel** (pas de Redis Streams à ce stade) | F6 |
 | [`05-stack-technologique.md`](../../docs/general_specs/05-stack-technologique.md) | § Traitement asynchrone — Celery | Remplacer la section Celery par le traitement asynchrone **asyncio** ; mettre à jour § Récapitulatif des dépendances (retrait Celery, ajout argon2-cffi) | F1/F2 |
 | [`06-modele-de-donnees.md`](../../docs/general_specs/06-modele-de-donnees.md) | § Vue d'ensemble + § Migration de `targets` vers `hosts` | Annoter le **déploiement phasé** du modèle directeur : étapes 1-2 livrées (tables support, `Host` + `origin`), étape 3 (`Apps`/`Machines`/`Clusters`) reportée Roadmap Phase 2 | F4 |
-| [`16-deploiement.md`](../../docs/general_specs/16-deploiement.md) | § Profils d'installation / § Installation mode standard | Retirer toute référence au **worker Celery** (service compose, build) si STORY-130 est fait ; vérifier la cohérence d'`alembic upgrade head` (STORY-120) | F1 |
+| [`16-deploiement.md`](../../docs/general_specs/16-deploiement.md) | § Profils d'installation / § Installation mode standard | Retirer toute référence au **worker Celery** (service compose, build) si STORY-130.2 est faite ; vérifier la cohérence d'`alembic upgrade head` (STORY-120) | F1 |
 | [`15-securite.md`](../../docs/general_specs/15-securite.md) | § synthèse auth (si bcrypt cité) | Aligner la mention du hash sur Argon2id (cohérence avec 07) | F2 |
 
 Éléments existants à réutiliser / contraintes :
@@ -39,7 +39,7 @@ Modifications consolidées attendues, **chacune citée avec son chapitre** :
 
 ## Critères d'acceptation (AC)
 
-- [ ] AC 1 : Chaque modification de spec est **traçable** : spec ↔ chapitre ↔ arbitrage (F1/F2/F3/F4/F5/F6) ↔ story livreuse (STORY-130/160/162/166/173…) — tableau de correspondance fourni dans les notes d'implémentation.
+- [ ] AC 1 : Chaque modification de spec est **traçable** : spec ↔ chapitre ↔ arbitrage (F1/F2/F3/F4/F5/F6) ↔ story livreuse (STORY-130.1/130.2/160/162/166/173…) — tableau de correspondance fourni dans les notes d'implémentation.
 - [ ] AC 2 : Relecture croisée specs ↔ [`backend_status.md`](../../docs/backend_status.md) (actualisé par STORY-253) : **plus d'écart « annoncé vs réel »** sur les points traités (JWT 15 min, Argon2, absence de Celery, surfaces incorporées, phasage modèle, bus d'événements).
 - [ ] AC 3 : La validation utilisateur des arbitrages §7.4 (F3/F4/F5/F6) est **acquise et documentée** avant édition ; tout arbitrage refusé est tracé en divergence sans édition de spec.
 - [ ] AC 4 : Les documents internes restent cohérents : liens et renvois entre specs valides (00-index, « Voir aussi »), exemples de requêtes/réponses alignés sur le code (ex. `expires_in: 900`).
@@ -60,7 +60,7 @@ Modifications consolidées attendues, **chacune citée avec son chapitre** :
 ## Dépendances
 
 - ⚠️ **Validation utilisateur des arbitrages §7.4** (F3, F4, F5, F6 — F1/F2 déjà acquis lors de la création de STORY-130).
-- **Vagues P0-P2 terminées** — les specs reflètent le code livré : STORY-130 (F1/F2 effectifs), STORY-160 (runtime scheduler asyncio), STORY-162 (bus + nomenclature), STORY-166 (modèle Host — F4 étape 2), STORY-173 (compute — F3).
+- **Vagues P0-P2 terminées** — les specs reflètent le code livré : STORY-130.1 (F2 effectif) + STORY-130.2 (F1 effectif), STORY-160 (runtime scheduler asyncio), STORY-162 (bus + nomenclature), STORY-166 (modèle Host — F4 étape 2), STORY-173 (compute — F3).
 - Étroitement coordonnée avec **STORY-253** (mise à jour documentaire : `backend_status.md` et la revue croisée specs ↔ status doivent être cohérents).
 
 ## État d'avancement technique

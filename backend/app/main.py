@@ -147,7 +147,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"✗ Deployment recovery failed: {e}")
 
-    # Start periodic target health check (asyncio fallback when Celery is unavailable)
+    # Start periodic target health check (asyncio runtime — arbitrage F1,
+    # STORY-130)
     health_task: asyncio.Task | None = None
     try:
         # Import with relative paths (works regardless of entry point)
@@ -169,8 +170,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"✗ Periodic health check could not start: {e}")
 
-    # Periodic refresh token purge (STORY-123.4 — boucle asyncio au
-    # lifespan, sans Celery : arbitrage F1 reporté à STORY-130).
+    # Periodic refresh token purge (STORY-123.4 — boucle asyncio au lifespan ;
+    # arbitrage F1 consommé le 2026-10-02 par STORY-130, runtime asyncio unique).
     # Consomme RefreshTokenService.purge_expired() ; logs = comptages
     # uniquement (rules 40 — jamais de données sensibles).
     purge_task: asyncio.Task | None = None

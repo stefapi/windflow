@@ -1,14 +1,14 @@
 """
-Tâches asynchrones en background (fallback quand Celery n'est pas disponible).
+Tâches asynchrones en background (runtime asyncio canonique).
 
-Ce module fournit une alternative à Celery pour exécuter des tâches
-asynchrones directement dans le backend FastAPI. Il est utilisé comme
-fallback lorsque Celery n'est pas disponible (worker down, broker down, etc.).
+Ce module exécute les tâches asynchrones directement dans le processus
+backend FastAPI via asyncio — chemin d'exécution unique de WindFlow
+(arbitrage F1 consommé le 2026-10-02 par STORY-130).
 
 Important:
     - Ces tâches s'exécutent dans le processus backend
     - Pas de garantie de persistence en cas de crash
-    - Pas de retry automatique comme Celery
+    - Pas de retry automatique
     - Adapté pour développement ou petites charges
 """
 
@@ -29,10 +29,9 @@ async def deploy_stack_async(
     configuration: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
-    Version asyncio du déploiement de stack (fallback Celery).
+    Déploiement de stack en asyncio (runtime canonique).
 
-    Cette fonction réplique la logique de deploy_stack de Celery
-    mais s'exécute directement dans le processus backend via asyncio.
+    S'exécute directement dans le processus backend via asyncio.
 
     Args:
         deployment_id: ID du déploiement
@@ -472,11 +471,9 @@ async def retry_pending_deployments_async(
     max_age_minutes: int = 2, timeout_minutes: int = 60
 ) -> Dict[str, Any]:
     """
-    Version asyncio de la tâche de recovery des déploiements PENDING.
+    Recovery des déploiements PENDING en asyncio (runtime canonique).
 
-    Utilisée comme fallback quand Celery n'est pas disponible.
-    Cette fonction réplique exactement le comportement de la tâche Celery
-    mais s'exécute directement dans le processus backend via asyncio.
+    S'exécute directement dans le processus backend via asyncio.
 
     Args:
         max_age_minutes: Âge minimum pour considérer un PENDING comme bloqué (défaut: 2min)
@@ -530,9 +527,8 @@ async def retry_pending_deployments_async(
 
 async def health_check_targets_async() -> Dict[str, Any]:
     """
-    Version asyncio de la tâche de health check des targets.
+    Health check des targets en asyncio (runtime canonique).
 
-    Utilisée comme fallback quand Celery n'est pas disponible.
     Exécute un TCP reachability probe sur toutes les targets.
 
     Returns:

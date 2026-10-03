@@ -24,7 +24,7 @@ Méthode de la passe d'audit (même méthode que le rapport initial) :
    - **CONFORME** — l'écart est résolu et vérifié (test/inspection à l'appui) ;
    - **REPORTÉ** — l'écart est explicitement hors périmètre, tracé dans la Roadmap ou une initiative dédiée (ex. F8 backup, Keycloak, Vault, VMs/K8s…) ;
    - **ÉCART RÉSIDUEL** — écart restant non prévu : doit être **tracé** (nouvelle story ou bug) — critère de done : **zéro écart bloquant non tracé** (les écarts résiduels mineurs acceptés sont tracés en WONT_FIX/divergence documentée) ;
-4. **Vérifier les écrans de contrôle** des vagues : grep Celery (STORY-130), import-check code mort (STORY-250), matrice RBAC (STORY-122), couverture par domaine ≥ 80 % (rules 35) ;
+4. **Vérifier les écrans de contrôle** des vagues : grep Celery (STORY-130.2), import-check code mort (STORY-250), matrice RBAC (STORY-122), couverture par domaine ≥ 80 % (rules 35) ;
 5. **Formaliser le rapport final** : document de conformité (dans `docs/` ou mise à jour du plan de remédiation avec statuts), présentant le tableau, les preuves d'exécution et les reportés.
 
 Contraintes :

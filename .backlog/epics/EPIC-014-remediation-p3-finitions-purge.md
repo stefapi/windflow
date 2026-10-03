@@ -22,7 +22,7 @@ Chaque item P3 du plan de remédiation devient une story — le découpage final
 | STORY-254 | Clôture du plan | Revue finale de conformité : re-passe d'analyse d'écart specs ↔ code (même méthode que le rapport initial), tableau de conformité final (CONFORME/REPORTÉ/ÉCART RÉSIDUEL), zéro écart bloquant non tracé | M |
 
 **Dépendances internes** (plan §4-§5) :
-- STORY-250 dépend de STORY-160 (croniter consommé par le scheduler, EPIC-013), STORY-168 (`CacheManager`/abstractions consommés par le cache fallback, EPIC-013) et de l'arbitrage F1 validé (STORY-130, purge Celery effective).
+- STORY-250 dépend de STORY-160 (croniter consommé par le scheduler, EPIC-013), STORY-168 (`CacheManager`/abstractions consommés par le cache fallback, EPIC-013), STORY-130.1 (retraite de la dépendance `bcrypt` post-migration Argon2id) et de l'arbitrage F1 validé (STORY-130.2, purge Celery effective).
 - STORY-251 dépend de STORY-174 (`WorkloadAdapter` = point d'accroche naturel, EPIC-013) et expose sa métrique via STORY-172 (`/metrics`, EPIC-013).
 - STORY-252 dépend des vagues précédentes (les specs reflètent le code livré) et de la **validation utilisateur des arbitrages §7.4** (F3/F4/F5/F6 — F1/F2 déjà acquis).
 - STORY-253 dépend des vagues P0-P2 (et idéalement 250/251) ; il prépare STORY-254.

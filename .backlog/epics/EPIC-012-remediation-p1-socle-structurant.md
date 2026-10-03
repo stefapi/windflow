@@ -68,7 +68,8 @@ Chaque item P1 du plan de remédiation devient une story (certains items XL/L so
 - [x] STORY-127 : Hiérarchie d'exceptions — compléter `core/exceptions.py` et remplacer les `HTTPException` brutes (P1-5, partie exceptions)
 - [x] STORY-128 : Pagination généralisée — `?page&per_page` sur toutes les listes non paginées (P1-6)
 - [x] STORY-129 : Endpoints santé & mot de passe — `GET /system/ready` sans auth et `PUT /auth/password` (P1-7 + P1-8)
-- [ ] STORY-130 : Purge Celery + arbitrage Argon2 — suppression du double runtime fantôme et migration Argon2id (P1-10 + P1-11)
+- [x] STORY-130.1 : Migration Argon2id — double lecture bcrypt et re-hash automatique au login (P1-10 — STORY-130 découpée)
+- [x] STORY-130.2 : Purge des références Celery — runtime asyncio unique assumé (P1-11 — STORY-130 découpée)
 - [ ] STORY-131 : SSH réutilisables + empreintes hôtes + anti-MITM TOFU (P1-9)
 
 ## Notes de conception
@@ -76,11 +77,11 @@ Chaque item P1 du plan de remédiation devient une story (certains items XL/L so
 - **Plage de numéros réservée** : STORY-120 à STORY-159 (seules 120-131 sont affectées ; 132-159 disponibles pour sous-découpes, ex. STORY-122 XL sur ~110 endpoints et STORY-126/131 L).
 - Source principale : [`docs/backend_remediation_plan.md`](../../docs/backend_remediation_plan.md) §4 « Vague P1 », axes A1-A5, A7, A10-A13, B6/B15, C1, E10/F1/F2.
 - Règle de dépendance du plan : **Alembic avant toute migration de modèle ; RBAC avant ouverture de nouveaux endpoints ; SecretManager (STORY-103, EPIC-011) avant ssh_keys**.
-- Arbitrages validés par l'utilisateur avant exécution (plan §7.4) : F1 (abandon Celery → STORY-130), F2 (Argon2 → STORY-130), P1-5 enveloppes (breaking change → STORY-126, coordination frontend/CLI requise).
+- Arbitrages validés par l'utilisateur avant exécution (plan §7.4) : F1 (abandon Celery → STORY-130.2), F2 (Argon2 → STORY-130.1), P1-5 enveloppes (breaking change → STORY-126, coordination frontend/CLI requise).
 - STORY-122 (application RBAC) est l'item le plus invasif : découpage impératif par router avec la matrice de rôles spec 08 comme critère d'acceptation (risque §7.3).
 - La cible de couverture 95 % sur chemins critiques (auth/déploiement/RBAC — rules 35) devient réaliste après STORY-122.
 - ✅ **Référence croisée vérifiée (audit phase 5)** : STORY-164 (WS durci) cite bien **STORY-131** (ssh_keys) — la correction annoncée ci-contre dans les éditions précédentes a été appliquée dans [`.backlog/epics/EPIC-013-remediation-p2-conformite-fonctionnelle.md`](EPIC-013-remediation-p2-conformite-fonctionnelle.md) (notes de conception) et dans STORY-164.
-- Les corrections consolidées de specs (04/05 pour Celery, 07 pour Argon2, F5 JWT) sont portées par STORY-252 (P3-4, EPIC-014) conformément à la répartition du plan ; STORY-130 documente l'upgrade path et renvoie à STORY-252.
+- Les corrections consolidées de specs (04/05 pour Celery, 07 pour Argon2, F5 JWT) sont portées par STORY-252 (P3-4, EPIC-014) conformément à la répartition du plan ; STORY-130.1/130.2 documentent l'upgrade path / la traçabilité de purge et renvoient à STORY-252 (STORY-130 a été découpée en 130.1 Argon2id + 130.2 purge Celery le 2026-10-02).
 
 ## Critères de succès (Definition of Done)
 

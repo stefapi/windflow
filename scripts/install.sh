@@ -460,7 +460,6 @@ install_minimal() {
     echo "  • Redis"
     echo "  • Frontend (Vue.js 3)"
     echo "  • Nginx (Reverse Proxy)"
-    echo "  • Celery Worker"
     echo ""
 
     # Arrêter les conteneurs existants

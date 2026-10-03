@@ -53,7 +53,7 @@ Contraintes et gardes-fous :
 
 - **STORY-160** (EPIC-013) — le sort de `croniter.py` dépend de sa consommation par le moteur scheduler (chaîne critique du plan §5).
 - **STORY-168** (EPIC-013) — le sort de `CacheManager`/`core/abstractions.py` dépend de sa consommation par le cache avec fallback mémoire (E4).
-- **STORY-130** (EPIC-012) — purge Celery effective (l'écran de contrôle grep doit trouver un dépôt déjà nettoyé côté Celery).
+- **STORY-130.2** (EPIC-012) — purge Celery effective (l'écran de contrôle grep doit trouver un dépôt déjà nettoyé côté Celery).
 - Les vagues P0-P2 doivent être terminées avant finalisation (cette epic clôt le cycle de remédiation).
 
 ## État d'avancement technique

@@ -113,9 +113,7 @@ List users with role-based visibility.
     dependencies=[Depends(conditional_rate_limiter(30, 60))],
     responses={
         200: {
-            "description": (
-                "Paginated list of users — enveloppe spec 09"
-            ),
+            "description": ("Paginated list of users — enveloppe spec 09"),
             "content": {
                 "application/json": {
                     "example": {
@@ -425,7 +423,7 @@ Create a new user within an organization.
 - Provision user accounts via API
 
 ## Security
-- Passwords are hashed with bcrypt before storage
+- Passwords are hashed with Argon2id before storage
 - Email uniqueness is enforced
 - Organization isolation is maintained
 

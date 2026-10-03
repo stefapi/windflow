@@ -31,7 +31,6 @@ RELEASE_VERSION = $(shell git describe --long --first-parent 2>/dev/null | sed '
 DOCKER_REGISTRY ?= windflow
 API_IMAGE = $(DOCKER_REGISTRY)/api:$(VERSION)
 FRONTEND_IMAGE = $(DOCKER_REGISTRY)/frontend:$(VERSION)
-WORKER_IMAGE = $(DOCKER_REGISTRY)/worker:$(VERSION)
 COMPOSE_TAG ?= $(GIT_BRANCH)
 COMPOSE_HOST ?= $(shell hostname)
 
@@ -361,10 +360,7 @@ docker-build-backend: ## 🐳 Build backend Docker image
 docker-build-frontend: ## 🐳 Build frontend Docker image
 	$(DOCKER) build -t $(FRONTEND_IMAGE) -f $(INFRASTRUCTURE_DIR)/docker/Dockerfile.frontend .
 
-docker-build-worker: ## 🐳 Build worker Docker image
-	$(DOCKER) build -t $(WORKER_IMAGE) -f $(INFRASTRUCTURE_DIR)/docker/Dockerfile.worker .
-
-docker-build: docker-build-backend docker-build-frontend docker-build-worker ## 🐳 Build all Docker images
+docker-build: docker-build-backend docker-build-frontend ## 🐳 Build all Docker images
 
 docker-up: ## 🐳 Start Docker containers
 	$(DOCKER_COMPOSE) up -d
@@ -403,7 +399,6 @@ minimal: ## 📦 Start WindFlow in minimal mode (core only: <512MB, <2min)
 	@echo "   make enable-database    # PostgreSQL"
 	@echo "   make enable-cache       # Redis"
 	@echo "   make enable-monitoring  # Prometheus + Grafana"
-	@echo "   make enable-workers     # Celery workers"
 	@echo "   make enable-secrets     # HashiCorp Vault"
 	@echo "   make enable-sso         # Keycloak SSO"
 
@@ -469,15 +464,6 @@ enable-monitoring: ## 📊 Enable Prometheus + Grafana monitoring extension
 	@echo "   - Prometheus: http://prometheus.localhost"
 	@echo "   - Grafana:    http://grafana.localhost (admin/admin123)"
 
-enable-workers: ## ⚙️ Enable Celery workers extension (requires Redis)
-	@echo "📦 Enabling Celery workers..."
-	@$(DOCKER_COMPOSE) -f docker-compose.minimal.yml \
-		-f docker-compose.extensions.yml \
-		--profile cache \
-		--profile workers up -d
-	@echo "✅ Workers enabled:"
-	@echo "   - Flower: http://flower.localhost (admin/flower123)"
-
 # Extension disable commands
 disable-database: ## 🗑️ Disable PostgreSQL database extension
 	@echo "🗑️  Disabling PostgreSQL..."
@@ -504,11 +490,6 @@ disable-monitoring: ## 🗑️ Disable monitoring extension
 	@$(DOCKER_COMPOSE) -f docker-compose.extensions.yml --profile monitoring down
 	@echo "✅ Monitoring disabled"
 
-disable-workers: ## 🗑️ Disable workers extension
-	@echo "🗑️  Disabling workers..."
-	@$(DOCKER_COMPOSE) -f docker-compose.extensions.yml --profile workers down
-	@echo "✅ Workers disabled"
-
 # Utility commands
 status: ## 📊 Show status of all WindFlow services
 	@echo "📊 WindFlow Services Status:"
@@ -531,7 +512,6 @@ restart: stop minimal ## 🔄 Restart WindFlow (minimal mode)
 # Shortcuts
 enable-db: enable-database ## 🗄️ Shortcut for enable-database
 enable-mon: enable-monitoring ## 📊 Shortcut for enable-monitoring
-enable-work: enable-workers ## ⚙️ Shortcut for enable-workers
 
 # ============================================================================
 # DEPLOYMENT COMMANDS
@@ -625,7 +605,6 @@ ci-security-frontend: ## 🔒 CI: Security audit frontend (local execution)
 ci-build-docker: ## 🐳 CI: Build Docker images (local execution)
 	@echo "🐳 Building Docker images..."
 	$(DOCKER) build -t windflow/api:local -f $(INFRASTRUCTURE_DIR)/docker/Dockerfile.api .
-	$(DOCKER) build -t windflow/worker:local -f $(INFRASTRUCTURE_DIR)/docker/Dockerfile.worker .
 	$(DOCKER) build -t windflow/frontend:local -f $(INFRASTRUCTURE_DIR)/docker/Dockerfile.frontend ./$(FRONTEND_DIR)
 	@echo "✅ Docker images built"
 

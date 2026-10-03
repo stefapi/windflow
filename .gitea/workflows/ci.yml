@@ -324,14 +324,6 @@ jobs:
             -f infrastructure/docker/Dockerfile.api \
             .
 
-      - name: 🏗️ Build Worker image
-        run: |
-          docker build \
-            -t windflow/worker:${{ github.sha }} \
-            -t windflow/worker:latest \
-            -f infrastructure/docker/Dockerfile.worker \
-            .
-
       - name: 🏗️ Build Frontend image
         run: |
           docker build \

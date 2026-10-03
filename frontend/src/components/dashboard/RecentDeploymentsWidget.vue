@@ -1,44 +1,91 @@
 <template>
-  <el-card class="recent-deployments-widget" data-testid="recent-deployments-widget">
+  <el-card
+    class="recent-deployments-widget"
+    data-testid="recent-deployments-widget"
+  >
     <template #header>
       <div class="widget-header">
         <span class="widget-title">
           <el-icon><Clock /></el-icon>
           Derniers Déploiements
         </span>
-        <router-link to="/deployments" class="view-all-link"> Voir tout </router-link>
+        <router-link
+          to="/deployments"
+          class="view-all-link"
+        >
+          Voir tout
+        </router-link>
       </div>
     </template>
 
     <!-- Loading state -->
-    <div v-if="loading" class="recent-deployments-widget__loading">
-      <el-skeleton :rows="3" animated />
+    <div
+      v-if="loading"
+      class="recent-deployments-widget__loading"
+    >
+      <el-skeleton
+        :rows="3"
+        animated
+      />
     </div>
 
     <!-- Error state -->
-    <el-alert v-else-if="error" type="error" :title="error" show-icon :closable="false" data-testid="deployments-error" />
+    <el-alert
+      v-else-if="error"
+      type="error"
+      :title="error"
+      show-icon
+      :closable="false"
+      data-testid="deployments-error"
+    />
 
     <!-- Empty state -->
-    <el-empty v-else-if="deployments.length === 0" description="Aucun déploiement récent" :image-size="60" data-testid="deployments-empty" />
+    <el-empty
+      v-else-if="deployments.length === 0"
+      description="Aucun déploiement récent"
+      :image-size="60"
+      data-testid="deployments-empty"
+    />
 
     <!-- Deployments list -->
-    <div v-else class="deployments-list">
-      <div v-for="deployment in deployments" :key="deployment.id" class="deployment-row" :class="{ 'deployment-row--clickable': true }" @click="navigateToDeployment(deployment)">
+    <div
+      v-else
+      class="deployments-list"
+    >
+      <div
+        v-for="deployment in deployments"
+        :key="deployment.id"
+        class="deployment-row"
+        :class="{ 'deployment-row--clickable': true }"
+        @click="navigateToDeployment(deployment)"
+      >
         <div class="deployment-row__main">
           <div class="deployment-row__info">
             <span class="deployment-name">{{ deployment.name || deployment.id.slice(0, 8) }}</span>
-            <StatusBadge :status="mapDeploymentStatus(deployment.status)" size="small" />
+            <StatusBadge
+              :status="mapDeploymentStatus(deployment.status)"
+              size="small"
+            />
           </div>
           <div class="deployment-row__meta">
             <span class="deployment-time">{{ formatRelativeTime(deployment.created_at) }}</span>
-            <span v-if="deployment.target?.name" class="deployment-target">
+            <span
+              v-if="deployment.target?.name"
+              class="deployment-target"
+            >
               <el-icon><Monitor /></el-icon>
               {{ deployment.target.name }}
             </span>
           </div>
         </div>
         <div class="deployment-row__actions">
-          <el-button v-if="deployment.status === 'failed'" type="warning" size="small" :loading="retryingId === deployment.id" @click.stop="handleRetry(deployment)">
+          <el-button
+            v-if="deployment.status === 'failed'"
+            type="warning"
+            size="small"
+            :loading="retryingId === deployment.id"
+            @click.stop="handleRetry(deployment)"
+          >
             <el-icon><RefreshRight /></el-icon>
             Redéployer
           </el-button>

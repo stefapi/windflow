@@ -16,8 +16,15 @@ from ..models.user_organization import UserOrganization
 from ..schemas.organization_member import OrganizationMemberAddRequest
 from ..schemas.user import UserCreate, UserUpdate
 
-# Configuration password hashing avec Argon2
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+# Configuration password hashing : Argon2id en écriture, double lecture bcrypt legacy.
+# - "argon2" : schème par défaut en ÉCRITURE (premier schème non déprécié) — tous les
+#   nouveaux hashes sont Argon2id (paramètres par défaut passlib/argon2-cffi, sans
+#   surcharge — arbitrage n°2 de STORY-130.1).
+# - "bcrypt" : LECTURE SEULE dépréciée, pour la transition — permet de vérifier les
+#   hashes legacy ($2b$...) et de les re-hacher en Argon2id au login via
+#   verify_and_update (upgrade paresseux, aucun reset requis — arbitrage F2).
+#   Retraite de la dépendance `bcrypt` post-migration : cf. STORY-250.
+pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 
 
 class UserService:
@@ -47,19 +54,28 @@ class UserService:
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """
-        Vérifie un mot de passe avec Argon2.
+        Vérifie un mot de passe (double lecture Argon2id / bcrypt legacy).
 
-        Contrairement à bcrypt, Argon2 n'a pas de limite de longueur pour les mots de passe,
-        donc aucune troncature n'est nécessaire.
+        Le contexte accepte les hashes Argon2id (écriture courante) et les hashes
+        bcrypt legacy ($2b$..., lecture seule dépréciée — transition STORY-130.1).
+        Contrairement à bcrypt, Argon2 n'a pas de limite de longueur pour les mots
+        de passe, donc aucune troncature n'est nécessaire.
+
+        Les hashes illisibles (schème inconnu, hash corrompu) échouent
+        silencieusement : retourne False sans lever (arbitrage n°9 — jamais de 500
+        au login, même 401 générique anti-énumération).
 
         Args:
             plain_password: Mot de passe en clair à vérifier
-            hashed_password: Hash Argon2 stocké
+            hashed_password: Hash stocké (Argon2id ou bcrypt legacy)
 
         Returns:
             True si le mot de passe correspond, False sinon
         """
-        return pwd_context.verify(plain_password, hashed_password)
+        try:
+            return pwd_context.verify(plain_password, hashed_password)
+        except (ValueError, TypeError):
+            return False
 
     @staticmethod
     def verify_and_update(
@@ -68,18 +84,26 @@ class UserService:
         """
         Vérifie un mot de passe et détecte si le hash doit être renouvelé.
 
-        Cette méthode utilise la fonctionnalité de passlib pour détecter
-        automatiquement si un hash doit être mis à jour (par exemple si
-        les paramètres de sécurité Argon2 ont été modifiés dans la configuration).
+        Double lecture Argon2id / bcrypt legacy : cette méthode utilise
+        `verify_and_update` de passlib pour vérifier le hash stocké (quel que soit
+        son schème supporté) et retourner automatiquement un nouveau hash Argon2id
+        si le hash actuel est déprécié (bcrypt legacy en transition, ou paramètres
+        Argon2id obsolètes par rapport aux défauts passlib/argon2-cffi — aucune
+        surcharge de paramètres n'étant définie, arbitrage n°2 de STORY-130.1).
+
+        Les hashes illisibles (schème inconnu, hash corrompu) échouent
+        silencieusement : retourne (False, None) sans lever (arbitrage n°9 — jamais
+        de 500 au login, même 401 générique anti-énumération).
 
         Args:
             plain_password: Mot de passe en clair à vérifier
-            hashed_password: Hash Argon2 stocké
+            hashed_password: Hash stocké (Argon2id ou bcrypt legacy)
 
         Returns:
             Tuple[bool, Optional[str]]:
                 - bool: True si le mot de passe correspond, False sinon
-                - Optional[str]: Nouveau hash si une mise à jour est nécessaire, None sinon
+                - Optional[str]: Nouveau hash Argon2id si une mise à jour est
+                  nécessaire (ex. hash bcrypt legacy), None sinon
 
         Example:
             >>> is_valid, new_hash = UserService.verify_and_update("password123", old_hash)
@@ -88,10 +112,12 @@ class UserService:
             ...     user.hashed_password = new_hash
             ...     await db.commit()
         """
-        # Vérifier le mot de passe et obtenir le résultat
-        verified, new_hash = pwd_context.verify_and_update(
-            plain_password, hashed_password
-        )
+        try:
+            verified, new_hash = pwd_context.verify_and_update(
+                plain_password, hashed_password
+            )
+        except (ValueError, TypeError):
+            return False, None
 
         return verified, new_hash
 

@@ -1,5 +1,5 @@
 """
-Modèle ScheduledTask pour les tâches planifiées (Celery Beat).
+Modèle ScheduledTask pour les tâches planifiées (moteur scheduler — STORY-160).
 """
 
 from datetime import datetime
@@ -32,7 +32,8 @@ class ScheduledTask(Base):
     """
     Tâche planifiée avec expression cron.
 
-    Stocke la configuration des tâches récurrentes gérées par Celery Beat.
+    Stocke la configuration des tâches récurrentes gérées par le moteur
+    scheduler asyncio (STORY-160).
     """
 
     __tablename__ = "scheduled_tasks"

@@ -106,7 +106,6 @@ Toutes les commandes standards sont présentes dans le `Makefile` à la racine d
 | `make enable-database` / `make disable-database` | 🗄️ PostgreSQL |
 | `make enable-cache` / `make disable-cache` | 🔄 Redis |
 | `make enable-monitoring` / `make disable-monitoring` | 📊 Prometheus + Grafana |
-| `make enable-workers` / `make disable-workers` | ⚙️ Celery workers |
 | `make enable-secrets` / `make disable-secrets` | 🔐 HashiCorp Vault |
 | `make enable-sso` / `make disable-sso` | 🔑 Keycloak SSO |
 

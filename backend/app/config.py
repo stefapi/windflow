@@ -49,8 +49,9 @@ class Settings(BaseSettings):
     )
 
     # Intervalle du job de purge des refresh tokens expirés/révoqués
-    # (STORY-123.4 — boucle asyncio au lifespan, sans Celery : arbitrage
-    # F1 reporté à STORY-130). Env var : REFRESH_TOKEN_PURGE_INTERVAL_HOURS.
+    # (STORY-123.4 — boucle asyncio au lifespan, runtime asyncio unique :
+    # arbitrage F1 consommé le 2026-10-02 par STORY-130).
+    # Env var : REFRESH_TOKEN_PURGE_INTERVAL_HOURS.
     refresh_token_purge_interval_hours: int = Field(
         default=24,
         ge=1,

@@ -94,8 +94,8 @@ Authenticate a user and generate JWT tokens.
 - **Refresh Token**: **Opaque** server-side token (default: 7 days, `REFRESH_TOKEN_EXPIRE_DAYS`) — only its hash is stored in `refresh_tokens` (revocable, STORY-123)
 
 ## Security Features
-- Password hashing with bcrypt
-- Automatic password hash upgrade if needed
+- Password hashing with Argon2id
+- Automatic upgrade of legacy bcrypt hashes at login (transparent re-hash to Argon2id)
 - Account status verification
 - Rate limiting to prevent brute force attacks
 - Progressive account lockout after repeated failures (5 attempts / 10 min, 5 min lockout)
@@ -672,7 +672,7 @@ After successful registration, the user is **automatically logged in**:
 - Seamless onboarding experience
 
 ## Security Features
-- Password hashing with bcrypt
+- Password hashing with Argon2id
 - Email and username uniqueness validation
 - Rate limiting to prevent spam registrations
 
@@ -1005,7 +1005,8 @@ it is impossible to target another account.
 
 ## Security Features
 - Current password required (defense against session hijacking)
-- Argon2 hashing (same scheme as login — never legacy bcrypt)
+- Argon2id hashing for the new password (current password accepted from either
+  Argon2id or legacy bcrypt storage — double read at login, cf. STORY-130.1)
 - All refresh tokens revoked server-side (single-use opaque tokens)
 - Audit trail `user.password_changed` (no password material logged)
 - Rate limited (5 changes per minute)
