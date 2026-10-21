@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -137,12 +137,34 @@ class ConnectionTestRequest(BaseModel):
 
 
 class ConnectionTestResponse(BaseModel):
-    """Résultat d'un test de connexion SSH."""
+    """Résultat d'un test de connexion SSH (empreinte capturée — STORY-131.3).
+
+    Mode COLLECT : l'empreinte de la clé d'hôte présentée est
+    **capturée sans être persistée** (jamais d'ajout silencieux —
+    spec 15) et retournée pour acceptation explicite via
+    ``POST /targets/{id}/ssh-fingerprints/accept`` (STORY-131.2).
+    """
 
     success: bool = Field(..., description="La connexion a réussi")
     message: str = Field(..., description="Message descriptif du résultat")
     os_info: dict[str, Any] | None = Field(
         default=None, description="Informations OS détectées"
+    )
+    host_fingerprint: str | None = Field(
+        default=None,
+        description=(
+            "Empreinte de la clé d'hôte capturée (SHA256:<base64nopad>) — "
+            "NON persistée par le test : acceptation explicite requise "
+            "(STORY-131.3, TOFU)"
+        ),
+    )
+    fingerprint_status: Literal["unknown", "accepted", "mismatch"] | None = Field(
+        default=None,
+        description=(
+            "Statut TOFU de l'empreinte capturée : unknown (première "
+            "utilisation), accepted (matching une empreinte acceptée), "
+            "mismatch (divergence — connexion refusée, spec 15 anti-MITM)"
+        ),
     )
 
 
@@ -213,6 +235,13 @@ class TargetCreate(BaseModel):
     port: int = Field(default=22, ge=1, le=65535, description="Port SSH")
     description: str | None = Field(default=None, max_length=500)
     credentials: SSHCredentials
+    ssh_key_id: str | None = Field(
+        default=None,
+        description=(
+            "Clé SSH réutilisable référencée (voie canonique — "
+            "STORY-131) ; la clé doit exister (sinon 422/404)"
+        ),
+    )
     organization_id: str = Field(..., description="ID de l'organisation")
     extra_metadata: dict[str, Any] | None = Field(default=None)
 
@@ -226,6 +255,13 @@ class TargetUpdate(BaseModel):
     port: int | None = Field(default=None, ge=1, le=65535)
     description: str | None = Field(default=None, max_length=500)
     credentials: SSHCredentialsUpdate | None = None
+    ssh_key_id: str | None = Field(
+        default=None,
+        description=(
+            "Clé SSH réutilisable référencée (voie canonique — "
+            "STORY-131) ; la clé doit exister (sinon 422/404)"
+        ),
+    )
     status: TargetStatus | None = None
     extra_metadata: dict[str, Any] | None = None
 
@@ -246,6 +282,10 @@ class TargetResponse(BaseModel):
     auth_method: str | None
     username: str | None
     has_sudo: bool
+    ssh_key_id: str | None = Field(
+        default=None,
+        description="Clé SSH réutilisable référencée (voie canonique — STORY-131)",
+    )
     last_check: datetime | None = None
     scan_date: datetime | None = None
     scan_success: bool | None = None

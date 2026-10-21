@@ -18,7 +18,9 @@ from ..enums.target import TargetStatus, TargetType
 
 if TYPE_CHECKING:
     from .deployment import Deployment
+    from .host_ssh_fingerprint import HostSSHFingerprint
     from .organization import Organization
+    from .ssh_key import SSHKey
     from .target_capability import TargetCapability
 
 # Clé unique du dict opaque stocké en colonne ``credentials`` : la valeur
@@ -94,7 +96,20 @@ class Target(Base):
     # Credentials SSH — chiffrés au repos via le SecretManager (STORY-103.2) :
     # format opaque ``{"_encrypted": "<token Fernet>"}`` ; les lignes legacy
     # en clair sont migrées (ré-encryptées) à la première lecture.
+    # ``ssh_private_key`` (et sa passphrase) sont migrés vers l'entité
+    # SSHKey par la migration 1311 (STORY-131.1) ; username/password
+    # (auth password) et sudo_* restent ici.
     credentials: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+    # Clé SSH réutilisable (STORY-131.1) — N cibles peuvent référencer la
+    # même clé ; la suppression de la clé déréférence (SET NULL), la
+    # gestion (API) est portée par STORY-131.2.
+    ssh_key_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ssh_keys.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Clé SSH réutilisable (FK ssh_keys.id — SET NULL)",
+    )
 
     # Statut
     status: Mapped[TargetStatus] = mapped_column(
@@ -105,23 +120,31 @@ class Target(Base):
     # Configuration additionnelle
     extra_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     scan_date: Mapped[datetime | None] = mapped_column(
-        DateTime, nullable=True,
+        DateTime,
+        nullable=True,
         comment="Timestamp of the last capabilities scan",
     )
     scan_success: Mapped[bool | None] = mapped_column(
-        Boolean, nullable=True,
+        Boolean,
+        nullable=True,
         comment="Indicates if the last capabilities scan succeeded",
     )
     platform_info: Mapped[dict | None] = mapped_column(
-        JSON, nullable=True, default=None,
+        JSON,
+        nullable=True,
+        default=None,
         comment="Platform capabilities detected during the last scan",
     )
     os_info: Mapped[dict | None] = mapped_column(
-        JSON, nullable=True, default=None,
+        JSON,
+        nullable=True,
+        default=None,
         comment="Operating system information detected during the last scan",
     )
     access_profile: Mapped[dict | None] = mapped_column(
-        JSON, nullable=True, default=None,
+        JSON,
+        nullable=True,
+        default=None,
         comment="Access profile detected during the last scan (SSH user, sudo, capabilities)",
     )
 
@@ -186,7 +209,9 @@ class Target(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False,
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -206,6 +231,17 @@ class Target(Base):
 
     capabilities: Mapped[list["TargetCapability"]] = relationship(
         "TargetCapability", back_populates="target", cascade="all, delete-orphan"
+    )
+
+    ssh_key: Mapped["SSHKey | None"] = relationship(
+        "SSHKey",
+        back_populates="targets",
+    )
+
+    ssh_fingerprints: Mapped[list["HostSSHFingerprint"]] = relationship(
+        "HostSSHFingerprint",
+        back_populates="target",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

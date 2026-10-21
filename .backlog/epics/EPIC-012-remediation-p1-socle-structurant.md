@@ -1,6 +1,6 @@
 # EPIC-012 : P1 — Socle structurant (remédiation backend)
 
-**Statut :** IN_PROGRESS
+**Statut :** DONE
 **Priorité :** Haute
 
 ## Vision
@@ -70,7 +70,9 @@ Chaque item P1 du plan de remédiation devient une story (certains items XL/L so
 - [x] STORY-129 : Endpoints santé & mot de passe — `GET /system/ready` sans auth et `PUT /auth/password` (P1-7 + P1-8)
 - [x] STORY-130.1 : Migration Argon2id — double lecture bcrypt et re-hash automatique au login (P1-10 — STORY-130 découpée)
 - [x] STORY-130.2 : Purge des références Celery — runtime asyncio unique assumé (P1-11 — STORY-130 découpée)
-- [ ] STORY-131 : SSH réutilisables + empreintes hôtes + anti-MITM TOFU (P1-9)
+- [x] STORY-131.1 : Modèles & migrations — `ssh_keys`, `host_ssh_fingerprints` et data migration crypto (P1-9 — STORY-131 découpée)
+- [x] STORY-131.2 : Service & API de gestion des clés SSH et des empreintes hôtes (P1-9 — STORY-131 découpée)
+- [x] STORY-131.3 : Anti-MITM TOFU runtime — helper de connexion et intégration aux 5 sites SSH (P1-9 — STORY-131 découpée)
 
 ## Notes de conception
 

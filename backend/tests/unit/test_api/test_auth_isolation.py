@@ -5,17 +5,35 @@ défaut), ``/auth/me`` (organization_id = org primaire depuis l'association),
 ``disable_auth`` (auto-login superadmin).
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
+import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from tests.conftest import unwrap
 
 from app.config import settings
 from app.models.organization import Organization
-from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.services.user_organization_service import UserOrganizationService
+
+
+@pytest.fixture(autouse=True)
+def _jwt_mode(monkeypatch):
+    """Force le mode JWT normal (disable_auth=False) — pattern 122.2.
+
+    Le fichier ``.env`` local (git-ignored) peut contenir ``DISABLE_AUTH=true``
+    (valeur recommandée par ``env.example`` pour le dev). Sans ce forçage,
+    ``get_current_user`` court-circuite le JWT pour chercher un superadmin
+    en base → 500 ``INTERNAL_ERROR`` sur tous les endpoints authentifiés.
+
+    Note : la classe ``TestDisableAuthMode`` de ce module teste volontairement
+    le mode dev (``disable_auth=True``) via un ``patch.object`` local qui
+    recouvre ce forçage — aucun conflit.
+    """
+
+    from app.auth import dependencies as auth_deps
+
+    monkeypatch.setattr(auth_deps.settings, "disable_auth", False)
 
 
 class TestLoginNonRegression:

@@ -16,7 +16,9 @@ from typing import Any, Sequence
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.exceptions import UnprocessableEntityError
 from ..enums.target import CapabilityType, TargetStatus
+from ..models.ssh_key import SSHKey
 from ..models.target import Target, encrypt_credentials_for_storage
 from ..models.target_capability import TargetCapability
 from ..schemas.target import TargetCreate, TargetUpdate
@@ -128,17 +130,54 @@ class TargetService:
     # ─── Écriture ──────────────────────────────────────────────
 
     @staticmethod
+    async def _validate_ssh_key_ref(
+        db: AsyncSession, ssh_key_id: str | None
+    ) -> None:
+        """Valide l'existence de la clé SSH référencée (STORY-131.3).
+
+        Args:
+            db: Session de base de données async.
+            ssh_key_id: Identifiant de clé à valider (``None`` = rien
+                à valider).
+
+        Raises:
+            UnprocessableEntityError: Clé inexistante (422 — le
+                référencement d'une clé supprimée est impossible ; la
+                FK resterait de toute façon insatisfiable).
+        """
+        if ssh_key_id is None:
+            return
+        exists = (
+            await db.execute(select(SSHKey.id).where(SSHKey.id == ssh_key_id))
+        ).scalar_one_or_none()
+        if exists is None:
+            raise UnprocessableEntityError(
+                f"La clé SSH {ssh_key_id} référencée n'existe pas"
+            )
+
+    @staticmethod
     async def create(
         db: AsyncSession,
         target_data: TargetCreate,
         organization_id: str | None = None,
     ) -> Target:
-        """Crée une nouvelle cible."""
+        """Crée une nouvelle cible (référence clé SSH — STORY-131.3)."""
+        await TargetService._validate_ssh_key_ref(db, target_data.ssh_key_id)
+
         payload = target_data.model_dump(
             exclude={"credentials", "extra_metadata"},
         )
         if organization_id:
             payload["organization_id"] = organization_id
+
+        # Dépréciation (STORY-131.3) : credentials.ssh_private_key →
+        # clé référencée ssh_key_id (voie canonique). Warning loggé,
+        # pas de rejet : compatibilité transition.
+        if target_data.credentials.ssh_private_key:
+            logger.warning(
+                "target.create legacy ssh_private_key in credentials — "
+                "déprécié, référencez une clé SSH (ssh_key_id)"
+            )
 
         # Credentials → dict JSON chiffré via SecretManager (STORY-103.2)
         payload["credentials"] = encrypt_credentials_for_storage(
@@ -159,10 +198,13 @@ class TargetService:
     async def update(
         db: AsyncSession, target_id: str, target_data: TargetUpdate
     ) -> Target | None:
-        """Met à jour les informations d'une cible."""
+        """Met à jour les informations d'une cible (ssh_key_id — STORY-131.3)."""
         target = await TargetService.get_by_id(db, target_id)
         if target is None:
             return None
+
+        if target_data.ssh_key_id is not None:
+            await TargetService._validate_ssh_key_ref(db, target_data.ssh_key_id)
 
         update_data = target_data.model_dump(exclude_unset=True, exclude_none=True)
         if not update_data:

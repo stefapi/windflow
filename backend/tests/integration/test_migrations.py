@@ -45,7 +45,8 @@ ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 
 # Tables métier attendues + table technique Alembic (STORY-121.1 :
 # + user_organizations ; STORY-123.1 : + refresh_tokens ; STORY-124.1 :
-# + api_keys ; STORY-125.1 : + audit_logs).
+# + api_keys ; STORY-125.1 : + audit_logs ; STORY-131.1 : + ssh_keys et
+# host_ssh_fingerprints).
 EXPECTED_TABLES = {
     "users",
     "organizations",
@@ -61,7 +62,21 @@ EXPECTED_TABLES = {
     "refresh_tokens",
     "api_keys",
     "audit_logs",
+    "ssh_keys",
+    "host_ssh_fingerprints",
     "alembic_version",
+}
+
+# Tables créées par les migrations additives post-baseline — droppées
+# après create_all pour simuler fidèlement une base antérieure à
+# STORY-121.1 (pattern étendu à chaque migration additive).
+ADDITIVE_TABLES = {
+    "user_organizations",  # STORY-121.1
+    "refresh_tokens",  # STORY-123.1
+    "api_keys",  # STORY-124.1
+    "audit_logs",  # STORY-125.1
+    "ssh_keys",  # STORY-131.1
+    "host_ssh_fingerprints",  # STORY-131.1
 }
 
 # URL PostgreSQL de test : paramétrable via l'environnement (CI : service
@@ -172,6 +187,30 @@ def _add_legacy_users_org_column(db_path: Path) -> None:
         engine.dispose()
 
 
+def _drop_targets_ssh_key_id(db_path: Path) -> None:
+    """STORY-131.1 : retire ``targets.ssh_key_id`` d'une base create_all
+    (simulation base pré-1311).
+
+    SQLite refuse ``ALTER TABLE ... DROP COLUMN`` sur une colonne
+    référencée par un FK inline (« unknown column in foreign key
+    definition ») : le rebuild batch d'Alembic est utilisé à la place
+    (même mécanique que le downgrade de la migration 1311).
+    """
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn)
+            operations = Operations(ctx)
+            with operations.batch_alter_table("targets") as batch_op:
+                batch_op.drop_column("ssh_key_id")
+            conn.commit()
+    finally:
+        engine.dispose()
+
+
 class TestExistingDbStampedThenStartupNoDiff:
     """test_existing_db_stamped_then_startup_has_no_diff."""
 
@@ -195,11 +234,15 @@ class TestExistingDbStampedThenStartupNoDiff:
         # + données métier.
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(legacy_engine)
+        # STORY-131.1 : retirer la colonne additive targets.ssh_key_id
+        # AVANT de dropper ssh_keys (FK résolvable pendant le rebuild
+        # batch ; SQLite refuse DROP COLUMN sur colonne FK inline).
+        legacy_engine.dispose()
+        _drop_targets_ssh_key_id(db_path)
+        legacy_engine = create_engine(f"sqlite:///{db_path}")
         with legacy_engine.begin() as conn:
-            conn.execute(text("DROP TABLE user_organizations"))
-            conn.execute(text("DROP TABLE refresh_tokens"))
-            conn.execute(text("DROP TABLE api_keys"))
-            conn.execute(text("DROP TABLE audit_logs"))
+            for table in sorted(ADDITIVE_TABLES):
+                conn.execute(text(f"DROP TABLE {table}"))
         with legacy_engine.begin() as conn:
             conn.execute(
                 text(
@@ -227,12 +270,8 @@ class TestExistingDbStampedThenStartupNoDiff:
         # Aucune recréation/altération : mêmes tables + les tables
         # additives, données intactes.
         tables_after = _sqlite_table_names(db_path)
-        assert tables_after == tables_before | {
+        assert tables_after == tables_before | ADDITIVE_TABLES | {
             "alembic_version",
-            "user_organizations",
-            "refresh_tokens",
-            "api_keys",
-            "audit_logs",
         }
         check_engine = create_engine(f"sqlite:///{db_path}")
         try:
@@ -370,11 +409,14 @@ class TestUserOrganizationsTableMigration:
 
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(legacy_engine)
+        # STORY-131.1 : retirer targets.ssh_key_id AVANT de dropper
+        # ssh_keys (FK résolvable pendant le rebuild batch).
+        legacy_engine.dispose()
+        _drop_targets_ssh_key_id(db_path)
+        legacy_engine = create_engine(f"sqlite:///{db_path}")
         with legacy_engine.begin() as conn:
-            conn.execute(text("DROP TABLE user_organizations"))
-            conn.execute(text("DROP TABLE refresh_tokens"))
-            conn.execute(text("DROP TABLE api_keys"))
-            conn.execute(text("DROP TABLE audit_logs"))
+            for table in sorted(ADDITIVE_TABLES):
+                conn.execute(text(f"DROP TABLE {table}"))
         with legacy_engine.begin() as conn:
             conn.execute(
                 text(
@@ -434,9 +476,7 @@ class TestAuditLogsTableMigration:
     """STORY-125.1 — migration additive ``audit_logs`` : structure de la
     table (spec 06 + colonnes story) sur base vierge, downgrade propre."""
 
-    def test_fresh_db_upgrade_creates_audit_logs_table(
-        self, tmp_path: Path
-    ) -> None:
+    def test_fresh_db_upgrade_creates_audit_logs_table(self, tmp_path: Path) -> None:
         """Base vierge → ``upgrade head`` → table ``audit_logs``
         présente dans le schéma."""
         engine = _upgraded_engine(tmp_path, "fresh-audit.db")
@@ -454,8 +494,7 @@ class TestAuditLogsTableMigration:
         engine = _upgraded_engine(tmp_path, "structure-audit.db")
         try:
             columns = {
-                col["name"]: col
-                for col in inspect(engine).get_columns("audit_logs")
+                col["name"]: col for col in inspect(engine).get_columns("audit_logs")
             }
         finally:
             engine.dispose()
@@ -512,8 +551,7 @@ class TestAuditLogsTableMigration:
             engine.dispose()
 
         fks = {
-            row[3]: {"table": row[2], "to": row[4], "on_delete": row[6]}
-            for row in rows
+            row[3]: {"table": row[2], "to": row[4], "on_delete": row[6]} for row in rows
         }
         assert fks["user_id"]["table"] == "users"
         assert fks["user_id"]["to"] == "id"
@@ -541,9 +579,9 @@ class TestAuditLogsTableMigration:
             ("ix_audit_logs_created_at", ["created_at"]),
             ("idx_audit_resource", ["resource_type", "resource_id"]),
         ):
-            assert name in by_name, (
-                f"Index manquant : {name} (présentes = {sorted(by_name)})"
-            )
+            assert (
+                name in by_name
+            ), f"Index manquant : {name} (présentes = {sorted(by_name)})"
             assert by_name[name]["column_names"] == column
             assert not by_name[name]["unique"]
 
@@ -556,9 +594,7 @@ class TestAuditLogsTableMigration:
         up = _run_alembic("upgrade", "head", db_url=db_url)
         assert up.returncode == 0, up.stderr
 
-        down = _run_alembic(
-            "downgrade", "1241_api_keys", db_url=db_url
-        )
+        down = _run_alembic("downgrade", "1241_api_keys", db_url=db_url)
         assert down.returncode == 0, down.stderr
 
         engine = create_engine(f"sqlite:///{db_path}")
@@ -587,11 +623,14 @@ class TestUsersOrgMigrationData:
         à la main + données réalistes (2 orgs, 4 users)."""
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(legacy_engine)
+        # STORY-131.1 : retirer targets.ssh_key_id AVANT de dropper
+        # ssh_keys (FK résolvable pendant le rebuild batch).
+        legacy_engine.dispose()
+        _drop_targets_ssh_key_id(db_path)
+        legacy_engine = create_engine(f"sqlite:///{db_path}")
         with legacy_engine.begin() as conn:
-            conn.execute(text("DROP TABLE user_organizations"))
-            conn.execute(text("DROP TABLE refresh_tokens"))
-            conn.execute(text("DROP TABLE api_keys"))
-            conn.execute(text("DROP TABLE audit_logs"))
+            for table in sorted(ADDITIVE_TABLES):
+                conn.execute(text(f"DROP TABLE {table}"))
             # Recréer la colonne legacy (create_all ne la crée plus)
             conn.execute(
                 text("ALTER TABLE users ADD COLUMN organization_id VARCHAR(36)")
@@ -602,6 +641,9 @@ class TestUsersOrgMigrationData:
                     "ON users (organization_id)"
                 )
             )
+        legacy_engine.dispose()
+        legacy_engine = create_engine(f"sqlite:///{db_path}")
+        with legacy_engine.begin() as conn:
             for org_id, name in (("org-a", "Org A"), ("org-b", "Org B")):
                 conn.execute(
                     text(

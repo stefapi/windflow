@@ -17,6 +17,7 @@ from .organizations import router as organizations_router
 from .plugin_registry import router as plugin_registry_router
 from .plugins import router as plugins_router
 from .schedules import router as schedules_router
+from .ssh_keys import router as ssh_keys_router
 from .stacks import router as stacks_router
 from .stats import router as stats_router
 from .system import router as system_router
@@ -35,6 +36,9 @@ api_router.include_router(
     organizations_router, prefix="/organizations", tags=["organizations"]
 )
 api_router.include_router(targets_router, prefix="/targets", tags=["targets"])
+# STORY-131.2 : gestion des clés SSH réutilisables (entité globale
+# partagée — require_admin sur chaque endpoint, pas de scoping org).
+api_router.include_router(ssh_keys_router, prefix="/ssh-keys", tags=["ssh-keys"])
 api_router.include_router(stacks_router, prefix="/stacks", tags=["stacks"])
 api_router.include_router(
     deployments_router, prefix="/deployments", tags=["deployments"]

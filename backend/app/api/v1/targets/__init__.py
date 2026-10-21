@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from .capabilities import router as capabilities_router
 from .connectivity import router as connectivity_router
 from .crud import router as crud_router
+from .fingerprints import router as fingerprints_router
 from .scanning import router as scanning_router
 
 router = APIRouter()
@@ -19,5 +20,6 @@ router.include_router(crud_router)
 router.include_router(connectivity_router)
 router.include_router(scanning_router)
 router.include_router(capabilities_router)
+router.include_router(fingerprints_router)
 
 __all__ = ["router"]

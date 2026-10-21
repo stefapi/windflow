@@ -19,7 +19,11 @@ from typing import Any, Awaitable, Callable, TypeVar
 import asyncssh
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.exceptions import CommandExecutionError
+from ..core.exceptions import (
+    CommandExecutionError,
+    SSHHostKeyMismatchError,
+    SSHHostKeyNotAcceptedError,
+)
 from ..enums.target import AccessLevel
 from ..models.target import Target
 from ..schemas.target import TargetAccessProfile
@@ -57,6 +61,7 @@ from .target_scan_parsers import (
     parse_version_only,
     strip_quotes,
 )
+from .ssh_connection import HostKeyPolicy, build_ssh_kwargs
 from .target_service import TargetService
 
 logger = logging.getLogger(__name__)
@@ -92,7 +97,14 @@ class TargetScannerService:
         return await self._run_scan(executor, host="localhost")
 
     async def scan_remote(self, scan_request: ScanRequest) -> ScanResult:
-        """Scanne une machine distante via SSH.
+        """Scanne une machine distante via SSH (TOFU STRICT — STORY-131.3).
+
+        Scan ad hoc (credentials directs, sans cible persistée —
+        discovery) : le TOFU vivant sur ``targets.id``, une empreinte
+        inconnue bloque la session **sans persister** (l'événement
+        ``PENDING`` est émis avec ``target_id=None``). La voie
+        d'acceptation passe par la cible persistée : création manuelle
+        → scan (capture PENDING) → acceptation API (STORY-131.2).
 
         Args:
             scan_request: Paramètres de connexion distante.
@@ -101,10 +113,16 @@ class TargetScannerService:
             Résultat du scan avec les capacités détectées.
 
         Raises:
-            CommandExecutionError: Si la connexion SSH échoue.
+            CommandExecutionError: Si la connexion SSH échoue — y
+                compris blocage TOFU (empreinte non acceptée /
+                divergente), wrappé avec un message explicite.
         """
-        ssh_kwargs = self._build_ssh_kwargs(scan_request)
         try:
+            # Construction des kwargs DANS le try : un blocage TOFU
+            # (empreinte non acceptée / divergente) levé par le helper
+            # doit être wrappé en CommandExecutionError (contrat
+            # ``scan_remote`` inchangé côté appelants, STORY-131.3).
+            ssh_kwargs = await self._build_ssh_kwargs(scan_request, db=None)
             async with asyncssh.connect(**ssh_kwargs) as connection:
                 executor = SSHCommandExecutor(
                     connection,
@@ -112,6 +130,13 @@ class TargetScannerService:
                     sudo_password=scan_request.sudo_password,
                 )
                 return await self._run_scan(executor, host=scan_request.host)
+        except (SSHHostKeyNotAcceptedError, SSHHostKeyMismatchError) as exc:
+            # Blocage TOFU (STORY-131.3) — wrapping typé exigé par la
+            # story (scan → CommandExecutionError) : message explicite
+            # côté client, détails internes déjà loggés par le helper.
+            raise CommandExecutionError(
+                "ssh-connect", exit_status=255, stderr=str(exc)
+            ) from exc
         except (OSError, asyncssh.Error, asyncio.TimeoutError) as exc:
             raise CommandExecutionError(
                 "ssh-connect", exit_status=255, stderr=f"Échec connexion SSH : {exc}"
@@ -141,7 +166,7 @@ class TargetScannerService:
         is_localhost = target.host in {"localhost", "127.0.0.1"}
         try:
             scan_result, access_profile, standard_caps, elevated_caps = (
-                await self._execute_full_scan(target, is_localhost)
+                await self._execute_full_scan(target, is_localhost, db)
             )
 
             access_profile.standard_capabilities = standard_caps
@@ -156,9 +181,15 @@ class TargetScannerService:
     # ─── Orchestration interne ────────────────────────────────
 
     async def _execute_full_scan(
-        self, target: Target, is_localhost: bool
+        self, target: Target, is_localhost: bool, db: AsyncSession | None = None
     ) -> tuple[ScanResult, TargetAccessProfile, list[str], list[str]]:
         """Exécute le scan complet : scan + profil d'accès + double scan.
+
+        Args:
+            target: Cible à scanner.
+            is_localhost: Cible locale (pas de SSH).
+            db: Session async (TOFU STRICT — lecture/écriture des
+                empreintes de la cible, STORY-131.3).
 
         Returns:
             Tuple (scan_result, access_profile, standard_caps, elevated_caps).
@@ -174,7 +205,9 @@ class TargetScannerService:
         if is_localhost:
             return await self._full_scan_localhost(credentials, sudo_user, sudo_password, sudo_enabled)
 
-        return await self._full_scan_remote(target, credentials, sudo_user, sudo_password, sudo_enabled)
+        return await self._full_scan_remote(
+            target, credentials, sudo_user, sudo_password, sudo_enabled, db=db
+        )
 
     async def _full_scan_localhost(
         self, credentials: dict, sudo_user: str | None, sudo_password: str | None, sudo_enabled: bool
@@ -196,22 +229,35 @@ class TargetScannerService:
         return scan_result, access_profile, standard_caps, elevated_caps
 
     async def _full_scan_remote(
-        self, target: Target, credentials: dict, sudo_user: str | None, sudo_password: str | None, sudo_enabled: bool
+        self, target: Target, credentials: dict, sudo_user: str | None, sudo_password: str | None, sudo_enabled: bool,
+        db: AsyncSession | None = None,
     ) -> tuple[ScanResult, TargetAccessProfile, list[str], list[str]]:
-        """Scan complet pour une cible distante — connexion SSH unique réutilisée."""
+        """Scan complet pour une cible distante — connexion SSH unique réutilisée.
+
+        TOFU STRICT (STORY-131.3) : la vérification d'empreinte a lieu
+        à l'établissement (helper ``ssh_connection``) — premier contact
+        → ligne PENDING + blocage ; divergence → blocage (jamais
+        d'écrasement) ; acceptée + matching → session.
+        """
         username = credentials.get("username")
         if not username:
             raise ValueError("Les identifiants doivent contenir 'username' pour un scan distant.")
 
-        ssh_kwargs = self._build_ssh_kwargs(ScanRequest(
-            host=target.host, port=target.port or 22, username=username,
-            password=credentials.get("password"),
-            ssh_private_key=credentials.get("ssh_private_key"),
-            ssh_private_key_passphrase=credentials.get("ssh_private_key_passphrase"),
-            sudo_user=sudo_user, sudo_password=sudo_password,
-        ))
-
         try:
+            # Construction des kwargs DANS le try : blocage TOFU wrappé
+            # en CommandExecutionError (cf. scan_remote — la cible passe
+            # en ERROR via mark_scan_failed avec un message explicite).
+            ssh_kwargs = await self._build_ssh_kwargs(
+                ScanRequest(
+                    host=target.host, port=target.port or 22, username=username,
+                    password=credentials.get("password"),
+                    ssh_private_key=credentials.get("ssh_private_key"),
+                    ssh_private_key_passphrase=credentials.get("ssh_private_key_passphrase"),
+                    sudo_user=sudo_user, sudo_password=sudo_password,
+                ),
+                db=db,
+                target=target,
+            )
             async with asyncssh.connect(**ssh_kwargs) as connection:
                 sudo_executor = SSHCommandExecutor(
                     connection, sudo_user=sudo_user, sudo_password=sudo_password,
@@ -234,6 +280,14 @@ class TargetScannerService:
                     host=target.host, credentials=credentials,
                     executor=plain_executor,
                 )
+        except (SSHHostKeyNotAcceptedError, SSHHostKeyMismatchError) as exc:
+            # Blocage TOFU (STORY-131.3) — wrapping typé exigé par la
+            # story (scan → CommandExecutionError) : l'échec remonte à
+            # ``scan_and_update_target`` qui passe la cible en ERROR
+            # (mark_scan_failed) avec un message explicite.
+            raise CommandExecutionError(
+                "ssh-connect", exit_status=255, stderr=str(exc)
+            ) from exc
         except (OSError, asyncssh.Error, asyncio.TimeoutError) as exc:
             raise CommandExecutionError(
                 "ssh-connect", exit_status=255, stderr=f"Échec connexion SSH : {exc}"
@@ -258,19 +312,30 @@ class TargetScannerService:
         )
 
     @staticmethod
-    def _build_ssh_kwargs(scan_request: ScanRequest) -> dict:
-        """Construit les kwargs SSH à partir d'une requête de scan."""
-        kwargs: dict = {
-            "host": scan_request.host, "port": scan_request.port,
-            "username": scan_request.username, "known_hosts": None,
-        }
-        if scan_request.ssh_private_key:
-            kwargs["client_keys"] = [scan_request.ssh_private_key]
-            if getattr(scan_request, "ssh_private_key_passphrase", None):
-                kwargs["passphrase"] = scan_request.ssh_private_key_passphrase
-        else:
-            kwargs["password"] = scan_request.password
-        return kwargs
+    async def _build_ssh_kwargs(
+        scan_request: ScanRequest,
+        db: AsyncSession | None = None,
+        target: Target | None = None,
+    ) -> dict:
+        """Construit les kwargs SSH via le helper TOFU (STORY-131.3).
+
+        Délègue à :func:`app.services.ssh_connection.build_ssh_kwargs`
+        (politique STRICT — sites 1-3 du scanner) : plus aucun
+        ``known_hosts: None`` (R4). La résolution d'authentification
+        passe par la clé référencée de la cible quand elle existe
+        (voie canonique), sinon le matériau de la requête de scan.
+        """
+        return await build_ssh_kwargs(
+            db,
+            host=scan_request.host,
+            port=scan_request.port or 22,
+            username=scan_request.username,
+            mode=HostKeyPolicy.STRICT,
+            target=target,
+            password=scan_request.password,
+            ssh_private_key=scan_request.ssh_private_key,
+            passphrase=getattr(scan_request, "ssh_private_key_passphrase", None),
+        )
 
     # ─── Double scan (standard vs elevé) ─────────────────────
 
@@ -328,6 +393,9 @@ class TargetScannerService:
             return await self._run_scan(executor, host=host)
 
         # Fallback : nouvelle connexion SSH si aucun executor fourni
+        # (défensif — jamais atteint dans le flux remote actuel où
+        # l'executor de la connexion unique est toujours fourni ;
+        # STRICT sans cible → blocage propre au premier contact).
         scan_request = ScanRequest(
             host=host,
             port=credentials.get("port", 22),
@@ -336,7 +404,7 @@ class TargetScannerService:
             ssh_private_key=credentials.get("ssh_private_key"),
             ssh_private_key_passphrase=credentials.get("ssh_private_key_passphrase"),
         )
-        ssh_kwargs = self._build_ssh_kwargs(scan_request)
+        ssh_kwargs = await self._build_ssh_kwargs(scan_request, db=None)
         async with asyncssh.connect(**ssh_kwargs) as connection:
             remote_exec = SSHCommandExecutor(connection)
             return await self._run_scan(remote_exec, host=host)

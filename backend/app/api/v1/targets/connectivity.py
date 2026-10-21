@@ -8,9 +8,12 @@ from typing import Any
 
 import asyncssh
 from fastapi import APIRouter, Depends, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ....auth.rbac import require_operator
+from ....core.exceptions import SSHHostKeyMismatchError, SSHHostKeyNotAcceptedError
 from ....core.rate_limit import conditional_rate_limiter
+from ....database import get_db
 from ....models.user import User
 from ....schemas.target import (
     ConnectionTestRequest,
@@ -21,6 +24,11 @@ from ....schemas.target import (
     SSHAuthMethod,
 )
 from ....services.commands import LocalCommandExecutor, SSHCommandExecutor
+from ....services.ssh_connection import (
+    HostKeyCapture,
+    HostKeyPolicy,
+    build_ssh_kwargs,
+)
 from .helpers import test_sudo_access
 
 router = APIRouter()
@@ -236,8 +244,17 @@ Test SSH connection to a host with provided credentials.
 
 ## Process
 1. Attempts to establish an SSH connection using provided credentials
-2. If successful, retrieves basic OS information
-3. Returns connection status and OS details
+2. Captures the SSH **host key fingerprint** (TOFU — STORY-131.3):
+   nothing is persisted, the fingerprint is returned for
+   **explicit acceptance** via `POST /targets/{id}/ssh-fingerprints/accept`
+3. If successful, retrieves basic OS information
+4. Returns connection status, OS details and fingerprint status
+
+## Fingerprint statuses (STORY-131.3)
+- `unknown` — no accepted fingerprint for this host yet (first use);
+- `accepted` — matches a previously accepted fingerprint;
+- `mismatch` — differs from an accepted fingerprint: the connection
+  is **refused** (potential host reconfiguration or MITM — spec 15).
 
 ## Supported Authentication Methods
 - **Password**: Username + password authentication
@@ -245,18 +262,43 @@ Test SSH connection to a host with provided credentials.
 
 ## Use Cases
 - Validate credentials before creating a target
+- Capture the host fingerprint for first-use acceptance
 - Test connection after updating credentials
 - Troubleshoot connectivity issues
 
 **Authentication Required**
 """,
     dependencies=[Depends(conditional_rate_limiter(20, 60))],
+    responses={
+        200: {
+            "description": "Connection test result (with captured fingerprint)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": (
+                            "Connexion réussie à prod-vm01:22 en tant que "
+                            "'deploy' — empreinte hôte : "
+                            "SHA256:riuYU2/TOSwfigd2RdFbfw8dCjG7QZtoInqt30SgFpc "
+                            "(unknown)"
+                        ),
+                        "os_info": {"uname": "Linux prod-vm01 5.15.0 …"},
+                        "host_fingerprint": (
+                            "SHA256:riuYU2/TOSwfigd2RdFbfw8dCjG7QZtoInqt30SgFpc"
+                        ),
+                        "fingerprint_status": "unknown",
+                    }
+                }
+            },
+        },
+    },
     tags=["targets"],
 )
 async def test_connection(
     request: Request,
     test_request: ConnectionTestRequest,
     current_user: User = Depends(require_operator),
+    session: AsyncSession = Depends(get_db),
 ) -> ConnectionTestResponse:
     """Test SSH connection to a target host.
 
@@ -266,6 +308,14 @@ async def test_connection(
     SSH lecture-only (spec 08 § familles : SSH lecture = Operator+).
     Divergence inventaire (admin) signalée : libellé réel = test de
     connexion, cas prévu par la story.
+
+    ## TOFU (STORY-131.3)
+
+    Mode COLLECT : l'empreinte présentée est capturée **sans être
+    persistée** (jamais d'ajout silencieux) et retournée dans
+    ``host_fingerprint``/``fingerprint_status`` pour acceptation
+    explicite ; une divergence avec une empreinte acceptée refuse la
+    connexion (``mismatch``).
     """
     correlation_id = getattr(request.state, "correlation_id", None)
     logger.info(
@@ -283,7 +333,9 @@ async def test_connection(
         return await _test_local_connection(creds, correlation_id)
 
     # ── Mode SSH (password ou clé) ──────────────────────────────
-    return await _test_ssh_connection(test_request, creds, correlation_id)
+    return await _test_ssh_connection(
+        test_request, creds, correlation_id, session=session
+    )
 
 
 async def _test_local_connection(
@@ -343,21 +395,49 @@ async def _test_ssh_connection(
     test_request: ConnectionTestRequest,
     creds: Any,
     correlation_id: str | None,
+    session: AsyncSession | None = None,
 ) -> ConnectionTestResponse:
-    """Test connexion SSH (password ou clé)."""
-    ssh_kwargs: dict = {
-        "host": test_request.host,
-        "port": test_request.port,
-        "username": creds.username,
-        "known_hosts": None,
-    }
+    """Test connexion SSH (password ou clé) — mode COLLECT (STORY-131.3).
 
-    if creds.auth_method == SSHAuthMethod.SSH_KEY:
-        ssh_kwargs["client_keys"] = [creds.ssh_private_key]
-        if creds.ssh_private_key_passphrase:
-            ssh_kwargs["passphrase"] = creds.ssh_private_key_passphrase
-    else:
-        ssh_kwargs["password"] = creds.password
+    TOFU : l'empreinte de la clé d'hôte est **capturée sans être
+    persistée** (jamais d'ajout silencieux) et retournée dans la
+    réponse (``host_fingerprint`` + ``fingerprint_status``) pour
+    acceptation explicite via l'API STORY-131.2. Une divergence avec
+    une empreinte acceptée bloque la connexion (``mismatch``).
+    """
+    captures: list[HostKeyCapture] = []
+    ssh_kwargs = await build_ssh_kwargs(
+        session,
+        host=test_request.host,
+        port=test_request.port,
+        username=creds.username,
+        mode=HostKeyPolicy.COLLECT,
+        password=creds.password if creds.auth_method != SSHAuthMethod.SSH_KEY else None,
+        ssh_private_key=(
+            creds.ssh_private_key
+            if creds.auth_method == SSHAuthMethod.SSH_KEY
+            else None
+        ),
+        passphrase=(
+            creds.ssh_private_key_passphrase
+            if creds.auth_method == SSHAuthMethod.SSH_KEY
+            else None
+        ),
+        capture_out=captures,
+    )
+
+    def _response(
+        success: bool, message: str, os_info: dict[str, Any] | None = None
+    ) -> ConnectionTestResponse:
+        """Construit la réponse en attachant la capture éventuelle."""
+        capture = captures[0] if captures else None
+        return ConnectionTestResponse(
+            success=success,
+            message=message,
+            os_info=os_info or None,
+            host_fingerprint=capture.fingerprint if capture else None,
+            fingerprint_status=capture.status if capture else None,
+        )
 
     try:
         async with asyncssh.connect(**ssh_kwargs) as conn:
@@ -381,34 +461,49 @@ async def _test_ssh_connection(
                         f" — ⚠ sudo vers {sudo_user} échoué : {sudo_test['message']}"
                     )
 
-            return ConnectionTestResponse(
-                success=True,
-                message=f"Connexion réussie à {test_request.host}:{test_request.port} en tant que '{creds.username}'{sudo_test_msg}",
-                os_info=os_info or None,
+            status = captures[0].status if captures else "unknown"
+            fp_msg = (
+                f" — empreinte hôte : {captures[0].fingerprint} ({status})"
+                if captures
+                else ""
             )
+            return _response(
+                True,
+                f"Connexion réussie à {test_request.host}:{test_request.port} "
+                f"en tant que '{creds.username}'{sudo_test_msg}{fp_msg}",
+                os_info,
+            )
+    except (SSHHostKeyNotAcceptedError, SSHHostKeyMismatchError) as exc:
+        # Blocage TOFU (STORY-131.3 — mismatch COLLECT) : message
+        # générique côté client, détail interne déjà loggé par le
+        # helper (rules 40).
+        return _response(
+            False,
+            f"Connexion refusée : {exc.message}",
+        )
     except asyncssh.PermissionDenied:
-        return ConnectionTestResponse(
-            success=False,
-            message="Authentification échouée : identifiants incorrects",
+        return _response(
+            False,
+            "Authentification échouée : identifiants incorrects",
         )
     except asyncssh.ConnectionLost:
-        return ConnectionTestResponse(
-            success=False,
-            message="Connexion perdue pendant la négociation SSH",
+        return _response(
+            False,
+            "Connexion perdue pendant la négociation SSH",
         )
     except OSError as exc:
-        return ConnectionTestResponse(
-            success=False,
-            message=f"Impossible de se connecter à {test_request.host}:{test_request.port} — {exc}",
+        return _response(
+            False,
+            f"Impossible de se connecter à {test_request.host}:{test_request.port} — {exc}",
         )
     except Exception as exc:  # noqa: B902
         logger.warning(
             f"Unexpected SSH test error: {exc}",
             extra={"correlation_id": correlation_id},
         )
-        return ConnectionTestResponse(
-            success=False,
-            message=f"Erreur inattendue : {exc}",
+        return _response(
+            False,
+            f"Erreur inattendue : {exc}",
         )
 
 

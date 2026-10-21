@@ -30,6 +30,15 @@ class EventType(str, Enum):
     TARGET_UPDATED = "target.updated"
     TARGET_DELETED = "target.deleted"
     TARGET_HEALTH_CHECK = "target.health_check"
+    # Cycle TOFU des empreintes SSH d'hôte (spec 15) :
+    # - ACCEPTED : acceptation explicite via API (STORY-131.2) ;
+    # - PENDING : empreinte capturée en session STRICT bloquée —
+    #   acceptation explicite requise (STORY-131.3, runtime) ;
+    # - DIVERGENCE : empreinte divergente détectée — connexion bloquée,
+    #   alerte sécurité potentielle MITM (STORY-131.3, runtime).
+    TARGET_SSH_FINGERPRINT_ACCEPTED = "target.ssh_fingerprint_accepted"
+    TARGET_SSH_FINGERPRINT_PENDING = "target.ssh_fingerprint_pending"
+    TARGET_SSH_FINGERPRINT_DIVERGENCE = "target.ssh_fingerprint_divergence"
 
     # Stack
     STACK_CREATED = "stack.created"

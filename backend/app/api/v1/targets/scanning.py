@@ -32,6 +32,7 @@ from ....schemas.target_scan import (
     TargetDiscoveryResponse,
 )
 from ....services.commands import LocalCommandExecutor, SSHCommandExecutor
+from ....services.ssh_connection import HostKeyPolicy, build_ssh_kwargs
 from ....services.target_scan_parsers import build_capabilities_payload
 from ....services.target_scanner_service import TargetScannerService
 from ....services.target_service import TargetService
@@ -362,6 +363,7 @@ async def discover_target(
         scanner=scanner,
         discovery_request=discovery_request,
         is_localhost=is_localhost,
+        session=session,
     )
 
     await TargetService.apply_scan_result(
@@ -384,8 +386,19 @@ async def _detect_access_profile(
     scanner: TargetScannerService,
     discovery_request: TargetDiscoveryRequest,
     is_localhost: bool,
+    session: AsyncSession | None = None,
 ) -> dict[str, Any] | None:
-    """Détecte le profil d'accès pendant la découverte."""
+    """Détecte le profil d'accès pendant la découverte.
+
+    TOFU STRICT (STORY-131.3) : la connexion de détection passe par le
+    helper ``ssh_connection`` (plus aucun ``known_hosts: None``). La
+    cible étant déjà persistée à ce point du flux discovery (créée en
+    amont dans ``discover_target``), la vérification lit les
+    empreintes de la cible — premier contact → ligne PENDING +
+    blocage (le profil d'accès n'est alors pas détecté, comportement
+    non-fatal déjà prévu par le ``try/except`` : la discovery
+    aboutit, l'acceptation se fait via l'API 131.2 puis re-scan).
+    """
     try:
         if is_localhost:
             local_exec = LocalCommandExecutor()
@@ -397,20 +410,16 @@ async def _detect_access_profile(
                 detection_method="discovery",
             )
         else:
-            ssh_kwargs_detect: dict[str, Any] = {
-                "host": discovery_request.host,
-                "port": discovery_request.port,
-                "username": discovery_request.username,
-                "known_hosts": None,
-            }
-            if discovery_request.ssh_private_key:
-                ssh_kwargs_detect["client_keys"] = [discovery_request.ssh_private_key]
-                if getattr(discovery_request, "ssh_private_key_passphrase", None):
-                    ssh_kwargs_detect["passphrase"] = (
-                        discovery_request.ssh_private_key_passphrase
-                    )
-            else:
-                ssh_kwargs_detect["password"] = discovery_request.password
+            ssh_kwargs_detect = await build_ssh_kwargs(
+                session,
+                host=discovery_request.host,
+                port=discovery_request.port,
+                username=discovery_request.username,
+                mode=HostKeyPolicy.STRICT,
+                password=discovery_request.password,
+                ssh_private_key=discovery_request.ssh_private_key,
+                passphrase=discovery_request.ssh_private_key_passphrase,
+            )
 
             async with asyncssh.connect(**ssh_kwargs_detect) as conn:
                 ssh_exec = SSHCommandExecutor(conn)

@@ -2,9 +2,6 @@
 
 ## 📋 BACKLOG
 
-### EPIC-012 : P1 — Socle structurant (remédiation backend)
-- [ ] STORY-131 : SSH réutilisables + empreintes hôtes + anti-MITM TOFU (P1-9)
-
 ### EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
 - [ ] STORY-160 : Moteur d'exécution du scheduler — boucle asyncio, registre d'actions, triggers cron/événement, verrous, fuseaux IANA (P2-1, partie moteur)
 - [ ] STORY-161 : Table `scheduled_task_executions` — historique des exécutions, endpoints de consultation, rétention (P2-1, partie traçabilité)
@@ -45,6 +42,11 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] BUG-002 : Makefile .ONESHELL masque les échecs de lint
+- [x] BUG-001 : 35 échecs préexistants suite unitaire backend (herméticité DISABLE_AUTH + enveloppes spec-09)
+- [x] STORY-131.3 : Anti-MITM TOFU runtime — helper de connexion et intégration aux 5 sites SSH (P1-9 — STORY-131 découpée) (EPIC-012)
+- [x] STORY-131.2 : Service & API de gestion des clés SSH et des empreintes hôtes (P1-9 — STORY-131 découpée) (EPIC-012)
+- [x] STORY-131.1 : Modèles & migrations — `ssh_keys`, `host_ssh_fingerprints` et data migration crypto (P1-9 — STORY-131 découpée) (EPIC-012)
 - [x] STORY-130.2 : Purge des références Celery — runtime asyncio unique assumé (P1-11 — STORY-130 découpée) (EPIC-012)
 - [x] STORY-130.1 : Migration Argon2id — double lecture bcrypt et re-hash automatique au login (P1-10 — STORY-130 découpée) (EPIC-012)
 - [x] STORY-129 : Endpoints santé & mot de passe — `GET /system/ready` sans auth et `PUT /auth/password` (P1-7 + P1-8) (EPIC-012)

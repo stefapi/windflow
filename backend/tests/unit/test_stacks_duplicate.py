@@ -8,17 +8,33 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import error_message, unwrap
 
 from app.models.organization import Organization
 from app.models.stack import Stack
-from app.models.user import User
 from app.schemas.stack import StackCreate
 from app.services.stack_service import StackService
-from tests.conftest import error_message, unwrap
+
+
+@pytest.fixture(autouse=True)
+def _jwt_mode(monkeypatch):
+    """Force le mode JWT normal (disable_auth=False) — pattern 122.2.
+
+    Le fichier ``.env`` local (git-ignored) peut contenir ``DISABLE_AUTH=true``
+    (valeur recommandée par ``env.example`` pour le dev). Sans ce forçage,
+    ``get_current_user`` court-circuite le JWT pour chercher un superadmin
+    en base → 500 ``INTERNAL_ERROR`` sur tous les endpoints authentifiés.
+    """
+
+    from app.auth import dependencies as auth_deps
+
+    monkeypatch.setattr(auth_deps.settings, "disable_auth", False)
 
 
 @pytest.fixture
-async def test_stack(db_session: AsyncSession, test_organization: Organization) -> Stack:
+async def test_stack(
+    db_session: AsyncSession, test_organization: Organization
+) -> Stack:
     """Crée un stack de test."""
     stack_data = StackCreate(
         name="Original Stack",

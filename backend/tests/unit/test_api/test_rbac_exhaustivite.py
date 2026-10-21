@@ -60,7 +60,12 @@ EXPECTED_ROUTE_COUNTS: dict[str, int] = {
     "auth": 9,
     "users": 8,
     "organizations": 10,
-    "targets": 13,
+    # STORY-131.2 : +3 routes empreintes SSH (GET liste / POST accept /
+    # DELETE reset, protégées require_admin) — 13 → 16.
+    "targets": 16,
+    # STORY-131.2 : router ssh_keys — 6 routes (list/generate/import/
+    # get/put/delete, toutes require_admin).
+    "ssh_keys": 6,
     "stacks": 15,
     "deployments": 8,
     "workflows": 1,

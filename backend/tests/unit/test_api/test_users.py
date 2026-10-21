@@ -4,6 +4,7 @@ Scoping multi-appartenances, isolation croisée (403 sans org partagée),
 validation des organisations cibles (404), réaffectation via associations.
 """
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from tests.conftest import unwrap
@@ -14,6 +15,21 @@ from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
+
+
+@pytest.fixture(autouse=True)
+def _jwt_mode(monkeypatch):
+    """Force le mode JWT normal (disable_auth=False) — pattern 122.2.
+
+    Le fichier ``.env`` local (git-ignored) peut contenir ``DISABLE_AUTH=true``
+    (valeur recommandée par ``env.example`` pour le dev). Sans ce forçage,
+    ``get_current_user`` court-circuite le JWT pour chercher un superadmin
+    en base → 500 ``INTERNAL_ERROR`` sur tous les endpoints authentifiés.
+    """
+
+    from app.auth import dependencies as auth_deps
+
+    monkeypatch.setattr(auth_deps.settings, "disable_auth", False)
 
 
 async def _make_user_in(

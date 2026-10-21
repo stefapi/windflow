@@ -42,6 +42,28 @@ def _sync_table_names(db_path: Path) -> set[str]:
         engine.dispose()
 
 
+def _drop_targets_ssh_key_id(db_path: Path) -> None:
+    """STORY-131.1 : retire ``targets.ssh_key_id`` d'une base create_all.
+
+    SQLite refuse ``ALTER TABLE ... DROP COLUMN`` sur une colonne
+    référencée par un FK inline : le rebuild batch d'Alembic est utilisé
+    (même mécanique que le downgrade de la migration 1311).
+    """
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn)
+            operations = Operations(ctx)
+            with operations.batch_alter_table("targets") as batch_op:
+                batch_op.drop_column("ssh_key_id")
+            conn.commit()
+    finally:
+        engine.dispose()
+
+
 def _alembic_version(db_path: Path) -> str | None:
     """Lit la révision courante dans la table ``alembic_version``."""
     engine = create_engine(f"sqlite:///{db_path}")
@@ -113,15 +135,25 @@ class TestRunMigrationsExistingUnversionedDb:
         # + DROP des tables additives pour simuler fidèlement une base
         # antérieure à STORY-121.1 (create_all des métadonnées courantes
         # les créerait aussi — DROP refresh_tokens ajouté par
-        # STORY-123.1, DROP api_keys par STORY-124.1) + données métier
+        # STORY-123.1, DROP api_keys par STORY-124.1, ssh_keys/
+        # host_ssh_fingerprints par STORY-131.1) + données métier
         # à préserver.
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(legacy_engine)
+        # STORY-131.1 : retirer targets.ssh_key_id AVANT de dropper
+        # ssh_keys — SQLite refuse DROP COLUMN sur une colonne FK inline,
+        # le rebuild batch d'Alembic est utilisé (FK résolvable tant que
+        # ssh_keys existe).
+        legacy_engine.dispose()
+        _drop_targets_ssh_key_id(db_path)
+        legacy_engine = create_engine(f"sqlite:///{db_path}")
         with legacy_engine.begin() as conn:
             conn.execute(text("DROP TABLE user_organizations"))
             conn.execute(text("DROP TABLE refresh_tokens"))
             conn.execute(text("DROP TABLE api_keys"))
             conn.execute(text("DROP TABLE audit_logs"))
+            conn.execute(text("DROP TABLE ssh_keys"))
+            conn.execute(text("DROP TABLE host_ssh_fingerprints"))
         # STORY-121.3 : simuler la colonne héritée users.organization_id
         # (+ index) — absente du schéma courant mais attendue par la
         # migration 1213 sur une base pré-121.3

@@ -299,6 +299,95 @@ class InvalidApiKeyError(WindFlowException):
         super().__init__(reason)
 
 
+class SSHHostKeyNotAcceptedError(WindFlowException):
+    """Levée quand la clé d'hôte SSH présentée n'est pas acceptée (STORY-131.3).
+
+    TOFU (*Trust On First Use*, spec 15 § Hosts distants) : l'empreinte
+    présentée est **inconnue** (première connexion — une ligne PENDING
+    ``accepted=False`` a été enregistrée par le helper
+    ``ssh_connection``) ou **enregistrée mais non acceptée**
+    (acceptation explicite toujours attendue via ``POST
+    /targets/{id}/ssh-fingerprints/accept``). La session est bloquée :
+    jamais d'ajout silencieux au known_hosts (anti-MITM).
+
+    Exception **technique runtime** (elle n'est pas destinée à être
+    exposée telle quelle en HTTP) : les callers la traduisent — scan →
+    ``CommandExecutionError``, test-connection → réponse structurée
+    avec ``fingerprint_status``. Le message est générique côté client
+    (rules 40 : pas de secret, l'empreinte d'hôte étant publique par
+    nature elle peut figurer dans ``details``).
+
+    Attributes:
+        fingerprint: Empreinte présentée ``SHA256:<base64nopad>``.
+        target_id: Cible vérifiée (``None`` hors contexte cible
+            persistée — ex. discovery avant création).
+    """
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        details: dict | None = None,
+        fingerprint: str | None = None,
+        target_id: str | None = None,
+    ) -> None:
+        self.fingerprint = fingerprint
+        self.target_id = target_id
+        super().__init__(
+            message
+            or (
+                "Empreinte de clé d'hôte SSH inconnue ou non acceptée — "
+                "acceptation explicite requise avant toute connexion"
+            ),
+            details=details,
+        )
+
+
+class SSHHostKeyMismatchError(WindFlowException):
+    """Levée en cas de divergence d'empreinte de clé d'hôte SSH (STORY-131.3).
+
+    Anti-MITM (spec 15) : l'empreinte présentée **diffère** de
+    l'empreinte acceptée enregistrée pour ``(hostname, port, key_type)``
+    — l'hôte a été reconfiguré **ou** la connexion est usurpée
+    (man-in-the-middle). La connexion est bloquée systématiquement et
+    l'empreinte acceptée n'est **jamais écrasée** : une ré-acceptation
+    délibérée (reset + accept) est requise si le changement est légitime.
+
+    Exception **technique runtime** — traduite par les callers (message
+    générique côté client, détails internes loggés sans donnée
+    sensible, rules 40). Un événement
+    ``TARGET_SSH_FINGERPRINT_DIVERGENCE`` et une ligne d'audit
+    ``target.fingerprint_divergence`` sont émis au point de blocage.
+
+    Attributes:
+        fingerprint: Empreinte présentée (divergente).
+        expected_fingerprint: Empreinte acceptée faisant autorité.
+        target_id: Cible vérifiée (``None`` hors contexte cible
+            persistée).
+    """
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        details: dict | None = None,
+        fingerprint: str | None = None,
+        expected_fingerprint: str | None = None,
+        target_id: str | None = None,
+    ) -> None:
+        self.fingerprint = fingerprint
+        self.expected_fingerprint = expected_fingerprint
+        self.target_id = target_id
+        super().__init__(
+            message
+            or (
+                "Empreinte de clé d'hôte SSH divergente — hôte reconfiguré "
+                "ou usurpation possible (MITM) ; ré-acceptation délibérée requise"
+            ),
+            details=details,
+        )
+
+
 __all__ = [
     "APIError",
     "AuthenticationError",
@@ -310,6 +399,8 @@ __all__ = [
     "NotFoundError",
     "PermissionDeniedError",
     "RateLimitError",
+    "SSHHostKeyMismatchError",
+    "SSHHostKeyNotAcceptedError",
     "SecretDecryptionError",
     "SecretEncryptionError",
     "ServiceUnavailableError",

@@ -9,9 +9,25 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import error_message, unwrap
 
 from app.models.organization import Organization
 from app.models.stack import Stack
+
+
+@pytest.fixture(autouse=True)
+def _jwt_mode(monkeypatch):
+    """Force le mode JWT normal (disable_auth=False) — pattern 122.2.
+
+    Le fichier ``.env`` local (git-ignored) peut contenir ``DISABLE_AUTH=true``
+    (valeur recommandée par ``env.example`` pour le dev). Sans ce forçage,
+    ``get_current_user`` court-circuite le JWT pour chercher un superadmin
+    en base → 500 ``INTERNAL_ERROR`` sur tous les endpoints authentifiés.
+    """
+
+    from app.auth import dependencies as auth_deps
+
+    monkeypatch.setattr(auth_deps.settings, "disable_auth", False)
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────
@@ -81,15 +97,13 @@ class TestStartStack:
         ]
         mock_docker = _make_docker_mock(containers=containers)
 
-        with patch(
-            "app.api.v1.stacks.DockerClientService", return_value=mock_docker
-        ):
+        with patch("app.api.v1.stacks.DockerClientService", return_value=mock_docker):
             response = await authenticated_client.post(
                 f"/api/v1/stacks/{test_stack.id}/start",
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is True
         assert data["action"] == "start"
         assert data["affected_services"] > 0
@@ -104,15 +118,13 @@ class TestStartStack:
         """Stack sans containers Docker → 200, affected_services=0."""
         mock_docker = _make_docker_mock(containers=[])
 
-        with patch(
-            "app.api.v1.stacks.DockerClientService", return_value=mock_docker
-        ):
+        with patch("app.api.v1.stacks.DockerClientService", return_value=mock_docker):
             response = await authenticated_client.post(
                 f"/api/v1/stacks/{test_stack.id}/start",
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is True
         assert data["affected_services"] == 0
         assert "aucun container" in data["message"].lower()
@@ -133,15 +145,13 @@ class TestStartStack:
             start_side_effect=[None, Exception("Container db: start failed")],
         )
 
-        with patch(
-            "app.api.v1.stacks.DockerClientService", return_value=mock_docker
-        ):
+        with patch("app.api.v1.stacks.DockerClientService", return_value=mock_docker):
             response = await authenticated_client.post(
                 f"/api/v1/stacks/{test_stack.id}/start",
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is False
         assert "erreur" in data["message"].lower()
 
@@ -156,7 +166,7 @@ class TestStartStack:
         )
 
         assert response.status_code == 404
-        assert "non trouvée" in response.json()["detail"].lower()
+        assert "non trouvée" in error_message(response).lower()
 
     @pytest.mark.asyncio
     async def test_start_stack_unauthenticated(
@@ -205,9 +215,7 @@ class TestStartStack:
         """Docker indisponible → 503."""
         mock_docker = _make_docker_mock(ping_ok=False)
 
-        with patch(
-            "app.api.v1.stacks.DockerClientService", return_value=mock_docker
-        ):
+        with patch("app.api.v1.stacks.DockerClientService", return_value=mock_docker):
             response = await authenticated_client.post(
                 f"/api/v1/stacks/{test_stack.id}/start",
             )
@@ -234,15 +242,13 @@ class TestStopStack:
         ]
         mock_docker = _make_docker_mock(containers=containers)
 
-        with patch(
-            "app.api.v1.stacks.DockerClientService", return_value=mock_docker
-        ):
+        with patch("app.api.v1.stacks.DockerClientService", return_value=mock_docker):
             response = await authenticated_client.post(
                 f"/api/v1/stacks/{test_stack.id}/stop",
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is True
         assert data["action"] == "stop"
         assert data["affected_services"] > 0
@@ -256,15 +262,13 @@ class TestStopStack:
         """Stack sans containers → 200, affected_services=0."""
         mock_docker = _make_docker_mock(containers=[])
 
-        with patch(
-            "app.api.v1.stacks.DockerClientService", return_value=mock_docker
-        ):
+        with patch("app.api.v1.stacks.DockerClientService", return_value=mock_docker):
             response = await authenticated_client.post(
                 f"/api/v1/stacks/{test_stack.id}/stop",
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is True
         assert data["affected_services"] == 0
 
@@ -284,15 +288,13 @@ class TestStopStack:
             stop_side_effect=[None, Exception("Container db: stop failed")],
         )
 
-        with patch(
-            "app.api.v1.stacks.DockerClientService", return_value=mock_docker
-        ):
+        with patch("app.api.v1.stacks.DockerClientService", return_value=mock_docker):
             response = await authenticated_client.post(
                 f"/api/v1/stacks/{test_stack.id}/stop",
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is False
 
     @pytest.mark.asyncio
@@ -365,16 +367,14 @@ class TestRedeployStack:
         ]
         mock_docker = _make_docker_mock(containers=containers)
 
-        with patch(
-            "app.api.v1.stacks.DockerClientService", return_value=mock_docker
-        ):
+        with patch("app.api.v1.stacks.DockerClientService", return_value=mock_docker):
             response = await authenticated_client.post(
                 f"/api/v1/stacks/{test_stack.id}/redeploy",
                 json={},
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is True
         assert data["action"] == "redeploy"
         assert data["strategy"] == "stop_start"
@@ -393,16 +393,14 @@ class TestRedeployStack:
         ]
         mock_docker = _make_docker_mock(containers=containers)
 
-        with patch(
-            "app.api.v1.stacks.DockerClientService", return_value=mock_docker
-        ):
+        with patch("app.api.v1.stacks.DockerClientService", return_value=mock_docker):
             response = await authenticated_client.post(
                 f"/api/v1/stacks/{test_stack.id}/redeploy",
                 json={"strategy": "rolling"},
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is True
         assert data["strategy"] == "rolling"
         assert data["affected_services"] == 2
@@ -416,15 +414,13 @@ class TestRedeployStack:
         """Stack sans containers → 200, affected_services=0."""
         mock_docker = _make_docker_mock(containers=[])
 
-        with patch(
-            "app.api.v1.stacks.DockerClientService", return_value=mock_docker
-        ):
+        with patch("app.api.v1.stacks.DockerClientService", return_value=mock_docker):
             response = await authenticated_client.post(
                 f"/api/v1/stacks/{test_stack.id}/redeploy",
             )
 
         assert response.status_code == 200
-        data = response.json()
+        data = unwrap(response)
         assert data["success"] is True
         assert data["affected_services"] == 0
 

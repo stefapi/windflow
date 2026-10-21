@@ -10,6 +10,21 @@ from app.models.stack import Stack
 from app.models.target import Target
 
 
+@pytest.fixture(autouse=True)
+def _jwt_mode(monkeypatch):
+    """Force le mode JWT normal (disable_auth=False) — pattern 122.2.
+
+    Le fichier ``.env`` local (git-ignored) peut contenir ``DISABLE_AUTH=true``
+    (valeur recommandée par ``env.example`` pour le dev). Sans ce forçage,
+    ``get_current_user`` court-circuite le JWT pour chercher un superadmin
+    en base → 500 ``INTERNAL_ERROR`` sur tous les endpoints authentifiés.
+    """
+
+    from app.auth import dependencies as auth_deps
+
+    monkeypatch.setattr(auth_deps.settings, "disable_auth", False)
+
+
 @pytest.mark.asyncio
 async def test_debug_get_deployment_500(
     authenticated_client: AsyncClient,

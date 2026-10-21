@@ -1,10 +1,17 @@
-# STORY-131 : SSH réutilisables + empreintes hôtes + anti-MITM (TOFU + confirmation) (P1-9)
+# STORY-131 : [ABANDONED] SSH réutilisables + empreintes hôtes + anti-MITM (TOFU + confirmation) (P1-9)
 
-**Statut :** TODO
+**Statut :** ABANDONED
 **Epic Parent :** EPIC-012 — P1 : Socle structurant (remédiation backend)
 **Item plan :** P1-9 (axe A7, rapports §4/§7) — ampleur **L**
 
 > *Story ajoutée à la vague P1 pour couvrir l'intégralité du plan (P1-1 à P1-11) : la mission initiale listait 11 stories sans cet item ; conservée ici conformément au plan §4.*
+
+> **Note d'abandon (2026-10-16)** : story **découpée proactivement post-analyse** (`split-story`) en trois sous-stories autonomes, l'ampleur L (modèles + migrations + service/API + helper runtime TOFU sur 5 sites SSH) dépassant le périmètre d'une seule implémentation :
+> - [STORY-131.1](STORY-131.1-modeles-migrations-ssh-keys.md) — Modèles & migrations (`ssh_keys`, `host_ssh_fingerprints`, FK `targets.ssh_key_id`, data migration crypto tolérante R1) ;
+> - [STORY-131.2](STORY-131.2-service-api-gestion-cles-ssh.md) — Schémas API, service et router de gestion des clés/empreintes ;
+> - [STORY-131.3](STORY-131.3-anti-mitm-tofu-runtime.md) — Helper TOFU runtime et intégration aux 5 sites SSH.
+>
+> L'analyse complète (phase A/B/C, patterns, risques R1-R3, arbitrage F3) est reportée dans les sections « Contexte technique » des sous-stories. Cette story est conservée pour l'historique.
 
 ## Description
 

@@ -68,7 +68,9 @@ export APP_PYSCRIPT
 
 BROWSER := $(PYTHON) -c "$$BROWSER_PYSCRIPT"
 
-.ONESHELL:
+# NOTE: ne pas réintroduire `.ONESHELL:` — sans `set -e` il masque les échecs des
+# sous-commandes d'une recette (seul l'exit code de la dernière commande est propagé)
+# et fait persister les `cd` entre les lignes d'une même recette (cf. BUG-002).
 
 # ============================================================================
 # COMMON COMMANDS

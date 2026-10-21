@@ -27,7 +27,8 @@ SCRIPT_LOCATION = REPO_ROOT / "backend" / "alembic"
 
 # Tables attendues : exactement celles des modèles ORM (STORY-121.1 :
 # + user_organizations ; STORY-123.1 : + refresh_tokens ; STORY-124.1 :
-# + api_keys ; STORY-125.1 : + audit_logs).
+# + api_keys ; STORY-125.1 : + audit_logs ; STORY-131.1 : + ssh_keys et
+# host_ssh_fingerprints).
 EXPECTED_TABLES = {
     "users",
     "organizations",
@@ -43,7 +44,44 @@ EXPECTED_TABLES = {
     "refresh_tokens",
     "api_keys",
     "audit_logs",
+    "ssh_keys",
+    "host_ssh_fingerprints",
 }
+
+# Tables/créées par les migrations additives post-baseline — droppées
+# après create_all pour simuler fidèlement une base antérieure à
+# STORY-121.1 (pattern étendu à chaque migration additive).
+ADDITIVE_TABLES = {
+    "user_organizations",  # STORY-121.1
+    "refresh_tokens",  # STORY-123.1
+    "api_keys",  # STORY-124.1
+    "audit_logs",  # STORY-125.1
+    "ssh_keys",  # STORY-131.1
+    "host_ssh_fingerprints",  # STORY-131.1
+}
+
+
+def _drop_targets_ssh_key_id(db_path: Path) -> None:
+    """Retire ``targets.ssh_key_id`` d'une base create_all (pré-1311).
+
+    SQLite refuse ``ALTER TABLE ... DROP COLUMN`` sur une colonne
+    référencée par un FK inline (« unknown column in foreign key
+    definition ») : le rebuild batch d'Alembic (même mécanique que le
+    downgrade de la migration 1311) est utilisé à la place.
+    """
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn)
+            operations = Operations(ctx)
+            with operations.batch_alter_table("targets") as batch_op:
+                batch_op.drop_column("ssh_key_id")
+            conn.commit()
+    finally:
+        engine.dispose()
 
 
 def _run_alembic(*args: str, db_url: str) -> subprocess.CompletedProcess[str]:
@@ -190,11 +228,18 @@ class TestExistingDatabaseStampScenario:
         #    api_keys par STORY-124.1).
         sync_engine = create_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(sync_engine)
+        # STORY-131.1 : retirer targets.ssh_key_id AVANT de dropper
+        # ssh_keys (FK résolvable pendant le rebuild batch).
+        sync_engine.dispose()
+        _drop_targets_ssh_key_id(db_path)
+        sync_engine = create_engine(f"sqlite:///{db_path}")
         with sync_engine.begin() as conn:
             conn.execute(text("DROP TABLE user_organizations"))
             conn.execute(text("DROP TABLE refresh_tokens"))
             conn.execute(text("DROP TABLE api_keys"))
             conn.execute(text("DROP TABLE audit_logs"))
+            conn.execute(text("DROP TABLE ssh_keys"))
+            conn.execute(text("DROP TABLE host_ssh_fingerprints"))
         # STORY-121.3 : recréer la colonne héritée users.organization_id
         # (+ index) — le schéma courant (modèles) ne la crée plus mais la
         # migration 1213 s'attend à la trouver sur une base pré-121.3
@@ -208,17 +253,16 @@ class TestExistingDatabaseStampScenario:
                     "ON users (organization_id)"
                 )
             )
+        # (La colonne additive targets.ssh_key_id a été retirée avant les
+        # drops — voir _drop_targets_ssh_key_id ci-dessus.)
+
         before = set(inspect(sync_engine).get_table_names())
         sync_engine.dispose()
         assert (
-            EXPECTED_TABLES
-            - {"user_organizations", "refresh_tokens", "api_keys", "audit_logs"}
-            <= before
+            EXPECTED_TABLES - ADDITIVE_TABLES <= before
         ), "create_all n'a pas créé les tables modèles"
-        assert "user_organizations" not in before
-        assert "refresh_tokens" not in before
-        assert "api_keys" not in before
-        assert "audit_logs" not in before
+        for table in ADDITIVE_TABLES:
+            assert table not in before, f"{table} doit être absente (pré-migration)"
 
         # 2. stamp baseline — marque la base comme étant au niveau baseline
         result = _run_alembic("stamp", "baseline", db_url=db_url)
@@ -243,16 +287,15 @@ class TestExistingDatabaseStampScenario:
         finally:
             engine.dispose()
         assert (
-            before
-            | {
-                "alembic_version",
-                "user_organizations",
-                "refresh_tokens",
-                "api_keys",
-                "audit_logs",
-            }
-            == after
+            before | ADDITIVE_TABLES | {"alembic_version"} == after
         ), "Le schéma d'origine a été altéré ou une table additive manque"
+        # La colonne additive est recréée par la migration 1311.
+        engine2 = create_engine(f"sqlite:///{db_path}")
+        try:
+            target_cols = {c["name"] for c in inspect(engine2).get_columns("targets")}
+        finally:
+            engine2.dispose()
+        assert "ssh_key_id" in target_cols
 
         # 4. alembic check → aucun diff (commande échoue (rc=255) si diff
         #    détecté, rc=0 si propre).
