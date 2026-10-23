@@ -70,7 +70,7 @@ Chaque item P2 du plan de remédiation est couvert par une story de la plage STO
 - [x] STORY-160.2 : Moteur runtime asyncio — boucle lifespan, verrous, timeout, orphelins, fuseaux IANA, contrat `ExecutionStore` (P2-1, partie moteur — STORY-160 découpée)
 - [x] STORY-160.3 : Actions core réelles et triggers événement (P2-1, partie exécution — STORY-160 découpée)
 - [x] STORY-161 : Table `scheduled_task_executions` — historique des exécutions, endpoints de consultation, rétention (P2-1, partie traçabilité)
-- [ ] STORY-162 : Bus d'événements canonique — interface unique, nomenclature spec, in-memory + Redis Pub/Sub optionnel (P2-2, partie bus — F6)
+- [x] STORY-162 : Bus d'événements canonique — interface unique, nomenclature spec, in-memory + Redis Pub/Sub optionnel (P2-2, partie bus — F6)
 - [ ] STORY-163 : Consommateurs plugins du bus — hooks `@on_event`, `deployment_notifications` enregistré, `DEPLOYMENT_PROGRESS` émis (P2-2, partie consommateurs)
 - [ ] STORY-164 : Canaux WebSocket manquants + durcissement — `/ws/ssh`, `/ws/journal`, `/ws/batch`, heartbeats, ack, reconnexion (P2-5, partie durcissement)
 - [ ] STORY-165 : Tests WebSocket — couverture complète du module temps réel (P2-5/P2-14, partie tests)

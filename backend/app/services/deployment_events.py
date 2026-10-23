@@ -75,20 +75,36 @@ class DeploymentEventsService:
         if additional_data:
             event_data.update(additional_data)
 
-        # Map DeploymentStatus to EventType
+        # Map DeploymentStatus → EventType canonique (spec 11 — STORY-162).
+        # Divergence documentée vs analyse : l'enum n'a pas de statut
+        # ``success`` — le statut métier de succès est ``running`` (le
+        # déploiement est actif/déployé ; l'audit ``deployment.succeeded``
+        # est déjà émis sur la transition vers RUNNING par
+        # ``deployment_service.update_status``). Le bus s'aligne :
+        # ``running`` → ``deployment.succeeded`` (JAMAIS
+        # ``deployment.completed``). Statut sans événement canonique
+        # (``stopped``, inconnu) → pas d'émission + warning.
         status_str = (
             new_status.value if isinstance(new_status, DeploymentStatus) else new_status
         )
-        event_type_map = {
+        event_type_map: Dict[str, EventType] = {
             "pending": EventType.DEPLOYMENT_CREATED,
             "deploying": EventType.DEPLOYMENT_STARTED,
-            "running": EventType.DEPLOYMENT_STARTED,  # Un déploiement "running" est démarré, pas terminé
-            "success": EventType.DEPLOYMENT_COMPLETED,
+            "running": EventType.DEPLOYMENT_SUCCEEDED,
             "failed": EventType.DEPLOYMENT_FAILED,
-            "rollback": EventType.DEPLOYMENT_ROLLED_BACK,
+            "rolling_back": EventType.DEPLOYMENT_ROLLED_BACK,
         }
 
-        event_type = event_type_map.get(status_str, EventType.DEPLOYMENT_COMPLETED)
+        event_type = event_type_map.get(status_str)
+        if event_type is None:
+            # Statut sans événement canonique (stopped, inconnu) →
+            # warning explicite, aucune émission (plus de fallback
+            # silencieux vers un événement trompeur).
+            logger.warning(
+                "Deployment status %r has no canonical event — nothing emitted",
+                status_str,
+            )
+            return
 
         logger.info(
             f"📡 [STEP 1/4] Emitting status change event: {deployment_id} → {new_status} (EventType: {event_type})"

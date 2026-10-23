@@ -321,6 +321,30 @@ class Settings(BaseSettings):
         default="SAMEORIGIN", description="X-Frame-Options header"
     )
 
+    # === Cache Redis mode standard (STORY-162 — bus d'événements) ===
+    # URL Redis du mode standard : active le bus Pub/Sub (canal
+    # ``windflow:events``) ; réutilisée par STORY-168 (cache unifié).
+    # None = mode léger in-memory (défaut, aucune connexion tentée).
+    # Env var : CACHE_URL.
+    cache_url: Optional[str] = Field(
+        default=None,
+        description="Redis URL for standard mode (event bus Pub/Sub + shared "
+        "cache, e.g. redis://localhost:6379/1) — None = lightweight "
+        "in-memory mode",
+    )
+
+    # === Double émission WS legacy (STORY-162 — période de transition) ===
+    # Borne la double diffusion des événements deployment.* sur le pont
+    # WebSocket (clé canonique + ancien DEPLOYMENT_STATUS_CHANGED pour le
+    # frontend). Retrait tracé STORY-253/254. Env var :
+    # LEGACY_WS_EVENT_NAMES_ENABLED.
+    legacy_ws_event_names_enabled: bool = Field(
+        default=True,
+        description="Also broadcast deployment.* events under the legacy "
+        "DEPLOYMENT_STATUS_CHANGED WebSocket key (transition period, "
+        "removal tracked by STORY-253/254)",
+    )
+
     # === Rate Limiting ===
     rate_limit_enabled: bool = Field(default=True, description="Enable rate limiting")
     rate_limit_default: str = Field(

@@ -16,7 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.events import EventType
 from ..core.exceptions import WindFlowException
 from ..models.plugin import Plugin, PluginStatus
-from ..schemas.plugin import PluginConfigureRequest, PluginInstallRequest, PluginUpdateRequest
+from ..schemas.plugin import (
+    PluginConfigureRequest,
+    PluginInstallRequest,
+    PluginUpdateRequest,
+)
 from .plugin_dependency_service import PluginDependencyService
 from .plugin_lifecycle_service import PluginLifecycleService
 from .plugin_manifest_service import PluginManifestService
@@ -137,7 +141,9 @@ class PluginManagerService:
         """
         # Valider le manifest YAML si fourni directement
         if install_data.manifest_yaml:
-            manifest = self._manifest_service.validate_manifest(install_data.manifest_yaml)
+            manifest = self._manifest_service.validate_manifest(
+                install_data.manifest_yaml
+            )
         else:
             # Pour le moment, source seule sans téléchargement — on lève une erreur
             raise WindFlowException(
@@ -163,12 +169,16 @@ class PluginManagerService:
             # Tenter la résolution transitive des dépendances manquantes
             if dep_result.missing:
                 try:
-                    resolved = await self._dependency_service.resolve_transitive_dependencies(
-                        db, manifest, organization_id
+                    resolved = (
+                        await self._dependency_service.resolve_transitive_dependencies(
+                            db, manifest, organization_id
+                        )
                     )
                     # Installer chaque dépendance résolue avant le plugin principal
                     for dep_manifest in resolved:
-                        dep_existing = await self.get_plugin_by_name(db, dep_manifest.name)
+                        dep_existing = await self.get_plugin_by_name(
+                            db, dep_manifest.name
+                        )
                         if dep_existing:
                             continue
                         dep_plugin = Plugin(
@@ -301,6 +311,13 @@ class PluginManagerService:
             organization_id=organization_id,
             payload={"version": plugin.version},
         )
+        # STORY-162 : publication réelle sur le bus canonique (best-effort
+        # — ne doit jamais faire échouer l'installation).
+        await self._publish_to_bus(
+            EventType.PLUGIN_INSTALLED,
+            plugin_name=plugin.name,
+            version=plugin.version,
+        )
 
         logger.info(
             "plugin_installed",
@@ -374,6 +391,13 @@ class PluginManagerService:
             user_id=user_id,
             organization_id=plugin.organization_id,
             payload={"version": plugin.version},
+        )
+        # STORY-162 : publication réelle sur le bus canonique (extra-
+        # canonique ``plugin.updated`` — best-effort).
+        await self._publish_to_bus(
+            EventType.PLUGIN_UPDATED,
+            plugin_name=plugin.name,
+            version=plugin.version,
         )
 
         logger.info(
@@ -454,14 +478,17 @@ class PluginManagerService:
         await db.delete(plugin)
         await db.commit()
 
-        # Émettre l'événement PLUGIN_UNINSTALLED (uniquement si le hook a réussi)
+        # Émettre l'événement PLUGIN_REMOVED (uniquement si le hook a réussi)
         self._emit_event(
-            event_type=EventType.PLUGIN_UNINSTALLED,
+            event_type=EventType.PLUGIN_REMOVED,
             plugin_id=plugin_id,
             plugin_name=plugin_name,
             user_id=user_id,
             organization_id=organization_id,
         )
+        # STORY-162 : publication réelle sur le bus canonique
+        # (``plugin.removed`` — best-effort).
+        await self._publish_to_bus(EventType.PLUGIN_REMOVED, plugin_name=plugin_name)
 
         logger.info(
             "plugin_uninstalled",
@@ -525,6 +552,9 @@ class PluginManagerService:
             user_id=user_id,
             organization_id=plugin.organization_id,
         )
+        # STORY-162 : publication réelle sur le bus canonique (extra-
+        # canonique ``plugin.configured`` — best-effort).
+        await self._publish_to_bus(EventType.PLUGIN_CONFIGURED, plugin_name=plugin.name)
 
         logger.info(
             "plugin_configured",
@@ -538,6 +568,32 @@ class PluginManagerService:
         return plugin
 
     # ── Helpers ─────────────────────────────────────────────────────────────
+
+    @staticmethod
+    async def _publish_to_bus(
+        event_type: EventType,
+        plugin_name: str,
+        version: Optional[str] = None,
+    ) -> None:
+        """Publie l'événement plugin sur le bus canonique (STORY-162).
+
+        Best-effort strict : aucune exception ne remonte — un échec
+        d'émission ne doit jamais faire échouer install/uninstall/
+        configure (règle : l'émission n'altère pas l'opération métier).
+        Payload minimal sans secret (nom/version).
+        """
+        try:
+            from ..core.events import get_event_bus
+
+            payload: dict = {"plugin_name": plugin_name}
+            if version is not None:
+                payload["version"] = version
+            await get_event_bus().emit(event_type, payload)
+        except Exception:
+            logger.warning(
+                "plugin bus event emission failed (%s)",
+                getattr(event_type, "value", event_type),
+            )
 
     @staticmethod
     def _emit_event(

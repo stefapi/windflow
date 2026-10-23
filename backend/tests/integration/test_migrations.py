@@ -1256,12 +1256,19 @@ class TestScheduledTaskExecutionsMigration:
         assert fks["task_id"]["on_delete"] == "CASCADE"
 
     def test_downgrade_drops_table_and_indexes(self, tmp_path: Path) -> None:
-        """``downgrade -1`` : table et index supprimés proprement."""
+        """Downgrade sous 1331 : table et index supprimés proprement.
+
+        STORY-162 : la data migration ``1341`` s'insère entre 1331 et
+        head — ``downgrade -1`` ne suffit plus ; cible explicite la
+        révision **précédant** 1331.
+        """
         db_path = tmp_path / "downgrade-exec.db"
         db_url = f"sqlite+aiosqlite:///{db_path}"
         upgrade = _run_alembic("upgrade", "head", db_url=db_url)
         assert upgrade.returncode == 0
-        downgrade = _run_alembic("downgrade", "-1", db_url=db_url)
+        downgrade = _run_alembic(
+            "downgrade", "1321_scheduled_tasks_spec17", db_url=db_url
+        )
         assert downgrade.returncode == 0, (
             f"downgrade a échoué :\nstdout={downgrade.stdout}\n"
             f"stderr={downgrade.stderr}"
@@ -1296,6 +1303,122 @@ class TestScheduledTaskExecutionsMigration:
             assert "scheduled_task_executions" in inspect(engine).get_table_names()
             check = _run_alembic("check", db_url=db_url)
             assert check.returncode == 0
+        finally:
+            engine.dispose()
+
+
+class TestScheduledTaskEventNameNormalization:
+    """STORY-162 — scénario 9 : data migration ``1341`` (normalisation des
+    ``scheduled_tasks.event_name`` alias legacy → canonique spec 11).
+
+    Sans cette migration, les triggers événement du scheduler seraient
+    muets après le renommage de la nomenclature (match DB jamais satisfait).
+    """
+
+    #: Alias insérés → canonique attendu (miroir de LEGACY_EVENT_ALIASES).
+    _CASES: dict[str, str] = {
+        "deployment.completed": "deployment.succeeded",
+        "target.created": "host.added",
+        "target.updated": "host.offline",
+        "target.deleted": "host.removed",
+        "target.health_check": "host.offline",
+        "stack.deleted": "stack.removed",
+        "plugin.uninstalled": "plugin.removed",
+    }
+
+    def _insert_alias_rows(self, engine: Engine, db_path: Path) -> None:
+        """Insère une définition par alias directement en base.
+
+        Colonnes conformes à la révision 1331 : ``task_type`` a été
+        retiré par la migration 1321 (spec 17) ; ``run_count`` est
+        NOT NULL sans défaut serveur — fourni explicitement.
+        """
+        with engine.begin() as conn:
+            for alias in self._CASES:
+                conn.execute(
+                    text(
+                        "INSERT INTO scheduled_tasks ("
+                        "id, name, action, trigger_type, event_name, "
+                        "cron_expression, error_policy, parameters, enabled, "
+                        "run_count, organization_id, created_at, updated_at"
+                        ") VALUES ("
+                        ":id, :name, 'notification.send', 'event', :event_name, "
+                        "'0 * * * *', 'ignore', '{}', 1, 0, "
+                        "'0f9e8d7c-6b5a-4c3d-2e1f-0a9b8c7d6e5f', "
+                        "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP"
+                        ")"
+                    ),
+                    {
+                        "id": f"alias-{alias}",
+                        "name": f"task {alias}",
+                        "event_name": alias,
+                    },
+                )
+
+    def test_upgrade_head_normalizes_alias_event_names(self, tmp_path: Path) -> None:
+        """Insertion d'event_name alias → upgrade head → canonique en base."""
+        # 1. Migrer jusqu'à la révision PRÉCÉDENTE (1331) pour insérer
+        #    les lignes alias dans l'état « avant normalisation ».
+        db_path = tmp_path / "normalize-events.db"
+        pre = _run_alembic(
+            "upgrade",
+            "1331_scheduled_task_executions",
+            db_url=f"sqlite+aiosqlite:///{db_path}",
+        )
+        assert pre.returncode == 0, (
+            f"upgrade 1331 a échoué :\nstdout={pre.stdout}\nstderr={pre.stderr}"
+        )
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            self._insert_alias_rows(engine, db_path)
+
+            # 2. Appliquer la data migration.
+            post = _run_alembic(
+                "upgrade",
+                "head",
+                db_url=f"sqlite+aiosqlite:///{db_path}",
+            )
+            assert post.returncode == 0, (
+                f"upgrade head a échoué :\n"
+                f"stdout={post.stdout}\nstderr={post.stderr}"
+            )
+
+            # 3. Chaque ligne porte désormais la valeur canonique.
+            engine.dispose()
+            engine = create_engine(f"sqlite:///{db_path}")
+            with engine.begin() as conn:
+                for alias, canonical in self._CASES.items():
+                    stored = conn.execute(
+                        text(
+                            "SELECT event_name FROM scheduled_tasks "
+                            "WHERE id = :id"
+                        ),
+                        {"id": f"alias-{alias}"},
+                    ).scalar_one()
+                    assert stored == canonical, (
+                        f"{alias!r} devrait être normalisé en {canonical!r}, "
+                        f"trouvé {stored!r}"
+                    )
+
+            # Aucune valeur alias ne subsiste.
+            with engine.begin() as conn:
+                remaining = conn.execute(
+                    text("SELECT COUNT(*) FROM scheduled_tasks")
+                ).scalar_one()
+            assert remaining == len(self._CASES)
+        finally:
+            engine.dispose()
+
+    def test_upgrade_head_on_fresh_db_is_noop(self, tmp_path: Path) -> None:
+        """Base vierge → upgrade head : la data migration ne crée rien."""
+        engine = _upgraded_engine(tmp_path, "normalize-fresh.db")
+        try:
+            columns = {
+                col["name"]
+                for col in inspect(engine).get_columns("scheduled_tasks")
+            }
+            assert "event_name" in columns  # colonne inchangée (data-only)
         finally:
             engine.dispose()
 

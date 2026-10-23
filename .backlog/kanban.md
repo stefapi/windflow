@@ -3,7 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
-- [ ] STORY-162 : Bus d'événements canonique — interface unique, nomenclature spec, in-memory + Redis Pub/Sub optionnel (P2-2, partie bus — F6)
 - [ ] STORY-163 : Consommateurs plugins du bus — hooks `@on_event`, `deployment_notifications` enregistré, `DEPLOYMENT_PROGRESS` émis (P2-2, partie consommateurs)
 - [ ] STORY-164 : Canaux WebSocket manquants + durcissement — `/ws/ssh`, `/ws/journal`, `/ws/batch`, heartbeats, ack, reconnexion (P2-5, partie durcissement)
 - [ ] STORY-165 : Tests WebSocket — couverture complète du module temps réel (P2-5/P2-14, partie tests)
@@ -16,6 +15,11 @@
 - [ ] STORY-172 : Observabilité Prometheus réelle — `/metrics`, métriques business, dashboards alimentés (P2-9)
 - [ ] STORY-173 : `/compute` élargi — `browse` paginé et `prune` protégé, rapprochement `/compute`↔`/docker` (P2-11 — F3)
 - [ ] STORY-174 : Socle `WorkloadAdapter` + adapter Docker + recreate sécurisé (P2-12 + P2-13 — F7)
+- [ ] BUG-004 : `test_schedules_v2.py::test_parameters_not_logged_raw` échoue sur main (echo SQL local — herméticité cwd)
+
+### Divers (sans epic)
+
+- [ ] BUG-003 : `POST /docker/containers` — `response_model=ContainerResponse` inadéquat (handler retourne `ContainerDetailResponse` → 500)
 
 ### EPIC-014 : P3 — Finitions & purge (remédiation backend)
 - [ ] STORY-250 : Purge du code mort et résidus + dépréciation `/auth/me` — permissions legacy, croniter conditionnel, abstractions, stub workflows, litellm orphelin, print debug, HealthCheck (P3-1 + P3-3)
@@ -40,6 +44,7 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] STORY-162 : Bus d'événements canonique — interface unique, nomenclature spec, in-memory + Redis Pub/Sub optionnel (P2-2, partie bus — F6) (EPIC-013)
 - [x] STORY-161 : Table `scheduled_task_executions` — historique des exécutions, endpoints de consultation paginés, run manuel 202, rétention (P2-1, partie traçabilité) (EPIC-013)
 - [x] STORY-160.3 : Actions core réelles et triggers événement — handlers `host.scan`/`compute.docker.prune` (dry-run défaut, liste protégée, audit), stubs tracés, triggers EventBus via le chemin moteur (P2-1, partie exécution — STORY-160 découpée) (EPIC-013)
 - [x] STORY-160.2 : Moteur runtime asyncio — boucle lifespan, verrous, timeout, orphelins, fuseaux IANA, contrat `ExecutionStore` (P2-1, partie moteur — STORY-160 découpée) (EPIC-013)

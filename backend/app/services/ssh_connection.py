@@ -187,9 +187,9 @@ async def _emit_pending(
     key_type: str,
     fingerprint: str,
 ) -> None:
-    """Émet l'événement ``TARGET_SSH_FINGERPRINT_PENDING`` (sans secret)."""
+    """Émet l'événement ``HOST_SSH_FINGERPRINT_PENDING`` (sans secret)."""
     await event_bus.emit(
-        EventType.TARGET_SSH_FINGERPRINT_PENDING,
+        EventType.HOST_SSH_FINGERPRINT_PENDING,
         {
             "target_id": target_id,
             "hostname": hostname,
@@ -208,7 +208,7 @@ async def _emit_divergence(
     fingerprint: str,
     expected_fingerprint: str,
 ) -> None:
-    """Émet l'événement ``TARGET_SSH_FINGERPRINT_DIVERGENCE`` + audit.
+    """Émet l'événement ``HOST_SSH_FINGERPRINT_DIVERGENCE`` + audit.
 
     La divergence est une **alerte sécurité** (MITM potentiel) :
     l'événement est émis sur le bus (STORY-164 consommera) **et** une
@@ -226,7 +226,7 @@ async def _emit_divergence(
         "expected_fingerprint": expected_fingerprint,
     }
     await event_bus.emit(
-        EventType.TARGET_SSH_FINGERPRINT_DIVERGENCE,
+        EventType.HOST_SSH_FINGERPRINT_DIVERGENCE,
         payload,
     )
     try:

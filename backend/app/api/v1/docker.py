@@ -305,6 +305,23 @@ async def create_container(
         # Récupérer les détails
         container = await client.get_container(container_id)
 
+        # STORY-162 (AC 3) : événement canonique ``container.created`` —
+        # best-effort après succès de l'opération Docker ; payload sans
+        # env/labels (rules 40 — id/nom/image uniquement).
+        try:
+            from ...core.events import EventType, get_event_bus
+
+            await get_event_bus().emit(
+                EventType.CONTAINER_CREATED,
+                {
+                    "container_id": str(container_id),
+                    "name": container_data.name,
+                    "image": container_data.image,
+                },
+            )
+        except Exception:
+            logger.warning("container.created event emission failed")
+
         return ContainerDetailResponse(  # type: ignore[call-arg]
             id=container.id,
             name=container.name,
@@ -499,6 +516,17 @@ async def start_container(
             resource_type="container",
             resource_id=container_id,
         )
+        # STORY-162 (AC 3) : événement canonique ``container.started`` —
+        # best-effort, n'altère jamais la réponse API.
+        try:
+            from ...core.events import EventType, get_event_bus
+
+            await get_event_bus().emit(
+                EventType.CONTAINER_STARTED,
+                {"container_id": container_id, "name": container_id},
+            )
+        except Exception:
+            logger.warning("container.started event emission failed")
 
     except aiohttp.ClientResponseError as e:
         if e.status == 304:
@@ -553,6 +581,17 @@ async def stop_container(
             resource_type="container",
             resource_id=container_id,
         )
+        # STORY-162 (AC 3) : événement canonique ``container.stopped`` —
+        # best-effort, n'altère jamais la réponse API.
+        try:
+            from ...core.events import EventType, get_event_bus
+
+            await get_event_bus().emit(
+                EventType.CONTAINER_STOPPED,
+                {"container_id": container_id, "name": container_id},
+            )
+        except Exception:
+            logger.warning("container.stopped event emission failed")
 
     except aiohttp.ClientResponseError as e:
         if e.status == 304:
@@ -726,6 +765,17 @@ async def remove_container(
             resource_id=container_id,
             details={"force": force},
         )
+        # STORY-162 (AC 3) : événement canonique ``container.removed`` —
+        # best-effort, n'altère jamais la réponse API.
+        try:
+            from ...core.events import EventType, get_event_bus
+
+            await get_event_bus().emit(
+                EventType.CONTAINER_REMOVED,
+                {"container_id": container_id, "name": container_id},
+            )
+        except Exception:
+            logger.warning("container.removed event emission failed")
 
     except aiohttp.ClientResponseError as e:
         if e.status == 404:

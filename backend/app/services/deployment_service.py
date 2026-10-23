@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.events import EventType
 from ..helper.template_renderer import TemplateRenderer
 from ..models.deployment import (
     Deployment,
@@ -784,6 +785,37 @@ class DeploymentService:
             )
         except Exception as e:
             logger.error(f"Erreur lors de l'émission de l'événement de statut: {e}")
+
+        # STORY-162 (AC 3) : au succès d'un déploiement de stack, émettre
+        # aussi l'événement canonique ``stack.deployed`` — best-effort
+        # post-commit (n'altère jamais la réponse), payload limité à
+        # IDs/noms/durée (rules 40 — jamais de secrets ni variables
+        # d'environnement). ``services`` est alimenté au mieux des
+        # données disponibles (divergence documentée si incomplet).
+        if status == DeploymentStatus.RUNNING and deployment.stack_id:
+            try:
+                from uuid import UUID as _UUID
+
+                from .deployment_events import get_deployment_events
+
+                await get_deployment_events().event_bus.emit(
+                    EventType.STACK_DEPLOYED,
+                    {
+                        "stack_id": str(deployment.stack_id),
+                        "name": deployment.name,
+                        "host_id": (
+                            str(deployment.target_id) if deployment.target_id else None
+                        ),
+                        "deployment_id": str(deployment_id),
+                        "duration_seconds": deployment.deploy_duration_seconds,
+                        "services": [],  # au mieux des données disponibles
+                        "user_id": str(_UUID(user_id)) if user_id else None,
+                    },
+                )
+            except Exception as e:
+                logger.error(
+                    f"Erreur lors de l'émission de l'événement stack.deployed: {e}"
+                )
 
         # Émettre événement de logs si des logs ont été ajoutés
         if logs:

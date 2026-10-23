@@ -211,6 +211,15 @@ class PluginLifecycleService:
                     "error_message": result.error_message,
                 },
             )
+            # STORY-162 : publication réelle sur le bus canonique (extra-
+            # canonique ``plugin.error`` — best-effort, jamais bloquant).
+            await self._publish_to_bus(
+                EventType.PLUGIN_ERROR,
+                plugin_name=plugin.name,
+                hook_name=hook_name,
+                transition=transition,
+                exit_code=result.exit_code,
+            )
 
             logger.error(
                 "hook_failed_plugin_error",
@@ -394,7 +403,9 @@ class PluginLifecycleService:
                 exit_code=exit_code,
                 stdout=stdout[:_OUTPUT_MAX_LENGTH],
                 stderr=stderr[:_OUTPUT_MAX_LENGTH],
-                error_message=None if success else (stderr[:500] or f"Exit code: {exit_code}"),
+                error_message=(
+                    None if success else (stderr[:500] or f"Exit code: {exit_code}")
+                ),
             )
 
         except asyncio.TimeoutError:
@@ -455,7 +466,10 @@ class PluginLifecycleService:
         if os.path.isabs(script_path):
             raise WindFlowException(
                 f"Chemin de script absolu interdit : {script_path}",
-                details={"error_type": "invalid_script_path", "script_path": script_path},
+                details={
+                    "error_type": "invalid_script_path",
+                    "script_path": script_path,
+                },
             )
 
         # Vérifier le path traversal (..)
@@ -471,7 +485,10 @@ class PluginLifecycleService:
 
         # Vérification supplémentaire : le chemin résolu doit être sous le base_dir
         resolved_base = os.path.normpath(base_dir)
-        if not full_path.startswith(resolved_base + os.sep) and full_path != resolved_base:
+        if (
+            not full_path.startswith(resolved_base + os.sep)
+            and full_path != resolved_base
+        ):
             raise WindFlowException(
                 f"Chemin de script en dehors du répertoire de base : {script_path}",
                 details={"error_type": "path_traversal", "script_path": script_path},
@@ -523,6 +540,30 @@ class PluginLifecycleService:
         return env_vars
 
     @staticmethod
+    async def _publish_to_bus(
+        event_type: EventType,
+        plugin_name: str,
+        **context: object,
+    ) -> None:
+        """Publie l'événement plugin sur le bus canonique (STORY-162).
+
+        Best-effort strict : aucune exception ne remonte — l'émission ne
+        doit jamais altérer la transition lifecycle. Payload minimal sans
+        secret (nom + contexte technique borné).
+        """
+        try:
+            from ..core.events import get_event_bus
+
+            await get_event_bus().emit(
+                event_type, {"plugin_name": plugin_name, **context}
+            )
+        except Exception:
+            logger.warning(
+                "plugin bus event emission failed (%s)",
+                getattr(event_type, "value", event_type),
+            )
+
+    @staticmethod
     def _emit_event(
         event_type: EventType,
         plugin_id: str,
@@ -531,7 +572,8 @@ class PluginLifecycleService:
         organization_id: str,
         payload: Optional[dict] = None,
     ) -> None:
-        """Émet un événement plugin via le logger structuré.
+        """Émet un événement plugin via le logger structuré (log conservé ;
+        la publication bus est assurée par ``_publish_to_bus``).
 
         Args:
             event_type: Type d'événement.

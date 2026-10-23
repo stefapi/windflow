@@ -19,8 +19,8 @@ rules 35) :
 """
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy import select
@@ -221,7 +221,7 @@ class TestStrictPolicy:
         # Event DIVERGENCE émis (payload sans secret).
         divergences = [
             d for (t, d) in _quiet_events
-            if t is EventType.TARGET_SSH_FINGERPRINT_DIVERGENCE
+            if t is EventType.HOST_SSH_FINGERPRINT_DIVERGENCE
         ]
         assert len(divergences) == 1
         assert divergences[0]["fingerprint"] == FP_B
@@ -298,7 +298,7 @@ class TestStrictPolicy:
         # Event PENDING émis avec target_id=None (observabilité).
         pendings = [
             d for (t, d) in _quiet_events
-            if t is EventType.TARGET_SSH_FINGERPRINT_PENDING
+            if t is EventType.HOST_SSH_FINGERPRINT_PENDING
         ]
         assert len(pendings) == 1
         assert pendings[0]["target_id"] is None
@@ -387,7 +387,7 @@ class TestCollectPolicy:
 
         divergences = [
             d for (t, d) in _quiet_events
-            if t is EventType.TARGET_SSH_FINGERPRINT_DIVERGENCE
+            if t is EventType.HOST_SSH_FINGERPRINT_DIVERGENCE
         ]
         assert len(divergences) == 1
 

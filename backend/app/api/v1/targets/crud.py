@@ -172,9 +172,7 @@ async def list_targets(
     )
     total = await TargetService.count_by_organizations(session, org_ids)
 
-    data: List[dict] = [
-        TargetResponse.model_validate(t).model_dump() for t in targets
-    ]
+    data: List[dict] = [TargetResponse.model_validate(t).model_dump() for t in targets]
     return PaginatedResponse(data=data, pagination=build_meta(page, per_page, total))
 
 
@@ -548,6 +546,26 @@ async def create_target(
             exc,
         )
 
+    # STORY-162 (AC 3) : événement canonique ``host.added`` — émission
+    # best-effort post-commit (try/except : n'altère jamais la réponse
+    # API) ; payload strictement sans secret ni matériel de clé SSH
+    # (rules 40 — IDs/nom/type uniquement).
+    try:
+        from ....core.events import EventType, get_event_bus
+
+        await get_event_bus().emit(
+            EventType.HOST_ADDED,
+            {
+                "host_id": str(target.id),
+                "name": target.name,
+                "profile": target.type.value if target.type else None,
+                "engines": [],  # capacités non détectées à la création
+                "organization_id": str(target.organization_id),
+            },
+        )
+    except Exception as exc:  # best-effort : jamais bloquant
+        logger.warning("host.added event emission failed: %s", exc)
+
     return TargetResponse.model_validate(target)
 
 
@@ -897,3 +915,19 @@ async def delete_target(
         resource_id=target_id,
         details={"name": target.name},
     )
+
+    # STORY-162 (AC 3) : événement canonique ``host.removed`` — best-effort
+    # post-commit (n'altère jamais la réponse API) ; payload sans secret
+    # (rules 40 — IDs/nom uniquement).
+    try:
+        from ....core.events import EventType, get_event_bus
+
+        await get_event_bus().emit(
+            EventType.HOST_REMOVED,
+            {
+                "host_id": str(target.id),
+                "name": target.name,
+            },
+        )
+    except Exception as exc:  # best-effort : jamais bloquant
+        logger.warning("host.removed event emission failed: %s", exc)

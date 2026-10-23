@@ -388,12 +388,33 @@ class SSHHostKeyMismatchError(WindFlowException):
         )
 
 
+class InvalidEventTypeNameError(WindFlowException):
+    """Levée quand un type d'événement hors ``EventType`` est passé au bus.
+
+    STORY-162 (AC 4) : ``Bus.emit`` accepte exclusivement des membres de
+    :class:`~app.core.events.EventType` — l'ancienne réencapsulation
+    silencieuse en ``system.error`` (fragilité §4 de WEBSOCKET-REAL-TIME)
+    est remplacée par cette erreur explicite. Exception **technique**
+    (pas destinée à être exposée en HTTP : interception par les émetteurs
+    best-effort).
+    """
+
+    def __init__(
+        self,
+        message: str = "Invalid event type name (EventType member required)",
+        *,
+        details: dict | None = None,
+    ) -> None:
+        super().__init__(message, details=details)
+
+
 __all__ = [
     "APIError",
     "AuthenticationError",
     "CommandExecutionError",
     "ConflictError",
     "InvalidApiKeyError",
+    "InvalidEventTypeNameError",
     "InvalidInputError",
     "InvalidRefreshTokenError",
     "NotFoundError",

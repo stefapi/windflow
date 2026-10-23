@@ -355,6 +355,7 @@ class TargetService:
         """
         check_time = datetime.now(timezone.utc)
         port = TargetService._get_health_check_port(target)
+        was_online = target.status == TargetStatus.ONLINE
 
         try:
             _, writer = await asyncio.wait_for(
@@ -372,6 +373,33 @@ class TargetService:
                 target.id,
             )
             new_status = TargetStatus.ERROR
+
+        # STORY-162 (AC 3, décision 4) : transition joignable→injoignable
+        # → événement canonique ``host.offline`` (émetteur naturel = health
+        # check périodique). Best-effort après persistance du statut :
+        # n'interrompt jamais le cycle de vérification ; payload sans
+        # secret (rules 40 — IDs/nom/timestamp).
+        if was_online and new_status != TargetStatus.ONLINE:
+            try:
+                from ..core.events import EventType, get_event_bus
+
+                await get_event_bus().emit(
+                    EventType.HOST_OFFLINE,
+                    {
+                        "host_id": str(target.id),
+                        "name": target.name,
+                        "last_seen": (
+                            target.last_check.isoformat()
+                            if target.last_check
+                            else None
+                        ),
+                    },
+                )
+            except Exception:
+                logger.warning(
+                    "host.offline event emission failed for target %s",
+                    target.id,
+                )
 
         target.status = new_status
         target.last_check = check_time

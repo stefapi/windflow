@@ -27,13 +27,22 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from ..core.events import EventType
+from ..core.events import (
+    LEGACY_EVENT_ALIASES,
+    EventType,
+    resolve_event_name,
+)
 from ..helper.croniter import CroniterBadCronError, croniter
 from ..services.action_registry import is_valid as action_is_valid
 from ..services.action_registry import validate_params as validate_action_params
 
-# Liste canonique des événements (spec 11 — valeurs machine EventType).
-_CANONICAL_EVENT_NAMES: frozenset[str] = frozenset(member.value for member in EventType)
+# Valeurs machine acceptées pour ``event_name`` : membres EventType
+# (canoniques spec 11 + extra-canoniques) **et** alias historiques — ces
+# derniers sont résolus vers leur forme canonique au passage (stockage
+# canonique, STORY-162 T9).
+_CANONICAL_EVENT_NAMES: frozenset[str] = frozenset(
+    member.value for member in EventType
+) | frozenset(LEGACY_EVENT_ALIASES)
 
 TRIGGER_TYPES: tuple[str, ...] = ("cron", "event")
 ERROR_POLICIES: tuple[str, ...] = ("ignore", "retry", "disable")
@@ -81,22 +90,31 @@ def _validate_timezone(name: Optional[str]) -> Optional[str]:
 
 
 def _validate_event_name(name: Optional[str]) -> Optional[str]:
-    """Valide un event_name contre la liste canonique EventType (422).
+    """Valide un event_name et résout les alias historiques (422 si inconnu).
+
+    STORY-162 (T9) : les alias legacy (ex. ``deployment.completed``)
+    restent acceptés en entrée mais sont **résolus vers leur forme
+    canonique** (stockage canonique — les triggers comparent ensuite des
+    valeurs canoniques pures). Un nom inconnu même après résolution
+    reste rejeté (422).
 
     Args:
         name: Nom d'événement candidat (None accepté pour les crons).
 
     Returns:
-        Le nom validé (inchangé).
+        Le nom canonique résolu (ou None inchangé).
 
     Raises:
         ValueError: Événement hors liste canonique spec 11.
     """
-    if name is not None and name not in _CANONICAL_EVENT_NAMES:
+    if name is None:
+        return None
+    resolved = resolve_event_name(name)
+    if resolved not in _CANONICAL_EVENT_NAMES:
         raise ValueError(
             f"Unknown event_name: {name!r} (must be a canonical EventType, " "spec 11)"
         )
-    return name
+    return resolved
 
 
 def _validate_action(name: str) -> str:
@@ -201,7 +219,11 @@ class ScheduledTaskCreate(_ScheduledTaskValidators):
         default=None,
         max_length=100,
         description="Événement canonique (spec 11) déclenchant la tâche — "
-        "requis si trigger_type='event'",
+        "requis si trigger_type='event'. Les alias historiques (ex. "
+        "'deployment.completed', 'target.deleted') sont acceptés et "
+        "résolus vers leur forme canonique au stockage (STORY-162). "
+        "Exemples : 'deployment.failed', 'deployment.succeeded', "
+        "'host.added', 'container.started', 'stack.deployed'.",
     )
     timezone: Optional[str] = Field(
         default=None,

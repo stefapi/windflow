@@ -102,6 +102,14 @@ async def lifespan(app: FastAPI):
     await db.seed_tables()
     logger.info("✓ Database initialized")
 
+    # Event bus canonique (STORY-162 — P2-2/F6) : in-memory par défaut
+    # (mode léger), Redis Pub/Sub si CACHE_URL configuré et joignable.
+    # Initialisé AVANT le pont WebSocket (le pont s'abonne au bus actif).
+    from .core.events import init_event_bus
+
+    await init_event_bus()
+    logger.info("✓ Event bus initialized")
+
     # Setup Event Bridge
     from .websocket.event_bridge import setup_event_bridge
 
@@ -395,6 +403,13 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("✓ Periodic scheduled task executions purge task cancelled")
+
+    # Shutdown event bus (STORY-162 — arrêt du transport Redis Pub/Sub et
+    # de la tâche subscriber APRÈS le désabonnement des consommateurs).
+    from .core.events import shutdown_event_bus
+
+    await shutdown_event_bus()
+    logger.info("✓ Event bus shut down")
 
     # Cancel scheduler engine task (STORY-160.2 — les exécutions en cours
     # sont annulées proprement et tracées failed dans l'ExecutionStore) ;

@@ -325,7 +325,7 @@ class TestAcceptFingerprint:
         test_superuser: User,
         test_organization,
     ):
-        """Event ``TARGET_SSH_FINGERPRINT_ACCEPTED`` publié sur le bus."""
+        """Event ``HOST_SSH_FINGERPRINT_ACCEPTED`` publié sur le bus."""
         from app.api.v1.targets import fingerprints as fp_module
         from app.core.events import EventType
 
@@ -346,10 +346,10 @@ class TestAcceptFingerprint:
             )
         assert response.status_code == 200
         assert any(
-            et == EventType.TARGET_SSH_FINGERPRINT_ACCEPTED for et, _ in emitted
+            et == EventType.HOST_SSH_FINGERPRINT_ACCEPTED for et, _ in emitted
         ), emitted
         payload = next(
-            d for et, d in emitted if et == EventType.TARGET_SSH_FINGERPRINT_ACCEPTED
+            d for et, d in emitted if et == EventType.HOST_SSH_FINGERPRINT_ACCEPTED
         )
         assert payload["target_id"] == target.id
         assert payload["fingerprint"] == FP_STORED

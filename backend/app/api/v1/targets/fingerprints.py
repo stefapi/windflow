@@ -289,7 +289,7 @@ async def accept_ssh_fingerprint(
 
     # Événement canonique (STORY-164 consommera) — payload sans secret.
     await event_bus.emit(
-        EventType.TARGET_SSH_FINGERPRINT_ACCEPTED,
+        EventType.HOST_SSH_FINGERPRINT_ACCEPTED,
         {
             "target_id": target_id,
             "host_id": target_id,

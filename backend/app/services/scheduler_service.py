@@ -95,19 +95,24 @@ def _validate_definition(
             details={"trigger_type": trigger_type},
         )
     if trigger_type == "event":
-        from ..core.events import EventType
+        from ..core.events import LEGACY_EVENT_ALIASES, EventType, resolve_event_name
 
         if not event_name:
             raise UnprocessableEntityError(
                 "event_name is required when trigger_type='event'",
                 details={"trigger_type": trigger_type},
             )
-        if event_name not in {member.value for member in EventType}:
+        resolved = resolve_event_name(event_name)
+        if resolved not in {member.value for member in EventType} | set(
+            LEGACY_EVENT_ALIASES
+        ):
             raise UnprocessableEntityError(
                 f"Unknown event_name: {event_name!r} (canonical EventType "
                 "required, spec 11)",
                 details={"event_name": event_name},
             )
+        # NOTE : la valeur canonique est stockée par le schéma Pydantic
+        # (résolution à la validation) — ici, simple re-validation défensive.
     if cron_expression is not None:
         try:
             croniter(cron_expression)

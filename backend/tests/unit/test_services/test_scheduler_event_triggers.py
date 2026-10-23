@@ -20,6 +20,7 @@ anti-chevauchement, cycle de vie start/stop.
 import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
+
 import pytest
 
 import app.services.action_registry as action_registry_module
@@ -590,4 +591,64 @@ def test_start_is_idempotent(test_session_factory):
     # garantie par le flag _subscribed).
     for handlers in bus._handlers.values():
         assert len([h for h in handlers if h == component._on_event]) == 1
+    component.stop()
+
+
+# ===========================================================================
+# STORY-162 (T9) — résolution d'alias : un event_name canonique déclenche,
+# un alias stocké en base déclenche aussi le canonique émis.
+# ===========================================================================
+
+
+async def test_event_trigger_matches_canonical_and_resolves_legacy_alias(
+    db_session, test_session_factory, test_organization, monkeypatch
+):
+    """DEPLOYMENT_SUCCEEDED (canonique) déclenche la définition stockée
+    en canonique ; une ligne encore stockée en alias
+    ``deployment.completed`` est aussi rapprochée via resolve_event_name."""
+    calls: list[dict] = []
+
+    async def spy_handler(params: dict) -> None:
+        calls.append(params)
+
+    _patch_handler(monkeypatch, "notification.send", spy_handler)
+    # Définition stockée en CANONIQUE
+    await _make_event_task(
+        db_session,
+        test_organization.id,
+        task_id="event-canonical",
+        event_name="deployment.succeeded",
+    )
+    # Définition encore stockée en ALIAS legacy (migration non appliquée)
+    await _make_event_task(
+        db_session,
+        test_organization.id,
+        task_id="event-alias",
+        event_name="deployment.completed",
+    )
+
+    bus = EventBus()
+    engine = SchedulerEngine(
+        _test_settings(),
+        store=InMemoryExecutionStore(),
+        clock=FixedClock(),
+        session_factory=test_session_factory,
+        retry_backoff_base=0.0,
+    )
+    component = _make_component(engine, bus, test_session_factory)
+    component.start()
+
+    # Émission du canonique deployment.succeeded
+    await bus.publish(
+        Event(
+            event_type=EventType.DEPLOYMENT_SUCCEEDED,
+            aggregate_id=uuid.uuid4(),
+            aggregate_type="deployment",
+            payload={"deployment_id": "dep-9", "message": "ok", "new_status": "running"},
+        )
+    )
+    await engine.wait_for_executions()
+
+    # Les DEUX définitions (canonique + alias résolu) se déclenchent
+    assert len(calls) == 2
     component.stop()

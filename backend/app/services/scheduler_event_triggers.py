@@ -52,7 +52,13 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.events import Event, EventType, get_event_bus
+from ..core.events import (
+    LEGACY_EVENT_ALIASES,
+    Event,
+    EventType,
+    get_event_bus,
+    resolve_event_name,
+)
 from ..models.scheduled_task import ScheduledTask
 from .action_registry import get_action, validate_params
 from .scheduler_engine import SchedulerEngine, _snapshot, _TaskSnapshot
@@ -60,6 +66,13 @@ from .scheduler_execution_store import TRIGGERED_BY_EVENT
 from .scheduler_service import SchedulerService
 
 logger = logging.getLogger(__name__)
+
+
+def _aliases_resolving_to(canonical: str) -> set[str]:
+    """Alias legacy dont la résolution mène à ``canonical`` (STORY-162)."""
+    return {
+        alias for alias, target in LEGACY_EVENT_ALIASES.items() if target == canonical
+    }
 
 
 class SchedulerEventTriggers:
@@ -139,14 +152,28 @@ class SchedulerEventTriggers:
             )
 
     async def _dispatch(self, event: Event) -> None:
-        """Résout les définitions actives correspondant à l'événement."""
-        event_name = event.event_type.value
+        """Résout les définitions actives correspondant à l'événement.
+
+        STORY-162 (T9) — défense en profondeur bidirectionnelle : on
+        matche le canonique émis **et** tout alias legacy qui lui
+        correspond (une ligne encore stockée sous ``deployment.completed``
+        reste déclenchée par ``deployment.succeeded`` même si la data
+        migration n'est pas encore appliquée ; réciproquement un émetteur
+        legacy serait rapproché d'une définition canonique).
+        """
+        canonical = resolve_event_name(event.event_type.value)
+        names = {canonical} | _aliases_resolving_to(canonical)
+        tasks: list[ScheduledTask] = []
         async with self._session_factory() as session:
-            tasks = await self._enabled_event_tasks(session, event_name)
+            for name in names:
+                tasks.extend(await self._enabled_event_tasks(session, name))
         if not tasks:
             return  # événement sans définition → no-op
+        seen: set[str] = set()
         for task in tasks:
-            await self._dispatch_one(task.id, event)
+            if task.id not in seen:  # même ligne via canonique + alias
+                seen.add(task.id)
+                await self._dispatch_one(task.id, event)
 
     async def _enabled_event_tasks(
         self, session: AsyncSession, event_name: str
