@@ -15,7 +15,6 @@
 - [ ] STORY-172 : Observabilité Prometheus réelle — `/metrics`, métriques business, dashboards alimentés (P2-9)
 - [ ] STORY-173 : `/compute` élargi — `browse` paginé et `prune` protégé, rapprochement `/compute`↔`/docker` (P2-11 — F3)
 - [ ] STORY-174 : Socle `WorkloadAdapter` + adapter Docker + recreate sécurisé (P2-12 + P2-13 — F7)
-- [ ] BUG-004 : `test_schedules_v2.py::test_parameters_not_logged_raw` échoue sur main (echo SQL local — herméticité cwd)
 
 ### Divers (sans epic)
 
@@ -42,6 +41,7 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] BUG-004 : `test_schedules_v2.py::test_parameters_not_logged_raw` échoue sur main (echo SQL local — herméticité cwd)  # divers (sans epic) — corrigé (défense en profondeur : caplog + fixture autouse conftest sqlalchemy.engine/aiosqlite + bridage main.py WARNING-sauf-DEBUG), re-vérifié à la clôture (57 + 22 tests verts)
 - [x] BUG-003 : `POST /docker/containers` — `response_model=ContainerResponse` inadéquat → 500 systématique sur création  # divers (sans epic) — corrigé (response_model=ContainerDetailResponse), 32 tests ciblés verts
 - [x] STORY-162 : Bus d'événements canonique — interface unique, nomenclature spec, in-memory + Redis Pub/Sub optionnel (P2-2, partie bus — F6) (EPIC-013)
 - [x] STORY-161 : Table `scheduled_task_executions` — historique des exécutions, endpoints de consultation paginés, run manuel 202, rétention (P2-1, partie traçabilité) (EPIC-013)

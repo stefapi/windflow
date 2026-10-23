@@ -498,9 +498,10 @@ class TestSecretsHygiene:
 
         Défense du piège environnement documenté dans la story : le
         logger ``sqlalchemy.engine`` est bridé à WARNING (ses logs INFO
-        échappent les paramètres bindés, dont ``key_hash``) — au
-        lancement manuel, exiger ``LOG_LEVEL=WARNING`` en tête de
-        commande.
+        échappent les paramètres bindés, dont ``key_hash``). Depuis
+        BUG-004, ce bridage est systématique (fixture autouse du
+        ``conftest.py`` + ``main.py``) : plus besoin d'imposer
+        ``LOG_LEVEL=WARNING`` en tête de commande.
         """
         caplog.set_level(logging.DEBUG)
         caplog.set_level(logging.WARNING, logger="sqlalchemy.engine")

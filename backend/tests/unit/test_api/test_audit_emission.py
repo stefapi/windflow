@@ -755,8 +755,10 @@ class TestResilienceAndSecrets:
         absents de tous les enregistrements.
 
         Défense du piège documenté (124.4) : ``sqlalchemy.engine`` est
-        bridé à WARNING (ses logs INFO échappent les paramètres bindés) —
-        au lancement manuel, exiger ``LOG_LEVEL=WARNING`` en tête.
+        bridé à WARNING (ses logs INFO échappent les paramètres bindés).
+        Depuis BUG-004, ce bridage est systématique (fixture autouse du
+        ``conftest.py`` + ``main.py``) : plus besoin d'imposer
+        ``LOG_LEVEL=WARNING`` en tête de commande.
         """
         caplog.set_level(logging.DEBUG)
         caplog.set_level(logging.WARNING, logger="sqlalchemy.engine")

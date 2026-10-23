@@ -406,7 +406,14 @@ class TestSecurity:
         self, client: AsyncClient, db_session: AsyncSession, caplog
     ):
         """Rules 40 : les parameters ne sont jamais loggés bruts
-        (valeur target_id absente des logs applicatifs)."""
+        (valeur target_id absente des logs applicatifs).
+
+        Défense du piège environnement (BUG-004) : le logger
+        ``sqlalchemy.engine`` est bridé à WARNING (à INFO, il échappe les
+        paramètres bindés des statements SQL, dont ``parameters``) — le
+        test est ainsi hermétique au cwd / au ``LOG_LEVEL`` effectif.
+        """
+        caplog.set_level(logging.WARNING, logger="sqlalchemy.engine")
         user, org = await _create_user_with_role(db_session, "sch2-s-log", Role.ADMIN)
         sentinel = "tgt-TOPSECRET-42"
         with caplog.at_level(logging.INFO, logger="app.services.scheduler_service"):

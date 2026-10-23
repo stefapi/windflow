@@ -10,6 +10,7 @@ Fournit les fixtures pour:
 """
 
 import asyncio
+import logging
 import shutil
 from pathlib import Path
 from typing import Any, AsyncGenerator, Generator
@@ -120,6 +121,37 @@ def _reset_bruteforce_store():
     bruteforce_protector.reset_all()
     yield
     bruteforce_protector.reset_all()
+
+
+# Loggers tiers qui échappent le SQL avec ses paramètres bindés (BUG-004) :
+# - ``sqlalchemy.engine`` à INFO (statements + paramètres, quel que soit `echo`)
+# - ``aiosqlite`` à DEBUG (chaque opération du driver avec ses arguments) —
+#   sink adjacent découvert en validation adversaire LOG_LEVEL=DEBUG.
+_SQL_BINDING_LOGGERS = ("sqlalchemy.engine", "aiosqlite")
+
+
+@pytest.fixture(autouse=True)
+def _silence_sqlalchemy_engine():
+    """
+    Bride les loggers SQL (``sqlalchemy.engine``, ``aiosqlite``) à WARNING
+    pendant chaque test (BUG-004).
+
+    Défense rules 40 : ces loggers journalisent chaque statement SQL avec ses
+    paramètres bindés (``key_hash``, hash de mots de passe, ``parameters``
+    des tâches planifiées…) quel que soit le flag ``echo`` des engines — le
+    niveau dépend sinon du cwd de lancement (``.env`` chargé ou non) et du
+    ``LOG_LEVEL`` local (ex. DEBUG, qui active ``aiosqlite`` via le root).
+    Le bridage garantit que ces valeurs ne fuient jamais dans ``caplog`` ;
+    le niveau initial de chaque logger est restauré après test.
+    """
+    initial_levels = {
+        name: logging.getLogger(name).level for name in _SQL_BINDING_LOGGERS
+    }
+    for name in _SQL_BINDING_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+    yield
+    for name, level in initial_levels.items():
+        logging.getLogger(name).setLevel(level)
 
 
 @pytest.fixture(scope="session")

@@ -62,9 +62,14 @@ logging.basicConfig(
     ),
 )
 
-# Force SQLAlchemy engine logger to respect configured LOG_LEVEL
-# This prevents SQLAlchemy from using its own handler at INFO level when echo=True
-logging.getLogger("sqlalchemy.engine").setLevel(getattr(logging, settings.log_level))
+# BUG-004 (rules 40) : le logger "sqlalchemy.engine" à INFO journalise tout le
+# SQL avec ses paramètres bindés (hash de mots de passe, key_hash, parameters
+# des tâches planifiées…) quel que soit le flag `echo` des engines. Il est
+# donc bridé à WARNING, sauf en LOG_LEVEL=DEBUG où l'echo SQL reste un choix
+# de debug explicite (engine `echo=True` dans database.py).
+logging.getLogger("sqlalchemy.engine").setLevel(
+    logging.DEBUG if settings.log_level == "DEBUG" else logging.WARNING
+)
 
 logger = logging.getLogger(__name__)
 
