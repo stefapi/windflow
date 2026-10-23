@@ -72,7 +72,9 @@ EXPECTED_ROUTE_COUNTS: dict[str, int] = {
     "websockets": 5,
     "stats": 2,
     "import_export": 2,
-    "schedules": 6,
+    # STORY-161 : +4 routes exécutions (liste par tâche, vue globale,
+    # détail, run manuel) — les 6 routes historiques restent inchangées.
+    "schedules": 10,
     "admin": 16,
     "docker": 35,
     "compute": 2,

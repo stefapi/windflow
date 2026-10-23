@@ -134,6 +134,26 @@ class Settings(BaseSettings):
         "definitions.",
     )
 
+    # === Rétention des exécutions scheduler (STORY-161 — AC 4) ===
+    # Rétention des lignes scheduled_task_executions. None = purge
+    # désactivée (conservation infinie — pattern audit 125.3, défaut).
+    # Env var : SCHEDULER_EXECUTIONS_RETENTION_DAYS.
+    scheduler_executions_retention_days: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Scheduled task executions retention in days (None = "
+        "purge disabled, keep forever).",
+    )
+    # Intervalle du job de purge des exécutions (STORY-161 — boucle
+    # asyncio au lifespan, 5ᵉ tâche de fond). Env var :
+    # SCHEDULER_EXECUTIONS_PURGE_INTERVAL_HOURS.
+    scheduler_executions_purge_interval_hours: int = Field(
+        default=24,
+        ge=1,
+        description="Interval (hours) between scheduled task executions "
+        "purge runs (background lifespan job).",
+    )
+
     @field_validator("scheduler_default_timezone")
     @classmethod
     def _validate_default_timezone(cls, value: Optional[str]) -> Optional[str]:

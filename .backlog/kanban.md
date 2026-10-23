@@ -3,7 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
-- [ ] STORY-161 : Table `scheduled_task_executions` — historique des exécutions, endpoints de consultation, rétention (P2-1, partie traçabilité)
 - [ ] STORY-162 : Bus d'événements canonique — interface unique, nomenclature spec, in-memory + Redis Pub/Sub optionnel (P2-2, partie bus — F6)
 - [ ] STORY-163 : Consommateurs plugins du bus — hooks `@on_event`, `deployment_notifications` enregistré, `DEPLOYMENT_PROGRESS` émis (P2-2, partie consommateurs)
 - [ ] STORY-164 : Canaux WebSocket manquants + durcissement — `/ws/ssh`, `/ws/journal`, `/ws/batch`, heartbeats, ack, reconnexion (P2-5, partie durcissement)
@@ -41,6 +40,7 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] STORY-161 : Table `scheduled_task_executions` — historique des exécutions, endpoints de consultation paginés, run manuel 202, rétention (P2-1, partie traçabilité) (EPIC-013)
 - [x] STORY-160.3 : Actions core réelles et triggers événement — handlers `host.scan`/`compute.docker.prune` (dry-run défaut, liste protégée, audit), stubs tracés, triggers EventBus via le chemin moteur (P2-1, partie exécution — STORY-160 découpée) (EPIC-013)
 - [x] STORY-160.2 : Moteur runtime asyncio — boucle lifespan, verrous, timeout, orphelins, fuseaux IANA, contrat `ExecutionStore` (P2-1, partie moteur — STORY-160 découpée) (EPIC-013)
 - [x] STORY-160.1 : Modèle ScheduledTask spec 17, registre d'actions et API `/schedules` v2 (P2-1, partie définition — STORY-160 découpée) (EPIC-013)

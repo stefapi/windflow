@@ -101,43 +101,6 @@ def _restore_legacy_scheduled_tasks(db_path: Path) -> None:
         engine.dispose()
 
 
-def _restore_legacy_scheduled_tasks(db_path: Path) -> None:
-    """STORY-160.1 : ramène ``scheduled_tasks`` à son état pré-1321 sur
-    une base create_all (modèles courants — colonnes spec 17 déjà
-    posées, plus d'enum ``task_type``).
-
-    Retire les 5 colonnes v2 (rebuild batch) puis recrée ``task_type``
-    VARCHAR(20) NOT NULL DEFAULT 'CUSTOM' (fidèle à la baseline ; le
-    CHECK enum est omis — la migration 1321 lit la valeur brute).
-    """
-    from alembic.migration import MigrationContext
-    from alembic.operations import Operations
-
-    engine = create_engine(f"sqlite:///{db_path}")
-    try:
-        with engine.connect() as conn:
-            ctx = MigrationContext.configure(conn)
-            operations = Operations(ctx)
-            with operations.batch_alter_table("scheduled_tasks") as batch_op:
-                for column in (
-                    "action",
-                    "trigger_type",
-                    "event_name",
-                    "timezone",
-                    "error_policy",
-                ):
-                    batch_op.drop_column(column)
-            conn.execute(
-                text(
-                    "ALTER TABLE scheduled_tasks ADD COLUMN task_type "
-                    "VARCHAR(20) NOT NULL DEFAULT 'CUSTOM'"
-                )
-            )
-            conn.commit()
-    finally:
-        engine.dispose()
-
-
 def _alembic_version(db_path: Path) -> str | None:
     """Lit la révision courante dans la table ``alembic_version``."""
     engine = create_engine(f"sqlite:///{db_path}")
@@ -231,6 +194,8 @@ class TestRunMigrationsExistingUnversionedDb:
             conn.execute(text("DROP TABLE audit_logs"))
             conn.execute(text("DROP TABLE ssh_keys"))
             conn.execute(text("DROP TABLE host_ssh_fingerprints"))
+            # STORY-161 : table additive scheduled_task_executions.
+            conn.execute(text("DROP TABLE scheduled_task_executions"))
         # STORY-121.3 : simuler la colonne héritée users.organization_id
         # (+ index) — absente du schéma courant mais attendue par la
         # migration 1213 sur une base pré-121.3

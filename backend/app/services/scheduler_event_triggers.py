@@ -25,12 +25,12 @@ Mécanique :
    délégation au chemin moteur (``_execute``) dans une tâche dédiée
    sous verrou anti-chevauchement.
 
-Divergences tracées (notes d'implémentation de la story) :
+Divergences tracées (notes d'implémentation de la story 160.3) :
 
-- le moteur (160.2, DONE — non modifiable) code ``triggered_by="schedule"``
-  dans ``_execute`` : les exécutions événementielles portent
-  ``triggered_by="schedule"`` dans l'ExecutionStore — la distinction
-  ``triggered_by="event"`` est un point d'entrée STORY-161 (impl DB) ;
+- ~~le moteur (160.2) code ``triggered_by="schedule"`` dans ``_execute``~~
+  **Résolue par STORY-161** : ``_execute`` accepte un paramètre additif
+  ``triggered_by`` (défaut ``schedule`` — comportement inchangé) et ce
+  composant passe désormais ``triggered_by="event"`` à la délégation ;
 - ``_trigger`` du moteur re-snapshotterait les paramètres **depuis la
   base**, ce qui perdrait la fusion définition+payload : ce composant
   reproduit donc le préambule défensif de ``_trigger`` (relecture +
@@ -56,6 +56,7 @@ from ..core.events import Event, EventType, get_event_bus
 from ..models.scheduled_task import ScheduledTask
 from .action_registry import get_action, validate_params
 from .scheduler_engine import SchedulerEngine, _snapshot, _TaskSnapshot
+from .scheduler_execution_store import TRIGGERED_BY_EVENT
 from .scheduler_service import SchedulerService
 
 logger = logging.getLogger(__name__)
@@ -198,7 +199,11 @@ class SchedulerEventTriggers:
             return
         snapshot = _merge_snapshot(_snapshot(fresh), merged)
         self._engine._running.add(task_id)
-        task = asyncio.create_task(self._engine._execute(snapshot))
+        # STORY-161 : origine explicite « event » (paramètre additif du
+        # chemin moteur — la nomenclature spec 06 est posée par l'impl DB).
+        task = asyncio.create_task(
+            self._engine._execute(snapshot, triggered_by=TRIGGERED_BY_EVENT)
+        )
         self._engine._inflight.add(task)
         task.add_done_callback(self._engine._inflight.discard)
 

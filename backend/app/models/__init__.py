@@ -11,6 +11,7 @@ from .plugin import Plugin
 from .plugin_hook_log import PluginHookLog
 from .refresh_token import RefreshToken
 from .scheduled_task import ScheduledTask
+from .scheduled_task_execution import ScheduledTaskExecution
 from .ssh_key import SSHKey
 from .stack import Stack
 from .stack_version import StackVersion
@@ -29,6 +30,7 @@ __all__ = [
     "StackVersion",
     "TargetCapability",
     "ScheduledTask",
+    "ScheduledTaskExecution",
     "Plugin",
     "PluginHookLog",
     "RefreshToken",

@@ -28,7 +28,7 @@ SCRIPT_LOCATION = REPO_ROOT / "backend" / "alembic"
 # Tables attendues : exactement celles des modèles ORM (STORY-121.1 :
 # + user_organizations ; STORY-123.1 : + refresh_tokens ; STORY-124.1 :
 # + api_keys ; STORY-125.1 : + audit_logs ; STORY-131.1 : + ssh_keys et
-# host_ssh_fingerprints).
+# host_ssh_fingerprints ; STORY-161 : + scheduled_task_executions).
 EXPECTED_TABLES = {
     "users",
     "organizations",
@@ -46,6 +46,7 @@ EXPECTED_TABLES = {
     "audit_logs",
     "ssh_keys",
     "host_ssh_fingerprints",
+    "scheduled_task_executions",
 }
 
 # Tables/créées par les migrations additives post-baseline — droppées
@@ -58,6 +59,7 @@ ADDITIVE_TABLES = {
     "audit_logs",  # STORY-125.1
     "ssh_keys",  # STORY-131.1
     "host_ssh_fingerprints",  # STORY-131.1
+    "scheduled_task_executions",  # STORY-161
 }
 
 
@@ -280,6 +282,8 @@ class TestExistingDatabaseStampScenario:
             conn.execute(text("DROP TABLE audit_logs"))
             conn.execute(text("DROP TABLE ssh_keys"))
             conn.execute(text("DROP TABLE host_ssh_fingerprints"))
+            # STORY-161 : table additive scheduled_task_executions.
+            conn.execute(text("DROP TABLE scheduled_task_executions"))
         # STORY-121.3 : recréer la colonne héritée users.organization_id
         # (+ index) — le schéma courant (modèles) ne la crée plus mais la
         # migration 1213 s'attend à la trouver sur une base pré-121.3

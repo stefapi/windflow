@@ -241,6 +241,58 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"✗ Periodic audit purge could not start: {e}")
 
+    # Periodic scheduled task executions purge (STORY-161 — 5ᵉ tâche
+    # lifespan, pattern audit 125.3 : boucle dédiée, sans fusion des
+    # boucles existantes). Consomme DatabaseExecutionStore.purge_expired
+    # — purge uniforme des lignes au-delà de la rétention ; l'audit est
+    # gouverné séparément (jamais touché ici). Logs = comptages.
+    executions_purge_task: asyncio.Task | None = None
+    if settings.scheduler_executions_retention_days is None:
+        # Démarrage conditionnel : rétention désactivée (défaut) — pas
+        # de boucle, un réveil ne ferait que des no-op.
+        logger.info(
+            "○ Scheduled task executions retention disabled "
+            "(keep forever) — purge job not started"
+        )
+    else:
+        try:
+            from .services.scheduler_execution_store import (
+                DatabaseExecutionStore as _ExecutionsStore,
+            )
+
+            _executions_interval = (
+                settings.scheduler_executions_purge_interval_hours * 3600
+            )
+            _executions_store = _ExecutionsStore()
+
+            async def _periodic_executions_purge() -> None:
+                """Background loop: purge executions past retention."""
+                while True:
+                    try:
+                        removed = await _executions_store.purge_expired(
+                            settings.scheduler_executions_retention_days or 1
+                        )
+                        if removed:
+                            logger.info(
+                                "Scheduled task executions purge: "
+                                "%d entries removed",
+                                removed,
+                            )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        logger.error("Scheduled task executions purge error: %s", exc)
+                    await asyncio.sleep(_executions_interval)
+
+            executions_purge_task = asyncio.create_task(_periodic_executions_purge())
+            logger.info(
+                "✓ Periodic scheduled task executions purge started "
+                f"(retention={settings.scheduler_executions_retention_days}d, "
+                f"every {settings.scheduler_executions_purge_interval_hours}h)"
+            )
+        except Exception as e:
+            logger.warning(f"✗ Periodic executions purge could not start: {e}")
+
     # Scheduler engine (STORY-160.2 — 4ᵉ tâche lifespan, arbitrage F1 :
     # runtime asyncio dans le processus API). Évalue les crons des
     # définitions spec 17 via croniter vendored et exécute les actions du
@@ -263,7 +315,16 @@ async def lifespan(app: FastAPI):
 
             register_scheduler_actions()
 
-            scheduler_engine = SchedulerEngine(settings=settings)
+            # STORY-161 : le moteur est branché sur le store DB — les
+            # exécutions (cron/event/manual) sont matérialisées dans
+            # scheduled_task_executions (traçabilité spec 06/17).
+            from .services.scheduler_execution_store import (
+                DatabaseExecutionStore,
+            )
+
+            scheduler_engine = SchedulerEngine(
+                settings=settings, store=DatabaseExecutionStore()
+            )
             scheduler_task = asyncio.create_task(scheduler_engine.run())
             logger.info(
                 "✓ Scheduler engine started "
@@ -324,6 +385,16 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("✓ Periodic audit purge task cancelled")
+
+    # Cancel periodic scheduled task executions purge (STORY-161 — pas
+    # démarrée si rétention désactivée : None → garde satisfaite)
+    if executions_purge_task and not executions_purge_task.done():
+        executions_purge_task.cancel()
+        try:
+            await executions_purge_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("✓ Periodic scheduled task executions purge task cancelled")
 
     # Cancel scheduler engine task (STORY-160.2 — les exécutions en cours
     # sont annulées proprement et tracées failed dans l'ExecutionStore) ;

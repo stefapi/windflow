@@ -61,6 +61,7 @@ from ..models.scheduled_task import ScheduledTask
 from .action_registry import get_action, validate_params
 from .scheduler_execution_store import (
     ORPHAN_REASON,
+    TRIGGERED_BY_MANUAL,
     TRIGGERED_BY_SCHEDULE,
     ExecutionStore,
     InMemoryExecutionStore,
@@ -230,6 +231,118 @@ class SchedulerEngine:
             await asyncio.gather(*list(self._inflight), return_exceptions=True)
 
     # ------------------------------------------------------------------
+    # Déclenchement manuel (STORY-161 — additif)
+    # ------------------------------------------------------------------
+
+    async def run_task_now(self, task_id: str) -> str:
+        """Déclenche l'exécution immédiate d'une tâche (``POST /run``).
+
+        Symétrique du chemin cron mais **sans attendre la fin** :
+        relecture défensive (existence + ``enabled``), verrou
+        anti-chevauchement (chevauchement → ligne ``skipped`` tracée +
+        :class:`ConflictError`), puis exécution dans une tâche asyncio
+        dédiée ``triggered_by="manual"`` (contrat moteur — l'impl DB
+        persiste la nomenclature spec 06 telle quelle).
+
+        Args:
+            task_id: Identifiant de la définition ``scheduled_tasks``.
+
+        Returns:
+            L'identifiant de la ligne d'exécution ``queued`` créée dans
+            l':class:`ExecutionStore` (réponse 202 fire-and-forget).
+
+        Raises:
+            NotFoundError: Définition inconnue ou désactivée (erreur
+                explicite, **aucune** ligne d'exécution créée).
+            ConflictError: Une exécution de la même tâche est déjà en
+                cours (le saut est tracé ``skipped`` dans le store).
+        """
+        from ..core.exceptions import ConflictError, NotFoundError
+
+        async with self._session_factory() as session:
+            fresh = await SchedulerService(session).get_task(task_id)
+        if fresh is None or not fresh.enabled:
+            raise NotFoundError(f"Tâche planifiée inconnue ou désactivée : {task_id}")
+        if task_id in self._running:
+            await self.store.mark_skipped(
+                task_id,
+                "overlap : l'exécution précédente est toujours en cours "
+                "(déclenchement manuel)",
+            )
+            logger.info(
+                "Scheduler engine : run manuel de %s skipped — chevauchement",
+                task_id,
+            )
+            raise ConflictError(
+                "Une exécution de cette tâche est déjà en cours " "(saut tracé skipped)"
+            )
+        # Ligne queued créée AVANT le lancement : l'identifiant est
+        # retourné immédiatement (202) sans attendre l'exécution.
+        execution_id = await self.store.mark_queued(task_id, TRIGGERED_BY_MANUAL)
+        snapshot = _snapshot(fresh)
+        self._running.add(task_id)
+        task = asyncio.create_task(self._execute_manual(execution_id, snapshot))
+        self._inflight.add(task)
+        task.add_done_callback(self._inflight.discard)
+        return execution_id
+
+    async def _execute_manual(self, execution_id: str, snapshot: _TaskSnapshot) -> None:
+        """Exécute une tâche manuelle sur sa ligne ``queued`` existante.
+
+        Variante de :meth:`_execute` : la ligne ``queued`` a déjà été
+        créée par :meth:`run_task_now` (l'API retourne son identifiant en
+        202 sans attendre) — l'orchestration reprend à ``running``.
+        """
+        await self.store.mark_running(execution_id)
+        started = self._clock()
+        logger.info(
+            "Scheduler engine : exécution manuelle démarrée task=%s "
+            "action=%s (execution=%s)",
+            snapshot.task_id,
+            snapshot.action,
+            execution_id,
+        )
+        try:
+            await self._attempt_with_retries(snapshot, execution_id)
+        except asyncio.CancelledError:
+            await self.store.mark_failed(
+                execution_id, "annulée — arrêt du scheduler pendant l'exécution"
+            )
+            logger.info(
+                "Scheduler engine : exécution manuelle annulée task=%s (shutdown)",
+                snapshot.task_id,
+            )
+            raise
+        except Exception as exc:
+            error = sanitize_error(f"{type(exc).__name__}: {exc}")
+            await self.store.mark_failed(execution_id, error)
+            await self._apply_error_policy(snapshot, error)
+            await self._record_run(snapshot.task_id, "failed", error)
+            self._note_failure(snapshot)
+            logger.warning(
+                "Scheduler engine : exécution manuelle échouée task=%s "
+                "action=%s policy=%s erreur=%r",
+                snapshot.task_id,
+                snapshot.action,
+                snapshot.error_policy,
+                error,
+            )
+        else:
+            duration = (self._clock() - started).total_seconds()
+            await self.store.mark_success(execution_id, duration)
+            await self._record_run(snapshot.task_id, "success")
+            self._consecutive_failures.pop(snapshot.task_id, None)
+            logger.info(
+                "Scheduler engine : exécution manuelle réussie task=%s "
+                "action=%s (%.3fs)",
+                snapshot.task_id,
+                snapshot.action,
+                duration,
+            )
+        finally:
+            self._running.discard(snapshot.task_id)
+
+    # ------------------------------------------------------------------
     # Tick
     # ------------------------------------------------------------------
 
@@ -358,17 +471,25 @@ class SchedulerEngine:
     # Exécution
     # ------------------------------------------------------------------
 
-    async def _execute(self, snapshot: _TaskSnapshot) -> None:
+    async def _execute(
+        self, snapshot: _TaskSnapshot, triggered_by: str = TRIGGERED_BY_SCHEDULE
+    ) -> None:
         """Exécute une tâche (tâche asyncio dédiée — jamais inline au tick).
 
         Orchestration : queued → running → success/failed dans le
         :class:`ExecutionStore`, politique d'erreur, ``record_run`` sur la
         définition, événements système. Toute exception est interceptée —
         seules :class:`asyncio.CancelledError` traversent (shutdown propre).
+
+        Args:
+            snapshot: Copie scalaire de la définition (relecture défensive).
+            triggered_by: Origine de l'exécution (contrat moteur —
+                ``schedule`` | ``event`` | ``manual`` ; STORY-161 : la
+                divergence 160.3 « origine codée en dur » est levée, le
+                paramètre est additif et vaut ``schedule`` par défaut —
+                aucun changement de comportement des chemins existants).
         """
-        execution_id = await self.store.mark_queued(
-            snapshot.task_id, TRIGGERED_BY_SCHEDULE
-        )
+        execution_id = await self.store.mark_queued(snapshot.task_id, triggered_by)
         await self.store.mark_running(execution_id)
         started = self._clock()
         logger.info(

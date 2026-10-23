@@ -51,7 +51,7 @@ ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 # Tables métier attendues + table technique Alembic (STORY-121.1 :
 # + user_organizations ; STORY-123.1 : + refresh_tokens ; STORY-124.1 :
 # + api_keys ; STORY-125.1 : + audit_logs ; STORY-131.1 : + ssh_keys et
-# host_ssh_fingerprints).
+# host_ssh_fingerprints ; STORY-161 : + scheduled_task_executions).
 EXPECTED_TABLES = {
     "users",
     "organizations",
@@ -69,6 +69,7 @@ EXPECTED_TABLES = {
     "audit_logs",
     "ssh_keys",
     "host_ssh_fingerprints",
+    "scheduled_task_executions",
     "alembic_version",
 }
 
@@ -82,6 +83,7 @@ ADDITIVE_TABLES = {
     "audit_logs",  # STORY-125.1
     "ssh_keys",  # STORY-131.1
     "host_ssh_fingerprints",  # STORY-131.1
+    "scheduled_task_executions",  # STORY-161
 }
 
 # URL PostgreSQL de test : paramétrable via l'environnement (CI : service
@@ -1175,6 +1177,127 @@ class TestMigratedDbSeedAndAdminLogin:
             await database.disconnect()
             settings.database_url = original_url
             settings.admin_email = original_admin_email
+
+
+class TestScheduledTaskExecutionsMigration:
+    """STORY-161 — scénario 8 : migration additive ``1331`` (table
+    ``scheduled_task_executions``) : structure (colonnes, FK CASCADE,
+    index) sur base vierge et base legacy stampée, downgrade propre."""
+
+    def test_fresh_db_upgrade_creates_table(self, tmp_path: Path) -> None:
+        """Base vierge → ``upgrade head`` → table présente."""
+        engine = _upgraded_engine(tmp_path, "fresh-exec.db")
+        try:
+            assert "scheduled_task_executions" in inspect(engine).get_table_names()
+        finally:
+            engine.dispose()
+
+    def test_table_structure_matches_spec_06(self, tmp_path: Path) -> None:
+        """Colonnes spec 06 : types/portabilité (SQLite : VARCHAR/TEXT/FLOAT)."""
+        engine = _upgraded_engine(tmp_path, "structure-exec.db")
+        try:
+            columns = {
+                col["name"]: col
+                for col in inspect(engine).get_columns("scheduled_task_executions")
+            }
+        finally:
+            engine.dispose()
+
+        assert set(columns) == {
+            "id",
+            "task_id",
+            "status",
+            "triggered_by",
+            "started_at",
+            "finished_at",
+            "duration_seconds",
+            "error",
+            "logs",
+            "created_at",
+        }
+        for name in ("id", "task_id", "status", "triggered_by", "created_at"):
+            assert not columns[name]["nullable"], f"{name} doit être NOT NULL"
+        for name in ("started_at", "finished_at", "duration_seconds", "error", "logs"):
+            assert columns[name]["nullable"], f"{name} doit être nullable"
+
+    def test_indexes_present(self, tmp_path: Path) -> None:
+        """Les 3 index spec 06 (task_id/status/started_at) sont posés."""
+        engine = _upgraded_engine(tmp_path, "indexes-exec.db")
+        try:
+            index_names = {
+                idx["name"]
+                for idx in inspect(engine).get_indexes("scheduled_task_executions")
+            }
+        finally:
+            engine.dispose()
+        assert {
+            "idx_scheduled_exec_task",
+            "idx_scheduled_exec_status",
+            "idx_scheduled_exec_started",
+        } <= index_names
+
+    def test_foreign_key_cascade_reflected(self, tmp_path: Path) -> None:
+        """FK ``task_id → scheduled_tasks.id`` avec ``ondelete CASCADE``
+        (PRAGMA foreign_key_list — pattern 1211)."""
+        engine = _upgraded_engine(tmp_path, "fk-exec.db")
+        try:
+            with engine.connect() as conn:
+                rows = conn.exec_driver_sql(
+                    "PRAGMA foreign_key_list(scheduled_task_executions)"
+                ).fetchall()
+        finally:
+            engine.dispose()
+
+        fks = {
+            row[3]: {"table": row[2], "to": row[4], "on_delete": row[6]} for row in rows
+        }
+        assert fks["task_id"]["table"] == "scheduled_tasks"
+        assert fks["task_id"]["to"] == "id"
+        assert fks["task_id"]["on_delete"] == "CASCADE"
+
+    def test_downgrade_drops_table_and_indexes(self, tmp_path: Path) -> None:
+        """``downgrade -1`` : table et index supprimés proprement."""
+        db_path = tmp_path / "downgrade-exec.db"
+        db_url = f"sqlite+aiosqlite:///{db_path}"
+        upgrade = _run_alembic("upgrade", "head", db_url=db_url)
+        assert upgrade.returncode == 0
+        downgrade = _run_alembic("downgrade", "-1", db_url=db_url)
+        assert downgrade.returncode == 0, (
+            f"downgrade a échoué :\nstdout={downgrade.stdout}\n"
+            f"stderr={downgrade.stderr}"
+        )
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            assert "scheduled_task_executions" not in inspect(engine).get_table_names()
+        finally:
+            engine.dispose()
+
+    async def test_legacy_stamped_base_upgrades_to_head(self, tmp_path: Path) -> None:
+        """Base legacy stampée baseline → ``upgrade head`` sans erreur :
+        la migration 1331 s'applique sur un état antérieur (pattern 1311)."""
+        db_path = tmp_path / "legacy-exec.db"
+        db_url = f"sqlite+aiosqlite:///{db_path}"
+        legacy_engine = create_engine(f"sqlite:///{db_path}")
+        Base.metadata.create_all(legacy_engine)
+        legacy_engine.dispose()
+        _drop_targets_ssh_key_id(db_path)
+        _restore_legacy_scheduled_tasks(db_path)
+        legacy_engine = create_engine(f"sqlite:///{db_path}")
+        with legacy_engine.begin() as conn:
+            for table in sorted(ADDITIVE_TABLES):
+                conn.execute(text(f"DROP TABLE {table}"))
+        legacy_engine.dispose()
+        _add_legacy_users_org_column(db_path)
+        stamp = _run_alembic("stamp", "baseline", db_url=db_url)
+        assert stamp.returncode == 0
+        await _startup_migrated(db_path)
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            assert "scheduled_task_executions" in inspect(engine).get_table_names()
+            check = _run_alembic("check", db_url=db_url)
+            assert check.returncode == 0
+        finally:
+            engine.dispose()
 
 
 class TestMigrationsCompatiblePostgresql:

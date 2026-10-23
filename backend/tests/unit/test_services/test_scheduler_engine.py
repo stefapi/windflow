@@ -977,3 +977,189 @@ async def test_tick_error_does_not_kill_run_loop(test_session_factory, monkeypat
     assert not run_task.done()  # la boucle a survécu
     run_task.cancel()
     await asyncio.gather(run_task, return_exceptions=True)
+
+
+# ===========================================================================
+# STORY-161 — run manuel + origine propagée + alerte 3 échecs (AC 4)
+# ===========================================================================
+
+
+async def test_run_task_now_manual_execution_end_to_end(
+    db_session, test_session_factory, test_organization, monkeypatch
+):
+    """run_task_now : exécution ``manual`` de bout en bout (AC 2/5)."""
+    calls: list[dict] = []
+
+    async def handler(params: dict) -> None:
+        calls.append(dict(params))
+
+    _patch_handler(monkeypatch, "host.scan", handler)
+    await _make_task(db_session, test_organization.id, task_id="task-manual-1")
+    clock = TimeTravel(datetime(2026, 10, 23, 3, 0, 0, tzinfo=timezone.utc))
+    engine = _make_engine(test_session_factory, clock)
+
+    execution_id = await engine.run_task_now("task-manual-1")
+    await engine.wait_for_executions()
+
+    assert len(calls) == 1
+    record = _store(engine).get(execution_id)
+    assert record is not None
+    assert record.status == STATUS_SUCCESS
+    assert record.triggered_by == "manual"  # contrat moteur (l'impl DB → spec 06)
+    assert record.duration_seconds is not None
+
+
+async def test_run_task_now_unknown_or_disabled_task_no_row(
+    db_session, test_session_factory, test_organization
+):
+    """Tâche inconnue/désactivée → NotFoundError, AUCUNE ligne créée."""
+    from app.core.exceptions import NotFoundError
+
+    clock = TimeTravel(datetime(2026, 10, 23, 3, 0, 0, tzinfo=timezone.utc))
+    engine = _make_engine(test_session_factory, clock)
+
+    with pytest.raises(NotFoundError):
+        await engine.run_task_now("ghost-task")
+    await _make_task(
+        db_session, test_organization.id, task_id="task-off", enabled=False
+    )
+    with pytest.raises(NotFoundError):
+        await engine.run_task_now("task-off")
+    assert _store(engine).all_executions() == []
+
+
+async def test_run_task_now_overlap_skipped_traced(
+    db_session, test_session_factory, test_organization, monkeypatch
+):
+    """Chevauchement → ConflictError + ligne ``skipped`` tracée."""
+    started = asyncio.Event()
+
+    async def slow_handler(params: dict) -> None:
+        started.set()
+        await asyncio.sleep(0.2)
+
+    _patch_handler(monkeypatch, "host.scan", slow_handler)
+    await _make_task(db_session, test_organization.id, task_id="task-overlap")
+    clock = TimeTravel(datetime(2026, 10, 23, 3, 0, 0, tzinfo=timezone.utc))
+    engine = _make_engine(test_session_factory, clock)
+
+    first = await engine.run_task_now("task-overlap")
+    await started.wait()  # la première exécution tient le verrou
+    from app.core.exceptions import ConflictError
+
+    with pytest.raises(ConflictError):
+        await engine.run_task_now("task-overlap")
+    await engine.wait_for_executions()
+
+    records = _store(engine).executions_for_task("task-overlap")
+    assert first is not None
+    assert any(r.status == STATUS_SKIPPED for r in records)
+
+
+async def test_triggered_by_event_propagated_from_event_triggers(
+    db_session, test_session_factory, test_organization, monkeypatch
+):
+    """Chemin événement (160.3) → ligne d'origine ``event`` (store espion)."""
+    from app.core.events import Event, EventType
+    from app.services.scheduler_event_triggers import SchedulerEventTriggers
+
+    calls: list[dict] = []
+
+    async def handler(params: dict) -> None:
+        calls.append(dict(params))
+
+    _patch_handler(
+        monkeypatch, "notification.send", handler
+    )  # action avec event_type dans son schéma
+    await _make_task(
+        db_session,
+        test_organization.id,
+        task_id="task-event-1",
+        action="notification.send",
+        parameters={"channel": "webhook", "message": "échec"},
+    )
+    from sqlalchemy import update as sa_update
+
+    await db_session.execute(
+        sa_update(ScheduledTask)
+        .where(ScheduledTask.id == "task-event-1")
+        .values(trigger_type="event", event_name="deployment.failed")
+    )
+    await db_session.commit()
+
+    clock = TimeTravel(datetime(2026, 10, 23, 3, 0, 0, tzinfo=timezone.utc))
+    engine = _make_engine(test_session_factory, clock)
+
+    class _ForwardBus:
+        """Bus factice qui relaie l'événement à la callback du composant."""
+
+        def __init__(self) -> None:
+            self.callback = None
+
+        def subscribe(self, event_type, callback) -> None:
+            self.callback = callback
+
+        def unsubscribe(self, event_type, callback) -> None:
+            self.callback = None
+
+    bus = _ForwardBus()
+    triggers = SchedulerEventTriggers(
+        engine, bus=bus, session_factory=test_session_factory
+    )
+    triggers.start()
+    assert bus.callback is not None
+    await bus.callback(
+        Event(
+            event_type=EventType.DEPLOYMENT_FAILED,
+            aggregate_id=None,
+            aggregate_type="deployment",
+            payload={"message": "échec déploy"},
+        )
+    )
+    await engine.wait_for_executions()
+
+    records = _store(engine).executions_for_task("task-event-1")
+    assert records, "aucune exécution déclenchée par l'événement"
+    assert all(r.triggered_by == "event" for r in records)
+
+
+async def test_repeated_failures_event_and_persisted_rows(
+    db_session, test_session_factory, test_organization, monkeypatch
+):
+    """AC 4 : 3 échecs consécutifs → événement SYSTEM_WARNING
+    ``scheduled_task.repeated_failures`` + 3 lignes ``failed`` consultables."""
+    from app.core.events import Event, EventType
+
+    published: list[Event] = []
+
+    async def failing_handler(params: dict) -> None:
+        raise RuntimeError("boom")
+
+    _patch_handler(monkeypatch, "host.scan", failing_handler)
+    await _make_task(db_session, test_organization.id, task_id="task-fail-3")
+    clock = TimeTravel(datetime(2026, 10, 23, 3, 0, 0, tzinfo=timezone.utc))
+
+    async def spy_publish(event: Event) -> None:
+        published.append(event)
+
+    monkeypatch.setattr(scheduler_engine_module, "publish_event", spy_publish)
+    engine = _make_engine(test_session_factory, clock)
+
+    # Trois déclenchements cron consécutifs (time travel minute par minute).
+    await engine.tick()  # initialisation sans trigger
+    for i in range(3):
+        clock.advance(minutes=1)
+        await engine.tick()
+        await engine.wait_for_executions()
+
+    warnings = [
+        e
+        for e in published
+        if e.event_type == EventType.SYSTEM_WARNING
+        and e.payload.get("reason") == "scheduled_task.repeated_failures"
+    ]
+    assert warnings, "l'alerte 3 échecs n'a pas été émise sur le bus"
+    assert warnings[0].payload["consecutive_failures"] == 3
+    # Les 3 échecs sont matérialisés dans le store (consultables via 161).
+    records = _store(engine).executions_for_task("task-fail-3")
+    assert [r.status for r in records].count(STATUS_FAILED) == 3
