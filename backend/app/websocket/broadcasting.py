@@ -119,7 +119,11 @@ async def broadcast_deployment_status(
 
 
 async def broadcast_deployment_progress(
-    deployment_id: str, progress: int, step: str, **extra_data
+    deployment_id: str,
+    progress: int,
+    step: str,
+    total_steps: Optional[int] = None,
+    **extra_data,
 ):
     """
     Broadcast deployment progress updates to all connected WebSocket clients.
@@ -127,10 +131,20 @@ async def broadcast_deployment_progress(
     This function is used by the plugin system to send real-time progress updates
     during deployment execution.
 
+    STORY-163 (T4) : le payload est aligné sur le contrat frontend existant
+    (``frontend/src/types/websocket.ts`` — ``deployment_id``, ``progress``,
+    ``current_step``, ``total_steps``, consommé par ``handleProgress`` de
+    ``useDeploymentWebSocket.ts``) — snake_case, sans période de
+    compatibilité (aucun consommateur backend du camelCase : vérifié).
+    ``step`` est conservé en plus de ``current_step`` pour les logs
+    internes (``deployment_monitor`` lit ``current_step`` avec fallback
+    ``step``).
+
     Args:
         deployment_id: ID of the deployment
         progress: Progress percentage (0-100)
         step: Current deployment step description
+        total_steps: Total number of pipeline steps (optional)
         **extra_data: Additional data to include in the event
 
     Note:
@@ -140,9 +154,11 @@ async def broadcast_deployment_progress(
         deployment_id,
         WebSocketEventType.DEPLOYMENT_PROGRESS,
         {
-            "deploymentId": deployment_id,
+            "deployment_id": deployment_id,
             "progress": progress,
-            "step": step,
+            "current_step": step,
+            "step": step,  # compat logs internes (deployment_monitor)
+            "total_steps": total_steps,
             **extra_data,
         },
     )

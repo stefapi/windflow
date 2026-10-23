@@ -59,6 +59,7 @@ async def deploy_stack_async(
     from app.models.deployment import Deployment, DeploymentStatus  # type: ignore[import-not-found]
     from app.models.stack import Stack  # type: ignore[import-not-found]
     from app.enums.target import TargetType  # type: ignore[import-not-found]
+    from app.services.deployment_events import get_deployment_events  # type: ignore[import-not-found]
     from app.services.deployment_service import DeploymentService  # type: ignore[import-not-found]
     from app.services.docker_compose_service import DockerComposeService  # type: ignore[import-not-found]
     from app.services.docker_service import DockerService  # type: ignore[import-not-found]
@@ -67,6 +68,35 @@ async def deploy_stack_async(
         f"[FALLBACK-ASYNCIO] Début du déploiement {deployment_id} "
         f"du stack {stack_id} sur target {target_id} par user {user_id}"
     )
+
+    # STORY-163 (T5/AC 3) — émission DEPLOYMENT_PROGRESS aux jalons
+    # observables du pipeline. Jalons et progression (0→100, monotone) :
+    #   docker simple (8 jalons) : démarrage 5, stack chargée 15,
+    #     mode déterminé 20, variables substituées 35, validation 45,
+    #     déploiement en cours 75, succès 100 ;
+    #   compose (10 jalons) : + labels injectés 55, fichier généré 65.
+    # Les sous-étapes pulling/creating/starting sont internes à
+    # deploy_container/deploy_compose (non observables individuellement —
+    # hypothèse des jalons observables, cf. notes d'implémentation).
+    # Best-effort : emit_progress_update n'émet jamais sur le chemin
+    # d'échec (l'exception propage FAILED via update_status existant).
+    progress_events = get_deployment_events()
+
+    async def emit_progress(progress: int, step: str, total_steps: int) -> None:
+        """Émet DEPLOYMENT_PROGRESS (best-effort, jamais bloquant)."""
+        try:
+            await progress_events.emit_progress_update(
+                deployment_id=deployment_id,
+                progress=progress,
+                step=step,
+                total_steps=total_steps,
+                user_id=user_id,
+            )
+        except Exception:  # pragma: no cover — défense (déjà best-effort)
+            logger.debug("Progress emission skipped for %s", deployment_id)
+
+    TOTAL_STEPS_DOCKER = 7
+    TOTAL_STEPS_COMPOSE = 9
 
     try:
         async with AsyncSessionLocal() as db:
@@ -107,8 +137,17 @@ async def deploy_stack_async(
                 logs=f"[INFO] Stack chargé: {stack.name} v{stack.version} (type: {stack.target_type})",
             )
 
+            # Jalons communs — émis une fois le target_type connu pour
+            # garantir un total_steps constant sur tout le chemin (les
+            # jalons 5/15 précèdent sémantiquement le branchement, leur
+            # émission WS est simplement rattachée au total du chemin).
+            is_docker_path = stack.target_type == TargetType.DOCKER.value
+            total_steps = TOTAL_STEPS_DOCKER if is_docker_path else TOTAL_STEPS_COMPOSE
+            await emit_progress(5, "starting", total_steps)
+            await emit_progress(15, "stack_loaded", total_steps)
+
             # Router vers le bon service selon le target_type
-            if stack.target_type == TargetType.DOCKER.value:
+            if is_docker_path:
                 # === DÉPLOIEMENT DOCKER SIMPLE ===
                 logger.info(
                     "[FALLBACK-ASYNCIO] Mode déploiement: Docker container simple"
@@ -119,6 +158,7 @@ async def deploy_stack_async(
                     DeploymentStatus.DEPLOYING,
                     logs="[INFO] Mode déploiement: Docker container simple (asyncio fallback)",
                 )
+                await emit_progress(20, "mode_determined", TOTAL_STEPS_DOCKER)
 
                 # 2. Substituer les variables avec DockerService
                 docker_service = DockerService()
@@ -133,6 +173,7 @@ async def deploy_stack_async(
                     DeploymentStatus.DEPLOYING,
                     logs="[INFO] Variables substituées dans le template",
                 )
+                await emit_progress(35, "variables_substituted", TOTAL_STEPS_DOCKER)
 
                 # 3. Valider la configuration container
                 is_valid, error_msg = docker_service.validate_container_config(
@@ -147,6 +188,7 @@ async def deploy_stack_async(
                     DeploymentStatus.DEPLOYING,
                     logs="[INFO] Validation de la configuration container réussie",
                 )
+                await emit_progress(45, "validated", TOTAL_STEPS_DOCKER)
 
                 # 4. Déployer le container
                 container_name = deployment_name
@@ -156,6 +198,7 @@ async def deploy_stack_async(
                     DeploymentStatus.DEPLOYING,
                     logs=f"[INFO] Lancement du container {container_name}...",
                 )
+                await emit_progress(75, "deploying", TOTAL_STEPS_DOCKER)
 
                 success, output = await docker_service.deploy_container(
                     final_config, container_name
@@ -173,6 +216,7 @@ async def deploy_stack_async(
                     DeploymentStatus.RUNNING,
                     logs=f"[SUCCESS] Container déployé avec succès (asyncio fallback)\nContainer ID: {output}",
                 )
+                await emit_progress(100, "completed", TOTAL_STEPS_DOCKER)
 
                 return {
                     "deployment_id": deployment_id,
@@ -198,6 +242,7 @@ async def deploy_stack_async(
                     DeploymentStatus.DEPLOYING,
                     logs="[INFO] Mode déploiement: Docker Compose (asyncio fallback)",
                 )
+                await emit_progress(20, "mode_determined", TOTAL_STEPS_COMPOSE)
 
                 # 2. Substituer les variables dans le template
                 compose_service = DockerComposeService()
@@ -212,6 +257,7 @@ async def deploy_stack_async(
                     DeploymentStatus.DEPLOYING,
                     logs="[INFO] Variables substituées dans le template",
                 )
+                await emit_progress(35, "variables_substituted", TOTAL_STEPS_COMPOSE)
 
                 # 3. Valider le compose généré
                 is_valid, error_msg = compose_service.validate_compose(final_compose)
@@ -224,6 +270,7 @@ async def deploy_stack_async(
                     DeploymentStatus.DEPLOYING,
                     logs="[INFO] Validation du fichier compose réussie",
                 )
+                await emit_progress(45, "validated", TOTAL_STEPS_COMPOSE)
 
                 # 3b. Injecter les labels WindFlow dans chaque service
                 # Permet au compute_service de reconnaître ces containers comme "managed"
@@ -254,6 +301,7 @@ async def deploy_stack_async(
                     DeploymentStatus.DEPLOYING,
                     logs=f"[INFO] Labels WindFlow injectés (windflow.stack_id={stack_id})",
                 )
+                await emit_progress(55, "labels_injected", TOTAL_STEPS_COMPOSE)
 
                 # 4. Générer le fichier docker-compose.yml
                 deploy_dir = Path(f"/tmp/windflow-deployments/{deployment_id}")
@@ -267,6 +315,7 @@ async def deploy_stack_async(
                     DeploymentStatus.DEPLOYING,
                     logs=f"[INFO] Fichier compose généré: {compose_file}",
                 )
+                await emit_progress(65, "compose_generated", TOTAL_STEPS_COMPOSE)
 
                 # 5. Déployer avec docker-compose
                 project_name = deployment_name
@@ -276,6 +325,7 @@ async def deploy_stack_async(
                     DeploymentStatus.DEPLOYING,
                     logs=f"[INFO] Lancement de docker-compose pour {project_name}...",
                 )
+                await emit_progress(75, "deploying", TOTAL_STEPS_COMPOSE)
 
                 success, output = await compose_service.deploy_compose(
                     compose_file, project_name
@@ -293,6 +343,7 @@ async def deploy_stack_async(
                     DeploymentStatus.RUNNING,
                     logs=f"[SUCCESS] Déploiement terminé avec succès (asyncio fallback)\n{output}",
                 )
+                await emit_progress(100, "completed", TOTAL_STEPS_COMPOSE)
 
                 return {
                     "deployment_id": deployment_id,

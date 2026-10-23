@@ -178,7 +178,7 @@ alias mappent vers `host.offline`).
 - l'événement ne remplace pas les audit logs existants
   (`deployment.succeeded` déjà audité côté `AuditService`).
 
-## 8. Interface `Bus` pour les plugins (entrée de STORY-163)
+## 8. Interface `Bus` (contrat stable)
 
 ```python
 class Bus(Protocol):
@@ -190,7 +190,129 @@ class Bus(Protocol):
     async def stop(self) -> None: ...
 ```
 
-STORY-163 (consommateurs plugins : hooks `@on_event`,
-`deployment_notifications`, décision `DEPLOYMENT_PROGRESS`) s'appuiera
-sur ce contrat tel quel — interface identique pour les plugins en mode
-léger et standard (spec 11 § Bus d'événements).
+Interface identique pour les plugins en mode léger et standard
+(spec 11 § Bus d'événements).
+
+## 9. Consommateurs plugins (STORY-163)
+
+### 9.1 SDK hooks — `app.plugins.hooks`
+
+> **Divergence d'import assumée** : la spec 11 montre un exemple
+> illustratif `from windflow.plugins.hooks import ...` ; le package
+> applicatif s'importe `app.*` (convention de tout le backend) — le SDK
+> réel est donc `app.plugins.hooks`.
+
+- `PluginEvent` : enveloppe légère (`name`, `data`, `timestamp`,
+  `event_id`) — jamais l'`Event` interne brut (réduction de surface) ;
+  `data` est une **copie défensive** du payload ;
+- `PluginHooks` : classe de base ; le registre d'instance
+  `hooks: dict[str, list[callable]]` est assemblé à l'instanciation ;
+- `@on_event("<canonique>")` : valide le nom **au décorateur** — les 18
+  canoniques uniquement. Les noms SCREAMING_SNAKE (ex.
+  `DEPLOYMENT_PROGRESS` — types de **transport WS**) et les
+  extra-canoniques (ex. `organization.created`, sécurité
+  `host.ssh_fingerprint_*`) lèvent `InvalidEventTypeNameError`
+  (avertissement WEBSOCKET §4.2 : la souscription plugins se fait
+  uniquement sur les canoniques).
+
+```python
+from app.plugins.hooks import PluginHooks, PluginEvent, on_event
+
+class MyHooks(PluginHooks):
+    @on_event("stack.deployed")
+    async def on_deployed(self, event: PluginEvent) -> None: ...
+
+    @on_event("deployment.failed")
+    async def on_failed(self, event: PluginEvent) -> None: ...
+```
+
+Contrat : hooks **asynchrones non bloquants** — ils réagissent après
+coup et ne peuvent pas refuser une action (les décisions bloquantes
+sont les gates pre-deploy de STORY-170).
+
+### 9.2 Pont `PluginHooksService` — isolation d'exécution
+
+[`plugin_hooks_service.py`](../../backend/app/services/plugin_hooks_service.py)
+s'abonne aux **18 canoniques uniquement** (jamais les extra-canoniques —
+réduction de surface, sécurité TOFU incluse) et dispatche chaque hook en
+**tâche asyncio dédiée** :
+
+- timeout par hook (`plugin_hooks_timeout_seconds`, défaut 30 s —
+  cohérent avec `HOOK_TIMEOUT_SECONDS` des hooks lifecycle) : hook lent
+  → `TimeoutError` loggé WARNING, hook annulé ;
+- erreur de hook → ERROR loggé (plugin + événement), jamais propagée ;
+- pool borné (sémaphore, 16 concurrents max) — pas de tempête de tâches ;
+- le `publish` de l'émetteur **revient immédiatement** : un plugin lent
+  ou en échec ne bloque jamais le bus ni les autres abonnés (AC 1).
+
+Settings : `plugin_hooks_enabled` (défaut `True`),
+`plugin_hooks_timeout_seconds` (défaut 30), `plugin_hooks_demo_enabled`
+(défaut `False`).
+
+### 9.3 Chargement lifespan des `hooks_module`
+
+Au startup (après `init_event_bus()`/`setup_event_bridge()`) : lecture
+des plugins `type IN (extension, hybrid)` ET `status IN (installed,
+running)` en base, puis pour chaque `manifest_data.extensions.hooks_module`
+présent — import dynamique `importlib` résolu sous
+`plugins_base_dir/<plugin_name>/` avec contrôle **anti path-traversal**
+(pattern `plugin_lifecycle_service._resolve_script_path` : refus des
+chemins absolus, des `..` et de toute sortie du base_dir).
+
+Best-effort : l'échec d'un plugin (chemin refusé, import impossible,
+aucune sous-classe `PluginHooks`) est loggé WARNING et ignoré — le
+startup reste intact. **Tant que STORY-169 (installation réelle) n'est
+pas faite, la base ne contient pas de fichiers extraits : zéro hook
+chargé en environnement courant** (log debug) — le mécanisme et le
+démonstrateur (`app/plugins/examples/demo_logger_hooks.py`,
+`stack.deployed` + `deployment.failed`) sont couverts par les tests.
+STORY-169 devra brancher l'enregistrement des hooks à l'installation.
+
+### 9.4 `DEPLOYMENT_PROGRESS` — transport WS (décision : émettre)
+
+Décision du plan de remédiation (§4 P2-2/B7) : le type **existe et est
+consommé** (plugins `deployment_monitor`/`deployment_notifications`,
+handler frontend `handleProgress` de `useDeploymentWebSocket.ts`) — il
+est donc **émis**, jamais retiré.
+
+- **Jamais sur le bus canonique** : c'est un type de transport WebSocket
+  (§4.2 WEBSOCKET-REAL-TIME) — émission par
+  `DeploymentEventsService.emit_progress_update()` (modèle
+  `emit_logs_update` : broadcast direct, best-effort) ;
+- payload **snake_case** aligné sur le contrat frontend
+  (`frontend/src/types/websocket.ts`) : `deployment_id`, `progress`,
+  `current_step`, `total_steps`, `timestamp` (+ `step` conservé pour les
+  logs internes de `deployment_monitor`, qui lit `current_step` avec
+  fallback `step`) ;
+- émission aux **jalons observables** de `deploy_stack_async`
+  ([`background_tasks.py`](../../backend/app/tasks/background_tasks.py)) —
+  les sous-étapes `pulling/creating/starting` sont internes aux services
+  Docker (non observables individuellement, non instrumentées) :
+
+| Jalon | docker simple (7 étapes) | compose (9 étapes) |
+|-------|--------------------------|--------------------|
+| `starting` | 5 | 5 |
+| `stack_loaded` | 15 | 15 |
+| `mode_determined` | 20 | 20 |
+| `variables_substituted` | 35 | 35 |
+| `validated` | 45 | 45 |
+| `labels_injected` | — | 55 |
+| `compose_generated` | — | 65 |
+| `deploying` | 75 | 75 |
+| `completed` | 100 | 100 |
+
+Aucun progress sur le chemin d'échec : l'exception propage `FAILED` via
+`update_status` existant. Payload limité à ID/étapes/progression
+(rules 40 — jamais de variables de déploiement ni secrets).
+
+### 9.5 Statut des clés de souscription mortes de `deployment_notifications`
+
+`deployment_notifications` est désormais **enregistré** via
+`default_plugins` (T3 — pattern des 3 autres plugins internes,
+auto-enregistrement à l'import retiré). Ses clés de souscription
+`"deployment_events"` et `f"deployment_progress_{id}"` ne sont **pas
+exposées par le `SubscriptionHandler`** (clés mortes) — son contrat
+actuel (log + `broadcast_to_user` si `user_id`) reste satisfaisant ;
+la refonte de ces canaux est tracée **STORY-164/165** (hors périmètre
+163, garde-fou §2.G : ne pas casser l'architecture des modules de
+broadcast internes).

@@ -121,6 +121,38 @@ async def lifespan(app: FastAPI):
     setup_event_bridge()
     logger.info("✓ Event bridge initialized")
 
+    # Plugin hooks bridge (STORY-163 — pont bus canonique → hooks @on_event
+    # des plugins extension/hybrid) : abonnement aux 18 événements
+    # canoniques uniquement (jamais les extra-canoniques sécurité) ;
+    # chargement best-effort des hooks_module des plugins installés en
+    # base (aucun échec de plugin ne compromet le startup). Tant que
+    # STORY-169 (installation réelle) n'est pas faite, ce chargement
+    # examinera zéro fichier — mécanisme posé ici.
+    plugin_hooks_service_instance = None
+    if settings.plugin_hooks_enabled:
+        try:
+            from .services.plugin_hooks_service import PluginHooksService
+
+            plugin_hooks_service_instance = PluginHooksService()
+            plugin_hooks_service_instance.start()
+            loaded = await plugin_hooks_service_instance.load_installed_hooks()
+            if settings.plugin_hooks_demo_enabled:
+                from .plugins.examples.demo_logger_hooks import DemoLoggerHooks
+
+                plugin_hooks_service_instance.register(DemoLoggerHooks())
+                loaded += 1
+                logger.info(
+                    "✓ Plugin hooks demo loaded (plugin_hooks_demo_enabled=true)"
+                )
+            logger.info(
+                f"✓ Plugin hooks service started ({loaded} plugin hook(s) loaded)"
+            )
+        except Exception as e:
+            plugin_hooks_service_instance = None
+            logger.warning(f"✗ Plugin hooks service could not start: {e}")
+    else:
+        logger.info("○ Plugin hooks disabled (PLUGIN_HOOKS_ENABLED=false)")
+
     # Initialize rate limiter — 3 états observables (STORY-102 / P0-3) :
     # Redis distribué, fallback mémoire process-local, ou désactivé.
     if settings.rate_limit_enabled and settings.rate_limit_storage_url:
@@ -408,6 +440,12 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("✓ Periodic scheduled task executions purge task cancelled")
+
+    # Plugin hooks shutdown (STORY-163 — désabonnement du pont avant
+    # l'arrêt du bus, même séquence que scheduler_event_triggers).
+    if plugin_hooks_service_instance is not None:
+        plugin_hooks_service_instance.stop()
+        logger.info("✓ Plugin hooks service stopped")
 
     # Shutdown event bus (STORY-162 — arrêt du transport Redis Pub/Sub et
     # de la tâche subscriber APRÈS le désabonnement des consommateurs).

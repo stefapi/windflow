@@ -3,7 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
-- [ ] STORY-163 : Consommateurs plugins du bus — hooks `@on_event`, `deployment_notifications` enregistré, `DEPLOYMENT_PROGRESS` émis (P2-2, partie consommateurs)
 - [ ] STORY-164 : Canaux WebSocket manquants + durcissement — `/ws/ssh`, `/ws/journal`, `/ws/batch`, heartbeats, ack, reconnexion (P2-5, partie durcissement)
 - [ ] STORY-165 : Tests WebSocket — couverture complète du module temps réel (P2-5/P2-14, partie tests)
 - [ ] STORY-166 : Migration `Target`→`Host` + axe `origin` + `environments` + `Stack.git_url` + auto-détection du host local (P2-4 + P2-10 — F4 étape 2)
@@ -41,6 +40,7 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] STORY-163 : Consommateurs plugins du bus — hooks `@on_event`, `deployment_notifications` enregistré, `DEPLOYMENT_PROGRESS` émis (P2-2, partie consommateurs) (EPIC-013) — SDK `app.plugins.hooks` + pont isolé (timeout/pool), 4 plugins WS, jalons 2 chemins, 2106 tests verts
 - [x] BUG-004 : `test_schedules_v2.py::test_parameters_not_logged_raw` échoue sur main (echo SQL local — herméticité cwd)  # divers (sans epic) — corrigé (défense en profondeur : caplog + fixture autouse conftest sqlalchemy.engine/aiosqlite + bridage main.py WARNING-sauf-DEBUG), re-vérifié à la clôture (57 + 22 tests verts)
 - [x] BUG-003 : `POST /docker/containers` — `response_model=ContainerResponse` inadéquat → 500 systématique sur création  # divers (sans epic) — corrigé (response_model=ContainerDetailResponse), 32 tests ciblés verts
 - [x] STORY-162 : Bus d'événements canonique — interface unique, nomenclature spec, in-memory + Redis Pub/Sub optionnel (P2-2, partie bus — F6) (EPIC-013)

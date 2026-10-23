@@ -311,3 +311,83 @@ async def test_init_event_bus_with_unreachable_redis_falls_back(monkeypatch):
     bus = await init_event_bus()
     assert type(bus) is InMemoryEventBus
     reset_event_bus()
+
+
+# ===========================================================================
+# STORY-163 — multi-consommateurs : pont hooks + bridge WS + triggers
+# scheduler abonnés simultanément, isolation mutuelle préservée.
+# ===========================================================================
+
+
+async def test_multi_consumers_all_notified_with_mutual_isolation():
+    """Trois familles de consommateurs sur le même bus : tous notifiés.
+
+    Un consommateur en échec (bridge qui lève) n'affecte ni les hooks
+    plugins (pont STORY-163) ni les consommateurs directs du bus.
+    """
+    from app.plugins.hooks import PluginEvent, PluginHooks, on_event
+    from app.services.plugin_hooks_service import PluginHooksService
+
+    bus = InMemoryEventBus()
+
+    # Consommateur 1 : pont hooks plugins (STORY-163).
+    received_hooks: list[PluginEvent] = []
+
+    class _StackHooks(PluginHooks):
+        @on_event("stack.deployed")
+        async def hook(self, event: PluginEvent) -> None:
+            received_hooks.append(event)
+
+    bridge = PluginHooksService(bus, timeout_seconds=5)
+    bridge.register(_StackHooks())
+    bridge.start()
+
+    # Consommateur 2 : handler direct « bridge WS » qui LÈVE.
+    async def failing_ws_bridge(event: Event) -> None:
+        raise RuntimeError("bridge ws down")
+
+    bus.subscribe(EventType.STACK_DEPLOYED, failing_ws_bridge)
+
+    # Consommateur 3 : handler direct « triggers scheduler ».
+    received_scheduler: list[Event] = []
+
+    async def scheduler_like(event: Event) -> None:
+        received_scheduler.append(event)
+
+    bus.subscribe(EventType.STACK_DEPLOYED, scheduler_like)
+
+    await bus.emit(EventType.STACK_DEPLOYED, {"stack_id": "s-multi"})
+    await bridge.wait_for_hooks()
+
+    # Tous les consommateurs sains ont été notifiés malgré l'échec du
+    # consommateur 2 — isolation mutuelle préservée.
+    assert len(received_hooks) == 1
+    assert received_hooks[0].data == {"stack_id": "s-multi"}
+    assert len(received_scheduler) == 1
+
+    bridge.stop()
+
+
+async def test_canonical_value_of_stack_deployed_reaches_hooks_only_canonical():
+    """Le pont ne dispatche que les canoniques — vérif via host.offline."""
+    from app.plugins.hooks import PluginEvent, PluginHooks, on_event
+    from app.services.plugin_hooks_service import PluginHooksService
+
+    bus = InMemoryEventBus()
+
+    received: list[PluginEvent] = []
+
+    class _HostHooks(PluginHooks):
+        @on_event("host.offline")
+        async def hook(self, event: PluginEvent) -> None:
+            received.append(event)
+
+    bridge = PluginHooksService(bus, timeout_seconds=5)
+    bridge.register(_HostHooks())
+    bridge.start()
+
+    await bus.emit(EventType.HOST_OFFLINE, {"host_id": "h-1"})
+    await bridge.wait_for_hooks()
+    assert len(received) == 1
+
+    bridge.stop()

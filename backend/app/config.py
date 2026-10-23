@@ -454,6 +454,28 @@ class Settings(BaseSettings):
         default="./data/plugins/",
         description="Répertoire de base pour la résolution des chemins de scripts hooks des plugins",
     )
+    plugin_hooks_enabled: bool = Field(
+        default=True,
+        description=(
+            "Active le pont bus d'événements → hooks @on_event des plugins "
+            "extension/hybrid (STORY-163)"
+        ),
+    )
+    plugin_hooks_timeout_seconds: int = Field(
+        default=30,
+        description=(
+            "Timeout d'exécution de chaque hook @on_event en secondes — "
+            "cohérent avec HOOK_TIMEOUT_SECONDS des hooks lifecycle "
+            "(plugin_lifecycle_service)"
+        ),
+    )
+    plugin_hooks_demo_enabled: bool = Field(
+        default=False,
+        description=(
+            "Charge le plugin démonstrateur app/plugins/examples/ au startup "
+            "(désactivé par défaut — aucun comportement ajouté en production)"
+        ),
+    )
 
     # Mode développement sans authentification
     # ⚠️ DANGER : Ne JAMAIS activer en production !

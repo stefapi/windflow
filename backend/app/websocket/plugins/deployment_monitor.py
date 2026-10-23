@@ -89,7 +89,9 @@ class DeploymentMonitorPlugin(WebSocketPlugin):
 
         elif event == WebSocketEventType.DEPLOYMENT_PROGRESS:
             progress = data.get("progress", 0)
-            step = data.get("step", "")
+            # STORY-163 (T4) : payload snake_case — current_step d'abord,
+            # fallback step (compat messages internes plus anciens).
+            step = data.get("current_step") or data.get("step", "")
 
             context.logger.info(
                 f"⏳ Deployment progress: {deployment_id} - {progress}% ({step})",

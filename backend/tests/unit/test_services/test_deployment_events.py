@@ -1,4 +1,5 @@
-"""Tests ``DeploymentEventsService.emit_status_change`` (STORY-162, T4 — AC 3).
+"""Tests ``DeploymentEventsService.emit_status_change`` (STORY-162, T4 — AC 3)
+et ``emit_progress_update`` (STORY-163, T4 — AC 3).
 
 Familles :
 
@@ -11,6 +12,15 @@ Familles :
   émission** + warning (plus de fallback silencieux) ;
 - payload : IDs/noms/statuts uniquement — assertion d'absence de
   secrets (règle 40).
+
+STORY-163 — ``emit_progress_update`` :
+
+- broadcast **direct** via ``broadcast_deployment_progress`` (mock) avec
+  payload **snake_case exact** : ``deployment_id``, ``progress``,
+  ``current_step``, ``total_steps`` (+ ``step`` compat logs internes) —
+  cohérence avec ``frontend/src/types/websocket.ts`` ;
+- échec du broadcast → aucune exception propagée (best-effort) ;
+- payload sans secret (rules 40).
 
 Note de divergence (documentée dans la story) : l'enum
 ``DeploymentStatus`` n'a pas de membre ``success`` — le statut métier de
@@ -25,6 +35,7 @@ Bus espion : instance ``InMemoryEventBus`` réelle + handler collecteur
 from __future__ import annotations
 
 import logging
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -147,6 +158,141 @@ async def test_stopped_and_unknown_status_emit_nothing_and_warn(spy_bus, caplog)
     assert collected == []  # plus de fallback silencieux
     warnings = [r.message for r in caplog.records if "no canonical event" in r.message]
     assert len(warnings) == 2
+
+
+# ===========================================================================
+# STORY-163 (T4/AC 3) — emit_progress_update : transport WS direct
+# ===========================================================================
+
+
+async def test_emit_progress_update_broadcasts_snake_case_payload(mocker):
+    """emit_progress_update → broadcast appelé avec le contrat exact (AC 3)."""
+    broadcast = mocker.patch(
+        "app.websocket.broadcasting.broadcast_deployment_progress",
+        new_callable=AsyncMock,
+    )
+    service = DeploymentEventsService(event_bus=InMemoryEventBus())
+
+    await service.emit_progress_update(
+        deployment_id=uuid4(),
+        progress=45,
+        step="validated",
+        total_steps=7,
+        user_id=uuid4(),
+    )
+
+    broadcast.assert_awaited_once()
+    kwargs = broadcast.await_args.kwargs
+    # Contrat snake_case exact du frontend (types/websocket.ts l.33-38) :
+    # les données de progression partent dans le corps du message, le
+    # broadcast ajoute deployment_id/progress/current_step/step.
+    assert kwargs["progress"] == 45
+    assert kwargs["step"] == "validated"
+    assert kwargs["total_steps"] == 7
+
+
+async def test_emit_progress_update_payload_has_no_secrets(mocker):
+    """Payload limité à ID/étapes/progression — aucun secret (rules 40)."""
+    broadcast = mocker.patch(
+        "app.websocket.broadcasting.broadcast_deployment_progress",
+        new_callable=AsyncMock,
+    )
+    service = DeploymentEventsService(event_bus=InMemoryEventBus())
+    deployment_id = uuid4()
+
+    # Contexte sensible imaginaire autour de l'appel — seuls les champs
+    # explicites de la signature peuvent partir dans le message.
+    await service.emit_progress_update(
+        deployment_id=deployment_id,
+        progress=75,
+        step="deploying",
+        total_steps=7,
+    )
+
+    broadcast.assert_awaited_once()
+    kwargs = broadcast.await_args.kwargs
+    serialized = str(kwargs)
+    assert "password" not in serialized.lower()
+    assert "secret" not in serialized.lower()
+    assert "token" not in serialized.lower()
+    assert "api_key" not in serialized.lower()
+
+
+async def test_emit_progress_update_never_raises_on_broadcast_failure(mocker):
+    """Échec du broadcast → loggué, jamais propagé (best-effort)."""
+    mocker.patch(
+        "app.websocket.broadcasting.broadcast_deployment_progress",
+        new_callable=AsyncMock,
+        side_effect=ConnectionError("ws down"),
+    )
+    service = DeploymentEventsService(event_bus=InMemoryEventBus())
+
+    # Aucune exception — le pipeline de déploiement ne doit pas échouer
+    # pour une notification.
+    await service.emit_progress_update(
+        deployment_id=uuid4(),
+        progress=100,
+        step="completed",
+        total_steps=7,
+    )
+
+
+async def test_emit_progress_update_passes_user_id_as_string(mocker):
+    """user_id UUID → string dans le routage du broadcast."""
+    broadcast = mocker.patch(
+        "app.websocket.broadcasting.broadcast_deployment_progress",
+        new_callable=AsyncMock,
+    )
+    service = DeploymentEventsService(event_bus=InMemoryEventBus())
+    user_id = uuid4()
+
+    await service.emit_progress_update(
+        deployment_id=uuid4(),
+        progress=20,
+        step="mode_determined",
+        total_steps=9,
+        user_id=user_id,
+    )
+
+    assert broadcast.await_args.kwargs["user_id"] == str(user_id)
+    # Sans user_id → None (pas de broadcast utilisateur)
+    await service.emit_progress_update(
+        deployment_id=uuid4(),
+        progress=35,
+        step="variables_substituted",
+        total_steps=9,
+    )
+    assert broadcast.await_args.kwargs["user_id"] is None
+
+
+async def test_broadcast_deployment_progress_message_contract():
+    """Le message émis par broadcasting expose bien le contrat snake_case."""
+    from unittest.mock import AsyncMock as _AsyncMock
+    from unittest.mock import patch
+
+    from app.websocket.broadcasting import broadcast_deployment_progress
+
+    with patch(
+        "app.websocket.broadcasting._broadcast_deployment_event",
+        new_callable=_AsyncMock,
+    ) as dispatch:
+        await broadcast_deployment_progress(
+            deployment_id="dep-1",
+            progress=45,
+            step="validated",
+            total_steps=7,
+        )
+
+    dispatch.assert_awaited_once()
+    args = dispatch.await_args.args
+    payload = args[2]
+    assert payload["deployment_id"] == "dep-1"
+    assert payload["progress"] == 45
+    assert payload["current_step"] == "validated"
+    assert payload["step"] == "validated"  # compat logs internes
+    assert payload["total_steps"] == 7
+    # Plus aucun camelCase (correction sans période de compatibilité).
+    assert "deploymentId" not in payload
 
 
 async def test_payload_contains_no_secrets(spy_bus):

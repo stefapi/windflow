@@ -190,8 +190,8 @@ class DeploymentNotificationsPlugin(WebSocketPlugin):
         self.logger.info("🔌 Deployment Notifications Plugin cleaned up")
 
 
-# Register the plugin with the global plugin manager
-from ..plugin import plugin_manager
-
-deployment_notifications_plugin = DeploymentNotificationsPlugin()
-plugin_manager.register(deployment_notifications_plugin)
+# STORY-163 (T3) : plus d'auto-enregistrement à l'import — le module est
+# désormais importé par websocket/plugins/__init__.py et le plugin
+# enregistré via `default_plugins` par websocket/general.py, pattern
+# identique aux 3 autres plugins internes (sinon double register
+# « already registered, replacing »).

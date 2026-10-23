@@ -150,6 +150,64 @@ class DeploymentEventsService:
         except Exception as e:
             logger.error(f"Failed to broadcast logs update: {e}", exc_info=True)
 
+    async def emit_progress_update(
+        self,
+        deployment_id: UUID,
+        progress: int,
+        step: str,
+        total_steps: int,
+        user_id: Optional[UUID] = None,
+    ) -> None:
+        """Broadcast une mise à jour de progression directement via WebSocket.
+
+        STORY-163 (T4/AC 3) : ``DEPLOYMENT_PROGRESS`` est un type de
+        **transport WebSocket** — jamais émis sur le bus canonique
+        (avertissement WEBSOCKET-REAL-TIME §4.2 : couche transport vs
+        couche canonique), sur le modèle de ``emit_logs_update``.
+
+        Payload **snake_case** aligné sur le contrat frontend existant
+        ([``frontend/src/types/websocket.ts`` l.33-38] consommé par
+        ``handleProgress`` de ``useDeploymentWebSocket.ts``) :
+        ``deployment_id``, ``progress``, ``current_step``,
+        ``total_steps``, ``timestamp``.
+
+        Sécurité (rules 40) : payload limité à ID/étapes/progression —
+        jamais de variables de déploiement ni de secrets ; l'émission est
+        best-effort (échec de broadcast loggué, jamais propagé — le
+        pipeline de déploiement ne doit pas échouer pour une notification).
+
+        Args:
+            deployment_id: ID du déploiement.
+            progress: Progression (0-100, monotone au fil du pipeline).
+            step: Libellé explicite de l'étape courante (ex. ``deploying``).
+            total_steps: Nombre total d'étapes du chemin de déploiement.
+            user_id: ID de l'utilisateur initiateur (transmis pour
+                routage des notifications, non exposé dans le message).
+        """
+        try:
+            # Import ici pour éviter la dépendance circulaire (pattern
+            # emit_logs_update).
+            from ..websocket.broadcasting import broadcast_deployment_progress
+
+            logger.debug(
+                "📡 Broadcasting progress via WebSocket: %s (%s%% — %s)",
+                deployment_id,
+                progress,
+                step,
+            )
+
+            await broadcast_deployment_progress(
+                deployment_id=str(deployment_id),
+                progress=progress,
+                step=step,
+                total_steps=total_steps,
+                user_id=str(user_id) if user_id else None,
+            )
+
+        except Exception as e:
+            # Best-effort : jamais de remontée au pipeline de déploiement.
+            logger.error(f"Failed to broadcast progress update: {e}", exc_info=True)
+
 
 # Singleton instance with lazy initialization to avoid circular imports
 _deployment_events_instance: Optional[DeploymentEventsService] = None

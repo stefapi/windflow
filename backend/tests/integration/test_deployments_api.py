@@ -156,6 +156,78 @@ class TestDeploymentsAPI:
         )
         assert response.status_code == 422
 
+    async def test_deployment_cycle_emits_progress_messages(
+        self,
+        db_session,
+        test_session_factory,
+        test_organization,
+        test_stack: Stack,
+        test_target: Target,
+    ):
+        """STORY-163 (AC 3) : un cycle de déploiement réel (DB de test,
+        Docker mocké) produit des messages DEPLOYMENT_PROGRESS via
+        emit_progress_update — espion sur toute la durée du cycle."""
+        from unittest.mock import MagicMock
+
+        from app.enums.target import TargetType
+        from app.models.deployment import Deployment, DeploymentStatus
+        from app.tasks.background_tasks import deploy_stack_async
+
+        # Déploiement réel en base (statut initial), stack docker réelle.
+        test_stack.target_type = TargetType.DOCKER.value
+        await db_session.flush()
+
+        deployment = Deployment(
+            name="progress-integration",
+            stack_id=test_stack.id,
+            target_id=test_target.id,
+            organization_id=test_organization.id,
+            status=DeploymentStatus.PENDING,
+            config={},
+            variables={},
+        )
+        db_session.add(deployment)
+        # Commit : le pipeline ouvre ses propres sessions (factory), la
+        # ligne doit être visible hors de la transaction courante.
+        await db_session.commit()
+
+        # Espion progress + Docker mocké (aucun daemon requis).
+        progress_calls: list[dict] = []
+
+        async def _spy_progress(**kwargs):
+            progress_calls.append(kwargs)
+
+        docker_service = MagicMock()
+        docker_service.substitute_variables.return_value = {}
+        docker_service.validate_container_config.return_value = (True, "")
+        docker_service.deploy_container = AsyncMock(return_value=(True, "cid"))
+
+        with patch(
+            "app.database.AsyncSessionLocal", new=test_session_factory
+        ), patch(
+            "app.services.docker_service.DockerService", return_value=docker_service
+        ), patch(
+            "app.services.deployment_events.get_deployment_events",
+            return_value=MagicMock(emit_progress_update=_spy_progress),
+        ):
+            result = await deploy_stack_async(
+                deployment_id=deployment.id,
+                stack_id=test_stack.id,
+                target_id=test_target.id,
+                user_id="integration-user",
+                configuration={},
+            )
+
+        assert result["status"] == "success"
+        # AC 3 bout-en-bout : messages DEPLOYMENT_PROGRESS produits
+        # pendant le cycle, séquence monotone jusqu'à 100.
+        progresses = [c["progress"] for c in progress_calls]
+        assert progresses, "aucun DEPLOYMENT_PROGRESS émis pendant le cycle"
+        assert progresses == sorted(progresses)
+        assert progresses[-1] == 100
+        steps = [c["step"] for c in progress_calls]
+        assert "starting" in steps and "completed" in steps
+
     async def test_delete_deployment(
         self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Target
     ):
