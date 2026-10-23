@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **BUG-003 — `POST /api/v1/docker/containers` renvoyait systématiquement 500** : le décorateur déclarait `response_model=ContainerResponse` alors que le handler retourne un `ContainerDetailResponse` → `ResponseValidationError` après création effective du conteneur côté Docker (échec perçu alors que le conteneur existait). Correction : `response_model=ContainerDetailResponse` déclaré (aligné sur `GET /containers/{id}` et le typage frontend `ContainerDetail`), handler inchangé ; contrat OpenAPI corrigé. Les contournements de tests (mutation `route.response_model = None`, appel direct du handler) sont retirés — le chemin nominal 201 est désormais couvert par les tests avec la validation FastAPI active (`test_container_create.py`, `test_docker_rbac.py::test_admin_200_create_container`) + test de contrat par introspection de route.
 - `DELETE /api/v1/stacks/{id}` renvoyait 500 (`AttributeError`) : `StackService.delete()` était appelée mais n'existait pas — méthode ajoutée (pattern `TargetService.delete`), `type: ignore` masqueur retiré.
 - `DeploymentService.update_status` levait `TypeError` (soustraction naive/aware) sur toute transition RUNNING → FAILED/STOPPED avec `deployed_at` défini : `stopped_at` et le calcul de durée passés en naïf UTC cohérent avec les colonnes DateTime SQLite.
 

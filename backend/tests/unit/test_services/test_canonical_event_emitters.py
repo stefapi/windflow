@@ -28,7 +28,6 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.jwt import create_access_token
@@ -140,13 +139,11 @@ def _docker_client_mock() -> AsyncMock:
 async def test_create_container_emits_container_created(spy_bus):
     """create_container (fonction endpoint réelle) → container.created.
 
-    Divergence notée : le POST HTTP complet n'est pas exercé ici — le
-    ``response_model`` du endpoint (``ContainerResponse`` vs objet
-    ``ContainerDetailResponse`` retourné) échoue à la validation finale
-    avec un client Docker mocké standard ; bug latent **préexistant**
-    hors périmètre de cette story (jamais couvert par les tests actuels,
-    uniquement des 403 RBAC). L'appel direct de la fonction teste bien
-    l'émetteur réel (T6).
+    Appel direct de la fonction endpoint : le périmètre de ce test est
+    l'émission d'event (T6), pas le chemin HTTP — désormais couvert par
+    ``test_container_create.py`` et ``test_docker_rbac.py`` depuis la
+    correction BUG-003 (``response_model=ContainerDetailResponse``,
+    contrat aligné sur l'objet réellement retourné).
     """
     from types import SimpleNamespace
 

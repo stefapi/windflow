@@ -334,23 +334,17 @@ class TestAdminMatrix:
     async def test_admin_200_create_container(
         self, client: AsyncClient, db_session: AsyncSession
     ):
-        """Gestion : POST /docker/containers avec admin → 201.
+        """Gestion : POST /docker/containers avec admin → 201 (chemin HTTP réel).
 
-        Note : response_model mismatch pré-existant (ContainerResponse vs
-        ContainerDetailResponse retourné — cf. test_container_create.py).
-        La mutation doit être posée sur le router source **avant** montage
-        (include_router clone les routes) : mini-app dédiée, chaîne d'auth
-        réelle préservée (JWT → require_admin → AuthorizationService sur
-        la session de test).
+        BUG-003 : plus de contournement (mini-app + mutation
+        ``response_model = None``) — le contrat déclaré est désormais
+        ``ContainerDetailResponse``, cohérent avec l'objet construit par
+        le handler ; la validation de réponse FastAPI passe sur le chemin
+        nominal. Chaîne d'auth réelle préservée (JWT → require_admin →
+        AuthorizationService sur la session de test) ; réponse 201 lue via
+        l'enveloppe spec 09 (``body["data"]``).
         """
         from unittest.mock import AsyncMock, MagicMock, patch
-
-        from fastapi import FastAPI
-        from fastapi.routing import APIRoute
-        from httpx import ASGITransport
-
-        from app.api.v1.docker import router as docker_router
-        from app.database import get_db
 
         user = await _create_user_with_role(db_session, "adm-create", Role.ADMIN)
 
@@ -372,36 +366,16 @@ class TestAdminMatrix:
         docker.get_container.return_value = container
         docker.close = AsyncMock()
 
-        route = next(
-            r
-            for r in docker_router.routes
-            if isinstance(r, APIRoute)
-            and r.path == "/containers"
-            and "POST" in r.methods
-        )
-        saved_model = route.response_model
-        route.response_model = None
+        with patch("app.api.v1.docker.get_docker_client", return_value=docker):
+            response = await client.post(
+                "/api/v1/docker/containers",
+                json={"name": "created", "image": "nginx:latest"},
+                headers=_auth_headers(user),
+            )
 
-        async def _override_db():
-            yield db_session
-
-        mini_app = FastAPI()
-        mini_app.dependency_overrides[get_db] = _override_db
-        mini_app.include_router(docker_router, prefix="/api/v1/docker")
-        try:
-            with patch("app.api.v1.docker.get_docker_client", return_value=docker):
-                async with AsyncClient(
-                    transport=ASGITransport(app=mini_app), base_url="http://test"
-                ) as mini_client:
-                    response = await mini_client.post(
-                        "/api/v1/docker/containers",
-                        json={"name": "created", "image": "nginx:latest"},
-                        headers=_auth_headers(user),
-                    )
-        finally:
-            route.response_model = saved_model
-
-        assert response.status_code == 201
+        assert response.status_code == 201, response.text
+        # Enveloppe spec 09 : charge utile dans body["data"]
+        assert response.json()["data"]["id"] == "abc123def456"
         docker.create_container.assert_awaited_once()
 
     async def test_admin_200_delete_container(

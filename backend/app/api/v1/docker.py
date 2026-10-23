@@ -261,7 +261,7 @@ async def get_container(
 
 @router.post(
     "/containers",
-    response_model=ContainerResponse,
+    response_model=ContainerDetailResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create container",
     description="""

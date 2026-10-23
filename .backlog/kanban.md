@@ -19,8 +19,6 @@
 
 ### Divers (sans epic)
 
-- [ ] BUG-003 : `POST /docker/containers` — `response_model=ContainerResponse` inadéquat (handler retourne `ContainerDetailResponse` → 500)
-
 ### EPIC-014 : P3 — Finitions & purge (remédiation backend)
 - [ ] STORY-250 : Purge du code mort et résidus + dépréciation `/auth/me` — permissions legacy, croniter conditionnel, abstractions, stub workflows, litellm orphelin, print debug, HealthCheck (P3-1 + P3-3)
 - [ ] STORY-251 : CircuitBreaker — câbler sur les appels externes ou supprimer le module (P3-2)
@@ -44,6 +42,7 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] BUG-003 : `POST /docker/containers` — `response_model=ContainerResponse` inadéquat → 500 systématique sur création  # divers (sans epic) — corrigé (response_model=ContainerDetailResponse), 32 tests ciblés verts
 - [x] STORY-162 : Bus d'événements canonique — interface unique, nomenclature spec, in-memory + Redis Pub/Sub optionnel (P2-2, partie bus — F6) (EPIC-013)
 - [x] STORY-161 : Table `scheduled_task_executions` — historique des exécutions, endpoints de consultation paginés, run manuel 202, rétention (P2-1, partie traçabilité) (EPIC-013)
 - [x] STORY-160.3 : Actions core réelles et triggers événement — handlers `host.scan`/`compute.docker.prune` (dry-run défaut, liste protégée, audit), stubs tracés, triggers EventBus via le chemin moteur (P2-1, partie exécution — STORY-160 découpée) (EPIC-013)

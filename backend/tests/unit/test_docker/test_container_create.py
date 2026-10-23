@@ -6,8 +6,8 @@ Teste la création réussie, la validation et les cas d'erreur.
 
 Notes :
 - L'endpoint est sécurisé avec get_current_active_user (STORY-032).
-- L'endpoint a un response_model=ContainerResponse mais retourne ContainerDetailResponse
-  (bug pré-existant). Les tests contournent cette validation pour tester la logique métier.
+- L'endpoint déclare response_model=ContainerDetailResponse (BUG-003) :
+  les tests valident la réponse avec la validation FastAPI active.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -22,6 +22,7 @@ from app.auth.dependencies import get_current_active_user
 from app.auth.rbac import require_admin, require_operator, require_viewer
 from app.core.exceptions import WindFlowException
 from app.middleware.error_handler import windflow_exception_handler
+from app.schemas.docker import ContainerDetailResponse
 
 
 def _make_mock_user():
@@ -146,20 +147,12 @@ class TestContainerCreateEndpoint:
 
     @pytest.fixture
     def app(self):
-        """Crée une application FastAPI de test avec response_model désactivé.
+        """Crée une application FastAPI de test (validation de réponse active).
 
-        Note : L'endpoint a response_model=ContainerResponse mais retourne
-        ContainerDetailResponse (bug pré-existant). On désactive la validation
-        de réponse pour tester la logique métier.
+        BUG-003 : le response_model du POST /containers est désormais
+        ContainerDetailResponse, cohérent avec l'objet retourné par le
+        handler — plus de contournement, la réponse est validée par FastAPI.
         """
-        # Désactiver la validation de réponse AVANT d'inclure le router
-        # pour contourner le mismatch response_model=ContainerResponse
-        # vs retour ContainerDetailResponse (bug pré-existant)
-        for route in router.routes:
-            if hasattr(route, "path") and route.path == "/containers":
-                if hasattr(route, "methods") and "POST" in route.methods:
-                    route.response_model = None
-
         app = FastAPI()
         # STORY-127 : exceptions typées → handler global requis
         app.add_exception_handler(WindFlowException, windflow_exception_handler)
@@ -171,9 +164,31 @@ class TestContainerCreateEndpoint:
             app.dependency_overrides[_rbac_dep] = lambda: _make_mock_user()
         return app
 
+    def test_create_container_route_declares_detail_response_model(self):
+        """Contrat (BUG-003) : le POST /containers déclare le bon response_model.
+
+        Non-régression directe : le route doit déclarer
+        ``ContainerDetailResponse`` (aligné sur l'objet construit par le
+        handler), sinon FastAPI lève ``ResponseValidationError`` → 500.
+        """
+        route = next(
+            r
+            for r in router.routes
+            if hasattr(r, "path")
+            and r.path == "/containers"
+            and hasattr(r, "methods")
+            and "POST" in r.methods
+        )
+        assert route.response_model is ContainerDetailResponse
+
     @pytest.mark.asyncio
     async def test_create_container_returns_201_authenticated(self, app):
-        """Cas nominal : création réussie retourne 201."""
+        """Cas nominal : création réussie retourne 201 (forme détaillée).
+
+        BUG-003 : validation FastAPI active — la réponse doit passer le
+        ``response_model=ContainerDetailResponse`` et exposée la forme
+        détaillée (state, config, host_config, network_settings, mounts).
+        """
         mock_container = _make_mock_container()
 
         mock_client = AsyncMock()
@@ -200,6 +215,12 @@ class TestContainerCreateEndpoint:
         data = response.json()
         assert data["name"] == "test-container"
         assert data["id"] == "abc123def456"
+        # Forme ContainerDetailResponse (BUG-003) — validation active
+        assert data["state"]["status"] == "created"
+        assert data["config"]["image"] == "nginx:latest"
+        assert "host_config" in data
+        assert "network_settings" in data
+        assert data["mounts"] == []
 
     @pytest.mark.asyncio
     async def test_create_container_returns_401_without_token(self, app):
