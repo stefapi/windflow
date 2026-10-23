@@ -1,6 +1,6 @@
 # EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
 
-**Statut :** TODO
+**Statut :** IN_PROGRESS
 **Priorité :** Moyenne
 
 ## Vision
@@ -66,7 +66,9 @@ Chaque item P2 du plan de remédiation est couvert par une story de la plage STO
 
 ## Liste des Stories liées
 
-- [ ] STORY-160 : Moteur d'exécution du scheduler — boucle asyncio, registre d'actions, triggers cron/événement, verrous, fuseaux IANA (P2-1, partie moteur)
+- [x] STORY-160.1 : Modèle ScheduledTask spec 17, registre d'actions et API `/schedules` v2 (P2-1, partie définition — STORY-160 découpée)
+- [x] STORY-160.2 : Moteur runtime asyncio — boucle lifespan, verrous, timeout, orphelins, fuseaux IANA, contrat `ExecutionStore` (P2-1, partie moteur — STORY-160 découpée)
+- [x] STORY-160.3 : Actions core réelles et triggers événement (P2-1, partie exécution — STORY-160 découpée)
 - [ ] STORY-161 : Table `scheduled_task_executions` — historique des exécutions, endpoints de consultation, rétention (P2-1, partie traçabilité)
 - [ ] STORY-162 : Bus d'événements canonique — interface unique, nomenclature spec, in-memory + Redis Pub/Sub optionnel (P2-2, partie bus — F6)
 - [ ] STORY-163 : Consommateurs plugins du bus — hooks `@on_event`, `deployment_notifications` enregistré, `DEPLOYMENT_PROGRESS` émis (P2-2, partie consommateurs)
@@ -84,7 +86,8 @@ Chaque item P2 du plan de remédiation est couvert par une story de la plage STO
 
 ## Notes de conception
 
-- **Plage de numéros réservée** : STORY-160 à STORY-199 (seules 160-174 sont affectées ; 175-199 disponibles pour sous-découpes — ex. STORY-160/166/169 XL et STORY-162/164/170/174 L — et pour la matérialisation éventuelle de P2-15, cf. traçabilité ci-dessus).
+- **Plage de numéros réservée** : STORY-160 à STORY-199 (seules 160-174 sont affectées ; 175-199 disponibles pour sous-découpes — ex. STORY-166/169 XL et STORY-162/164/170/174 L — et pour la matérialisation éventuelle de P2-15, cf. traçabilité ci-dessus).
+- ✂️ **STORY-160 découpée (2026-10-21)** : `split-story` proactif post-analyse (complexité XL — 4 domaines peu couplés) → **STORY-160.1** (modèle spec 17 + registre d'actions + API `/schedules` v2), **STORY-160.2** (moteur runtime asyncio), **STORY-160.3** (actions core + triggers événement), suffixes `.1/.2/.3` pattern STORY-131 ; la mère est `ABANDONED` ([STORY-160](../stories/STORY-160-moteur-scheduler-asyncio.md)) et le critère de done « P2-1 (STORY-160/161) » se vérifie désormais sur 160.1→160.3 + 161.
 - Source principale : [`docs/backend_remediation_plan.md`](../../docs/backend_remediation_plan.md) §4 « Vague P2 », axes A8, A9, A14, A15, A16/F3, B4, B5, B7, B8, B9, C3-C11, C13, C14, D1-D5, F4 (étape 2), F6, F7.
 - Arbitrages concernés : **F4** (modèle directeur phasé — étape 2 ici ; `Apps`/`Machines`/`Clusters` = Roadmap Phase 2, noté dans STORY-166), **F6** (bus — interface + 2 implémentations, STORY-162), **F3** (incorporation HORS SPEC, STORY-166/173), **F1** (purge Celery déjà traitée en STORY-130.2 — le scheduler assume asyncio, STORY-160), **F7** (WorkloadAdapter, STORY-174).
 - Hors périmètre explicitement rappelé dans les stories : console VNC et canal `batch` lié aux Machines (Roadmap VMs — `/ws/batch` livré car lié aux opérations groupées Apps), check-updates et graph complet (Roadmap Phase 5), GitOps (plugin Git), Redis Streams replay, adapters K8s/VM, étape 3 du modèle directeur.

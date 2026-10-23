@@ -35,6 +35,10 @@ fastapi-limiter = {version = "^0.1.6", python = ">=3.11,<4.0"}
 redis = "^5.0.0"
 alembic = "^1.13.0"
 asyncpg = "^0.30.0"
+# STORY-160.1 (E3) : croniter vendored (app/helper/croniter.py) importe
+# dateutil.relativedelta/dateutil.tz — dépendance directe explicite
+# (déjà résolue transitiivement en 2.9.0.post0, déclarée pour la fiabilité).
+python-dateutil = "^2.9.0"
 
 [tool.poetry.group.dev]
 optional = true

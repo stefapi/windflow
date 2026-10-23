@@ -9,7 +9,7 @@ import json
 import logging
 from typing import List, Optional, Union
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -77,6 +77,79 @@ class Settings(BaseSettings):
         description="Interval (hours) between audit log purge runs "
         "(background lifespan job).",
     )
+
+    # === Scheduler (STORY-160.1 — défauts de définition spec 17) ===
+    # Fuseau IANA par défaut des définitions sans timezone explicite
+    # (None = stocké NULL, résolu au runtime par le moteur). Env var :
+    # SCHEDULER_DEFAULT_TIMEZONE.
+    scheduler_default_timezone: Optional[str] = Field(
+        default=None,
+        description="Default IANA timezone for scheduled task definitions "
+        "without explicit timezone (None = resolved at runtime; e.g. "
+        "'Europe/Paris').",
+    )
+    # Politique d'erreur par défaut des définitions : ignore | retry |
+    # disable (spec 17 § Scheduler core). Env var :
+    # SCHEDULER_DEFAULT_ERROR_POLICY.
+    scheduler_default_error_policy: str = Field(
+        default="ignore",
+        description="Default error policy for scheduled tasks "
+        "(ignore | retry | disable, spec 17).",
+    )
+
+    # === Scheduler runtime (STORY-160.2 — moteur asyncio au lifespan,
+    # arbitrage F1 : single-worker par défaut). Env var : SCHEDULER_ENABLED. ===
+    # ⚠ Limite multi-workers : le verrou anti-chevauchement est en mémoire
+    # process-local — avec uvicorn --workers > 1, chaque worker aurait sa
+    # propre boucle et ses propres verrous (exécutions dupliquées possibles).
+    # Le déploiement supporté est single-worker (default), cf. doc.
+    scheduler_enabled: bool = Field(
+        default=False,
+        description="Start the scheduler engine loop at lifespan "
+        "(single-worker only — in-memory anti-overlap lock, arbitrage F1).",
+    )
+    # Intervalle du tick (~30-60 s : granularité cron = minute). Env var :
+    # SCHEDULER_TICK_SECONDS.
+    scheduler_tick_seconds: int = Field(
+        default=30,
+        ge=1,
+        le=3600,
+        description="Interval (seconds) between scheduler engine ticks "
+        "(cron granularity is the minute).",
+    )
+    # Timeout par exécution (défaut 10 min, spec 17 § Bonnes pratiques).
+    # Env var : SCHEDULER_TASK_TIMEOUT_SECONDS.
+    scheduler_task_timeout_seconds: int = Field(
+        default=600,
+        ge=1,
+        description="Per-execution timeout (seconds) — asyncio.wait_for, "
+        "the engine loop never dies (spec 17: 10 min).",
+    )
+    # Retentes retry max (backoff). Env var : SCHEDULER_RETRY_BACKOFF.
+    scheduler_retry_backoff: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="Max retries (with backoff) for error_policy='retry' "
+        "definitions.",
+    )
+
+    @field_validator("scheduler_default_timezone")
+    @classmethod
+    def _validate_default_timezone(cls, value: Optional[str]) -> Optional[str]:
+        """Valide le fuseau IANA par défaut au chargement (défense en
+        profondeur — la validation par définition est déjà en place 160.1)."""
+        if value is None:
+            return None
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(
+                f"scheduler_default_timezone: unknown IANA timezone {value!r}"
+            ) from exc
+        return value
 
     # Clé maîtresse de chiffrement des secrets au repos (STORY-103.1)
     # Optionnelle : si vide, la clé maîtresse dérive de jwt_secret_key

@@ -64,6 +64,80 @@ def _drop_targets_ssh_key_id(db_path: Path) -> None:
         engine.dispose()
 
 
+def _restore_legacy_scheduled_tasks(db_path: Path) -> None:
+    """STORY-160.1 : ramène ``scheduled_tasks`` à son état pré-1321 sur
+    une base create_all (modèles courants — colonnes spec 17 déjà
+    posées, plus d'enum ``task_type``).
+
+    Retire les 5 colonnes v2 (rebuild batch) puis recrée ``task_type``
+    VARCHAR(20) NOT NULL DEFAULT 'CUSTOM' (fidèle à la baseline ; le
+    CHECK enum est omis — la migration 1321 lit la valeur brute).
+    """
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn)
+            operations = Operations(ctx)
+            with operations.batch_alter_table("scheduled_tasks") as batch_op:
+                for column in (
+                    "action",
+                    "trigger_type",
+                    "event_name",
+                    "timezone",
+                    "error_policy",
+                ):
+                    batch_op.drop_column(column)
+            conn.execute(
+                text(
+                    "ALTER TABLE scheduled_tasks ADD COLUMN task_type "
+                    "VARCHAR(20) NOT NULL DEFAULT 'CUSTOM'"
+                )
+            )
+            conn.commit()
+    finally:
+        engine.dispose()
+
+
+def _restore_legacy_scheduled_tasks(db_path: Path) -> None:
+    """STORY-160.1 : ramène ``scheduled_tasks`` à son état pré-1321 sur
+    une base create_all (modèles courants — colonnes spec 17 déjà
+    posées, plus d'enum ``task_type``).
+
+    Retire les 5 colonnes v2 (rebuild batch) puis recrée ``task_type``
+    VARCHAR(20) NOT NULL DEFAULT 'CUSTOM' (fidèle à la baseline ; le
+    CHECK enum est omis — la migration 1321 lit la valeur brute).
+    """
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn)
+            operations = Operations(ctx)
+            with operations.batch_alter_table("scheduled_tasks") as batch_op:
+                for column in (
+                    "action",
+                    "trigger_type",
+                    "event_name",
+                    "timezone",
+                    "error_policy",
+                ):
+                    batch_op.drop_column(column)
+            conn.execute(
+                text(
+                    "ALTER TABLE scheduled_tasks ADD COLUMN task_type "
+                    "VARCHAR(20) NOT NULL DEFAULT 'CUSTOM'"
+                )
+            )
+            conn.commit()
+    finally:
+        engine.dispose()
+
+
 def _alembic_version(db_path: Path) -> str | None:
     """Lit la révision courante dans la table ``alembic_version``."""
     engine = create_engine(f"sqlite:///{db_path}")
@@ -146,6 +220,9 @@ class TestRunMigrationsExistingUnversionedDb:
         # ssh_keys existe).
         legacy_engine.dispose()
         _drop_targets_ssh_key_id(db_path)
+        # STORY-160.1 : scheduled_tasks à l'état pré-1321 (sinon
+        # duplicate column lors de l'upgrade 1321).
+        _restore_legacy_scheduled_tasks(db_path)
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         with legacy_engine.begin() as conn:
             conn.execute(text("DROP TABLE user_organizations"))

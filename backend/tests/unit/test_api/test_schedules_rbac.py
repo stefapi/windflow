@@ -22,17 +22,20 @@ from app.auth.jwt import create_access_token
 from app.core.cache import reset_role_cache
 from app.enums.rbac import Role
 from app.models.organization import Organization
-from app.models.scheduled_task import ScheduledTask, TaskType
+from app.models.scheduled_task import ScheduledTask
 from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
 
+# STORY-160.1 : contrat v2 — task_type (enum fermé retiré par la
+# migration 1321) remplacé par action du registre + champs spec 17.
 TASK_PAYLOAD_BASE: dict = {
-    "name": "rbac-cleanup",
-    "task_type": "cleanup_logs",
+    "name": "rbac-scan",
+    "action": "host.scan",
+    "trigger_type": "cron",
     "cron_expression": "0 3 * * *",
-    "parameters": {},
+    "parameters": {"target_id": "tgt-rbac"},
     "enabled": True,
 }
 
@@ -78,9 +81,10 @@ async def _seed_task(
     """Insère une tâche planifiée dans l'organisation donnée."""
     task = ScheduledTask(
         name="seed-task",
-        task_type=TaskType.CLEANUP_LOGS,
+        action="host.scan",
+        trigger_type="cron",
         cron_expression="0 3 * * *",
-        parameters={},
+        parameters={"target_id": "tgt-rbac"},
         enabled=enabled,
         organization_id=org.id,
     )

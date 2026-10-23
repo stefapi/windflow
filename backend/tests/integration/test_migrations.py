@@ -15,6 +15,11 @@ Scénarios couverts (AC 3/AC 4 de STORY-120) :
 6. STORY-121.1 : migration additive ``user_organizations`` — structure
    (colonnes, PK composite, FK CASCADE, index, défaut serveur ``viewer``)
    sur base vierge **et** sur base legacy stampée baseline.
+7. STORY-160.1 : migration d'évolution ``1321`` — colonnes spec 17 de
+   ``scheduled_tasks`` (action/trigger_type/event_name/timezone/
+   error_policy) + **mapping défensif** des ``task_type`` legacy
+   (lignes gelées ``legacy.*``, désactivées et journalisées — aucune
+   perte silencieuse) + downgrade reverse-mapping.
 
 La génération ``make migrate`` (autogenerate) est validée manuellement sur
 un changement de modèle factice reverté ensuite (AC 3) — hors pytest car
@@ -211,6 +216,44 @@ def _drop_targets_ssh_key_id(db_path: Path) -> None:
         engine.dispose()
 
 
+def _restore_legacy_scheduled_tasks(db_path: Path) -> None:
+    """STORY-160.1 : ramène ``scheduled_tasks`` à son état pré-1321 sur
+    une base create_all (modèles courants — qui posent déjà les colonnes
+    spec 17 et plus l'enum ``task_type``).
+
+    Retire les 5 colonnes v2 (rebuild batch, pattern
+    ``_drop_targets_ssh_key_id``) puis recrée ``task_type`` VARCHAR(20)
+    NOT NULL DEFAULT 'CUSTOM' (fidèle à la baseline, CHECK enum omis —
+    la migration 1321 lit la valeur brute).
+    """
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn)
+            operations = Operations(ctx)
+            with operations.batch_alter_table("scheduled_tasks") as batch_op:
+                for column in (
+                    "action",
+                    "trigger_type",
+                    "event_name",
+                    "timezone",
+                    "error_policy",
+                ):
+                    batch_op.drop_column(column)
+            conn.execute(
+                text(
+                    "ALTER TABLE scheduled_tasks ADD COLUMN task_type "
+                    "VARCHAR(20) NOT NULL DEFAULT 'CUSTOM'"
+                )
+            )
+            conn.commit()
+    finally:
+        engine.dispose()
+
+
 class TestExistingDbStampedThenStartupNoDiff:
     """test_existing_db_stamped_then_startup_has_no_diff."""
 
@@ -239,6 +282,9 @@ class TestExistingDbStampedThenStartupNoDiff:
         # batch ; SQLite refuse DROP COLUMN sur colonne FK inline).
         legacy_engine.dispose()
         _drop_targets_ssh_key_id(db_path)
+        # STORY-160.1 : la migration d'évolution 1321 ajoute les colonnes
+        # spec 17 — l'état legacy simulé ne doit pas déjà les porter.
+        _restore_legacy_scheduled_tasks(db_path)
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         with legacy_engine.begin() as conn:
             for table in sorted(ADDITIVE_TABLES):
@@ -427,6 +473,10 @@ class TestUserOrganizationsTableMigration:
                 )
             )
         legacy_engine.dispose()
+
+        # STORY-160.1 : scheduled_tasks retourne à l'état pré-1321 avant
+        # le stamp baseline (sinon duplicate column lors du upgrade).
+        _restore_legacy_scheduled_tasks(db_path)
 
         # STORY-121.3 : simuler la colonne héritée (base pré-121.3)
         _add_legacy_users_org_column(db_path)
@@ -627,6 +677,9 @@ class TestUsersOrgMigrationData:
         # ssh_keys (FK résolvable pendant le rebuild batch).
         legacy_engine.dispose()
         _drop_targets_ssh_key_id(db_path)
+        # STORY-160.1 : scheduled_tasks à l'état pré-1321 (task_type +
+        # sans colonnes spec 17) avant le stamp baseline.
+        _restore_legacy_scheduled_tasks(db_path)
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         with legacy_engine.begin() as conn:
             for table in sorted(ADDITIVE_TABLES):
@@ -867,6 +920,177 @@ class TestUsersOrgMigrationData:
         finally:
             engine.dispose()
         assert name == "legacy-stack", "données préexistantes altérées"
+
+
+class TestScheduledTasksSpec17Migration:
+    """STORY-160.1 — migration d'évolution ``1321`` : colonnes spec 17
+    sur ``scheduled_tasks``, mapping défensif des ``task_type`` legacy
+    (gel ``legacy.*`` + désactivation journalisée, aucune perte
+    silencieuse), downgrade reverse-mapping."""
+
+    _PREVIOUS = "1311_ssh_keys"
+
+    @staticmethod
+    def _columns(engine: Engine, table: str) -> set[str]:
+        return {col["name"] for col in inspect(engine).get_columns(table)}
+
+    def test_fresh_db_upgrade_adds_spec17_columns(self, tmp_path: Path) -> None:
+        """Base vierge → upgrade head → les 5 colonnes spec 17 présentes,
+        ``task_type`` absent."""
+        engine = _upgraded_engine(tmp_path, "fresh-1321.db")
+        try:
+            columns = self._columns(engine, "scheduled_tasks")
+        finally:
+            engine.dispose()
+        assert {
+            "action",
+            "trigger_type",
+            "event_name",
+            "timezone",
+            "error_policy",
+        } <= columns
+        assert "task_type" not in columns
+
+    def test_spec17_defaults_on_fresh_schema(self, tmp_path: Path) -> None:
+        """Défauts serveur : trigger_type='cron', error_policy='ignore'."""
+        db_path = tmp_path / "defaults-1321.db"
+        db_url = f"sqlite+aiosqlite:///{db_path}"
+        assert _run_alembic("upgrade", "head", db_url=db_url).returncode == 0
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            columns = {
+                col["name"]: col
+                for col in inspect(engine).get_columns("scheduled_tasks")
+            }
+        finally:
+            engine.dispose()
+        trigger_default = columns["trigger_type"]["default"]
+        policy_default = columns["error_policy"]["default"]
+        assert trigger_default is not None and trigger_default.strip("'\"") == "cron"
+        assert policy_default is not None and policy_default.strip("'\"") == "ignore"
+
+    @staticmethod
+    def _seed_legacy_scheduled_tasks(db_path: Path) -> None:
+        """Base legacy pré-1321 : create_all + restauration pré-1321 de
+        ``scheduled_tasks`` + organisations et tâches legacy (2 types)."""
+        legacy_engine = create_engine(f"sqlite:///{db_path}")
+        Base.metadata.create_all(legacy_engine)
+        legacy_engine.dispose()
+        _drop_targets_ssh_key_id(db_path)
+        _restore_legacy_scheduled_tasks(db_path)
+        engine = create_engine(f"sqlite:///{db_path}")
+        with engine.begin() as conn:
+            for table in sorted(ADDITIVE_TABLES):
+                conn.execute(text(f"DROP TABLE {table}"))
+        engine.dispose()
+        # 1213 lit users.organization_id (colonne héritée pré-121.3).
+        _add_legacy_users_org_column(db_path)
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "INSERT INTO organizations "
+                        "(id, name, slug, settings, created_at, updated_at) "
+                        "VALUES ('org-x', 'Org X', 'org-x', '{}', "
+                        "'2026-01-01 00:00:00', '2026-01-01 00:00:00')"
+                    )
+                )
+                for task_id, name, task_type, enabled in (
+                    ("task-clean", "cleanup", "CLEANUP_LOGS", 1),
+                    ("task-custom", "custom", "CUSTOM", 1),
+                ):
+                    conn.execute(
+                        text(
+                            "INSERT INTO scheduled_tasks "
+                            "(id, name, task_type, cron_expression, parameters, "
+                            "enabled, run_count, organization_id, created_at, "
+                            "updated_at) VALUES (:id, :name, :tt, '0 3 * * *', "
+                            "'{}', :en, 0, 'org-x', "
+                            "'2026-01-01 00:00:00', '2026-01-01 00:00:00')"
+                        ),
+                        {
+                            "id": task_id,
+                            "name": name,
+                            "tt": task_type,
+                            "en": enabled,
+                        },
+                    )
+        finally:
+            engine.dispose()
+
+    def test_defensive_mapping_gels_and_disables_legacy_rows(
+        self, tmp_path: Path
+    ) -> None:
+        """Mapping défensif (AC 3) : chaque ligne legacy reçoit une clé
+        gelée ``legacy.<type>`` **hors registre** et ``enabled=false`` —
+        aucune perte silencieuse, aucune exécution non validée."""
+        db_path = tmp_path / "mapping-1321.db"
+        db_url = f"sqlite+aiosqlite:///{db_path}"
+        self._seed_legacy_scheduled_tasks(db_path)
+
+        stamp = _run_alembic("stamp", "baseline", db_url=db_url)
+        assert stamp.returncode == 0, stamp.stderr
+        upgrade = _run_alembic("upgrade", "head", db_url=db_url)
+        assert upgrade.returncode == 0, (
+            f"upgrade head a échoué :\nstdout={upgrade.stdout}\n"
+            f"stderr={upgrade.stderr}"
+        )
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                rows = conn.exec_driver_sql(
+                    "SELECT id, action, enabled FROM scheduled_tasks ORDER BY id"
+                ).fetchall()
+                columns = self._columns(engine, "scheduled_tasks")
+        finally:
+            engine.dispose()
+
+        by_id = {row[0]: (row[1], row[2]) for row in rows}
+        assert by_id["task-clean"] == ("legacy.cleanup_logs", 0)
+        assert by_id["task-custom"] == ("legacy.custom", 0)
+        assert "task_type" not in columns
+
+    def test_downgrade_reverse_maps_and_roundtrip(self, tmp_path: Path) -> None:
+        """Downgrade : ``legacy.*`` → enum d'origine (CUSTOM sinon), puis
+        re-upgrade — round-trip sans perte de lignes."""
+        db_path = tmp_path / "roundtrip-1321.db"
+        db_url = f"sqlite+aiosqlite:///{db_path}"
+        self._seed_legacy_scheduled_tasks(db_path)
+        assert _run_alembic("stamp", "baseline", db_url=db_url).returncode == 0
+        assert _run_alembic("upgrade", "head", db_url=db_url).returncode == 0
+
+        down = _run_alembic("downgrade", self._PREVIOUS, db_url=db_url)
+        assert down.returncode == 0, down.stderr
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                rows = conn.exec_driver_sql(
+                    "SELECT id, task_type FROM scheduled_tasks ORDER BY id"
+                ).fetchall()
+                columns = self._columns(engine, "scheduled_tasks")
+        finally:
+            engine.dispose()
+        by_id = dict(rows)
+        assert by_id["task-clean"] == "CLEANUP_LOGS"
+        assert by_id["task-custom"] == "CUSTOM"
+        assert "action" not in columns
+        assert "task_type" in columns
+
+        # Re-upgrade : les lignes sont regelées/désactivées (mapping
+        # défensif idempotent — aucune perte).
+        up = _run_alembic("upgrade", "head", db_url=db_url)
+        assert up.returncode == 0, up.stderr
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                count = conn.execute(
+                    text("SELECT COUNT(*) FROM scheduled_tasks")
+                ).scalar_one()
+        finally:
+            engine.dispose()
+        assert count == 2, "round-trip ne doit perdre aucune ligne"
 
 
 class TestAlembicCheckNoPendingChanges:

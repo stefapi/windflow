@@ -1,15 +1,21 @@
 """
 Modèle ScheduledTask pour les tâches planifiées (moteur scheduler — STORY-160).
+
+STORY-160.1 — alignement spec 17 § Scheduler core : une définition porte
+une ``action`` issue du **registre canonique**
+([`services/action_registry.py`](../services/action_registry.py)) —
+l'enum fermé ``TaskType`` a été retiré (migration ``1321`` avec mapping
+défensif des ``task_type`` legacy) — un déclencheur ``cron`` **ou**
+événement (``trigger_type``/``event_name``), un fuseau IANA
+(``timezone``, défaut résolu au runtime depuis les settings) et une
+politique d'erreur (``error_policy`` : ``ignore``|``retry``|``disable``).
 """
 
 from datetime import datetime
-from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -18,22 +24,16 @@ if TYPE_CHECKING:
     from .organization import Organization
 
 
-class TaskType(str, Enum):
-    """Types de tâches planifiées."""
-
-    CLEANUP_LOGS = "cleanup_logs"
-    HEALTH_CHECK = "health_check"
-    GIT_SYNC = "git_sync"
-    RETRY_DEPLOYMENTS = "retry_deployments"
-    CUSTOM = "custom"
-
-
 class ScheduledTask(Base):
     """
-    Tâche planifiée avec expression cron.
+    Tâche planifiée conforme spec 17 (STORY-160.1).
 
-    Stocke la configuration des tâches récurrentes gérées par le moteur
-    scheduler asyncio (STORY-160).
+    Stocke la configuration des tâches récurrentes/event-driven gérées
+    par le moteur scheduler asyncio (STORY-160.2) : ``action`` du
+    registre + ``parameters`` validés par le schéma Pydantic de l'action,
+    trigger ``cron`` (expression validée croniter) ou ``event``
+    (``event_name`` ∈ liste canonique ``EventType``), fuseau IANA et
+    politique d'erreur.
     """
 
     __tablename__ = "scheduled_tasks"
@@ -43,8 +43,23 @@ class ScheduledTask(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     description: Mapped[str] = mapped_column(Text, nullable=True)
-    task_type: Mapped[TaskType] = mapped_column(
-        SQLEnum(TaskType), nullable=False, default=TaskType.CUSTOM
+    # STORY-160.1 : clé du registre canonique (validation à l'API via
+    # action_registry.is_valid) — remplace l'enum fermé TaskType. Les
+    # lignes legacy migrées portent une clé "legacy.<task_type>" gelée
+    # (enabled=False, jamais exécutable — hors registre).
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Trigger : "cron" | "event" (spec 17). event_name requis si "event"
+    # (validé à l'API — 422), ignoré sinon.
+    trigger_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="cron"
+    )
+    event_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Fuseau IANA (ex. "Europe/Paris") — None = défaut settings (UTC),
+    # résolu au runtime par le moteur (STORY-160.2).
+    timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Politique d'erreur : "ignore" | "retry" | "disable" (spec 17).
+    error_policy: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="ignore"
     )
     cron_expression: Mapped[str] = mapped_column(
         String(100), nullable=False, default="0 * * * *"
@@ -70,4 +85,8 @@ class ScheduledTask(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<ScheduledTask(id={self.id}, name={self.name}, type={self.task_type}, enabled={self.enabled})>"
+        return (
+            f"<ScheduledTask(id={self.id}, name={self.name}, "
+            f"action={self.action}, trigger={self.trigger_type}, "
+            f"enabled={self.enabled})>"
+        )

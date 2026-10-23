@@ -18,6 +18,7 @@ from typing import Any, Optional
 
 import redis.asyncio as redis
 from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -240,6 +241,51 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"✗ Periodic audit purge could not start: {e}")
 
+    # Scheduler engine (STORY-160.2 — 4ᵉ tâche lifespan, arbitrage F1 :
+    # runtime asyncio dans le processus API). Évalue les crons des
+    # définitions spec 17 via croniter vendored et exécute les actions du
+    # registre ; verrou anti-chevauchement en mémoire, orphelins récupérés
+    # au démarrage. ⚠ Limite multi-workers : le verrou et le suivi des
+    # échéances sont process-local — avec --workers > 1 chaque worker
+    # aurait sa propre boucle (exécutions dupliquées possibles). Le
+    # déploiement supporté est single-worker (défaut, arbitrage F1).
+    scheduler_task: asyncio.Task | None = None
+    scheduler_event_triggers = None
+    if settings.scheduler_enabled:
+        try:
+            # Handlers d'actions (STORY-160.3) : enregistrement explicite
+            # des handlers réels/stubs au registre canonique (source de
+            # vérité du dispatch moteur). Au lifespan uniquement : hors
+            # scheduler actif, le registre reste en état « pré-160.3 »
+            # (tests moteur 160.2 : handler None → failed explicite).
+            from .services.scheduler_actions import register_scheduler_actions
+            from .services.scheduler_engine import SchedulerEngine
+
+            register_scheduler_actions()
+
+            scheduler_engine = SchedulerEngine(settings=settings)
+            scheduler_task = asyncio.create_task(scheduler_engine.run())
+            logger.info(
+                "✓ Scheduler engine started "
+                f"(tick={settings.scheduler_tick_seconds}s, "
+                f"timeout={settings.scheduler_task_timeout_seconds}s)"
+            )
+            # Triggers événement (STORY-160.3, tâche 6) : abonnement
+            # EventBus pour les définitions trigger_type="event" —
+            # exécution déléguée au chemin moteur (jamais inline dans
+            # la callback du bus) ; shutdown avec le moteur ci-dessous.
+            from .services.scheduler_event_triggers import (
+                SchedulerEventTriggers,
+            )
+
+            scheduler_event_triggers = SchedulerEventTriggers(scheduler_engine)
+            scheduler_event_triggers.start()
+            logger.info("✓ Scheduler event triggers subscribed to bus")
+        except Exception as e:
+            logger.warning(f"✗ Scheduler engine could not start: {e}")
+    else:
+        logger.info("○ Scheduler engine disabled (SCHEDULER_ENABLED=false)")
+
     logger.info("=" * 60)
     logger.info(f"🚀 {settings.app_name} is ready!")
     logger.info(f"   Docs: http://{settings.api_host}:{settings.api_port}/docs")
@@ -278,6 +324,21 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("✓ Periodic audit purge task cancelled")
+
+    # Cancel scheduler engine task (STORY-160.2 — les exécutions en cours
+    # sont annulées proprement et tracées failed dans l'ExecutionStore) ;
+    # désabonnement des triggers événement (STORY-160.3) avant l'arrêt
+    # du moteur : plus aucun événement ne peut déclencher d'exécution.
+    if scheduler_event_triggers is not None:
+        scheduler_event_triggers.stop()
+        logger.info("✓ Scheduler event triggers unsubscribed from bus")
+    if scheduler_task and not scheduler_task.done():
+        scheduler_task.cancel()
+        try:
+            await scheduler_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("✓ Scheduler engine task cancelled")
 
     # Close rate limiter
     if settings.rate_limit_enabled and settings.rate_limit_storage_url:
@@ -588,13 +649,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
     # STORY-126.1 : erreurs Pydantic migrent de detail vers error.details
-    # (flag retiré par STORY-126.3 — enveloppe systématique)
+    # (flag retiré par STORY-126.3 — enveloppe systématique).
+    # STORY-160.1 : jsonable_encoder requis — les validators Pydantic V2
+    # placent l'objet ValueError source dans ctx.error (non sérialisable
+    # JSON tel quel → 500 au lieu de 422 sinon).
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content=build_error_payload(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             message="Validation Error",
-            details=exc.errors(),
+            details=jsonable_encoder(exc.errors()),
             path=request.url.path,
             correlation_id=correlation_id,
         ),
@@ -611,12 +675,14 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
         extra={"correlation_id": correlation_id},
     )
 
+    # STORY-160.1 : jsonable_encoder requis (ctx.error ValueError non
+    # sérialisable JSON tel quel — cf. validation_exception_handler).
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content=build_error_payload(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             message="Validation Error",
-            details=exc.errors(),
+            details=jsonable_encoder(exc.errors()),
             path=request.url.path,
             correlation_id=correlation_id,
         ),

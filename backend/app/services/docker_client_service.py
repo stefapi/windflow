@@ -304,6 +304,44 @@ class ExecResult:
     error: str
 
 
+# Préfixe des ressources gérées par les plugins WindFlow — sémantique du
+# prune protégé (STORY-173, consommé par STORY-160.3) : toute ressource
+# nommée ``windflow-plugin-*`` est épargnée par construction, jamais
+# candidate à un prune.
+PROTECTED_RESOURCE_PREFIX = "windflow-plugin-"
+
+# Bornage défensif du nombre d'éléments traités par un prune (anti-tempête
+# sur un démon qui aurait des milliers de candidats).
+PRUNE_MAX_ITEMS = 500
+
+
+def is_protected_resource(name: str) -> bool:
+    """Retourne ``True`` si la ressource est protégée (``windflow-plugin-*``)."""
+    return name.startswith(PROTECTED_RESOURCE_PREFIX)
+
+
+@dataclass
+class PruneResult:
+    """Résultat borné et typé d'un prune protégé (STORY-160.3/STORY-173).
+
+    Attributes:
+        resource: Ressource prunée — ``images`` | ``volumes``.
+        dry_run: ``True`` si simple estimation (aucun appel suppressif).
+        pruned_count: En dry-run : nombre de candidates estimées ; en
+            exécution réelle : nombre d'éléments effectivement supprimés.
+        space_reclaimed_bytes: Espace récupéré — exact pour les images
+            (somme des tailles) ; ``0`` pour les volumes (la taille n'est
+            pas exposée par le listage, limite documentée).
+        spared_count: Nombre de ressources ``windflow-plugin-*`` épargnées.
+    """
+
+    resource: str
+    dry_run: bool
+    pruned_count: int
+    space_reclaimed_bytes: int
+    spared_count: int
+
+
 # =============================================================================
 # Client Docker
 # =============================================================================
@@ -598,15 +636,19 @@ class DockerClientService:
             docker_mounts: list[dict[str, Any]] = []
             bind_list: list[str] = []
             for m in mounts:
-                docker_mounts.append({
-                    "Type": m.get("type", "bind"),
-                    "Source": m.get("source", ""),
-                    "Target": m.get("destination", ""),
-                    "ReadOnly": m.get("mode", "rw") == "ro",
-                })
+                docker_mounts.append(
+                    {
+                        "Type": m.get("type", "bind"),
+                        "Source": m.get("source", ""),
+                        "Target": m.get("destination", ""),
+                        "ReadOnly": m.get("mode", "rw") == "ro",
+                    }
+                )
                 if m.get("type", "bind") == "bind":
                     mode = m.get("mode", "rw")
-                    bind_list.append(f"{m.get('source', '')}:{m.get('destination', '')}:{mode}")
+                    bind_list.append(
+                        f"{m.get('source', '')}:{m.get('destination', '')}:{mode}"
+                    )
             config["HostConfig"]["Mounts"] = docker_mounts
             if bind_list:
                 existing_binds = config["HostConfig"].get("Binds", [])
@@ -680,9 +722,12 @@ class DockerClientService:
         # 2. Merge config : None = conserver la valeur existante
         merged_image = image if image is not None else detail.config.get("Image", "")
         merged_env = env if env is not None else detail.config.get("Env") or []
-        merged_labels = labels if labels is not None else detail.config.get("Labels") or {}
+        merged_labels = (
+            labels if labels is not None else detail.config.get("Labels") or {}
+        )
         merged_port_bindings = (
-            port_bindings if port_bindings is not None
+            port_bindings
+            if port_bindings is not None
             else detail.host_config.get("PortBindings")
         )
         if mounts is not None:
@@ -690,25 +735,35 @@ class DockerClientService:
         else:
             # Transformer le format Docker (PascalCase) en format abstrait (lowercase)
             # car create_container() attend des clés lowercase
-            merged_mounts = [
-                {
-                    "type": m.get("Type", "bind"),
-                    "source": m.get("Source", ""),
-                    "destination": m.get("Destination", ""),
-                    "mode": m.get("Mode", "rw"),
-                }
-                for m in detail.mounts
-            ] if detail.mounts else None
+            merged_mounts = (
+                [
+                    {
+                        "type": m.get("Type", "bind"),
+                        "source": m.get("Source", ""),
+                        "destination": m.get("Destination", ""),
+                        "mode": m.get("Mode", "rw"),
+                    }
+                    for m in detail.mounts
+                ]
+                if detail.mounts
+                else None
+            )
         merged_privileged = (
-            privileged if privileged is not None
+            privileged
+            if privileged is not None
             else detail.host_config.get("Privileged", False)
         )
         merged_readonly_rootfs = (
-            readonly_rootfs if readonly_rootfs is not None
+            readonly_rootfs
+            if readonly_rootfs is not None
             else detail.host_config.get("ReadonlyRootfs")
         )
-        merged_cap_add = cap_add if cap_add is not None else detail.host_config.get("CapAdd")
-        merged_cap_drop = cap_drop if cap_drop is not None else detail.host_config.get("CapDrop")
+        merged_cap_add = (
+            cap_add if cap_add is not None else detail.host_config.get("CapAdd")
+        )
+        merged_cap_drop = (
+            cap_drop if cap_drop is not None else detail.host_config.get("CapDrop")
+        )
 
         # Conserver les paramètres non-overridable
         merged_network_mode = detail.host_config.get("NetworkMode", "bridge")
@@ -905,9 +960,7 @@ class DockerClientService:
         )
         return await response.json()
 
-    async def rename_container(
-        self, container_id: str, new_name: str
-    ) -> None:
+    async def rename_container(self, container_id: str, new_name: str) -> None:
         """
         Renomme un container.
 
@@ -1368,6 +1421,121 @@ class DockerClientService:
         params = {"force": force}
         await self._request("DELETE", f"/volumes/{name}", params=params)
 
+    # -------------------------------------------------------------------------
+    # Prune protégé (STORY-160.3 — sémantique STORY-173)
+    # -------------------------------------------------------------------------
+
+    async def prune_images(
+        self, *, dry_run: bool = True, force: bool = False
+    ) -> PruneResult:
+        """Prune des images Docker non utilisées, protégé ``windflow-plugin-*``.
+
+        Candidates : images ``dangling`` (non taguées) retournées par le
+        filtre de l'API Engine. La liste protégée est épargnée **par
+        construction** : toute image portant un tag ``windflow-plugin-*``
+        n'est jamais candidate, même dangling.
+
+        Args:
+            dry_run: ``True`` (défaut) : estimation via listage, **aucun
+                appel suppressif** ; ``False`` : suppression effective des
+                candidates une à une (``DELETE /images/{id}``).
+            force: Force la suppression (n'affecte pas la liste protégée).
+
+        Returns:
+            Résultat borné et typé (comptages, espace) — jamais de
+            payload brut du démon.
+        """
+        images = await self.list_images(all=False, filters={"dangling": ["true"]})
+        candidates = [
+            img for img in images[:PRUNE_MAX_ITEMS] if not self._image_is_protected(img)
+        ]
+        spared = sum(1 for img in images if self._image_is_protected(img))
+        if dry_run:
+            return PruneResult(
+                resource="images",
+                dry_run=True,
+                pruned_count=len(candidates),
+                space_reclaimed_bytes=sum(img.size for img in candidates),
+                spared_count=spared,
+            )
+        pruned = 0
+        reclaimed = 0
+        for img in candidates:
+            await self.remove_image(img.id, force=force, no_prune=True)
+            pruned += 1
+            reclaimed += img.size
+        return PruneResult(
+            resource="images",
+            dry_run=False,
+            pruned_count=pruned,
+            space_reclaimed_bytes=reclaimed,
+            spared_count=spared,
+        )
+
+    async def prune_volumes(
+        self, *, dry_run: bool = True, force: bool = False
+    ) -> PruneResult:
+        """Prune des volumes orphelins, protégé ``windflow-plugin-*``.
+
+        Candidates : volumes non utilisés par aucun conteneur (la carte
+        des montages est construite via ``list_containers`` — le filtre
+        ``dangling`` de l'endpoint volumes n'apparaît qu'à partir de
+        l'API Engine 1.42, non garanti ici). La liste protégée est
+        épargnée **par construction** (préfixe de nom).
+
+        Args:
+            dry_run: ``True`` (défaut) : estimation via listage, **aucun
+                appel suppressif** ; ``False`` : suppression effective des
+                candidates une à une (``DELETE /volumes/{name}``).
+            force: Force la suppression (n'affecte pas la liste protégée).
+
+        Returns:
+            Résultat borné et typé ; ``space_reclaimed_bytes=0`` — la
+            taille d'un volume n'est pas exposée par le listage (limite
+            documentée, estimation laissée à STORY-173).
+        """
+        volumes = await self.list_volumes()
+        in_use = await self._volume_names_in_use()
+        candidates = [
+            v
+            for v in volumes[:PRUNE_MAX_ITEMS]
+            if not is_protected_resource(v.name) and v.name not in in_use
+        ]
+        spared = sum(1 for v in volumes if is_protected_resource(v.name))
+        if dry_run:
+            return PruneResult(
+                resource="volumes",
+                dry_run=True,
+                pruned_count=len(candidates),
+                space_reclaimed_bytes=0,
+                spared_count=spared,
+            )
+        for v in candidates:
+            await self.remove_volume(v.name, force=force)
+        return PruneResult(
+            resource="volumes",
+            dry_run=False,
+            pruned_count=len(candidates),
+            space_reclaimed_bytes=0,
+            spared_count=spared,
+        )
+
+    @staticmethod
+    def _image_is_protected(image: ImageInfo) -> bool:
+        """Une image est protégée si un de ses tags porte le préfixe plugin."""
+        return any(PROTECTED_RESOURCE_PREFIX in tag for tag in (image.repo_tags or []))
+
+    async def _volume_names_in_use(self) -> set[str]:
+        """Ensemble des noms de volumes montés par au moins un conteneur."""
+        containers = await self.list_containers(all=True)
+        names: set[str] = set()
+        for container in containers:
+            for mount in getattr(container, "mounts", None) or []:
+                name = mount.get("Name") if isinstance(mount, dict) else None
+                if name:
+                    names.add(name)
+        return names
+
     # =========================================================================
     # Networks
     # =========================================================================
@@ -1439,9 +1607,7 @@ class DockerClientService:
             "Container": container_id,
             "EndpointConfig": endpoint_config,
         }
-        await self._request(
-            "POST", f"/networks/{network_id}/connect", body=body
-        )
+        await self._request("POST", f"/networks/{network_id}/connect", body=body)
 
     async def disconnect_container_from_network(
         self,
@@ -1463,9 +1629,7 @@ class DockerClientService:
             "Container": container_id,
             "Force": force,
         }
-        await self._request(
-            "POST", f"/networks/{network_id}/disconnect", body=body
-        )
+        await self._request("POST", f"/networks/{network_id}/disconnect", body=body)
 
     # =========================================================================
     # System
