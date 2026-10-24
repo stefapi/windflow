@@ -295,7 +295,7 @@ describe('useContainerStats — reconnexion unifiée (STORY-164.3)', () => {
   })
 
   it('fetchOnce : reçoit une stats puis se déconnecte (mode manuel)', async () => {
-    const { connect, fetchOnce, status } = setup()
+    const { connect, fetchOnce } = setup()
     connect()
     mockWs.readyState = 1
     mockWs.onopen?.()

@@ -3,7 +3,11 @@
 ## 📋 BACKLOG
 
 ### EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
-- [ ] STORY-165 : Tests WebSocket — couverture complète du module temps réel (P2-5/P2-14, partie tests)
+- [ ] BUG-005 : Deadlock `UserConnectionManager.broadcast_to_user` — purge des connexions mortes sous le lock non-réentrant (Bloquant — détecté STORY-165, xfail strict)
+- [ ] BUG-006 : `WebSocketPluginManager.register` duplicate — index `_event_handlers` obsolète, le plugin remplacé continue de recevoir les dispatchs (Majeur — détecté STORY-165, xfail strict)
+- [ ] BUG-007 : Clé vide résiduelle dans `ConnectionManager.broadcast_to_deployment` — purge sans `del` de l'entrée (Mineur — détecté STORY-165, note de divergence)
+- [ ] BUG-008 : Double `websocket.accept()` sur `deployment_logs` — le client reçoit `error` au lieu du statut initial (Majeur — détecté STORY-165, xfail strict)
+- [ ] BUG-009 : `WebSocketService.disconnect()` frontend ne purge pas `authToken`/`authenticated`/`listeners`/`serverSubscriptions` — fuite d'état entre sessions (Majeur — détecté STORY-165 T10)
 - [ ] STORY-166 : Migration `Target`→`Host` + axe `origin` + `environments` + `Stack.git_url` + auto-détection du host local (P2-4 + P2-10 — F4 étape 2)
 - [ ] STORY-167 : `deployment_events` structurés — table dédiée, migration des données, endpoint paginé, rétention (P2-7)
 - [ ] STORY-168 : Cache avec fallback mémoire — interface unique + TTL, Redis sinon mémoire locale (P2-8)
@@ -39,6 +43,7 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] STORY-165 : Tests WebSocket — couverture complète du module temps réel (P2-5/P2-14, partie tests) (EPIC-013) — 10 fichiers de tests (+229 backend : 401 passed + 3 xfailed ; +25 frontend), couverture 94 % module WS / 94,05 % `websocket.ts`, 5 bugs consignés (BUG-005→009), story tests-only : zéro code de production modifié
 - [x] STORY-164.3 : Reconnexion unifiée avec jitter + resynchronisation d'état + client type documenté (P2-5, partie client — STORY-164 découpée) (EPIC-013) — module partagé `ws-reconnect.ts` consommé par canal général + composables, resync GET, logout conservé, client type documenté §8, 60 tests, couverture 97/82/80 %
 - [x] STORY-164.2 : Canaux WebSocket manquants — `/ws/ssh/{host}` TOFU STRICT, `/ws/journal/{host}`, `/ws/batch/{batch_id}` émetteur-ready, VNC reporté documenté (P2-5, partie canaux — STORY-164 découpée) (EPIC-013) — 3 canaux + host_access, 51 tests, couverture 84-100 %, RBAC journal=operator (D1)
 - [x] STORY-164.1 : Mécaniques de protocole serveur — heartbeats avec expiration des connexions muettes + acknowledgment des messages critiques (P2-5, partie protocole — STORY-164 découpée) (EPIC-013) — helpers heartbeat/ack_registry sur les 5 canaux, 34 tests, couverture 100 % nouveaux modules
