@@ -330,11 +330,11 @@ class UserConnectionManager:
             message, sent_count, connection_count, f"user: {user_id}"
         )
 
-        # Nettoyer les connexions mortes
-        if disconnected:
-            async with self._lock:
-                for ws in disconnected:
-                    await self.remove_connection(user_id, ws)
+        # Nettoyer les connexions mortes — HORS lock (remove_connection acquiert
+        # _lock, qui est non-réentrant : l'appeler sous le lock deadloque).
+        # Pattern de broadcast_to_event_subscribers (purge après libération).
+        for ws in disconnected:
+            await self.remove_connection(user_id, ws)
 
     async def broadcast_to_event_subscribers(self, event_type: str, message: dict):
         """

@@ -20,15 +20,16 @@ Couvre ``app/websocket/connection_managers.py`` (53 % → ≥ 85 %) :
   ``broadcast_to_event_subscribers``,
   ``broadcast_deployment_log_to_subscribers``, ``dispatch_to_plugins``.
 
-⚠️ Bug de production détecté (NON corrigé — décision 7 de la story) :
-``UserConnectionManager.broadcast_to_user`` purge les connexions mortes en
-appelant ``remove_connection`` **sous** ``self._lock``
-(connection_managers.py:334-337) alors que ``remove_connection``
-ré-acquiert ce lock non-réentrant → **deadlock** dès qu'un envoi échoue.
-Le test correspondant est ``xfail(strict=True)`` avec timeout court
-(``asyncio.wait_for``) pour ne jamais bloquer la suite. À corriger via un
-BUG-XXX dédié (sortir l'appel du lock, pattern de
-``broadcast_to_event_subscribers`` qui est correct).
+✅ Bug de production détecté (décision 7 de la story) puis **corrigé via
+BUG-005** : ``UserConnectionManager.broadcast_to_user`` purgeait les
+connexions mortes en appelant ``remove_connection`` **sous** ``self._lock``
+alors que ``remove_connection`` ré-acquiert ce lock non-réentrant →
+deadlock dès qu'un envoi échoue. La purge appelle désormais
+``remove_connection`` **hors** du lock (pattern de
+``broadcast_to_event_subscribers``, connection_managers.py:333-337).
+Les tests de purge conservent un timeout court (``asyncio.wait_for``) :
+ceinture de sécurité anti-blocage de la suite si une régression du
+deadlock était réintroduite.
 """
 
 from __future__ import annotations
@@ -435,30 +436,86 @@ class TestUserConnectionManagerBroadcastToUser:
         second.send_json.assert_awaited_once_with(MESSAGE)
         other_user_ws.send_json.assert_not_awaited()
 
-    @pytest.mark.xfail(
-        reason=(
-            "Bug production détecté (non corrigé, décision 7 STORY-165) : "
-            "broadcast_to_user appelle remove_connection sous self._lock "
-            "(lock asyncio non-réentrant) → deadlock quand une socket morte "
-            "est purgée. Fix attendue : appeler remove_connection hors du "
-            "lock, pattern de broadcast_to_event_subscribers."
-        ),
-        strict=True,
-    )
     async def test_broadcast_purges_dead_connections(self):
+        """BUG-005 : la purge d'une socket morte complète sans deadlock."""
         user_manager_local = UserConnectionManager()
         dead, alive = _make_websocket(fail=True), _make_websocket()
         await user_manager_local.add_connection("user-1", dead)
         await user_manager_local.add_connection("user-1", alive)
 
-        # Timeout court : le deadlock actuel lève TimeoutError (→ xfail),
-        # le comportement sain complète et purge la socket morte.
+        # Timeout court (ceinture de sécurité) : une réintroduction du
+        # deadlock lèverait TimeoutError au lieu de bloquer la suite.
         await asyncio.wait_for(
             user_manager_local.broadcast_to_user("user-1", MESSAGE), timeout=1.0
         )
 
         assert user_manager_local.user_connections["user-1"] == {alive}
         alive.send_json.assert_awaited_once_with(MESSAGE)
+
+    async def test_broadcast_user_lock_released_after_dead_purge(self):
+        """Contre-mesure DoS (BUG-005) : après une purge de socket morte, le
+        verrou du manager est réellement libéré — les opérations concurrentes
+        (``add_connection`` puis ``remove_connection``) complètent sans
+        bloquer."""
+        user_manager_local = UserConnectionManager()
+        dead = _make_websocket(fail=True)
+        await user_manager_local.add_connection("user-1", dead)
+
+        await asyncio.wait_for(
+            user_manager_local.broadcast_to_user("user-1", MESSAGE), timeout=1.0
+        )
+
+        # Si _lock était encore détenu (deadlock), ces appels lèveraient
+        # TimeoutError : preuve que le verrou a été libéré.
+        fresh = _make_websocket()
+        await asyncio.wait_for(
+            user_manager_local.add_connection("user-1", fresh), timeout=1.0
+        )
+        await asyncio.wait_for(
+            user_manager_local.remove_connection("user-1", fresh), timeout=1.0
+        )
+
+        assert "user-1" not in user_manager_local.user_connections
+
+    async def test_broadcast_user_purges_all_dead_connections_and_keeps_alive(self):
+        """Robustesse de la boucle de purge : toutes les sockets mortes sont
+        purgées, la vivante reçoit le message exactement une fois."""
+        user_manager_local = UserConnectionManager()
+        dead_a, dead_b = _make_websocket(fail=True), _make_websocket(fail=True)
+        alive = _make_websocket()
+        await user_manager_local.add_connection("user-1", dead_a)
+        await user_manager_local.add_connection("user-1", dead_b)
+        await user_manager_local.add_connection("user-1", alive)
+
+        await asyncio.wait_for(
+            user_manager_local.broadcast_to_user("user-1", MESSAGE), timeout=1.0
+        )
+
+        assert user_manager_local.user_connections["user-1"] == {alive}
+        alive.send_json.assert_awaited_once_with(MESSAGE)
+        dead_a.send_json.assert_awaited_once_with(MESSAGE)
+        dead_b.send_json.assert_awaited_once_with(MESSAGE)
+
+    async def test_broadcast_user_last_dead_connection_cleans_subscriptions_and_plugin_context(
+        self,
+    ):
+        """La purge passe bien par ``remove_connection`` (cascade complète) et
+        non un simple ``discard`` : la dernière connexion morte emporte
+        abonnements et contexte plugin de l'utilisateur."""
+        user_manager_local = UserConnectionManager()
+        dead = _make_websocket(fail=True)
+        context = MagicMock()
+        await user_manager_local.add_connection("user-1", dead, context=context)
+        await user_manager_local.subscribe_to_event("user-1", "EVT", dead)
+        assert "user-1" in user_manager_local.user_plugin_contexts
+
+        await asyncio.wait_for(
+            user_manager_local.broadcast_to_user("user-1", MESSAGE), timeout=1.0
+        )
+
+        assert "user-1" not in user_manager_local.user_connections
+        assert "user-1" not in user_manager_local.user_subscriptions
+        assert "user-1" not in user_manager_local.user_plugin_contexts
 
 
 # ===========================================================================
