@@ -11,7 +11,8 @@ Couvre ``app/websocket/connection_managers.py`` (53 % → ≥ 85 %) :
 - ``ConnectionManager`` : ``connect`` (accept + enregistrement par
   deployment_id, double connexion même id), ``disconnect`` (retrait +
   nettoyage de la clé vide), ``broadcast_to_deployment`` (inconnu → no-op
-  debug ; envoi N/M ; purge des connexions mortes après échec d'envoi) ;
+  debug ; envoi N/M ; purge des connexions mortes après échec d'envoi
+  + suppression de la clé vide — BUG-007) ;
 - ``UserConnectionManager`` : ``add_connection`` (stockage PluginContext du
   premier user), ``remove_connection`` (dernière connexion → purge
   abonnements + contextes), ``subscribe_to_event`` /
@@ -30,6 +31,15 @@ deadlock dès qu'un envoi échoue. La purge appelle désormais
 Les tests de purge conservent un timeout court (``asyncio.wait_for``) :
 ceinture de sécurité anti-blocage de la suite si une régression du
 deadlock était réintroduite.
+
+✅ Bug de production détecté (décision 7 de la story) puis **corrigé via
+BUG-007** : ``ConnectionManager.broadcast_to_deployment`` purgeait les
+sockets mortes sans supprimer la clé ``deployment_id`` devenue vide —
+il restait ``{"dep-id": set()}`` (fuite de clé résiduelle + ``KeyError``
+latent si un ``disconnect`` concurrent supprimait la clé pendant l'envoi).
+La purge applique désormais l'hygiène de ``disconnect`` :
+``difference_update`` puis ``del`` de la clé vide, avec une garde
+``.get()`` contre la suppression concurrente de la clé.
 """
 
 from __future__ import annotations
@@ -190,6 +200,31 @@ class TestConnectionManagerConnectDisconnect:
         websocket.accept.assert_awaited_once()
         assert connection_manager.active_connections["dep-1"] == {websocket}
 
+    async def test_connect_default_accepts(self):
+        """Contrat rétrocompatible du défaut : sans paramètre, ``connect``
+        accepte la connexion exactement une fois (pattern ``batch.py``).
+        """
+        connection_manager = ConnectionManager()
+        websocket = _make_websocket()
+
+        await connection_manager.connect(websocket, "dep-1")
+
+        websocket.accept.assert_awaited_once()
+        assert connection_manager.active_connections["dep-1"] == {websocket}
+
+    async def test_connect_with_accept_false_registers_without_accept(self):
+        """BUG-008 : ``accept_connection=False`` enregistre la connexion
+        **sans** accepter — chemin ``deployment_logs`` (l'endpoint a déjà
+        accepté ; un second accept ferait échouer la connexion).
+        """
+        connection_manager = ConnectionManager()
+        websocket = _make_websocket()
+
+        await connection_manager.connect(websocket, "dep-1", accept_connection=False)
+
+        websocket.accept.assert_not_awaited()
+        assert connection_manager.active_connections["dep-1"] == {websocket}
+
     async def test_connect_same_deployment_twice_registers_both(self):
         connection_manager = ConnectionManager()
         first, second = _make_websocket(), _make_websocket()
@@ -268,15 +303,12 @@ class TestConnectionManagerBroadcast:
         assert connection_manager.active_connections["dep-1"] == {alive}
         alive.send_json.assert_awaited_once_with(MESSAGE)
 
-    async def test_broadcast_dead_last_connection_leaves_empty_key(self):
-        """Documente le comportement actuel : purge sans nettoyage de la clé.
+    async def test_broadcast_dead_last_connection_removes_empty_key(self):
+        """BUG-007 : la purge post-broadcast supprime la clé devenue vide.
 
-        ⚠️ Divergence mineure détectée (non corrigée — décision 7) : la purge
-        post-broadcast (connection_managers.py:181-184) fait ``discard`` mais,
-        contrairement à ``disconnect``, ne supprime pas la clé devenue vide —
-        il reste ``{"dep-1": set()}`` (fuite de clé vide sans impact
-        fonctionnel : aucun envoi sur un set vide). À harmoniser avec le
-        nettoyage de ``disconnect`` (l.149-151) via BUG dédié.
+        Même hygiène que ``disconnect`` : purge de la socket morte puis
+        ``del`` de la clé quand le set est vide — plus de clé résiduelle
+        ``{"dep-1": set()}`` (l'ancienne note de divergence est levée).
         """
         connection_manager = ConnectionManager()
         dead = _make_websocket(fail=True)
@@ -284,7 +316,66 @@ class TestConnectionManagerBroadcast:
 
         await connection_manager.broadcast_to_deployment("dep-1", MESSAGE)
 
-        assert connection_manager.active_connections.get("dep-1") == set()
+        assert "dep-1" not in connection_manager.active_connections
+
+    async def test_broadcast_after_full_purge_is_noop_debug(self, caplog):
+        """Après purge complète, un second broadcast passe par le early-return
+        (la clé purgée redevient un déploiement « inconnu » — chemin l.163)."""
+        connection_manager = ConnectionManager()
+        dead = _make_websocket(fail=True)
+        await connection_manager.connect(dead, "dep-1")
+        await connection_manager.broadcast_to_deployment("dep-1", MESSAGE)
+
+        with caplog.at_level(logging.DEBUG, logger=LOGGER):
+            await connection_manager.broadcast_to_deployment("dep-1", MESSAGE)
+
+        assert any(
+            "No active connections for deployment dep-1" in r.message
+            for r in caplog.records
+        )
+
+    async def test_reconnect_after_full_purge_recreates_key_and_delivers(self):
+        """La suppression de la clé ne casse pas la reconnexion : ``connect``
+        recrée l'entrée et le message est délivré à la nouvelle socket."""
+        connection_manager = ConnectionManager()
+        dead = _make_websocket(fail=True)
+        await connection_manager.connect(dead, "dep-1")
+        await connection_manager.broadcast_to_deployment("dep-1", MESSAGE)
+        assert "dep-1" not in connection_manager.active_connections
+
+        alive = _make_websocket()
+        await connection_manager.connect(alive, "dep-1")
+        await connection_manager.broadcast_to_deployment("dep-1", MESSAGE)
+
+        assert connection_manager.active_connections["dep-1"] == {alive}
+        alive.send_json.assert_awaited_once_with(MESSAGE)
+
+    async def test_broadcast_purge_tolerates_concurrent_key_removal(self):
+        """BUG-007 (volet race) : un ``disconnect`` concurrent qui supprime la
+        clé pendant l'envoi ne fait pas lever ``KeyError`` à la purge (garde
+        ``.get()``). Timeout court (pattern BUG-005) : ceinture de sécurité
+        anti-blocage de la suite."""
+        connection_manager = ConnectionManager()
+        dead = _make_websocket(fail=True)
+        await connection_manager.connect(dead, "dep-1")
+
+        async def concurrent_disconnect_during_send(*args, **kwargs):
+            # Simule le ``finally`` d'un handler qui déconnecte la dernière
+            # socket pendant l'« envoi » : la clé dep-1 disparaît du dict.
+            connection_manager.active_connections.pop("dep-1", None)
+            return 0, {dead}
+
+        with patch.object(
+            BroadcastManager,
+            "_broadcast_to_connections",
+            new=concurrent_disconnect_during_send,
+        ):
+            await asyncio.wait_for(
+                connection_manager.broadcast_to_deployment("dep-1", MESSAGE),
+                timeout=1.0,
+            )
+
+        assert connection_manager.active_connections == {}
 
 
 # ===========================================================================

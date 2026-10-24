@@ -117,15 +117,27 @@ class ConnectionManager:
         self.active_connections: Dict[str, Set[WebSocket]] = {}
         self._lock = asyncio.Lock()
 
-    async def connect(self, websocket: WebSocket, deployment_id: str):
+    async def connect(
+        self, websocket: WebSocket, deployment_id: str, accept_connection: bool = True
+    ):
         """
         Accepte une nouvelle connexion WebSocket.
 
         Args:
             websocket: Instance de connexion WebSocket
             deployment_id: ID du déploiement concerné
+            accept_connection: Si True (défaut), accepte la connexion avant
+                l'enregistrement. Passer False lorsque l'endpoint a déjà
+                appelé ``websocket.accept()`` (ex: canal ``deployment_logs``,
+                qui accepte tôt pour émettre un message d'erreur applicatif
+                avant le close 1008) — un second accept ferait échouer la
+                connexion (machine à états ASGI de Starlette).
+
+        Returns:
+            None. La connexion est enregistrée sous ``deployment_id``.
         """
-        await websocket.accept()
+        if accept_connection:
+            await websocket.accept()
 
         async with self._lock:
             if deployment_id not in self.active_connections:
@@ -177,11 +189,17 @@ class ConnectionManager:
             message, sent_count, connection_count, f"deployment: {deployment_id}"
         )
 
-        # Nettoyer les connexions mortes
+        # Nettoyer les connexions mortes — même hygiène que disconnect :
+        # purge des sockets + suppression de la clé devenue vide (BUG-007).
+        # Garde .get() : la clé peut avoir été supprimée par un disconnect
+        # concurrent pendant l'envoi (la purge ne doit jamais lever KeyError).
         if disconnected:
             async with self._lock:
-                for ws in disconnected:
-                    self.active_connections[deployment_id].discard(ws)
+                connections = self.active_connections.get(deployment_id)
+                if connections is not None:
+                    connections.difference_update(disconnected)
+                    if not connections:
+                        del self.active_connections[deployment_id]
 
 
 # ============================================================================
