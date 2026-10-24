@@ -43,6 +43,8 @@ interface MockWebSocket {
   onopen: OpenHandler | null
   onmessage: MessageHandler | null
   onclose: CloseHandler | null
+  /** BUG-009 : détaché par disconnect()/reconnectWithToken() avant close(). */
+  onerror: (() => void) | null
   send: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
 }
@@ -60,6 +62,7 @@ function installWebSocketMock(): void {
       onopen: null,
       onmessage: null,
       onclose: null,
+      onerror: null,
       send: vi.fn().mockImplementation((data: string) => {
         mockWs.sent.push(data)
       }),
@@ -113,10 +116,10 @@ describe('WebSocketService — helpers & zones hors reconnexion (STORY-165 T10)'
     mockAuthStore.token = null
     localStorage.clear()
     // Nettoie l'état du singleton entre les tests : socket morte, timers,
-    // et surtout authToken/authenticated/listeners/serverSubscriptions —
-    // champs privés que disconnect() ne purge PAS (sans ce reset, les
-    // abonnements des tests précédents seraient rejoués à la première
-    // auth_success du test courant).
+    // et authToken/authenticated/listeners/serverSubscriptions. BUG-009 :
+    // depuis la correction, disconnect() purge seul ces 4 champs — le reset
+    // explicite ci-dessous est désormais redondant, conservé comme garde-fou
+    // de non-régression.
     wsService.disconnect()
     const internals = wsService as unknown as {
       authenticated: boolean
@@ -539,6 +542,133 @@ describe('WebSocketService — helpers & zones hors reconnexion (STORY-165 T10)'
         { type: 'subscribe', data: { event_type: 'system_event' } },
         { type: 'deployment_logs', data: { deployment_id: 'dep-sec' } }
       ])
+    })
+  })
+
+  // =========================================================================
+  // BUG-009 — disconnect() purge l'état de session ; reconnectWithToken()
+  // conserve listeners/abonnements serveur (rotation JWT même session)
+  // =========================================================================
+
+  describe('BUG-009 : disconnect() purge l\'état de session', () => {
+    it('disconnect() réinitialise authToken, authenticated, listeners et serverSubscriptions', () => {
+      wsService.connect('jwt-a')
+      openAndAuthenticate()
+      wsService.send('subscribe', { event_type: 'system_event' })
+      wsService.send('deployment_logs', { deployment_id: 'dep-a' })
+      wsService.on('system_event', vi.fn())
+      expect(wsService.isAuthenticated()).toBe(true)
+
+      wsService.disconnect()
+
+      const internals = wsService as unknown as {
+        authenticated: boolean
+        authToken: string | null
+        listeners: Map<string, Set<unknown>>
+        serverSubscriptions: Map<string, unknown>
+      }
+      expect(internals.authToken).toBeNull()
+      expect(internals.authenticated).toBe(false)
+      expect(internals.listeners.size).toBe(0)
+      expect(internals.serverSubscriptions.size).toBe(0)
+      expect(wsService.isAuthenticated()).toBe(false)
+    })
+
+    it('après disconnect(), la session suivante ne rejoue PAS les abonnements du précédent', () => {
+      // Session A : abonné à un topic système et aux logs d'un déploiement
+      wsService.connect('jwt-a')
+      openAndAuthenticate()
+      wsService.send('subscribe', { event_type: 'system_event' })
+      wsService.send('deployment_logs', { deployment_id: 'dep-a' })
+
+      // Fin de session A, puis session B sur le même singleton
+      wsService.disconnect()
+      wsService.connect('jwt-b')
+      openAndAuthenticate()
+
+      // Sur la nouvelle socket : seul le message d'auth de B, aucun rejeu
+      const replayed = sentParsed().filter((m) => m.type === 'subscribe' || m.type === 'deployment_logs')
+      expect(replayed).toHaveLength(0)
+      const authMessages = sentParsed().filter((m) => m.type === 'auth')
+      expect(authMessages).toHaveLength(1)
+      expect(authMessages[0]).toEqual({ type: 'auth', token: 'jwt-b' })
+    })
+
+    it('sécurité : après disconnect(), le token de l\'ancienne session n\'est plus jamais émis', () => {
+      wsService.connect('jwt-a')
+      openAndAuthenticate()
+      wsService.send('subscribe', { event_type: 'system_event' })
+
+      wsService.disconnect()
+      wsService.connect('jwt-b')
+      openSocket()
+
+      // Le token de A ne survit pas à sa session : rien sur la nouvelle socket
+      expect(mockWs.sent.some((raw) => raw.includes('jwt-a'))).toBe(false)
+      // L'unique message auth porte le token de B (jamais asserté hors auth)
+      const authMessages = sentParsed().filter((m) => m.type === 'auth')
+      expect(authMessages).toHaveLength(1)
+      expect(authMessages[0]).toEqual({ type: 'auth', token: 'jwt-b' })
+    })
+
+    it('les listeners de l\'ancienne session ne reçoivent plus d\'événements', () => {
+      const cb = vi.fn()
+      wsService.connect('jwt-a')
+      openAndAuthenticate()
+      wsService.on('system_event', cb)
+
+      wsService.disconnect()
+      wsService.connect('jwt-b')
+      openAndAuthenticate()
+
+      emitServerMessage('system_event', { message: 'for-B-only' })
+      expect(cb).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('BUG-009 : reconnectWithToken() — rotation JWT en session (flux refresh)', () => {
+    it('conserve listeners et abonnements serveur et les rejoue à la reconnexion', () => {
+      const cb = vi.fn()
+      wsService.connect('jwt-a')
+      openAndAuthenticate()
+      wsService.send('subscribe', { event_type: 'system_event' })
+      wsService.on('system_event', cb)
+
+      wsService.reconnectWithToken('jwt-b')
+      openAndAuthenticate()
+
+      // Auth avec le NOUVEAU token sur la nouvelle socket
+      const auth = sentParsed().find((m) => m.type === 'auth')
+      expect(auth).toEqual({ type: 'auth', token: 'jwt-b' })
+      // Abonnement serveur conservé puis rejoué à l'auth_success
+      expect(
+        sentParsed().some(
+          (m) => m.type === 'subscribe' && (m.data as { event_type?: string }).event_type === 'system_event'
+        )
+      ).toBe(true)
+      // Le listener de la session toujours actif
+      emitServerMessage('system_event', { message: 'still-here' })
+      expect(cb).toHaveBeenCalledWith({ message: 'still-here' })
+    })
+
+    it('détache les handlers de l\'ancienne socket (aucune reconnexion parasite)', () => {
+      wsService.connect('jwt-a')
+      openAndAuthenticate()
+      const oldWs = mockWs
+
+      wsService.reconnectWithToken('jwt-b')
+
+      // Détachement prouvé : les handlers de l'ancienne socket sont null
+      expect(oldWs.onclose).toBeNull()
+      expect(oldWs.onmessage).toBeNull()
+      expect(oldWs.onopen).toBeNull()
+      expect(oldWs.onerror).toBeNull()
+
+      // Le close event différé de l'ancienne socket ne déclenche rien :
+      // aucune construction WebSocket au-delà de la rotation après 60 s.
+      const callsAfterRotation = wsConstructor.mock.calls.length
+      vi.advanceTimersByTime(60000)
+      expect(wsConstructor.mock.calls.length).toBe(callsAfterRotation)
     })
   })
 })

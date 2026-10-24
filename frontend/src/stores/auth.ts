@@ -270,8 +270,8 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('refresh_token', newRefreshToken)
 
       // Update WebSocket connection
-      wsService.disconnect()
-      wsService.connect(newAccessToken)
+      // Rotation JWT même session : conserve listeners/abonnements serveur — BUG-009
+      wsService.reconnectWithToken(newAccessToken)
 
       console.log('Token refreshed successfully')
       return true

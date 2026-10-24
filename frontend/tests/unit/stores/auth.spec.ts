@@ -10,10 +10,12 @@ vi.mock('@/services/websocket', () => ({
   default: {
     connect: vi.fn(),
     disconnect: vi.fn(),
+    reconnectWithToken: vi.fn(),
   },
   wsService: {
     connect: vi.fn(),
     disconnect: vi.fn(),
+    reconnectWithToken: vi.fn(),
   },
 }))
 
@@ -82,5 +84,49 @@ describe('useAuthStore — enveloppes spec 09 (STORY-126.3)', () => {
 
     expect(store.token).toBeNull()
     expect(store.isAuthenticated).toBe(false)
+  })
+})
+
+describe('useAuthStore — refreshAccessToken (BUG-009 : rotation WS sans purge)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+    vi.clearAllMocks()
+  })
+
+  it('refreshAccessToken bascule la WebSocket via reconnectWithToken (sans disconnect purgeur)', async () => {
+    // Session établie : le login fournit access + refresh tokens
+    vi.spyOn(authApi, 'login').mockResolvedValue({
+      data: mockLoginPayload,
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {} as never,
+    } as never)
+    vi.spyOn(authApi, 'refreshToken').mockResolvedValue({
+      data: {
+        access_token: 'new-jwt-789',
+        refresh_token: 'new-refresh-012',
+      },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {} as never,
+    } as never)
+
+    const wsService = (await import('@/services/websocket')).default
+    const { useAuthStore } = await import('@/stores/auth')
+    const store = useAuthStore()
+    await store.login({ username: 'admin', password: 'pass' })
+    expect(store.refreshToken).toBe('refresh-token-456')
+
+    const result = await store.refreshAccessToken()
+    expect(result).toBe(true)
+    expect(store.token).toBe('new-jwt-789')
+
+    // BUG-009 : le refresh bascule via la rotation SANS purge — jamais disconnect()
+    expect(wsService.reconnectWithToken).toHaveBeenCalledTimes(1)
+    expect(wsService.reconnectWithToken).toHaveBeenCalledWith('new-jwt-789')
+    expect(wsService.disconnect).not.toHaveBeenCalled()
   })
 })

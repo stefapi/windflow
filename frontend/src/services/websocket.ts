@@ -144,16 +144,76 @@ class WebSocketService {
   }
 
   /**
-   * Disconnect from WebSocket server
+   * Disconnect from WebSocket server — fin de session (BUG-009).
+   *
+   * Réinitialise tout l'état de session du singleton : token d'auth,
+   * statut authentifié, listeners et abonnements serveur — un `connect()`
+   * ultérieur (nouvel utilisateur) part d'un état neutre, sans hériter des
+   * abonnements serveur ni de l'identité d'authentification de la session
+   * précédente. Les handlers de la socket sont détachés AVANT `close()` :
+   * le `onclose` différé de l'ancienne socket ne peut plus corrompre l'état
+   * d'une session suivante (course du « handler fantôme »).
+   *
+   * Pour une rotation de token au sein de la MÊME session (refresh JWT),
+   * utiliser `reconnectWithToken()`.
    */
   disconnect(): void {
     // Arrêt volontaire : plus aucune reconnexion automatique ne sera tentée.
     this.reconnect.stop()
     this.clearReconnectTimer()
     if (this.ws) {
+      this.detachSocketHandlers()
       this.ws.close()
       this.ws = null
     }
+    // Purge de fin de session (BUG-009) : le successeur ne doit rien
+    // hériter — ni le token (donnée sensible au-delà de sa session), ni
+    // les abonnements serveur, ni les callbacks de la session précédente.
+    this.authenticated = false
+    this.authToken = null
+    this.listeners.clear()
+    this.serverSubscriptions.clear()
+  }
+
+  /**
+   * Rotation de token au sein de la même session (refresh JWT — flux
+   * `refreshAccessToken` du store auth, BUG-009) : ferme la socket courante
+   * et la recrée immédiatement avec le nouveau token, SANS purger
+   * `listeners`/`serverSubscriptions` — les abonnements serveur sont
+   * rejoués par `resubscribeActiveTopics()` à l'`auth_success` suivant et
+   * les callbacks continuent de recevoir les événements.
+   *
+   * Le backend n'offre pas de ré-authentification sur connexion ouverte
+   * (auth au premier message uniquement) : la rotation recrée la socket
+   * côté client. La politique de reconnexion est remise à zéro par
+   * `connect()` lui-même (retour depuis `stopped`) — pas de `reset()` manuel.
+   */
+  reconnectWithToken(token: string): void {
+    this.clearReconnectTimer()
+    this.reconnect.stop()
+    if (this.ws) {
+      this.detachSocketHandlers()
+      this.ws.close()
+      this.ws = null
+    }
+    this.connect(token)
+  }
+
+  /**
+   * Détache les handlers de la socket courante avant fermeture volontaire
+   * (`onclose`/`onmessage`/`onopen`/`onerror` = null) — neutralise la
+   * course du « handler fantôme » (BUG-009) : le close event asynchrone de
+   * l'ancienne socket ne peut plus écraser l'état d'une nouvelle session
+   * (`authenticated = false`) ni déclencher une reconnexion parasite.
+   */
+  private detachSocketHandlers(): void {
+    if (!this.ws) {
+      return
+    }
+    this.ws.onclose = null
+    this.ws.onmessage = null
+    this.ws.onopen = null
+    this.ws.onerror = null
   }
 
   /**
