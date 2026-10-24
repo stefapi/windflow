@@ -111,8 +111,10 @@ async def deployment_logs_websocket_endpoint(
             return
 
     try:
-        # Enregistrer la connexion
-        await manager.connect(websocket, deployment_id)
+        # Enregistrer la connexion — sans ré-acceptance : la connexion est
+        # déjà acceptée ci-dessus (l'accept précoce est indispensable pour la
+        # branche 404/403 error + close 1008)
+        await manager.connect(websocket, deployment_id, accept_connection=False)
 
         # Envoyer le statut initial
         await websocket.send_json(

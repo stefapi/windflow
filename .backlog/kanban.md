@@ -27,8 +27,7 @@
 
 ## 🏗️ IN PROGRESS
 
-### EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
-- [~] BUG-008 : Double `websocket.accept()` sur `deployment_logs` — le client reçoit `error` au lieu du statut initial (Majeur — détecté STORY-165, xfail strict)
+_(vide)_
 
 ## 🚫 BLOCKED
 
@@ -40,6 +39,7 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] BUG-008 : Double `websocket.accept()` sur `deployment_logs` — le client reçoit `error` au lieu du statut initial (Majeur — détecté STORY-165, xfail strict) (EPIC-013) — corrigé (paramètre `accept_connection: bool = True` sur `ConnectionManager.connect` — accept conditionnel, défaut rétrocompatible batch.py intact ; handler `deployment_logs` appelle `accept_connection=False` : une seule acceptance par connexion, l'accept précoce reste dédié à la branche 404/403 error + close 1008), xfail retiré + contournement `_register_only_connect` supprimé (6 parcours nominaux sur le vrai chemin de production) + 2 tests du paramètre, 63/63 ciblés puis 416 passed + **0 xfailed** sur `test_websocket/` (BUG-008 était le dernier), non-régression batch 62 passed, connection_managers.py 100 % couverture, lint OK
 - [x] BUG-007 : Clé vide résiduelle dans `ConnectionManager.broadcast_to_deployment` — purge sans `del` de l'entrée (Mineur — détecté STORY-165, note de divergence) (EPIC-013) — corrigé (hygiène `disconnect` appliquée à la purge post-broadcast : `difference_update` + `del` de la clé vide, garde `.get()` contre `KeyError` sur disconnect concurrent ; canaux deployment_logs et batch couverts), test documentaire inversé/renommé + 3 tests non-régression (no-op après purge, reconnect, tolérance race), 50/50 ciblés puis 413 passed + 1 xfailed (BUG-008 seul restant), connection_managers.py 100 % couverture, lint OK
 - [x] BUG-006 : `WebSocketPluginManager.register` duplicate — index `_event_handlers` obsolète, le plugin remplacé continue de recevoir les dispatchs (Majeur — détecté STORY-165) (EPIC-013) — corrigé (pattern unregister : discard de l'ancienne instance + purge clés vides avant remplacement ; bug jumeau `register_message_handler` inclus), xfail retiré + 4 tests non-régression (dispatch, cleanup_all, écoutes partielles, routage messages), 44/44 ciblés puis 410 passed + 1 xfailed (BUG-008 seul restant), plugin.py 100 % couverture, lint OK
 - [x] BUG-005 : Deadlock `UserConnectionManager.broadcast_to_user` — purge des connexions mortes sous le lock non-réentrant (Bloquant — détecté STORY-165) (EPIC-013) — corrigé (remove_connection appelé hors lock, pattern broadcast_to_event_subscribers ; cascade abonnements/contextes préservée), xfail retiré + 3 tests non-régression (lock libéré, purge multiple, cascade), 47/47 puis 405 passed + 2 xfailed (BUG-006/008 restants), connection_managers.py 100 % couverture, lint OK

@@ -20,18 +20,14 @@ portage des scénarios §9.2/§9.3 de la spec (WEBSOCKET-REAL-TIME.md) et
 - **expiration muette** : settings réduits → silence → fermeture serveur ;
 - exception dans la boucle → message ``error`` envoyé si possible (l.169-174).
 
-⚠️ **Bug de production documenté (non corrigé — story tests-only)** :
-``deployment_logs_websocket_endpoint`` fait ``websocket.accept()`` (l.102)
-puis ``manager.connect(websocket, ...)`` (l.115) qui effectue un **second**
-``websocket.accept()`` (``connection_managers.py`` l.128). Starlette refuse
-le double accept (``application_state`` déjà ACCEPTED) → ``AssertionError``
-attrapée par le ``except`` générique → le client reçoit ``error`` au lieu du
-statut initial. Les tests auth existants masquaient le bug
-(``assert type in ("error", "status", "initial")``). Le bug est démontré par
-``test_initial_status_without_connect_workaround`` (xfail strict) ; les
-tests nominaux utilisent le contournement ``_register_only_connect`` (patch
-de ``manager.connect`` : enregistrement sans accept) pour couvrir la boucle
-réelle du canal.
+✅ **BUG-008 corrigé** (double ``websocket.accept()``) : l'endpoint accepte
+la connexion (l'accept précoce est nécessaire à la branche 404/403 error +
+close 1008) puis enregistre la connexion via
+``manager.connect(..., accept_connection=False)`` — une seule acceptance
+par connexion. Les parcours nominaux empruntent le vrai chemin de
+production (plus aucun contournement) ;
+``test_initial_status_without_connect_workaround`` est le garde-fou de
+non-régression du bug (ex-xfail strict).
 
 Le handshake est authentifié par la dépendance ``get_current_user_ws``
 (query param ``?token=``) puis ``ensure_role_ws("viewer")`` dans le routeur —
@@ -57,17 +53,6 @@ from app.websocket import deployment_logs as deployment_logs_module
 from app.websocket.connection_managers import manager
 
 CHANNEL = "/api/v1/ws/deployments/dep-1/logs"
-
-# Bug production (voir docstring module) : le double websocket.accept()
-# empêche le parcours nominal. Documenté pour suivi — non corrigé ici.
-DOUBLE_ACCEPT_BUG = (
-    "BUG production (STORY-165 Tâche 6) : double websocket.accept() sur le "
-    "canal deployment_logs — deployment_logs.py l.102 accepte la connexion "
-    "puis manager.connect() (connection_managers.py l.128) ré-accepte ; "
-    "Starlette lève AssertionError('Expected ASGI message websocket.send or "
-    "websocket.close, but got websocket.accept') → le client reçoit error "
-    "au lieu du statut initial. Non corrigé : story tests-only."
-)
 
 
 # ===========================================================================
@@ -217,24 +202,6 @@ def _auth_stack(
     return stack
 
 
-def _register_only_connect():
-    """Contournement du bug double-accept : ``manager.connect`` sans accept.
-
-    L'endpoint a déjà accepté la connexion (l.102) ; le ``connect`` du
-    manager ré-accepte et fait échouer le canal (voir DOUBLE_ACCEPT_BUG).
-    Ce patch enregistre la connexion **sans** ré-accepter, ce qui permet de
-    couvrir la boucle réelle du canal (statut initial, ping/pong, broadcast,
-    expiration) en attendant la correction du bug.
-    """
-
-    async def _connect(websocket, deployment_id):
-        if deployment_id not in manager.active_connections:
-            manager.active_connections[deployment_id] = set()
-        manager.active_connections[deployment_id].add(websocket)
-
-    return patch.object(manager, "connect", new=_connect)
-
-
 def _wait_for(condition, timeout: float = 3.0, interval: float = 0.02):
     """Attend une condition post-fermeture (nettoyage asynchrone côté serveur)."""
     deadline = time.monotonic() + timeout
@@ -277,8 +244,9 @@ def _emitter_as_heartbeat(deployment_id: str = "dep-1"):
 class TestDeploymentLogsAuthorized:
     """Membre de l'org : statut initial, ping/pong, déconnexion propre.
 
-    Ces tests parcourent la boucle réelle du canal via le contournement
-    documenté ``_register_only_connect`` (bug double-accept — voir module).
+    Ces tests parcourent la boucle réelle du canal via le vrai
+    ``manager.connect`` (BUG-008 corrigé — une seule acceptance par
+    connexion, plus de contournement).
     """
 
     def test_initial_status_message_sent_on_connect(self, ws_client):
@@ -288,20 +256,19 @@ class TestDeploymentLogsAuthorized:
         deployment = _make_deployment()
 
         with _auth_stack(user, deployment):
-            with _register_only_connect():
-                with ws_client.websocket_connect(CHANNEL + "?token=valid.jwt") as ws:
-                    status_message = ws.receive_json()
-                    assert status_message["type"] == "status"
-                    assert status_message["data"] == {
-                        "status": "running",
-                        "deployment_id": "dep-1",
-                        "name": "test-deployment",
-                    }
-                    # updated_at None → timestamp null (pas de crash).
-                    assert status_message["timestamp"] is None
+            with ws_client.websocket_connect(CHANNEL + "?token=valid.jwt") as ws:
+                status_message = ws.receive_json()
+                assert status_message["type"] == "status"
+                assert status_message["data"] == {
+                    "status": "running",
+                    "deployment_id": "dep-1",
+                    "name": "test-deployment",
+                }
+                # updated_at None → timestamp null (pas de crash).
+                assert status_message["timestamp"] is None
 
-                    # Connexion enregistrée auprès du manager.
-                    assert "dep-1" in manager.active_connections
+                # Connexion enregistrée auprès du manager.
+                assert "dep-1" in manager.active_connections
 
     def test_ping_pong_loop(self, ws_client):
         """Boucle : ping texte client → pong horodaté."""
@@ -310,13 +277,12 @@ class TestDeploymentLogsAuthorized:
         deployment = _make_deployment()
 
         with _auth_stack(user, deployment):
-            with _register_only_connect():
-                with ws_client.websocket_connect(CHANNEL + "?token=valid.jwt") as ws:
-                    ws.receive_json()  # status
-                    ws.send_text("ping")
-                    pong = ws.receive_json()
-                    assert pong["type"] == "pong"
-                    assert "timestamp" in pong
+            with ws_client.websocket_connect(CHANNEL + "?token=valid.jwt") as ws:
+                ws.receive_json()  # status
+                ws.send_text("ping")
+                pong = ws.receive_json()
+                assert pong["type"] == "pong"
+                assert "timestamp" in pong
 
     def test_disconnect_removes_connection_from_manager(self, ws_client):
         """Déconnexion client → manager.disconnect (plus aucune connexion)."""
@@ -325,10 +291,9 @@ class TestDeploymentLogsAuthorized:
         deployment = _make_deployment()
 
         with _auth_stack(user, deployment):
-            with _register_only_connect():
-                with ws_client.websocket_connect(CHANNEL + "?token=valid.jwt") as ws:
-                    ws.receive_json()  # status
-                    assert "dep-1" in manager.active_connections
+            with ws_client.websocket_connect(CHANNEL + "?token=valid.jwt") as ws:
+                ws.receive_json()  # status
+                assert "dep-1" in manager.active_connections
 
         _wait_for(lambda: "dep-1" not in manager.active_connections)
 
@@ -339,52 +304,41 @@ class TestDeploymentLogsAuthorized:
         deployment = _make_deployment()
 
         with _auth_stack(user, deployment):
-            with _register_only_connect():
-                with _emitter_as_heartbeat("dep-1"):
-                    with ws_client.websocket_connect(
-                        CHANNEL + "?token=valid.jwt"
-                    ) as ws:
-                        ws.receive_json()  # status
+            with _emitter_as_heartbeat("dep-1"):
+                with ws_client.websocket_connect(CHANNEL + "?token=valid.jwt") as ws:
+                    ws.receive_json()  # status
 
-                        messages = []
-                        for _ in range(10):
-                            message = ws.receive_json()
-                            messages.append(message)
-                            logs_count = len(
-                                [
-                                    m
-                                    for m in messages
-                                    if m["type"] == "DEPLOYMENT_LOGS_UPDATE"
-                                ]
-                            )
-                            if message.get("type") == "DEPLOYMENT_LOGS_UPDATE" and (
-                                logs_count >= 2
-                            ):
-                                break
+                    messages = []
+                    for _ in range(10):
+                        message = ws.receive_json()
+                        messages.append(message)
+                        logs_count = len(
+                            [
+                                m
+                                for m in messages
+                                if m["type"] == "DEPLOYMENT_LOGS_UPDATE"
+                            ]
+                        )
+                        if message.get("type") == "DEPLOYMENT_LOGS_UPDATE" and (
+                            logs_count >= 2
+                        ):
+                            break
 
-                        logs = [
-                            m for m in messages if m["type"] == "DEPLOYMENT_LOGS_UPDATE"
-                        ]
-                        assert len(logs) >= 2
-                        first, second = logs[0], logs[1]
-                        assert first["data"]["logs"] == ["step 1/2 pulling images"]
-                        assert first["data"]["level"] == "info"
-                        assert second["data"]["level"] == "warning"
-                        # Streaming logs : type non critique → pas d'id d'ack.
-                        assert "id" not in first
+                    logs = [
+                        m for m in messages if m["type"] == "DEPLOYMENT_LOGS_UPDATE"
+                    ]
+                    assert len(logs) >= 2
+                    first, second = logs[0], logs[1]
+                    assert first["data"]["logs"] == ["step 1/2 pulling images"]
+                    assert first["data"]["level"] == "info"
+                    assert second["data"]["level"] == "warning"
+                    # Streaming logs : type non critique → pas d'id d'ack.
+                    assert "id" not in first
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=DOUBLE_ACCEPT_BUG,
-    )
     def test_initial_status_without_connect_workaround(self, ws_client):
-        """Démontre le bug double-accept : sans contournement, le client
-        reçoit ``error`` (et non le statut initial) — Starlette refuse le
-        second ``websocket.accept`` émis par ``manager.connect``.
-
-        xfail strict : si le bug est corrigé (``manager.connect`` sans
-        accept, ou accept retiré de l'endpoint), ce test XPASS et échoue —
-        retirer alors le marquage ET le contournement ``_register_only_connect``.
+        """Garde-fou de non-régression BUG-008 : sans contournement, le
+        premier message est bien le statut initial (une seule acceptance
+        par connexion — ``manager.connect(accept_connection=False)``).
         """
         _override_db()
         user = _make_user()
@@ -465,11 +419,10 @@ class TestDeploymentLogsAccessRefusal:
 
         # is_member par défaut du _auth_stack : superuser → True partout.
         with _auth_stack(user, deployment):
-            with _register_only_connect():
-                with ws_client.websocket_connect(CHANNEL + "?token=valid.jwt") as ws:
-                    status_message = ws.receive_json()
-                    assert status_message["type"] == "status"
-                    assert status_message["data"]["deployment_id"] == "dep-1"
+            with ws_client.websocket_connect(CHANNEL + "?token=valid.jwt") as ws:
+                status_message = ws.receive_json()
+                assert status_message["type"] == "status"
+                assert status_message["data"]["deployment_id"] == "dep-1"
 
     async def test_none_user_401_unit_branch(self):
         """Branche défensive 401 : user None → HTTPException 401 (verify unitaire).
@@ -510,19 +463,18 @@ class TestDeploymentLogsExpiryAndErrors:
         deployment = _make_deployment()
 
         with _auth_stack(user, deployment):
-            with _register_only_connect():
-                with patch.object(settings, "ws_heartbeat_interval_seconds", 1):
-                    with patch.object(settings, "ws_heartbeat_timeout_factor", 1):
-                        with ws_client.websocket_connect(
-                            CHANNEL + "?token=valid.jwt"
-                        ) as ws:
-                            ws.receive_json()  # status
-                            # Silence client : le serveur ping puis ferme
-                            # après expiration — la réception finit par
-                            # échouer (pattern test_ws_batch mute expiry).
-                            with pytest.raises(Exception):
-                                while True:
-                                    ws.receive_json()
+            with patch.object(settings, "ws_heartbeat_interval_seconds", 1):
+                with patch.object(settings, "ws_heartbeat_timeout_factor", 1):
+                    with ws_client.websocket_connect(
+                        CHANNEL + "?token=valid.jwt"
+                    ) as ws:
+                        ws.receive_json()  # status
+                        # Silence client : le serveur ping puis ferme
+                        # après expiration — la réception finit par
+                        # échouer (pattern test_ws_batch mute expiry).
+                        with pytest.raises(Exception):
+                            while True:
+                                ws.receive_json()
 
     async def test_loop_exception_sends_error_message(self):
         """Boucle : exception non WebSocketDisconnect/Heartbeat → error envoyé.
