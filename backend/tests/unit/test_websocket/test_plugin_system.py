@@ -173,17 +173,6 @@ class TestRegisterUnregister:
         assert plugin_manager.get("dup") is second
         assert any("already registered" in r.message for r in caplog.records)
 
-    @pytest.mark.xfail(
-        reason=(
-            "Bug production détecté (non corrigé, décision 7 STORY-165) : "
-            "register en duplicate remplace _plugins[name] mais ne retire "
-            "jamais l'ancienne instance de _event_handlers → le plugin "
-            "'remplacé' continue de recevoir les dispatch (plugin.py:200-206). "
-            "Fix attendue : discard de l'ancien plugin des index avant "
-            "ré-indexation (ou unregister préalable)."
-        ),
-        strict=True,
-    )
     def test_register_duplicate_replaces_event_index(self):
         plugin_manager = WebSocketPluginManager()
         first = FakePlugin(name="dup", listens=[WebSocketEventType.AUTH_LOGOUT])
@@ -192,9 +181,82 @@ class TestRegisterUnregister:
         plugin_manager.register(first)
         plugin_manager.register(second)
 
-        # L'index par event doit pointer vers la nouvelle instance uniquement.
+        # L'index par event doit pointer vers la nouvelle instance uniquement
+        # (BUG-006 corrigé : discard de l'ancienne instance au remplacement).
         handlers = plugin_manager._event_handlers[WebSocketEventType.AUTH_LOGOUT]
         assert handlers == {second}
+
+    async def test_register_duplicate_dispatches_only_replacement(self, context):
+        """BUG-006 : le plugin remplacé ne reçoit plus les dispatchs."""
+        plugin_manager = WebSocketPluginManager()
+        first = FakePlugin(name="dup", listens=[WebSocketEventType.AUTH_LOGOUT])
+        second = FakePlugin(name="dup", listens=[WebSocketEventType.AUTH_LOGOUT])
+        plugin_manager.register(first)
+        plugin_manager.register(second)
+        await plugin_manager.initialize_all(context)
+
+        payload = {"user_id": "u-1"}
+        await plugin_manager.dispatch(WebSocketEventType.AUTH_LOGOUT, payload, context)
+
+        assert second.handled_events == [(WebSocketEventType.AUTH_LOGOUT, payload)]
+        assert first.handled_events == []
+
+    async def test_register_duplicate_cleanup_all_only_replacement(self, context):
+        """BUG-006 : cleanup_all ne nettoie que le remplaçant — l'instance
+        orpheline n'est plus référencée nulle part."""
+        plugin_manager = WebSocketPluginManager()
+        first = FakePlugin(name="dup", listens=[WebSocketEventType.AUTH_LOGOUT])
+        second = FakePlugin(name="dup", listens=[WebSocketEventType.AUTH_LOGOUT])
+        plugin_manager.register(first)
+        plugin_manager.register(second)
+
+        await plugin_manager.cleanup_all(context)
+
+        assert second.cleaned_up is True
+        assert first.cleaned_up is False
+
+    def test_register_duplicate_partial_listen_purges_stale_events(self):
+        """BUG-006 : événements écoutés par l'ancien seul → clé d'index purgée
+        (pattern unregister : discard + suppression des clés vides)."""
+        plugin_manager = WebSocketPluginManager()
+        first = FakePlugin(
+            name="dup",
+            listens=[
+                WebSocketEventType.AUTH_LOGOUT,
+                WebSocketEventType.NOTIFICATION_SYSTEM,
+            ],
+        )
+        second = FakePlugin(name="dup", listens=[WebSocketEventType.AUTH_LOGOUT])
+
+        plugin_manager.register(first)
+        plugin_manager.register(second)
+
+        assert plugin_manager._event_handlers[WebSocketEventType.AUTH_LOGOUT] == {
+            second
+        }
+        assert (
+            WebSocketEventType.NOTIFICATION_SYSTEM not in plugin_manager._event_handlers
+        )
+
+    async def test_register_message_handler_duplicate_replaces_type_index(
+        self, context
+    ):
+        """BUG-006 (bug jumeau) : l'index par type de message pointe vers le
+        remplaçant uniquement et le routage client est déterministe."""
+        plugin_manager = WebSocketPluginManager()
+        first = FakeHandler(name="dup", handles=["x"])
+        second = FakeHandler(name="dup", handles=["x"], response={"type": "x_ok"})
+        plugin_manager.register_message_handler(first)
+        plugin_manager.register_message_handler(second)
+
+        assert plugin_manager._message_type_handlers["x"] == {second}
+
+        message = {"type": "x", "data": {"payload": 1}}
+        response = await plugin_manager.handle_client_message(message, context)
+
+        assert response == {"type": "x_ok"}
+        assert second.handled_messages == [message]
+        assert first.handled_messages == []
 
     def test_register_message_handler_indexes_types(self):
         plugin_manager = WebSocketPluginManager()

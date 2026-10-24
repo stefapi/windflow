@@ -3,7 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
-- [ ] BUG-006 : `WebSocketPluginManager.register` duplicate — index `_event_handlers` obsolète, le plugin remplacé continue de recevoir les dispatchs (Majeur — détecté STORY-165, xfail strict)
 - [ ] BUG-007 : Clé vide résiduelle dans `ConnectionManager.broadcast_to_deployment` — purge sans `del` de l'entrée (Mineur — détecté STORY-165, note de divergence)
 - [ ] BUG-008 : Double `websocket.accept()` sur `deployment_logs` — le client reçoit `error` au lieu du statut initial (Majeur — détecté STORY-165, xfail strict)
 - [ ] BUG-009 : `WebSocketService.disconnect()` frontend ne purge pas `authToken`/`authenticated`/`listeners`/`serverSubscriptions` — fuite d'état entre sessions (Majeur — détecté STORY-165 T10)
@@ -42,6 +41,7 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] BUG-006 : `WebSocketPluginManager.register` duplicate — index `_event_handlers` obsolète, le plugin remplacé continue de recevoir les dispatchs (Majeur — détecté STORY-165) (EPIC-013) — corrigé (pattern unregister : discard de l'ancienne instance + purge clés vides avant remplacement ; bug jumeau `register_message_handler` inclus), xfail retiré + 4 tests non-régression (dispatch, cleanup_all, écoutes partielles, routage messages), 44/44 ciblés puis 410 passed + 1 xfailed (BUG-008 seul restant), plugin.py 100 % couverture, lint OK
 - [x] BUG-005 : Deadlock `UserConnectionManager.broadcast_to_user` — purge des connexions mortes sous le lock non-réentrant (Bloquant — détecté STORY-165) (EPIC-013) — corrigé (remove_connection appelé hors lock, pattern broadcast_to_event_subscribers ; cascade abonnements/contextes préservée), xfail retiré + 3 tests non-régression (lock libéré, purge multiple, cascade), 47/47 puis 405 passed + 2 xfailed (BUG-006/008 restants), connection_managers.py 100 % couverture, lint OK
 - [x] STORY-165 : Tests WebSocket — couverture complète du module temps réel (P2-5/P2-14, partie tests) (EPIC-013) — 10 fichiers de tests (+229 backend : 401 passed + 3 xfailed ; +25 frontend), couverture 94 % module WS / 94,05 % `websocket.ts`, 5 bugs consignés (BUG-005→009), story tests-only : zéro code de production modifié
 - [x] STORY-164.3 : Reconnexion unifiée avec jitter + resynchronisation d'état + client type documenté (P2-5, partie client — STORY-164 découpée) (EPIC-013) — module partagé `ws-reconnect.ts` consommé par canal général + composables, resync GET, logout conservé, client type documenté §8, 60 tests, couverture 97/82/80 %

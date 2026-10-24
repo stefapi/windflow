@@ -192,10 +192,19 @@ class WebSocketPluginManager:
         Args:
             plugin: Plugin instance to register
         """
-        if plugin.name in self._plugins:
+        existing = self._plugins.get(plugin.name)
+        if existing is not None:
             self._logger.warning(
                 f"Plugin '{plugin.name}' is already registered, replacing..."
             )
+            # BUG-006: remove the replaced instance from the event index
+            # (same pattern as unregister) so it no longer receives dispatches.
+            for event_type in existing.listens_for:
+                handlers = self._event_handlers.get(event_type)
+                if handlers:
+                    handlers.discard(existing)
+                    if not handlers:
+                        del self._event_handlers[event_type]
 
         self._plugins[plugin.name] = plugin
 
@@ -214,10 +223,19 @@ class WebSocketPluginManager:
         Args:
             handler: Message handler instance to register
         """
-        if handler.name in self._message_handlers:
+        existing = self._message_handlers.get(handler.name)
+        if existing is not None:
             self._logger.warning(
                 f"Message handler '{handler.name}' is already registered, replacing..."
             )
+            # BUG-006 (twin bug): remove the replaced handler from the message
+            # type index (same pattern as unregister) to keep routing deterministic.
+            for msg_type in existing.handles_message_types:
+                handlers = self._message_type_handlers.get(msg_type)
+                if handlers:
+                    handlers.discard(existing)
+                    if not handlers:
+                        del self._message_type_handlers[msg_type]
 
         self._message_handlers[handler.name] = handler
 
