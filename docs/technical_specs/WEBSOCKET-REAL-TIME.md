@@ -136,10 +136,13 @@ endpoints existent :
 | `/api/v1/ws/terminal/{container_id}?shell=&user=` | Terminal interactif container | `/ws/terminal/{container_id}` |
 | `/api/v1/ws/docker/containers/{container_id}/logs?tail=` | Streaming logs container | `/ws/logs/{app_id}` (partiel — périmètre container, voir C7) |
 | `/api/v1/ws/docker/containers/{container_id}/stats` | Streaming stats container | — (hors liste canonique) |
+| `/api/v1/ws/ssh/{host_id}?cols=&rows=` | Session SSH interactive de Host (PTY TOFU STRICT, STORY-164.2) | `/ws/ssh/{host_id}` |
+| `/api/v1/ws/journal/{host_id}?tail=` | Journal système de Host (`journalctl -f`, STORY-164.2) | `/ws/journal/{host_id}` |
+| `/api/v1/ws/batch/{batch_id}` | Progression des opérations groupées (émetteur-ready, STORY-164.2) | `/ws/batch/{batch_id}` |
 
 | Canal canonique non monté | Statut |
 |---|---|
-| `/ws/console/{machine_id}`, `/ws/ssh/{host_id}`, `/ws/journal/{host_id}`, `/ws/batch/{batch_id}` | ⚠️ **Non implémenté** — cible general_specs |
+| `/ws/console/{machine_id}` | ⏸️ **Explicitement reporté** à la Roadmap VMs (décision 8 analyse STORY-164 / plan §6 : VNC hors périmètre) — non implémenté ; un éventuel `/ws/console` retourne 404 naturellement. Sera livré avec le socle Machines (noVNC/SPICE). |
 
 Sur le canal général, les clients ne se connectent pas à un canal par sujet mais **s'abonnent à des types
 d'événements** via le message `subscribe` (voir §8.1) — les abonnements sont gérés par
@@ -450,40 +453,65 @@ répondent aussi à `ping`.
 
 ### 8.3 Reconnexion
 
-*Observé* (canal général, [`services/websocket.ts`](../../frontend/src/services/websocket.ts)) :
-backoff exponentiel **1 s / 2 s / 4 s**, **3 tentatives** max, puis déconnexion de l'utilisateur
-(logout). Les fermetures dues à une erreur d'authentification (codes 1008/1003, ou raisons « Invalid
-token », « Authentication timeout », etc.) ne sont **jamais** retentées → logout immédiat.
+> **Implémenté (STORY-164.3)** — politique unifiée, module partagé
+> [`frontend/src/services/ws-reconnect.ts`](../../frontend/src/services/ws-reconnect.ts),
+> consommé par le canal général ([`services/websocket.ts`](../../frontend/src/services/websocket.ts))
+> **et** les composables dédiés ([`useContainerLogs`](../../frontend/src/composables/useContainerLogs.ts),
+> [`useContainerStats`](../../frontend/src/composables/useContainerStats.ts)).
 
-```typescript
-// Extrait réel — frontend/src/services/websocket.ts:19-22
-  private reconnectAttempts = 0
-  private maxReconnectAttempts = 3 // Aligned with HTTP retry logic
-  private reconnectDelays = [1000, 2000, 4000] // Exponential backoff: 1s, 2s, 4s
-  private isReconnecting = false // Prevent simultaneous reconnection attempts
-```
+**Un seul algorithme, paramétrable par canal** (préréglages `generalChannel` / `dedicatedChannel`) :
 
-*Observé* (canaux dédiés, `useContainerLogs` / `useContainerStats`) : reconnexion simple — 5 tentatives,
-délai fixe de 2 s, sans retry si fermeture 1000/1008.
+1. **Backoff exponentiel** : délai = `min(base × factor^n, maxDelayMs)` — défaut 1 s × 2^n plafonné à 8 s
+   (constant [`WS_RECONNECT_DEFAULTS`](../../frontend/src/services/ws-reconnect.ts), décision 9 — pas de
+   nouvelle dépendance JS) ;
+2. **Jitter borné** : ± 25 % du délai plafonné (source aléatoire injectable, tests déterministes) —
+   anti-tempête de reconnexion ;
+3. **Re-souscription automatique** : à chaque ouverture réussie, le callback `onResubscribe` rétablit les
+   abonnements (canal général : topics `subscribe`/`deployment_logs` tracés et rejoués ; canaux dédiés :
+   reconnexion directe au canal) ;
+4. **Resynchronisation d'état par GET** : après une **coupure** (pas à la première connexion), le callback
+   `onResync` refait un `GET` de la ressource suivie — logs (`containersApi.getLogs`) / stats
+   (`containersApi.getStats`) — pour combler les événements manqués. Le passé se réconcilie par l'API
+   REST, jamais par rejou WebSocket ;
+5. **Jamais de retry sur 1008/1003** (ou raison d'auth : « Invalid token », « Authentication timeout »…)
+   → état `stopped` immédiat. Généralisation du comportement historiquement correct du canal général ;
+6. **Logout sur épuisement des tentatives, canal général** (3 par défaut — arbitrage STORY-164.3 :
+   comportement historique conservé, non-régression UX). Les canaux dédiés (preset `dedicatedChannel`,
+   5 tentatives) s'arrêtent silencieusement en statut erreur, sans logout ; par ailleurs ils ne retentent
+   pas une fermeture **1000** propre (fin de stream).
 
-⚠️ **Cible non implémentée** : politique unifiée (un seul algorithme tous canaux), gigue (jitter) sur le
-backoff pour éviter les tempêtes de reconnexion, reconnexion transparente après veille réseau, et
-**resynchronisation d'état** après reconnexion (refaire un `GET` de la ressource suivie pour combler les
-événements manqués). À spécifier au moment de l'implémentation.
+Machine à états du contrôleur : `idle → connecting → open ⇄ reconnecting → stopped` (`stop()` idempotent,
+`reset()` pour une reconnexion manuelle).
 
 ### 8.4 Acknowledgment
 
-⚠️ **Non implémenté — cible** (promesse general_specs). Spécification cible, pour les messages critiques
-(tout message dont la perte est inacceptable) :
+> **Implémenté (STORY-164.1)** — contrat serveur : enveloppe `id` UUID sur les types critiques
+> (`ws_ack_critical_types`, défaut `DEPLOYMENT_STATUS_CHANGED` / `NOTIFICATION_USER`), registre **par
+> utilisateur** avec TTL `ws_ack_ttl_seconds` (~30 s), re-diffusion à la reconnexion du même utilisateur,
+> dégradation WARNING au-delà du TTL. Le client type doit :
 
-1. Le serveur ajoute un champ `id` (UUID) à l'enveloppe des messages critiques ;
-2. Le client accuse réception en renvoyant `{"type": "ack", "data": {"id": "<uuid>"}}` ;
-3. Le serveur retient les messages non acquittés **par connexion** (TTL ~30 s) et re-diffuse à la
-   reconnexion — pas de persistence longue (le passé se réconcilie par l'API REST, pas par rejou WS) ;
-4. Un `ack` absent au-delà du TTL ⇒ dégradation en logs serveur (métriques [`metrics.py`](../../backend/app/websocket/metrics.py)).
+1. Détecter le champ `id` sur l'enveloppe des messages critiques ;
+2. Accuser réception en renvoyant `{"type": "ack", "data": {"id": "<uuid>"}}` (canal général) ;
+3. Traquer les re-diffusions idempotemment (même `id` → même traitement).
 
 L'acknowledgment ne s'applique ni au streaming de logs, ni aux heartbeats, ni aux messages d'UI
 éphémères (toasts) — par conception, ces flux sont perdables.
+
+### 8.5 Client type (contrat attendu d'un client tiers — CLI, plugin, intégration)
+
+> Résumé opérationnel du « client type documenté » (critère de done P2-5). Les implémentations de
+> référence sont [`websocket.ts`](../../frontend/src/services/websocket.ts) (canal général) et
+> [`useContainerLogs.ts`](../../frontend/src/composables/useContainerLogs.ts) (canal dédié).
+
+| Aspect | Contrat |
+|---|---|
+| **Auth** | Canaux dédiés : JWT en query param `?token=` (re-généré/ré-injecté à chaque reconnexion). Canal général et terminal : premier message `{"type": "auth", "token": "…"}` sous **30 s** (close 1008 sinon). Échec → ne **jamais** retenter (voir §8.3), nettoyer la session. |
+| **Ping/pong** | Le serveur émet `{"type": "ping", …}` périodiquement et **expire toute connexion muette au bout de ~2 intervalles** (`ws_heartbeat_*`, STORY-164.1, close 1001). Le client répond `pong` (ou émet toute activité) au moins toutes les ~1 intervalle. |
+| **Ack** | Messages critiques porteurs d'un `id` UUID → acquitter par `{"type": "ack", "data": {"id": …}}` ; une re-diffusion (TTL ~30 s écoulé sans ack visible serveur) peut survenir à la reconnexion — traitement idempotent (voir §8.4). |
+| **Reconnexion** | Politique unifiée §8.3 : backoff exponentiel + jitter borné, re-souscription automatique, resynchronisation GET de l'état, **aucun retry sur 1008/1003**. Le client tiers réimplémente l'algorithme (sans dépendance) ou s'inspire de `ws-reconnect.ts`. |
+| **Couches bus** | ⚠️ Les types SCREAMING_SNAKE (`DEPLOYMENT_STATUS_CHANGED`…) sont un détail de transport. **Jamais d'abonnement workflow/plugin sur ces noms** — la souscription métier se fait sur les événements canoniques `domaine.action_passé` (avertissement STORY-162, §4.2). |
+| **Nommage** | Les canaux réels sont montés sous `/api/v1/ws/...` (écart de nommage vs `/ws/...` canonique — voir §3.2, arbitrage STORY-252). |
+| **VNC** | `/ws/console/{machine_id}` non livré — explicitement reporté à la Roadmap VMs (§3.2). |
 
 ---
 

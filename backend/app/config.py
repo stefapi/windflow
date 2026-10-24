@@ -333,6 +333,44 @@ class Settings(BaseSettings):
         "in-memory mode",
     )
 
+    # === Protocole WebSocket : heartbeat + acknowledgment (STORY-164.1) ===
+    # Expiration des connexions muettes : le serveur ping périodiquement
+    # (tous les ``ws_heartbeat_interval_seconds``) et ferme toute connexion
+    # sans activité reçue (pong ou tout message client) pendant
+    # ``ws_heartbeat_timeout_factor × ws_heartbeat_interval_seconds``.
+    # Env var : WS_HEARTBEAT_INTERVAL_SECONDS.
+    ws_heartbeat_interval_seconds: int = Field(
+        default=30,
+        gt=0,
+        description="WebSocket server ping interval in seconds (idle expiry "
+        "applies after ws_heartbeat_timeout_factor × this interval without "
+        "any client activity)",
+    )
+    # Env var : WS_HEARTBEAT_TIMEOUT_FACTOR.
+    ws_heartbeat_timeout_factor: int = Field(
+        default=2,
+        ge=1,
+        description="Multiplier on ws_heartbeat_interval_seconds after which "
+        "a silent connection is closed server-side",
+    )
+    # Acknowledgment des messages critiques : un message critique non
+    # acquitté au-delà du TTL est journalisé en WARNING (dégradation) et
+    # re-diffusé à la reconnexion du même utilisateur tant que l'entrée
+    # n'a pas été purgée (purge paresseuse).
+    # Env var : WS_ACK_TTL_SECONDS.
+    ws_ack_ttl_seconds: int = Field(
+        default=30,
+        gt=0,
+        description="TTL in seconds for unacknowledged critical WebSocket "
+        "messages (degradation WARNING beyond, re-delivery on reconnect)",
+    )
+    # Env var : WS_ACK_CRITICAL_TYPES (JSON array ou comma-separated).
+    ws_ack_critical_types: List[str] = Field(
+        default=["DEPLOYMENT_STATUS_CHANGED", "NOTIFICATION_USER"],
+        description="WebSocket event types carrying an ack id (UUID) — "
+        "streaming logs, heartbeats and toasts are excluded by design",
+    )
+
     # === Double émission WS legacy (STORY-162 — période de transition) ===
     # Borne la double diffusion des événements deployment.* sur le pont
     # WebSocket (clé canonique + ancien DEPLOYMENT_STATUS_CHANGED pour le

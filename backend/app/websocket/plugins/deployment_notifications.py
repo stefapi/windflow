@@ -103,9 +103,13 @@ class DeploymentNotificationsPlugin(WebSocketPlugin):
         if user_id and context.broadcast_to_user:
             await context.broadcast_to_user(user_id, message)
 
-        # Broadcast to all deployment event subscribers
-        if context.broadcast_to_event_subscribers:
-            await context.broadcast_to_event_subscribers("deployment_events", message)
+        # STORY-164.1 (arbitrage du tracé STORY-163, point d'attention 6) :
+        # l'ancienne diffusion aux abonnés de la clé "deployment_events" est
+        # retirée — clé morte (aucun client ne s'y abonne : le frontend
+        # s'abonne à DEPLOYMENT_STATUS_CHANGED via le handler subscription,
+        # vérifié dans frontend/src/services/websocket.ts et
+        # useDeploymentWebSocket.ts). Le contrat du plugin (broadcast_to_user
+        # + types écoutés) est inchangé.
 
     async def _handle_logs_update(
         self, data: Dict[str, Any], context: PluginContext
@@ -179,11 +183,8 @@ class DeploymentNotificationsPlugin(WebSocketPlugin):
         if user_id and context.broadcast_to_user:
             await context.broadcast_to_user(user_id, message)
 
-        # Broadcast to deployment event subscribers
-        if context.broadcast_to_event_subscribers:
-            await context.broadcast_to_event_subscribers(
-                f"deployment_progress_{deployment_id}", message
-            )
+        # STORY-164.1 : idem statut — la clé dynamique
+        # "deployment_progress_{id}" était morte (aucun abonnement client).
 
     async def cleanup(self) -> None:
         """Clean up plugin resources."""

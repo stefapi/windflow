@@ -40,7 +40,7 @@ Chaque item P2 du plan de remédiation est couvert par une story de la plage STO
 **Dépendances internes** (plan §4-§5 + sections Dépendances de chaque story) :
 - **STORY-160** et **STORY-161** dépendent de **STORY-120** (Alembic, EPIC-012) — analyse conjointe recommandée.
 - **STORY-162** : aucune dépendance dure P1 ; **STORY-163** dépend de STORY-162.
-- **STORY-164** dépend de **STORY-100** (WS auth, EPIC-011) + **STORY-131** (ssh_keys — ⚠️ correction : la version précédente de cette epic citait « STORY-128 (ssh_keys) », erroné — STORY-128 est la pagination, les ssh_keys sont la STORY-131) ; **STORY-165** dépend de STORY-164.
+- **STORY-164** (découpée → **STORY-164.1/.2/.3**) dépend de **STORY-100** (WS auth, EPIC-011) + **STORY-131** (ssh_keys — ⚠️ correction : la version précédente de cette epic citait « STORY-128 (ssh_keys) », erroné — STORY-128 est la pagination, les ssh_keys sont la STORY-131) ; 164.2 dépend en outre de 164.1 (helper d'expiration — recommandé), 164.3 a une dépendance documentaire avec 164.1 ; **STORY-165** dépend des sous-stories 164.1→164.3.
 - **STORY-166** dépend de **STORY-120 + STORY-121 + STORY-122** (chaîne critique Alembic → RBAC → nouveaux chemins `/hosts`) ; s'appuie sur STORY-103 (credentials chiffrés) et STORY-131 (`hosts.ssh_key_id`).
 - **STORY-167** dépend de **STORY-120** ; liée à STORY-162 (nomenclature).
 - **STORY-168** dépend de **STORY-121/STORY-122** (cache RBAC TTL 300 s) ; harmonisation avec STORY-102 (rate limit mémoire).
@@ -54,7 +54,7 @@ Chaque item P2 du plan de remédiation est couvert par une story de la plage STO
 - P2-2 (STORY-162/163) : table de correspondance ancien→nouveau documentée ; chaque événement spec émis par son émetteur réel ; avec Redis configuré, événement visible sur canal Pub/Sub ; sans Redis, in-memory intact ; `DEPLOYMENT_PROGRESS` émis, `deployment_notifications` enregistré.
 - P2-3 (STORY-169/170) : install avec checksum invalide → rejet ; échec de hook → rollback complet (DB + filesystem + conteneur) ; config chiffrée en base ; routes dynamiques documentées OpenAPI ; gates approve/deny/timeout avec Trivy de référence.
 - P2-4 + P2-10 (STORY-166) : migration de données sans perte (test sur fixture réaliste) ; double nommage actif avec header de dépréciation ; adoption marque `origin=adopted` ; stacks rattachables à un environnement ; premier démarrage → host local détecté, désactivable par setting.
-- P2-5 (STORY-164/165) : suite de tests WS (connexion, auth, heartbeat timeout, re-souscription) ; client type documenté ; VNC explicitement absent (machines = Roadmap).
+- P2-5 (STORY-164.1→164.3/165) : suite de tests WS (connexion, auth, heartbeat timeout, re-souscription) ; client type documenté ; VNC explicitement absent (machines = Roadmap).
 - P2-6 (STORY-171) : `postgresql.yaml` passe la validation API admin ET le seed avec les mêmes règles ; `minimum/maximum` servis au formulaire.
 - P2-7 (STORY-167) : un déploiement de test produit une séquence d'events requêtable paginée ; rétention appliquée.
 - P2-8 (STORY-168) : sans Redis, cache mémoire fonctionne et warning émis ; avec Redis, clés visibles ; TTL respecté.
@@ -72,7 +72,9 @@ Chaque item P2 du plan de remédiation est couvert par une story de la plage STO
 - [x] STORY-161 : Table `scheduled_task_executions` — historique des exécutions, endpoints de consultation, rétention (P2-1, partie traçabilité)
 - [x] STORY-162 : Bus d'événements canonique — interface unique, nomenclature spec, in-memory + Redis Pub/Sub optionnel (P2-2, partie bus — F6)
 - [x] STORY-163 : Consommateurs plugins du bus — hooks `@on_event`, `deployment_notifications` enregistré, `DEPLOYMENT_PROGRESS` émis (P2-2, partie consommateurs)
-- [ ] STORY-164 : Canaux WebSocket manquants + durcissement — `/ws/ssh`, `/ws/journal`, `/ws/batch`, heartbeats, ack, reconnexion (P2-5, partie durcissement)
+- [x] STORY-164.1 : Mécaniques de protocole serveur — heartbeats avec expiration des connexions muettes + acknowledgment des messages critiques (P2-5, partie protocole — STORY-164 découpée)
+- [x] STORY-164.2 : Canaux WebSocket manquants — `/ws/ssh/{host}` TOFU STRICT, `/ws/journal/{host}`, `/ws/batch/{batch_id}` émetteur-ready, VNC reporté documenté (P2-5, partie canaux — STORY-164 découpée)
+- [x] STORY-164.3 : Reconnexion unifiée avec jitter + resynchronisation d'état + client type documenté (P2-5, partie client — STORY-164 découpée)
 - [ ] STORY-165 : Tests WebSocket — couverture complète du module temps réel (P2-5/P2-14, partie tests)
 - [ ] STORY-166 : Migration `Target`→`Host` + axe `origin` + `environments` + `Stack.git_url` + auto-détection du host local (P2-4 + P2-10 — F4 étape 2)
 - [ ] STORY-167 : `deployment_events` structurés — table dédiée, migration des données, endpoint paginé, rétention (P2-7)
@@ -88,6 +90,7 @@ Chaque item P2 du plan de remédiation est couvert par une story de la plage STO
 
 - **Plage de numéros réservée** : STORY-160 à STORY-199 (seules 160-174 sont affectées ; 175-199 disponibles pour sous-découpes — ex. STORY-166/169 XL et STORY-162/164/170/174 L — et pour la matérialisation éventuelle de P2-15, cf. traçabilité ci-dessus).
 - ✂️ **STORY-160 découpée (2026-10-21)** : `split-story` proactif post-analyse (complexité XL — 4 domaines peu couplés) → **STORY-160.1** (modèle spec 17 + registre d'actions + API `/schedules` v2), **STORY-160.2** (moteur runtime asyncio), **STORY-160.3** (actions core + triggers événement), suffixes `.1/.2/.3` pattern STORY-131 ; la mère est `ABANDONED` ([STORY-160](../stories/STORY-160-moteur-scheduler-asyncio.md)) et le critère de done « P2-1 (STORY-160/161) » se vérifie désormais sur 160.1→160.3 + 161.
+- ✂️ **STORY-164 découpée (2026-10-23)** : `split-story` proactif post-analyse (complexité L — ~10 tâches hétérogènes sur 3 périmètres indépendants) → **STORY-164.1** (protocole serveur : expiration heartbeat ~2 intervalles + ack TTL/re-diffusion), **STORY-164.2** (canaux `/ws/ssh`/`journal`/`batch` + VNC reporté documenté), **STORY-164.3** (reconnexion unifiée jitter + client type documenté), suffixes `.1/.2/.3` pattern STORY-160/131 ; la mère est `ABANDONED` ([STORY-164](../stories/STORY-164-canaux-websocket-manquants-durcissement.md)) et le critère de done « P2-5 » se vérifie désormais sur 164.1→164.3 + 165 ; inter-dépendances : 164.2 → 164.1 (helper expiration, recommandé), 164.3 → 164.1 (documentaire).
 - Source principale : [`docs/backend_remediation_plan.md`](../../docs/backend_remediation_plan.md) §4 « Vague P2 », axes A8, A9, A14, A15, A16/F3, B4, B5, B7, B8, B9, C3-C11, C13, C14, D1-D5, F4 (étape 2), F6, F7.
 - Arbitrages concernés : **F4** (modèle directeur phasé — étape 2 ici ; `Apps`/`Machines`/`Clusters` = Roadmap Phase 2, noté dans STORY-166), **F6** (bus — interface + 2 implémentations, STORY-162), **F3** (incorporation HORS SPEC, STORY-166/173), **F1** (purge Celery déjà traitée en STORY-130.2 — le scheduler assume asyncio, STORY-160), **F7** (WorkloadAdapter, STORY-174).
 - Hors périmètre explicitement rappelé dans les stories : console VNC et canal `batch` lié aux Machines (Roadmap VMs — `/ws/batch` livré car lié aux opérations groupées Apps), check-updates et graph complet (Roadmap Phase 5), GitOps (plugin Git), Redis Streams replay, adapters K8s/VM, étape 3 du modèle directeur.

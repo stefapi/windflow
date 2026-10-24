@@ -20,6 +20,7 @@ from ..database import db as database
 from ..models.deployment import Deployment
 from ..services.terminal_service import ExecSession, TerminalService
 from ..services.user_organization_service import UserOrganizationService
+from .heartbeat import HeartbeatExpiredError, receive_with_expiry
 
 logger = logging.getLogger(__name__)
 
@@ -365,10 +366,18 @@ async def container_terminal_websocket_endpoint(
 
         streaming_task = asyncio.create_task(stream_output())
 
-        # Boucle principale - gérer les messages du client
+        # Boucle principale - gérer les messages du client.
+        # STORY-164.1 : expiration sur inactivité TOTALE uniquement — tout
+        # message reçu (input terminal, resize, ping) reset le délai, les
+        # sessions interactives actives ne sont jamais fermées. Pas de ping
+        # serveur périodique sur ce canal interactif bidirectionnel (le
+        # terminal est en émission continue via stream_output ; l'expiration
+        # ne vise que le silence du client).
         while True:
             try:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
+                data = await receive_with_expiry(
+                    websocket, f"terminal:{container_id}", user_id=str(ws_user.id)
+                )
 
                 # Heartbeat
                 if data == "ping":
@@ -411,11 +420,14 @@ async def container_terminal_websocket_endpoint(
                     # already handled above
                     pass
 
-            except asyncio.TimeoutError:
-                # Timeout - juste envoyer un pong pour maintenir la connexion
-                await websocket.send_json(
-                    {"type": "pong", "timestamp": datetime.utcnow().isoformat()}
+            except HeartbeatExpiredError:
+                # Inactivité totale — connexion fermée côté serveur (1001)
+                # par le helper ; nettoyage ExecSession par le finally.
+                logger.info(
+                    "Terminal WebSocket expired (idle) for container %s",
+                    container_id,
                 )
+                break
 
             except Exception as e:
                 logger.error(f"WebSocket error: {e}")

@@ -24,18 +24,54 @@ Fonctions de gestion des abonnements:
     - subscribe_to_deployment_logs: S'abonner aux logs d'un déploiement
 """
 
+import uuid
 from datetime import datetime
 from typing import Optional
 
 from fastapi import WebSocket
 
 from ..schemas.websocket_events import WebSocketEventType
+from .ack_registry import AckRegistry, ack_registry
 from .connection_managers import manager, user_manager
 from .plugin import PluginContext
 
 # ============================================================================
 # FONCTIONS DE BROADCAST - DÉPLOIEMENTS
 # ============================================================================
+
+
+async def _attach_ack_id_if_critical(
+    event_type: object, message: dict, user_id: Optional[str] = None
+) -> None:
+    """
+    Attache un ``id`` UUID d'acknowledgment aux messages critiques (STORY-164.1).
+
+    Décision 5 : seuls les types configurés dans ``ws_ack_critical_types``
+    (défaut ``DEPLOYMENT_STATUS_CHANGED`` + ``NOTIFICATION_USER``) portent un
+    ``id`` et sont adressés au registre d'ack — les streaming logs, les
+    heartbeats et les toasts sont exclus par conception. Si le message porte
+    déjà un ``id`` (re-diffusion après reconnexion), rien n'est régénéré ni
+    réenregistré.
+
+    Args:
+        event_type: Type d'événement WebSocket (enum ou str).
+        message: Enveloppe du message (mutée sur place : ``id`` ajouté).
+        user_id: Destinataire si identifié — condition pour l'enregistrement
+            au registre (re-diffusion à la reconnexion du même utilisateur).
+    """
+    if not AckRegistry.is_critical_type(event_type):
+        return
+    if message.get("id"):
+        return  # id déjà porté (re-diffusion) — pas de double entrée
+    message_id = str(uuid.uuid4())
+    message["id"] = message_id
+    if user_id:
+        await ack_registry.register(
+            message_id=message_id,
+            user_id=user_id,
+            event_type=str(event_type),
+            payload=message.get("data") or {},
+        )
 
 
 async def _broadcast_deployment_event(
@@ -47,6 +83,8 @@ async def _broadcast_deployment_event(
     Gère automatiquement:
     - Ajout du timestamp si absent
     - Création du message WebSocket
+    - Id d'acknowledgment sur les types critiques + registre (STORY-164.1,
+      destinataire identifié via ``event_data["user_id"]``)
     - Broadcast aux connexions directes
     - Dispatch aux plugins
 
@@ -59,6 +97,13 @@ async def _broadcast_deployment_event(
         event_data["timestamp"] = datetime.utcnow().isoformat()
 
     websocket_message = {"type": event_type, "data": event_data}
+
+    # STORY-164.1 : id UUID + registre d'ack pour les types critiques —
+    # le destinataire identifiable est l'initiateur (``user_id``) lorsqu'il
+    # est fourni dans le payload.
+    await _attach_ack_id_if_critical(
+        event_type, websocket_message, user_id=event_data.get("user_id")
+    )
 
     await manager.broadcast_to_deployment(deployment_id, websocket_message)
     await user_manager.dispatch_to_plugins(event_type, event_data)
@@ -216,6 +261,10 @@ async def broadcast_to_user(user_id: str, message: dict):
         ...     "data": {"message": "Hello!"}
         ... })
     """
+    # STORY-164.1 : les messages critiques adressés à un utilisateur portent
+    # un id d'ack (généré si absent) et sont enregistrés au registre pour
+    # re-diffusion à la reconnexion de ce même utilisateur.
+    await _attach_ack_id_if_critical(message.get("type"), message, user_id=user_id)
     await user_manager.broadcast_to_user(user_id, message)
 
 

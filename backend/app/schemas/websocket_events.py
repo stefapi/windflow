@@ -5,6 +5,10 @@ These types must match the WebSocketEventType enum in frontend/src/services/webs
 """
 
 from enum import Enum
+from typing import Any, Optional
+from uuid import UUID
+
+from pydantic import BaseModel, Field
 
 
 class WebSocketEventType(str, Enum):
@@ -69,6 +73,35 @@ class WebSocketEventType(str, Enum):
     LOGS_SUBSCRIBED = "logs_subscribed"  # Confirmation d'abonnement aux logs
     MESSAGE_RECEIVED = "message_received"  # Accusé de réception
     TEXT_RECEIVED = "text_received"  # Texte reçu
+
+
+class WebSocketMessageEnvelope(BaseModel):
+    """Enveloppe des messages WebSocket serveur → client (STORY-164.1).
+
+    Documente le contrat de l'enveloppe diffusée par
+    ``websocket/broadcasting.py`` :
+
+    - ``type`` : type d'événement (``WebSocketEventType`` ou type interne) ;
+    - ``data`` : charge utile de l'événement ;
+    - ``timestamp`` : horodatage ISO (renseigné à l'émission) ;
+    - ``id`` : identifiant d'acknowledgment **uniquement pour les types
+      critiques** (``ws_ack_critical_types`` — défaut
+      ``DEPLOYMENT_STATUS_CHANGED`` + ``NOTIFICATION_USER``). Absent par
+      conception pour les streaming logs, heartbeats et toasts.
+
+    Le client accuse réception d'un message critique via :
+    ``{"type": "ack", "data": {"id": "<uuid>"}}`` (canal général) —
+    registre TTL ~30 s, re-diffusion à la reconnexion du même utilisateur.
+    """
+
+    type: str
+    data: Optional[dict[str, Any]] = None
+    timestamp: Optional[str] = None
+    id: Optional[UUID] = Field(
+        default=None,
+        description="Ack id (UUID) — critical event types only; the client "
+        "acknowledges with {'type': 'ack', 'data': {'id': ...}}",
+    )
 
 
 # Types helpers pour la construction des messages

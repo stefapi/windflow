@@ -28,6 +28,8 @@ from . import (
     plugin_manager,
     remove_user_connection,
 )
+from .ack_registry import ack_registry
+from .heartbeat import HeartbeatExpiredError, periodic_ping, receive_with_expiry
 from .plugins import default_message_handlers, default_plugins
 
 logger = logging.getLogger(__name__)
@@ -155,30 +157,34 @@ async def general_websocket_endpoint(websocket: WebSocket):
             # Ajouter l'utilisateur aux connexions actives
             await add_user_connection(str(user.id), websocket, plugin_context)
 
-            # Tâche de heartbeat serveur vers client
-            heartbeat_task = None
+            # STORY-164.1 : re-diffusion des messages critiques non
+            # acquittés de cet utilisateur (registre par user — les
+            # critiques émis pendant une déconnexion brève ne sont pas
+            # perdus silencieusement). Purge de l'entrée à la re-diffusion.
+            pending_critical = await ack_registry.redeliver_pending(str(user.id))
+            for entry in pending_critical:
+                await websocket.send_json(
+                    {
+                        "type": entry.event_type,
+                        "data": entry.payload,
+                        "id": entry.message_id,
+                        "redelivered": True,
+                    }
+                )
 
-            async def send_heartbeat():
-                """Envoie un heartbeat périodique au client."""
-                try:
-                    while True:
-                        await asyncio.sleep(30)  # Toutes les 30 secondes
-                        await websocket.send_json(
-                            {"type": "ping", "timestamp": datetime.utcnow().isoformat()}
-                        )
-                except asyncio.CancelledError:
-                    pass  # Tâche annulée, normal lors de la déconnexion
-                except Exception as e:
-                    logger.error(f"Error in heartbeat task: {e}")
+            # Tâche de heartbeat serveur vers client (helper factorisé,
+            # intervalle ws_heartbeat_interval_seconds)
+            heartbeat_task = asyncio.create_task(periodic_ping(websocket, "general"))
 
-            # Démarrer la tâche de heartbeat
-            heartbeat_task = asyncio.create_task(send_heartbeat())
-
-            # Boucle de maintien de connexion
+            # Boucle de maintien de connexion — STORY-164.1 : expiration
+            # des connexions muettes (tout message reçu reset le délai ;
+            # fermeture serveur 1001 après factor × interval sans activité)
             try:
                 while True:
-                    # Attendre un message du client
-                    data = await websocket.receive_text()
+                    # Attendre un message du client (borné par le helper)
+                    data = await receive_with_expiry(
+                        websocket, "general", user_id=str(user.id)
+                    )
 
                     # Le client peut envoyer "ping" pour maintenir la connexion
                     if data == "ping":
@@ -189,6 +195,32 @@ async def general_websocket_endpoint(websocket: WebSocket):
                         # Essayer de parser comme JSON pour d'autres types de messages
                         try:
                             message = json.loads(data)
+
+                            # STORY-164.1 : message de protocole `ack`
+                            # ({"type":"ack","data":{"id":…}}) — acquitte le
+                            # message critique auprès du registre (isolation
+                            # par user), sans passer par les plugins ni
+                            # déclencher l'écho message_received.
+                            if (
+                                isinstance(message, dict)
+                                and message.get("type") == "ack"
+                            ):
+                                acked_id = (message.get("data") or {}).get("id")
+                                acked = (
+                                    await ack_registry.ack(str(acked_id), str(user.id))
+                                    if acked_id
+                                    else False
+                                )
+                                if not acked:
+                                    logger.warning(
+                                        "WebSocket ack ignored (unknown, already "
+                                        "acked or foreign message)",
+                                        extra={
+                                            "user_id": str(user.id),
+                                            "message_id": str(acked_id),
+                                        },
+                                    )
+                                continue
 
                             # Utiliser le système de plugins pour gérer le message
                             response = await plugin_manager.handle_client_message(
@@ -220,6 +252,10 @@ async def general_websocket_endpoint(websocket: WebSocket):
 
             except WebSocketDisconnect:
                 logger.info(f"General WebSocket disconnected for user {user.id}")
+            except HeartbeatExpiredError:
+                # Connexion muette fermée côté serveur par le helper —
+                # nettoyage par le finally commun.
+                logger.info("General WebSocket expired (idle) for user %s", user.id)
             finally:
                 # Annuler la tâche de heartbeat
                 if heartbeat_task:

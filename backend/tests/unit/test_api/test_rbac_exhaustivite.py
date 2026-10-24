@@ -69,7 +69,7 @@ EXPECTED_ROUTE_COUNTS: dict[str, int] = {
     "stacks": 15,
     "deployments": 8,
     "workflows": 1,
-    "websockets": 5,
+    "websockets": 8,
     "stats": 2,
     "import_export": 2,
     # STORY-161 : +4 routes exécutions (liste par tâche, vue globale,
@@ -92,6 +92,12 @@ WS_DEDICATED = (
     "/api/v1/ws/deployments/{deployment_id}/logs",
     "/api/v1/ws/docker/containers/{container_id}/logs",
     "/api/v1/ws/docker/containers/{container_id}/stats",
+    "/api/v1/ws/batch/{batch_id}",
+)
+# Canaux dédiés Operator+ (matrice spec 08 § Hosts — STORY-164.2)
+WS_DEDICATED_OPERATOR = (
+    "/api/v1/ws/ssh/{host_id}",
+    "/api/v1/ws/journal/{host_id}",
 )
 
 
@@ -178,8 +184,8 @@ class TestWebSocketRoutesProtected:
     """Les 5 canaux ``/api/v1/ws/*`` ont une garde auth (+ rôle terminal)."""
 
     def test_dedicated_channels_have_auth_dependency(self):
-        """Logs/stats/déploiements : dépendance ``get_current_user_ws`` au
-        handshake + garde ``ensure_role_ws`` viewer dans le router."""
+        """Logs/stats/déploiements/batch : dépendance ``get_current_user_ws``
+        au handshake + garde ``ensure_role_ws`` viewer dans le router."""
         routes = _api_v1_routes()
         for path in WS_DEDICATED:
             route = routes.get(path)
@@ -189,13 +195,26 @@ class TestWebSocketRoutesProtected:
                 "get_current_user_ws" in names
             ), f"{path} : dépendance get_current_user_ws absente"
 
-        # Garde de rôle viewer homogène posée dans le router (STORY-122.6)
+        # Canaux Operator+ (STORY-164.2 — matrice spec 08 § Hosts)
+        for path in WS_DEDICATED_OPERATOR:
+            route = routes.get(path)
+            assert route is not None, f"Canal WebSocket manquant : {path}"
+            names = _dependency_names(route)
+            assert (
+                "get_current_user_ws" in names
+            ), f"{path} : dépendance get_current_user_ws absente"
+
+        # Garde de rôle posée dans le router (STORY-122.6 + 164.2) :
+        # viewer × (déploiements/logs/stats/batch), operator × (ssh/journal)
         from app.api.v1 import websockets as ws_router_module
 
         source = inspect.getsource(ws_router_module)
         assert source.count('ensure_role_ws(websocket, user, "viewer"') == len(
             WS_DEDICATED
-        ), "Garde ensure_role_ws(viewer) attendue sur les 3 canaux dédiés"
+        ), "Garde ensure_role_ws(viewer) attendue sur les canaux dédiés viewer"
+        assert source.count('ensure_role_ws(websocket, user, "operator"') == len(
+            WS_DEDICATED_OPERATOR
+        ), "Garde ensure_role_ws(operator) attendue sur ssh/journal"
 
     def test_first_message_channels_guarded_in_handlers(self):
         """Général + terminal : auth premier message + ``ensure_role_ws`` dans
@@ -220,13 +239,18 @@ class TestWebSocketRoutesProtected:
         ), "Canal terminal : garde ensure_role_ws(operator) absente du handler"
 
     def test_websocket_route_inventory(self):
-        """Inventaire : exactement les 5 canaux attendus sous ``/api/v1/ws``."""
+        """Inventaire : exactement les 8 canaux attendus sous ``/api/v1/ws``."""
         ws_paths = {
             path
             for path, route in _api_v1_routes().items()
             if type(route).__name__ == "APIWebSocketRoute"
         }
-        expected = {WS_GENERAL, WS_TERMINAL, *WS_DEDICATED}
+        expected = {
+            WS_GENERAL,
+            WS_TERMINAL,
+            *WS_DEDICATED,
+            *WS_DEDICATED_OPERATOR,
+        }
         assert (
             ws_paths == expected
         ), f"Canaux WS inattendus/manquants : {ws_paths ^ expected}"

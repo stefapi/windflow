@@ -6,19 +6,22 @@ La logique métier a été déplacée dans backend/app/websocket/ pour une
 meilleure organisation et maintenabilité.
 """
 
-from fastapi import APIRouter, Depends, WebSocket
+from fastapi import APIRouter, Depends, Query, WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.dependencies import get_current_user_ws
 from ...auth.rbac import ensure_role_ws
 from ...database import get_db
 from ...models.user import User
+from ...websocket.batch import batch_websocket_endpoint
 from ...websocket.container_logs import container_logs_websocket_endpoint
 from ...websocket.container_stats import container_stats_websocket_endpoint
 from ...websocket.deployment_logs import deployment_logs_websocket_endpoint
 
 # Import des endpoints WebSocket depuis le package websocket
 from ...websocket.general import general_websocket_endpoint
+from ...websocket.journal import journal_websocket_endpoint, validate_journal_tail
+from ...websocket.ssh_session import ssh_session_websocket_endpoint
 from ...websocket.terminal import container_terminal_websocket_endpoint
 
 router = APIRouter()
@@ -247,3 +250,164 @@ async def docker_container_stats_websocket(
     """
     await ensure_role_ws(websocket, user, "viewer", session)
     await container_stats_websocket_endpoint(websocket, container_id, user)
+
+
+@router.websocket("/ssh/{host_id}", name="ssh_session_websocket")
+async def ssh_session_websocket(
+    websocket: WebSocket,
+    host_id: str,
+    cols: int = Query(80, ge=10, le=500),
+    rows: int = Query(24, ge=4, le=200),
+    user: User = Depends(get_current_user_ws),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Interactive SSH session WebSocket for remote Hosts.
+
+    Opens a bidirectional PTY session (xterm.js compatible) on a remote
+    Host, with TOFU STRICT host key verification (STORY-131): unknown,
+    non-accepted or divergent fingerprint **blocks** the session (close
+    1011, generic client message — the fingerprint itself is never sent
+    to the client).
+
+    Authentication:
+    Authentication is performed via query parameter: ?token=JWT_TOKEN.
+    The handshake is **refused** (close code 1008) if the token is absent,
+    invalid, expired or the user is inactive. In development mode
+    (DISABLE_AUTH=true), the first superadmin is auto-logged in.
+
+    Query Parameters:
+    - token: JWT token for authentication
+    - cols: Initial terminal width (10-500, default 80)
+    - rows: Initial terminal height (4-200, default 24)
+
+    Client Messages:
+    - input: {"type": "input", "data": "ls\\n"}
+    - resize: {"type": "resize", "cols": 120, "rows": 30}
+    - ping: {"type": "ping"}
+
+    Server Messages:
+    - ready: {"type": "ready", "session_id": "...", "host_id": "...", "cols": 80, "rows": 24}
+    - output: {"type": "output", "data": "..."}
+    - error: {"type": "error", "message": "..."}
+    - exit: {"type": "exit", "code": 0}
+    - pong: {"type": "pong", "timestamp": "..."}
+
+    Security:
+    - TOFU STRICT: unknown/divergent host key → close 1011, generic
+      message (never the fingerprint itself)
+    - Rate limiting: maximum 3 concurrent SSH sessions per user
+    - Audit trail: dedicated `ssh_session_audit` logger
+      (connect/disconnect, user, host, duration — no secrets)
+    - Idle expiry: silent connections closed server-side (1001)
+
+    ## Access Control — RBAC (STORY-122.6)
+
+    - **Minimum role**: Operator — session SSH sur Host = action
+      opérationnelle (matrice spec 08 § Hosts « SSH/journalctl ») ;
+      rôle insuffisant → handshake refusé (close 1008) avant
+      acceptation du canal.
+    """
+    await ensure_role_ws(websocket, user, "operator", session)
+    await ssh_session_websocket_endpoint(websocket, host_id, user, session, cols, rows)
+
+
+@router.websocket("/journal/{host_id}", name="host_journal_websocket")
+async def host_journal_websocket(
+    websocket: WebSocket,
+    host_id: str,
+    tail: int = Query(100, ge=0, le=10000),
+    user: User = Depends(get_current_user_ws),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Stream a remote Host system journal (journalctl -f) in real-time.
+
+    Runs `journalctl -f -n <tail> --no-pager` on the Host over SSH (TOFU
+    STRICT host key verification — same policy as /ws/ssh) and streams
+    each line to the client. Non-systemd hosts (journalctl missing or
+    failing, non-zero exit) get an explicit `error` message and a clean
+    close.
+
+    Authentication:
+    Authentication is performed via query parameter: ?token=JWT_TOKEN.
+    The handshake is **refused** (close code 1008) if the token is absent,
+    invalid, expired or the user is inactive. In development mode
+    (DISABLE_AUTH=true), the first superadmin is auto-logged in.
+
+    Query Parameters:
+    - token: JWT token for authentication
+    - tail: Number of initial lines (0-10000, default 100) — validated
+      and bounded before being interpolated into the remote command
+
+    Message Types Sent:
+    - initial: {"type": "initial", "host_id": "...", "tail": 100}
+    - stream_status: started / ended / failed
+    - log: {"type": "log", "data": "..."} — one message per journal line
+    - error: journalctl unavailable (non-systemd host), SSH failure…
+    - pong: heartbeat response
+
+    Client Messages:
+    - Heartbeat: Send "ping" to keep connection alive
+
+    ## Access Control — RBAC (STORY-122.6)
+
+    - **Minimum role**: Operator — journalctl sur Host = action
+      opérationnelle SSH (matrice spec 08 § Hosts « SSH/journalctl
+      (lecture) » classée Operator+ ; divergence vs décision d'analyse
+      « viewer » signalée dans STORY-164.2) ; rôle insuffisant →
+      handshake refusé (close 1008) avant acceptation du canal.
+    """
+    await ensure_role_ws(websocket, user, "operator", session)
+    try:
+        validate_journal_tail(tail)
+    except ValueError:
+        # Garde défensive — Query(ge/le) a déjà borné la valeur.
+        await websocket.close(code=1008)
+        return
+    await journal_websocket_endpoint(websocket, host_id, user, session, tail)
+
+
+@router.websocket("/batch/{batch_id}", name="batch_progress_websocket")
+async def batch_progress_websocket(
+    websocket: WebSocket,
+    batch_id: str,
+    user: User = Depends(get_current_user_ws),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Follow the progression of a batch operation (batch update, check-updates).
+
+    Subscribes to the event stream of a grouped operation. The channel is
+    **emitter-ready** (STORY-164.2, decision 7): no batch orchestration
+    exists in the backend yet — the first real producer is expected from
+    STORY-173 (`POST /compute/check-updates` → batch_id), then the
+    multi-App batch-update (Roadmap). Emitters call
+    `broadcast_batch_event(batch_id, phase, data)`.
+
+    Authentication:
+    Authentication is performed via query parameter: ?token=JWT_TOKEN.
+    The handshake is **refused** (close code 1008) if the token is absent,
+    invalid, expired or the user is inactive. In development mode
+    (DISABLE_AUTH=true), the first superadmin is auto-logged in.
+
+    Message Types Sent:
+    - subscribed: {"type": "subscribed", "batch_id": "..."}
+    - start: {"type": "start", "data": {"batch_id": "...", "total": 3}}
+    - progress: {"type": "progress", "data": {"app_id": "...", "step": "pulling", ...}}
+    - complete: {"type": "complete", "data": {"total": 3, "succeeded": 2, ...}}
+    - error: global batch failure
+    - pong: heartbeat response
+
+    Client Messages:
+    - Heartbeat: Send "ping" to keep connection alive
+
+    ## Access Control — RBAC (STORY-122.6)
+
+    - **Minimum role**: Viewer — suivi d'opération = lecture (le
+      déclenchement d'une opération groupée passe par l'API REST
+      RBAC-protégée — décision 2 analyse STORY-164) ; rôle insuffisant →
+      handshake refusé (close 1008) avant acceptation du canal.
+    """
+    await ensure_role_ws(websocket, user, "viewer", session)
+    await batch_websocket_endpoint(websocket, batch_id, user, session)

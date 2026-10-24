@@ -20,8 +20,48 @@ websocket/
 │   ├── audit_logger.py      # Logging des événements de sécurité
 │   ├── deployment_monitor.py # Monitoring des déploiements
 │   └── subscription.py      # Gestion des abonnements
+├── heartbeat.py             # Protocole heartbeat + expiration (STORY-164.1)
+├── ack_registry.py          # Registre d'ack des messages critiques (STORY-164.1)
+├── host_access.py           # Résolution Host + isolation org (STORY-164.2)
+├── ssh_session.py           # Canal /ws/ssh/{host_id} — PTY TOFU STRICT (STORY-164.2)
+├── journal.py               # Canal /ws/journal/{host_id} — journalctl -f (STORY-164.2)
+├── batch.py                 # Canal /ws/batch/{batch_id} — émetteur-ready (STORY-164.2)
 └── README.md                # Cette documentation
 ```
+
+### Canaux (STORY-164.2 — état complété)
+
+Le routeur [`api/v1/websockets.py`](../api/v1/websockets.py) expose 8 canaux
+montés sous `/api/v1/ws` :
+
+| Canal | Rôle minimum | Handler |
+|---|---|---|
+| `/` (général) | viewer (auth 1er message) | `general.py` |
+| `/deployments/{id}/logs` | viewer | `deployment_logs.py` |
+| `/terminal/{container_id}` | operator (auth 1er message) | `terminal.py` |
+| `/docker/containers/{id}/logs` | viewer | `container_logs.py` |
+| `/docker/containers/{id}/stats` | viewer | `container_stats.py` |
+| `/ssh/{host_id}` | operator | `ssh_session.py` — PTY interactif, TOFU STRICT, rate limit 3/user, audit `ssh_session_audit` |
+| `/journal/{host_id}` | operator | `journal.py` — `journalctl -f -n <tail>` sur SSH, TOFU STRICT |
+| `/batch/{batch_id}` | viewer | `batch.py` — progression des opérations groupées (émetteur-ready : émission via `broadcast_batch_event`, 1er producteur attendu STORY-173 check-updates) |
+
+> ⏸️ **Console VNC (`/ws/console/{machine_id}`) explicitement reportée** à la
+> Roadmap VMs (décision 8 analyse STORY-164 / plan de remédiation §6) — non
+> implémentée ; un éventuel `/ws/console` retourne 404 naturellement. Sera
+> livrée avec le socle Machines (noVNC/SPICE). Les rôles journal/ssh suivent
+> la matrice spec 08 § Hosts (« SSH/journalctl » = Operator+).
+
+### Client type (STORY-164.3 — contrat attendu de tout client)
+
+| Aspect | Contrat |
+|---|---|
+| **Auth** | Canaux dédiés : JWT en query param `?token=`. Canal général et terminal : premier message `{"type": "auth", "token": "…"}` sous 30 s (close 1008 sinon). |
+| **Ping/pong** | Le serveur ping périodiquement et **expire les connexions muettes** au bout de ~2 intervalles (`heartbeat.py`, STORY-164.1, close 1001). Le client répond `pong` / émet une activité régulière. |
+| **Ack** | Messages critiques avec `id` UUID → acquitter `{"type": "ack", "data": {"id": …}}` ; re-diffusion possible à la reconnexion (TTL ~30 s, `ack_registry.py`) — traitement idempotent. |
+| **Reconnexion** | Politique unifiée : backoff exponentiel + jitter borné (±25 %, plafond 8 s), re-souscription automatique, **resynchronisation GET** de l'état, **aucun retry sur 1008/1003**. Implémentation de référence frontend : `frontend/src/services/ws-reconnect.ts`. |
+| **Couches bus** | Ne **jamais** abonner workflows/plugins aux types transport SCREAMING_SNAKE — souscription métier sur les événements canoniques `domaine.action_passé` (STORY-162). |
+
+Détail complet : [WEBSOCKET-REAL-TIME.md §8](../../../docs/technical_specs/WEBSOCKET-REAL-TIME.md).
 
 ## Modules
 

@@ -14,6 +14,11 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from ..models.user import User
 from ..services.docker_client_service import get_docker_client
+from .heartbeat import (
+    HeartbeatExpiredError,
+    periodic_ping,
+    receive_with_expiry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -496,6 +501,7 @@ async def container_stats_websocket_endpoint(
             pass
 
     status_check_task: Optional[asyncio.Task] = None
+    heartbeat_task: Optional[asyncio.Task] = None
 
     try:
         # Vérifier que le container existe et est en cours d'exécution
@@ -529,6 +535,11 @@ async def container_stats_websocket_endpoint(
         # Démarrer la tâche de vérification du statut du container
         status_check_task = asyncio.create_task(check_container_status())
 
+        # STORY-164.1 : ping serveur périodique (helper factorisé).
+        heartbeat_task = asyncio.create_task(
+            periodic_ping(websocket, f"container_stats:{container_id}")
+        )
+
         # Notifier le démarrage du stream
         await websocket.send_json(
             {
@@ -538,12 +549,14 @@ async def container_stats_websocket_endpoint(
             }
         )
 
-        # Boucle principale - attendre les heartbeats du client
+        # Boucle principale - attendre les heartbeats du client.
+        # STORY-164.1 : expiration des connexions muettes — le délai se
+        # reset sur les messages REÇUS du client uniquement ; l'émission
+        # des stats par le stream n'est pas de l'activité client.
         while streaming_active:
             try:
-                data = await asyncio.wait_for(
-                    websocket.receive_text(),
-                    timeout=30.0,  # 30s timeout
+                data = await receive_with_expiry(
+                    websocket, f"container_stats:{container_id}"
                 )
 
                 if data == "ping":
@@ -551,15 +564,14 @@ async def container_stats_websocket_endpoint(
                         {"type": "pong", "timestamp": datetime.utcnow().isoformat()}
                     )
 
-            except asyncio.TimeoutError:
-                # Timeout - envoyer un ping pour maintenir la connexion
-                try:
-                    await websocket.send_json(
-                        {"type": "ping", "timestamp": datetime.utcnow().isoformat()}
-                    )
-                except Exception:
-                    streaming_active = False
-                    break
+            except HeartbeatExpiredError:
+                # Connexion muette fermée côté serveur (1001) — arrêt du stream.
+                logger.info(
+                    "[ContainerStats] Idle connection expired for container %s",
+                    container_id,
+                )
+                streaming_active = False
+                break
 
             # Vérifier si la tâche de streaming a échoué
             if streaming_task and streaming_task.done():
@@ -588,6 +600,14 @@ async def container_stats_websocket_endpoint(
 
     finally:
         streaming_active = False
+
+        # STORY-164.1 : annuler la tâche de ping périodique
+        if heartbeat_task:
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
 
         # Annuler la tâche de streaming
         if streaming_task and not streaming_task.done():

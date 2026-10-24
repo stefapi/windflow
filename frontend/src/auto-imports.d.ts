@@ -7,8 +7,11 @@
 export {}
 declare global {
   const ACTIONS: typeof import('@/composables/business')['ACTIONS']
+  const AUTH_CLOSE_REASONS: typeof import('./services/ws-reconnect')['AUTH_CLOSE_REASONS']
   const EffectScope: typeof import('vue')['EffectScope']
   const RESOURCES: typeof import('@/composables/business')['RESOURCES']
+  const WS_RECONNECT_DEFAULTS: typeof import('./services/ws-reconnect')['WS_RECONNECT_DEFAULTS']
+  const WS_RECONNECT_PRESETS: typeof import('./services/ws-reconnect')['WS_RECONNECT_PRESETS']
   const acceptHMRUpdate: typeof import('pinia')['acceptHMRUpdate']
   const api: typeof import('./services/api')['default']
   const asyncComputed: typeof import('@vueuse/core')['asyncComputed']
@@ -17,6 +20,7 @@ declare global {
   const baseURL: typeof import('./services/http')['baseURL']
   const businessValidationRules: typeof import('@/composables/business')['businessValidationRules']
   const computeApi: typeof import('./services/api')['computeApi']
+  const computeReconnectDelay: typeof import('./services/ws-reconnect')['computeReconnectDelay']
   const computed: typeof import('vue')['computed']
   const computedAsync: typeof import('@vueuse/core')['computedAsync']
   const computedEager: typeof import('@vueuse/core')['computedEager']
@@ -31,6 +35,7 @@ declare global {
   const createInjectionState: typeof import('@vueuse/core')['createInjectionState']
   const createPinia: typeof import('pinia')['createPinia']
   const createReactiveFn: typeof import('@vueuse/core')['createReactiveFn']
+  const createReconnectPolicy: typeof import('./services/ws-reconnect')['createReconnectPolicy']
   const createReusableTemplate: typeof import('@vueuse/core')['createReusableTemplate']
   const createSharedComposable: typeof import('@vueuse/core')['createSharedComposable']
   const createTemplatePromise: typeof import('@vueuse/core')['createTemplatePromise']
@@ -346,6 +351,9 @@ declare global {
   // @ts-ignore
   export type { Component, Slot, Slots, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, ShallowRef, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
   import('vue')
+  // @ts-ignore
+  export type { ReconnectState, ReconnectPolicyOptions, ReconnectController } from './services/ws-reconnect'
+  import('./services/ws-reconnect')
 }
 
 // for vue template auto import
@@ -354,8 +362,11 @@ declare module 'vue' {
   interface GlobalComponents {}
   interface ComponentCustomProperties {
     readonly ACTIONS: UnwrapRef<typeof import('@/composables/business')['ACTIONS']>
+    readonly AUTH_CLOSE_REASONS: UnwrapRef<typeof import('./services/ws-reconnect')['AUTH_CLOSE_REASONS']>
     readonly EffectScope: UnwrapRef<typeof import('vue')['EffectScope']>
     readonly RESOURCES: UnwrapRef<typeof import('@/composables/business')['RESOURCES']>
+    readonly WS_RECONNECT_DEFAULTS: UnwrapRef<typeof import('./services/ws-reconnect')['WS_RECONNECT_DEFAULTS']>
+    readonly WS_RECONNECT_PRESETS: UnwrapRef<typeof import('./services/ws-reconnect')['WS_RECONNECT_PRESETS']>
     readonly acceptHMRUpdate: UnwrapRef<typeof import('pinia')['acceptHMRUpdate']>
     readonly api: UnwrapRef<typeof import('./services/api')['default']>
     readonly asyncComputed: UnwrapRef<typeof import('@vueuse/core')['asyncComputed']>
@@ -364,6 +375,7 @@ declare module 'vue' {
     readonly baseURL: UnwrapRef<typeof import('./services/http')['baseURL']>
     readonly businessValidationRules: UnwrapRef<typeof import('@/composables/business')['businessValidationRules']>
     readonly computeApi: UnwrapRef<typeof import('./services/api')['computeApi']>
+    readonly computeReconnectDelay: UnwrapRef<typeof import('./services/ws-reconnect')['computeReconnectDelay']>
     readonly computed: UnwrapRef<typeof import('vue')['computed']>
     readonly computedAsync: UnwrapRef<typeof import('@vueuse/core')['computedAsync']>
     readonly computedEager: UnwrapRef<typeof import('@vueuse/core')['computedEager']>
@@ -378,6 +390,7 @@ declare module 'vue' {
     readonly createInjectionState: UnwrapRef<typeof import('@vueuse/core')['createInjectionState']>
     readonly createPinia: UnwrapRef<typeof import('pinia')['createPinia']>
     readonly createReactiveFn: UnwrapRef<typeof import('@vueuse/core')['createReactiveFn']>
+    readonly createReconnectPolicy: UnwrapRef<typeof import('./services/ws-reconnect')['createReconnectPolicy']>
     readonly createReusableTemplate: UnwrapRef<typeof import('@vueuse/core')['createReusableTemplate']>
     readonly createSharedComposable: UnwrapRef<typeof import('@vueuse/core')['createSharedComposable']>
     readonly createTemplatePromise: UnwrapRef<typeof import('@vueuse/core')['createTemplatePromise']>

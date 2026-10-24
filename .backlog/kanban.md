@@ -3,7 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
-- [ ] STORY-164 : Canaux WebSocket manquants + durcissement — `/ws/ssh`, `/ws/journal`, `/ws/batch`, heartbeats, ack, reconnexion (P2-5, partie durcissement)
 - [ ] STORY-165 : Tests WebSocket — couverture complète du module temps réel (P2-5/P2-14, partie tests)
 - [ ] STORY-166 : Migration `Target`→`Host` + axe `origin` + `environments` + `Stack.git_url` + auto-détection du host local (P2-4 + P2-10 — F4 étape 2)
 - [ ] STORY-167 : `deployment_events` structurés — table dédiée, migration des données, endpoint paginé, rétention (P2-7)
@@ -39,6 +38,10 @@ _(vide)_
 _(vide)_
 
 ## ✅ DONE
+
+- [x] STORY-164.3 : Reconnexion unifiée avec jitter + resynchronisation d'état + client type documenté (P2-5, partie client — STORY-164 découpée) (EPIC-013) — module partagé `ws-reconnect.ts` consommé par canal général + composables, resync GET, logout conservé, client type documenté §8, 60 tests, couverture 97/82/80 %
+- [x] STORY-164.2 : Canaux WebSocket manquants — `/ws/ssh/{host}` TOFU STRICT, `/ws/journal/{host}`, `/ws/batch/{batch_id}` émetteur-ready, VNC reporté documenté (P2-5, partie canaux — STORY-164 découpée) (EPIC-013) — 3 canaux + host_access, 51 tests, couverture 84-100 %, RBAC journal=operator (D1)
+- [x] STORY-164.1 : Mécaniques de protocole serveur — heartbeats avec expiration des connexions muettes + acknowledgment des messages critiques (P2-5, partie protocole — STORY-164 découpée) (EPIC-013) — helpers heartbeat/ack_registry sur les 5 canaux, 34 tests, couverture 100 % nouveaux modules
 
 - [x] STORY-163 : Consommateurs plugins du bus — hooks `@on_event`, `deployment_notifications` enregistré, `DEPLOYMENT_PROGRESS` émis (P2-2, partie consommateurs) (EPIC-013) — SDK `app.plugins.hooks` + pont isolé (timeout/pool), 4 plugins WS, jalons 2 chemins, 2106 tests verts
 - [x] BUG-004 : `test_schedules_v2.py::test_parameters_not_logged_raw` échoue sur main (echo SQL local — herméticité cwd)  # divers (sans epic) — corrigé (défense en profondeur : caplog + fixture autouse conftest sqlalchemy.engine/aiosqlite + bridage main.py WARNING-sauf-DEBUG), re-vérifié à la clôture (57 + 22 tests verts)

@@ -2,10 +2,16 @@
  * WebSocket/SSE Service
  * Real-time communication for deployment logs, notifications, status updates
  * Extended with plugin system for easy extensibility
+ *
+ * STORY-164.3 : la reconnexion consomme la politique unifiée `ws-reconnect`
+ * (backoff exponentiel + jitter borné, machine à états). Comportements
+ * historiques préservés : aucun retry sur 1008/1003 (auth) et **logout sur
+ * épuisement des tentatives** (preset `generalChannel`, 3 tentatives).
  */
 
 import { pluginManager } from './websocket/plugin'
 import { WebSocketEventType } from './websocket/types'
+import { createReconnectPolicy, WS_RECONNECT_PRESETS, type ReconnectController } from './ws-reconnect'
 
 type EventCallback = (data: unknown) => void
 
@@ -16,14 +22,26 @@ interface WebSocketMessage {
 
 class WebSocketService {
   private ws: WebSocket | null = null
-  private reconnectAttempts = 0
-  private maxReconnectAttempts = 3 // Aligned with HTTP retry logic
-  private reconnectDelays = [1000, 2000, 4000] // Exponential backoff: 1s, 2s, 4s
-  private isReconnecting = false // Prevent simultaneous reconnection attempts
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private listeners: Map<string, Set<EventCallback>> = new Map()
+  /** Abonnements serveur actifs (`subscribe`/`deployment_logs`) — rétablis après reconnexion. */
+  private serverSubscriptions: Map<string, unknown> = new Map()
   private url: string
   private authenticated = false
   private authToken: string | null = null
+
+  /**
+   * Politique de reconnexion unifiée (STORY-164.3) :
+   * - logout sur fermeture d'auth (1008/1003 + raisons auth) — aucun retry ;
+   * - logout sur épuisement des tentatives (comportement historique conservé) ;
+   * - re-souscription des abonnements serveur actifs à chaque réouverture.
+   */
+  private reconnect: ReconnectController = createReconnectPolicy({
+    ...WS_RECONNECT_PRESETS.generalChannel,
+    onAuthError: () => this.handleFatalClose(),
+    onExhausted: () => this.handleFatalClose(),
+    onResubscribe: () => this.resubscribeActiveTopics(),
+  })
 
   constructor() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -42,6 +60,13 @@ class WebSocketService {
       return
     }
 
+    // Reconnexion volontaire après un arrêt de la politique (logout/login,
+    // disconnect()) : la politique repart de zéro.
+    if (this.reconnect.getState() === 'stopped') {
+      this.reconnect.reset()
+    }
+    this.reconnect.recordConnecting()
+
     // Stocker le token d'authentification si fourni
     if (authToken) {
       this.authToken = authToken
@@ -52,8 +77,6 @@ class WebSocketService {
 
       this.ws.onopen = () => {
         console.log('🔗 WebSocket connected successfully!')
-        this.reconnectAttempts = 0
-        this.isReconnecting = false
 
         // Authentifier immédiatement si un token est disponible
         if (this.authToken) {
@@ -81,40 +104,14 @@ class WebSocketService {
         console.log('WebSocket disconnected:', event.code, event.reason)
         this.authenticated = false
 
-        // Check for authentication/policy violation errors that should not retry
-        // Code 1008 = Policy Violation (used for auth errors by backend)
-        // Code 1003 = Unsupported Data
-        // Code 1011 = Internal Server Error
-        const authErrorCodes = [1008, 1003]
-        const authErrorReasons = [
-          'User not found or inactive',
-          'Invalid token',
-          'Authentication required',
-          'Authentication timeout'
-        ]
-
-        const isAuthError = authErrorCodes.includes(event.code) ||
-                           authErrorReasons.some(reason => event.reason?.includes(reason))
-
-        if (isAuthError) {
-          console.error(`WebSocket authentication error (code: ${event.code}, reason: ${event.reason}), logging out`)
-          this.reconnectAttempts = 0
-          this.isReconnecting = false
-
-          // Import and use auth store for logout
-          import('@/stores/auth').then(({ useAuthStore }) => {
-            const authStore = useAuthStore()
-            authStore.logout()
-          }).catch(error => {
-            console.error('Failed to logout after WebSocket auth error:', error)
-            // Fallback: redirect to login
-            window.location.href = '/login'
-          })
-          return
+        // Politique unifiée (STORY-164.3) : la décision de retry est portée par
+        // `ws-reconnect` — 1008/1003 (auth) → stop + logout via onAuthError ;
+        // épuisement des tentatives → logout via onExhausted ; sinon backoff
+        // exponentiel + jitter borné via scheduleReconnect.
+        const delay = this.reconnect.recordClose(event.code, event.reason ?? '')
+        if (delay !== null) {
+          this.scheduleReconnect(delay)
         }
-
-        // For normal disconnections, attempt to reconnect
-        this.attemptReconnect()
       }
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error)
@@ -150,52 +147,71 @@ class WebSocketService {
    * Disconnect from WebSocket server
    */
   disconnect(): void {
+    // Arrêt volontaire : plus aucune reconnexion automatique ne sera tentée.
+    this.reconnect.stop()
+    this.clearReconnectTimer()
     if (this.ws) {
       this.ws.close()
       this.ws = null
     }
-    this.reconnectAttempts = 0
-    this.isReconnecting = false
   }
 
   /**
-   * Attempt to reconnect with exponential backoff (aligned with HTTP retry logic)
+   * Programme la prochaine tentative avec le délai (backoff + jitter) calculé
+   * par la politique unifiée (STORY-164.3).
    */
-  private attemptReconnect(): void {
-    // If max attempts reached, logout user
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error(`Max reconnection attempts (${this.maxReconnectAttempts}) reached, logging out`)
-      this.reconnectAttempts = 0
-      this.isReconnecting = false
+  private scheduleReconnect(delay: number): void {
+    this.clearReconnectTimer()
+    console.log(
+      `[ws-reconnect] Next attempt in ${delay}ms (attempt ${this.reconnect.getAttempts()}/${WS_RECONNECT_PRESETS.generalChannel.maxAttempts})`
+    )
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      this.connect()
+    }, delay)
+  }
 
-      // Import and use auth store for logout
-      import('@/stores/auth').then(({ useAuthStore }) => {
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+  }
+
+  /**
+   * Fermeture fatale : erreur d'authentification (1008/1003) ou épuisement des
+   * tentatives → logout (comportement historique du canal général, conservé —
+   * arbitrage STORY-164.3).
+   */
+  private handleFatalClose(): void {
+    this.clearReconnectTimer()
+    // Import and use auth store for logout
+    import('@/stores/auth')
+      .then(({ useAuthStore }) => {
         const authStore = useAuthStore()
         authStore.logout()
-      }).catch(error => {
-        console.error('Failed to logout after max WebSocket reconnection attempts:', error)
+      })
+      .catch((error) => {
+        console.error('Failed to logout after WebSocket fatal close:', error)
         // Fallback: redirect to login
         window.location.href = '/login'
       })
+  }
+
+  /**
+   * Rétablit les abonnements serveur actifs après une reconnexion
+   * (re-souscription automatique, STORY-164.3). Les abonnements sont tracés
+   * dans `serverSubscriptions` au fil des messages `subscribe`/`deployment_logs`.
+   */
+  private resubscribeActiveTopics(): void {
+    if (this.serverSubscriptions.size === 0) {
       return
     }
-
-    // Prevent simultaneous reconnection attempts
-    if (this.isReconnecting) {
-      console.warn('Reconnection already in progress, skipping')
-      return
+    console.log(`[ws-reconnect] Re-establishing ${this.serverSubscriptions.size} server subscription(s)`)
+    for (const [key, data] of this.serverSubscriptions) {
+      const type = key.split(':')[0] ?? 'subscribe'
+      this.send(type, data)
     }
-
-    this.isReconnecting = true
-    const delay = this.reconnectDelays[this.reconnectAttempts]
-    this.reconnectAttempts++
-
-    console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
-
-    setTimeout(() => {
-      this.isReconnecting = false
-      this.connect()
-    }, delay)
   }
 
   /**
@@ -208,6 +224,9 @@ class WebSocketService {
     if (type === 'auth_success') {
       this.authenticated = true
       console.log('WebSocket authentication successful')
+      // Connexion réellement établie (canal général : auth au premier message)
+      // → déclenche la re-souscription des abonnements actifs (STORY-164.3).
+      this.reconnect.recordOpen()
     } else if (type === 'error') {
       // Le backend peut envoyer soit {type: "error", data: ...} soit {type: "error", message: ...}
       const errorMessage = (message as WebSocketMessage & { message?: string }).message || data || 'Unknown error'
@@ -271,8 +290,23 @@ class WebSocketService {
     if (this.ws?.readyState === WebSocket.OPEN) {
       const message: WebSocketMessage = { type, data }
       this.ws.send(JSON.stringify(message))
+      this.syncServerSubscriptions(type, data)
     } else {
       console.warn('WebSocket is not connected')
+    }
+  }
+
+  /**
+   * Trace les abonnements serveur (`subscribe`/`deployment_logs`) pour pouvoir
+   * les rétablir après une reconnexion ; retire les désabonnements.
+   */
+  private syncServerSubscriptions(type: string, data: unknown): void {
+    const payload = (data ?? {}) as { event_type?: string; deployment_id?: string }
+    if (type === 'subscribe' || type === 'deployment_logs') {
+      const topic = payload.event_type ?? payload.deployment_id ?? JSON.stringify(data)
+      this.serverSubscriptions.set(`${type}:${topic}`, data)
+    } else if (type === 'unsubscribe' && payload.event_type) {
+      this.serverSubscriptions.delete(`subscribe:${payload.event_type}`)
     }
   }
 

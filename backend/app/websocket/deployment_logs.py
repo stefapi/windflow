@@ -5,6 +5,7 @@ Ce module gère la connexion WebSocket pour suivre les logs d'un déploiement
 avec support du streaming en temps réel.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 
@@ -16,6 +17,11 @@ from ..models.deployment import Deployment
 from ..models.user import User
 from ..services.user_organization_service import UserOrganizationService
 from .connection_managers import manager
+from .heartbeat import (
+    HeartbeatExpiredError,
+    periodic_ping,
+    receive_with_expiry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -123,11 +129,22 @@ async def deployment_logs_websocket_endpoint(
             }
         )
 
+        # STORY-164.1 : ping serveur périodique (même mécanique que le canal
+        # général) + expiration des connexions muettes — tout message client
+        # reçu reset le délai, fermeture serveur 1001 après
+        # factor × interval sans activité.
+        heartbeat_task = asyncio.create_task(
+            periodic_ping(websocket, f"deployment_logs:{deployment_id}")
+        )
+
         # Boucle de maintien de connexion
         try:
             while True:
-                # Attendre un message du client (heartbeat)
-                data = await websocket.receive_text()
+                # Attendre un message du client (heartbeat) — borné par le
+                # helper d'expiration
+                data = await receive_with_expiry(
+                    websocket, f"deployment_logs:{deployment_id}"
+                )
 
                 # Le client peut envoyer "ping" pour maintenir la connexion
                 if data == "ping":
@@ -137,6 +154,17 @@ async def deployment_logs_websocket_endpoint(
 
         except WebSocketDisconnect:
             logger.info(f"Client disconnected from deployment {deployment_id}")
+        except HeartbeatExpiredError:
+            logger.info(
+                "Deployment logs WebSocket expired (idle) for deployment %s",
+                deployment_id,
+            )
+        finally:
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
 
     except Exception as e:
         logger.error(f"WebSocket error for deployment {deployment_id}: {e}")

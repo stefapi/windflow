@@ -1,10 +1,19 @@
 /**
  * useContainerLogs Composable
  * Handles WebSocket connection for real-time container logs streaming
+ *
+ * STORY-164.3 : la reconnexion consomme la politique unifiée
+ * `services/ws-reconnect` (backoff exponentiel + jitter borné, preset
+ * `dedicatedChannel`) — plus de « 5 tentatives × 2 s fixes ». Fermeture d'auth
+ * (1008/1003) → arrêt immédiat ; fin de stream propre (1000) → pas de retry
+ * (paramétrage par canal) ; après une coupure, **resynchronisation par GET**
+ * des derniers logs (`containersApi.getLogs`) pour combler le trou de flux.
  */
 
 import { ref, computed, onUnmounted, watch, unref, type Ref, type ComputedRef } from 'vue'
 import { useAuthStore } from '@/stores'
+import { containersApi } from '@/services/api'
+import { createReconnectPolicy, WS_RECONNECT_PRESETS } from '@/services/ws-reconnect'
 
 export type LogStreamStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
@@ -43,9 +52,23 @@ export function useContainerLogs(options: UseContainerLogsOptions): UseContainer
 
   // WebSocket instance
   let ws: WebSocket | null = null
-  let reconnectAttempts = 0
-  const maxReconnectAttempts = 5
-  const reconnectDelay = 2000
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+  /**
+   * Politique de reconnexion unifiée (STORY-164.3) — preset canal dédié :
+   * - 1008/1003 (auth) → arrêt immédiat, statut erreur ;
+   * - 1000 (fin de stream propre) → pas de retry (paramétrage par canal) ;
+   * - resynchronisation GET des logs après une coupure réseau.
+   */
+  const reconnectPolicy = createReconnectPolicy({
+    ...WS_RECONNECT_PRESETS.dedicatedChannel,
+    noRetryCodes: [1008, 1003, 1000],
+    onAuthError: () => {
+      error.value = 'Authentication failed'
+      status.value = 'error'
+    },
+    onResync: () => resyncLogs(),
+  })
 
   // Internal line buffer for efficient trimming
   let lineBuffer: string[] = []
@@ -112,7 +135,7 @@ export function useContainerLogs(options: UseContainerLogsOptions): UseContainer
 
       ws.onopen = () => {
         status.value = 'connected'
-        reconnectAttempts = 0
+        reconnectPolicy.recordOpen()
         console.log(`[ContainerLogs] Connected to container ${containerId}`)
       }
 
@@ -178,11 +201,14 @@ export function useContainerLogs(options: UseContainerLogsOptions): UseContainer
         console.log(`[ContainerLogs] Connection closed: code=${event.code}, reason=${event.reason}`)
         status.value = 'disconnected'
 
-        // Attempt reconnect if not closed intentionally and component is still mounted
-        if (isMounted && event.code !== 1000 && event.code !== 1008 && reconnectAttempts < maxReconnectAttempts) {
-          reconnectAttempts++
-          console.log(`[ContainerLogs] Reconnecting in ${reconnectDelay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`)
-          setTimeout(connect, reconnectDelay)
+        // Politique unifiée (STORY-164.3) : décision de retry déléguée à
+        // ws-reconnect (backoff + jitter, pas de retry sur 1008/1003/1000).
+        if (!isMounted) {
+          return
+        }
+        const delay = reconnectPolicy.recordClose(event.code, event.reason ?? '')
+        if (delay !== null) {
+          scheduleReconnect(delay)
         }
       }
     } catch (e) {
@@ -192,9 +218,52 @@ export function useContainerLogs(options: UseContainerLogsOptions): UseContainer
   }
 
   /**
+   * Programme la prochaine tentative avec le délai (backoff + jitter) calculé
+   * par la politique unifiée (STORY-164.3).
+   */
+  function scheduleReconnect(delay: number): void {
+    clearReconnectTimer()
+    console.log(`[ContainerLogs] Reconnecting in ${delay}ms (attempt ${reconnectPolicy.getAttempts()})`)
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      connect()
+    }, delay)
+  }
+
+  function clearReconnectTimer(): void {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+  }
+
+  /**
+   * Resynchronisation d'état après reconnexion (STORY-164.3) : GET des
+   * derniers logs via l'API REST pour combler le trou de flux — le buffer est
+   * remplacé par les `tail` dernières lignes (même sémantique que le message
+   * `initial` du flux WS).
+   */
+  function resyncLogs(): void {
+    containersApi
+      .getLogs(containerId, unref(tail))
+      .then((response) => {
+        if (response.data.logs) {
+          lineBuffer = response.data.logs.split('\n')
+          trimAndSync()
+        }
+      })
+      .catch((e: unknown) => {
+        console.error('[ContainerLogs] Resync GET failed:', e)
+      })
+  }
+
+  /**
    * Disconnect WebSocket
    */
   function disconnect(): void {
+    // Déconnexion volontaire : plus aucune reconnexion automatique.
+    reconnectPolicy.stop()
+    clearReconnectTimer()
     if (ws) {
       ws.close(1000, 'User disconnected')
       ws = null
@@ -207,7 +276,7 @@ export function useContainerLogs(options: UseContainerLogsOptions): UseContainer
    */
   function reconnect(): void {
     disconnect()
-    reconnectAttempts = 0
+    reconnectPolicy.reset()
     connect()
   }
 

@@ -1,10 +1,17 @@
 /**
  * useContainerStats Composable
  * Handles WebSocket connection for real-time container stats streaming
+ *
+ * STORY-164.3 : la reconnexion consomme la politique unifiée
+ * `services/ws-reconnect` (backoff exponentiel + jitter borné, preset
+ * `dedicatedChannel`) — remplace le « 5 tentatives × 2 s fixes » et ajoute la
+ * **resynchronisation par GET** du snapshot stats après une coupure.
  */
 
 import { ref, computed, onUnmounted, watch, type Ref, type ComputedRef } from 'vue'
 import { useAuthStore } from '@/stores'
+import { containersApi } from '@/services/api'
+import { createReconnectPolicy, WS_RECONNECT_PRESETS } from '@/services/ws-reconnect'
 
 export type StatsStreamStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
@@ -138,9 +145,22 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
 
   // WebSocket instance
   let ws: WebSocket | null = null
-  let reconnectAttempts = 0
-  const maxReconnectAttempts = 5
-  const reconnectDelay = 2000
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+  /**
+   * Politique de reconnexion unifiée (STORY-164.3) — preset canal dédié :
+   * 1008/1003 (auth) ou 1000 (fin propre) → pas de retry ; après une coupure
+   * réseau, resynchronisation par GET du snapshot stats courant.
+   */
+  const reconnectPolicy = createReconnectPolicy({
+    ...WS_RECONNECT_PRESETS.dedicatedChannel,
+    noRetryCodes: [1008, 1003, 1000],
+    onAuthError: () => {
+      error.value = 'Authentication failed'
+      status.value = 'error'
+    },
+    onResync: () => resyncStats(),
+  })
 
   // Heartbeat interval
   let heartbeatInterval: ReturnType<typeof setInterval> | null = null
@@ -179,7 +199,7 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
 
       ws.onopen = () => {
         status.value = 'connected'
-        reconnectAttempts = 0
+        reconnectPolicy.recordOpen()
         console.log(`[ContainerStats] Connected to container ${containerId}`)
         startHeartbeat()
       }
@@ -289,21 +309,18 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
         console.error(`[ContainerStats] WebSocket error:`, event)
         error.value = 'WebSocket error'
         status.value = 'error'
-
-        // Attempt reconnection
-        if (reconnectAttempts < maxReconnectAttempts) {
-          setTimeout(() => {
-            reconnectAttempts++
-            connect()
-          }, reconnectDelay)
-        }
       }
 
       ws.onclose = (event) => {
         console.log(`[ContainerStats] Connection closed:`, event)
-        if (status.value === 'connected') {
-          status.value = 'disconnected'
-          stopHeartbeat()
+        status.value = 'disconnected'
+        stopHeartbeat()
+
+        // Politique unifiée (STORY-164.3) : décision de retry déléguée à
+        // ws-reconnect (backoff + jitter, pas de retry sur 1008/1003/1000).
+        const delay = reconnectPolicy.recordClose(event.code, event.reason ?? '')
+        if (delay !== null) {
+          scheduleReconnect(delay)
         }
       }
     } catch {
@@ -313,9 +330,76 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
   }
 
   /**
+   * Programme la prochaine tentative avec le délai (backoff + jitter) calculé
+   * par la politique unifiée (STORY-164.3).
+   */
+  function scheduleReconnect(delay: number): void {
+    clearReconnectTimer()
+    console.log(`[ContainerStats] Reconnecting in ${delay}ms (attempt ${reconnectPolicy.getAttempts()})`)
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      connect()
+    }, delay)
+  }
+
+  function clearReconnectTimer(): void {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+  }
+
+  /**
+   * Resynchronisation d'état après reconnexion (STORY-164.3) : GET du snapshot
+   * stats courant via l'API REST (même format que le message `stats` du flux).
+   */
+  function resyncStats(): void {
+    containersApi
+      .getStats(containerId)
+      .then((response) => {
+        const data = response.data as {
+          cpu?: { percent?: number }
+          memory?: { percent?: number; used?: number; limit?: number }
+          network?: { rx_bytes?: number; tx_bytes?: number }
+          block_io?: { read_bytes?: number; write_bytes?: number }
+          timestamp?: string
+        }
+        if (data?.timestamp) {
+          stats.value = {
+            cpu_percent: data.cpu?.percent ?? 0,
+            memory_percent: data.memory?.percent ?? 0,
+            memory_used: data.memory?.used ?? 0,
+            memory_limit: data.memory?.limit ?? 1,
+            network_rx_bytes: data.network?.rx_bytes ?? 0,
+            network_tx_bytes: data.network?.tx_bytes ?? 0,
+            block_read_bytes: data.block_io?.read_bytes ?? 0,
+            block_write_bytes: data.block_io?.write_bytes ?? 0,
+            timestamp: data.timestamp,
+            network_interfaces: [],
+            total_rx_errors: 0,
+            total_tx_errors: 0,
+            total_rx_dropped: 0,
+            total_tx_dropped: 0,
+            blkio_devices: [],
+            network_rx_rate: 0,
+            network_tx_rate: 0,
+            block_read_rate: 0,
+            block_write_rate: 0,
+          }
+        }
+      })
+      .catch((e: unknown) => {
+        console.error('[ContainerStats] Resync GET failed:', e)
+      })
+  }
+
+  /**
    * Disconnect WebSocket
    */
   function disconnect(): void {
+    // Déconnexion volontaire : plus aucune reconnexion automatique.
+    reconnectPolicy.stop()
+    clearReconnectTimer()
     if (ws) {
       ws.close(1000, 'User disconnected')
       ws = null
@@ -329,7 +413,7 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
    */
   function reconnect(): void {
     disconnect()
-    reconnectAttempts = 0
+    reconnectPolicy.reset()
     connect()
   }
 
@@ -339,7 +423,6 @@ export function useContainerStats(options: UseContainerStatsOptions): UseContain
    */
   function fetchOnce(): void {
     manualMode = true
-    reconnectAttempts = 0
     connect()
   }
 
