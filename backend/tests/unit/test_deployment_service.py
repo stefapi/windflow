@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.deployment import Deployment
 from app.models.organization import Organization
 from app.models.stack import Stack
-from app.models.target import Target
+from app.models.host import Host
 from app.models.user import User
 from app.schemas.deployment import DeploymentCreate
 from app.services.deployment_service import DeploymentService
@@ -26,7 +26,7 @@ class TestDeploymentService:
         self,
         db_session: AsyncSession,
         test_stack: Stack,
-        test_target: Target,
+        test_target: Host,
         test_user: User,
         test_organization: Organization,
     ):
@@ -56,7 +56,7 @@ class TestDeploymentService:
         self,
         db_session: AsyncSession,
         test_stack: Stack,
-        test_target: Target,
+        test_target: Host,
         test_user: User,
         test_organization: Organization,
     ):
@@ -91,7 +91,7 @@ class TestDeploymentService:
         self,
         db_session: AsyncSession,
         test_stack: Stack,
-        test_target: Target,
+        test_target: Host,
         test_user: User,
         test_organization: Organization,
     ):
@@ -120,7 +120,7 @@ class TestDeploymentService:
         self,
         db_session: AsyncSession,
         test_stack: Stack,
-        test_target: Target,
+        test_target: Host,
         test_user: User,
         test_organization: Organization,
     ):
@@ -148,7 +148,7 @@ class TestDeploymentService:
         self,
         db_session: AsyncSession,
         test_stack: Stack,
-        test_target: Target,
+        test_target: Host,
         test_user: User,
         test_organization: Organization,
     ):

@@ -22,6 +22,7 @@ from ...core.rate_limit import conditional_rate_limiter
 from ...database import get_db
 from ...helper.pagination import PaginationQuery, build_meta
 from ...helper.template_renderer import TemplateRenderer
+from ...models.environment import Environment
 from ...models.stack_version import StackVersion
 from ...models.user import User
 from ...schemas.common import PaginatedResponse
@@ -823,6 +824,19 @@ async def create_stack(
     ):
         raise PermissionDeniedError("Accès refusé à cette organisation")
 
+    # STORY-166.4 : FK environment_id vérifiée à l'écriture (404 si
+    # environnement inexistant) + isolation organisationnelle (404 si
+    # l'environnement appartient à une autre organisation).
+    if stack_data.environment_id is not None:
+        environment = await session.get(Environment, str(stack_data.environment_id))
+        if environment is None or environment.organization_id != (
+            stack_data.organization_id
+        ):
+            raise NotFoundError(
+                f"Environnement {stack_data.environment_id} introuvable "
+                "dans cette organisation"
+            )
+
     stack = await StackService.create(session, stack_data)
     return stack
 
@@ -1062,6 +1076,19 @@ async def update_stack(
         session, current_user, existing_stack.organization_id
     ):
         raise PermissionDeniedError("Accès refusé à cette stack")
+
+    # STORY-166.4 : FK environment_id vérifiée à l'écriture (404 si
+    # inexistant) + isolation organisationnelle (404 si l'environnement
+    # appartient à une autre organisation que la stack).
+    if stack_data.environment_id is not None:
+        environment = await session.get(Environment, str(stack_data.environment_id))
+        if environment is None or environment.organization_id != (
+            existing_stack.organization_id
+        ):
+            raise NotFoundError(
+                f"Environnement {stack_data.environment_id} introuvable "
+                "dans cette organisation"
+            )
 
     # Si changement de nom, vérifier qu'il n'existe pas déjà
     if stack_data.name and stack_data.name != existing_stack.name:

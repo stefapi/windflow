@@ -22,7 +22,7 @@ from app.core.secret_manager import SecretManager, reset_secret_manager
 from app.models.deployment import DeploymentStatus
 from app.models.organization import Organization
 from app.models.stack import Stack
-from app.models.target import Target
+from app.models.host import Host
 from app.schemas.deployment import DeploymentCreate
 from app.services.deployment_service import DeploymentService
 
@@ -44,7 +44,7 @@ def _fresh_secret_manager():
 
 async def _seed_stack(
     db_session: AsyncSession, organization: Organization
-) -> tuple[Stack, Target]:
+) -> tuple[Stack, Host]:
     """Crée le stack (template + variables) et la cible de déploiement."""
     stack = Stack(
         name="render-sec-stack",
@@ -57,7 +57,7 @@ async def _seed_stack(
         organization_id=organization.id,
         version="1.0.0",
     )
-    target = Target(
+    target = Host(
         name="render-sec-target",
         host="127.0.0.1",
         credentials={},
@@ -111,9 +111,9 @@ class TestRenderReceivesDecryptedValues:
         # 2. Le rendu (config) contient la valeur DÉCHIFFRÉE en mémoire :
         #    la macro Jinja a bien reçu le mot de passe en clair.
         rendered_config = deployment.config
-        assert rendered_config["environment"]["POSTGRES_PASSWORD"] == PLAIN_PASSWORD, (
-            "le rendu doit recevoir la valeur déchiffrée, pas le token gAAAA"
-        )
+        assert (
+            rendered_config["environment"]["POSTGRES_PASSWORD"] == PLAIN_PASSWORD
+        ), "le rendu doit recevoir la valeur déchiffrée, pas le token gAAAA"
         assert rendered_config["labels"]["app.domain"] == "app.example.com"
         # Le token ne fuit pas dans le rendu.
         assert "gAAAA" not in str(rendered_config)

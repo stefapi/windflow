@@ -107,7 +107,7 @@ async def journal_websocket_endpoint(
     try:
         # ── Résolution du Host + isolation organisation ────────────
         try:
-            target = await resolve_host_and_check_access(host_id, user, session)
+            host = await resolve_host_and_check_access(host_id, user, session)
         except Exception as e:
             detail = getattr(e, "detail", "Host access denied")
             await websocket.send_json({"type": "error", "message": str(detail)})
@@ -123,15 +123,15 @@ async def journal_websocket_endpoint(
             return
 
         # ── Connexion SSH TOFU STRICT (STORY-131) ──────────────────
-        username = resolve_ssh_username(target)
+        username = resolve_ssh_username(host)
         try:
             ssh_kwargs = await build_ssh_kwargs(
                 session,
-                host=target.host,
-                port=target.port,
+                host=host.host,
+                port=host.port,
                 username=username,
                 mode=HostKeyPolicy.STRICT,
-                target=target,
+                host_model=host,
             )
             connection = await asyncssh.connect(**ssh_kwargs)
         except (SSHHostKeyNotAcceptedError, SSHHostKeyMismatchError) as e:

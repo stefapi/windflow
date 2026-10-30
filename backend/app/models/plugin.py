@@ -45,47 +45,60 @@ class Plugin(Base):
 
     # Informations de base
     name: Mapped[str] = mapped_column(
-        String(255), unique=True, nullable=False, index=True,
+        String(255),
+        unique=True,
+        nullable=False,
+        index=True,
         comment="Identifiant unique du plugin (kebab-case)",
     )
     version: Mapped[str] = mapped_column(
-        String(50), nullable=False,
+        String(50),
+        nullable=False,
         comment="Version du plugin (semver)",
     )
     display_name: Mapped[str] = mapped_column(
-        String(255), nullable=False,
+        String(255),
+        nullable=False,
         comment="Nom affiché dans l'UI",
     )
     description: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True,
+        Text,
+        nullable=True,
         comment="Description du plugin",
     )
 
     # Catégorie et type
     category: Mapped[str] = mapped_column(
-        String(50), nullable=False,
+        String(50),
+        nullable=False,
         comment="Catégorie du plugin (PluginCategory value)",
     )
     type: Mapped[str] = mapped_column(
-        String(20), nullable=False,
+        String(20),
+        nullable=False,
         comment="Type de plugin (PluginType value)",
     )
 
     # Statut
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default=PluginStatus.INSTALLED.value,
+        String(20),
+        nullable=False,
+        default=PluginStatus.INSTALLED.value,
         comment="Statut du plugin (PluginStatus value)",
     )
 
     # Données du manifest validé
     manifest_data: Mapped[dict] = mapped_column(
-        JSON, nullable=False,
+        JSON,
+        nullable=False,
         comment="Manifest validé complet (JSON)",
     )
 
     # Configuration utilisateur
     config_values: Mapped[dict] = mapped_column(
-        JSON, nullable=False, default=dict,
+        JSON,
+        nullable=False,
+        default=dict,
         comment="Valeurs de configuration saisies par l'utilisateur",
     )
 
@@ -107,7 +120,9 @@ class Plugin(Base):
 
     # Timestamps
     installed_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False,
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,

@@ -35,7 +35,7 @@ from app.models.audit_log import AuditLog
 from app.models.host_ssh_fingerprint import HostSSHFingerprint
 from app.models.organization import Organization
 from app.models.ssh_key import SSHKey
-from app.models.target import Target
+from app.models.host import Host
 from app.services.ssh_connection import (
     HostKeyCapture,
     HostKeyPolicy,
@@ -64,13 +64,11 @@ async def _call_verify(
     )
 
 
-async def _seed_target(
-    db: AsyncSession, organization_id: str
-) -> Target:
+async def _seed_target(db: AsyncSession, organization_id: str) -> Target:
     """Cible distante minimale (credentials chiffrées password)."""
-    from app.models.target import encrypt_credentials_for_storage
+    from app.models.host import encrypt_credentials_for_storage
 
-    target = Target(
+    target = Host(
         name="tofu-target",
         host=HOST,
         port=22,
@@ -110,9 +108,7 @@ async def _seed_fingerprint(
 
 async def _rows(db: AsyncSession) -> list[HostSSHFingerprint]:
     """Toutes les lignes d'empreintes (assertion de persistance)."""
-    return list(
-        (await db.execute(select(HostSSHFingerprint))).scalars().all()
-    )
+    return list((await db.execute(select(HostSSHFingerprint))).scalars().all())
 
 
 @pytest.fixture(autouse=True)
@@ -121,9 +117,7 @@ def _audit_db(monkeypatch, test_session_factory) -> None:
     (pattern test_targets_fingerprints.py)."""
     import app.services.audit_service as audit_service_module
 
-    monkeypatch.setattr(
-        audit_service_module, "AsyncSessionLocal", test_session_factory
-    )
+    monkeypatch.setattr(audit_service_module, "AsyncSessionLocal", test_session_factory)
 
 
 @pytest.fixture(autouse=True)
@@ -153,7 +147,7 @@ class TestStrictPolicy:
             port=22,
             username="deploy",
             mode=HostKeyPolicy.STRICT,
-            target=target,
+            host_model=target,
             password="s3cr3t",
         )
         with pytest.raises(SSHHostKeyNotAcceptedError):
@@ -179,7 +173,7 @@ class TestStrictPolicy:
             port=22,
             username="deploy",
             mode=HostKeyPolicy.STRICT,
-            target=target,
+            host_model=target,
             password="s3cr3t",
         )
         with pytest.raises(SSHHostKeyNotAcceptedError):
@@ -204,7 +198,7 @@ class TestStrictPolicy:
             port=22,
             username="deploy",
             mode=HostKeyPolicy.STRICT,
-            target=target,
+            host_model=target,
             password="s3cr3t",
         )
         # L'hôte présente FP_B alors que FP_A est acceptée.
@@ -220,7 +214,8 @@ class TestStrictPolicy:
 
         # Event DIVERGENCE émis (payload sans secret).
         divergences = [
-            d for (t, d) in _quiet_events
+            d
+            for (t, d) in _quiet_events
             if t is EventType.HOST_SSH_FINGERPRINT_DIVERGENCE
         ]
         assert len(divergences) == 1
@@ -240,7 +235,7 @@ class TestStrictPolicy:
             port=22,
             username="deploy",
             mode=HostKeyPolicy.STRICT,
-            target=target,
+            host_model=target,
             password="s3cr3t",
         )
         with pytest.raises(SSHHostKeyMismatchError):
@@ -255,7 +250,9 @@ class TestStrictPolicy:
                         AuditLog.action == "target.fingerprint_divergence"
                     )
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
         assert len(audits) == 1
         assert audits[0].resource_type == "host_ssh_fingerprint"
@@ -273,7 +270,7 @@ class TestStrictPolicy:
             port=22,
             username="deploy",
             mode=HostKeyPolicy.STRICT,
-            target=target,
+            host_model=target,
             password="s3cr3t",
         )
         assert await _call_verify(kwargs) is True
@@ -297,8 +294,7 @@ class TestStrictPolicy:
         assert await _rows(db_session) == []
         # Event PENDING émis avec target_id=None (observabilité).
         pendings = [
-            d for (t, d) in _quiet_events
-            if t is EventType.HOST_SSH_FINGERPRINT_PENDING
+            d for (t, d) in _quiet_events if t is EventType.HOST_SSH_FINGERPRINT_PENDING
         ]
         assert len(pendings) == 1
         assert pendings[0]["target_id"] is None
@@ -319,7 +315,7 @@ class TestCollectPolicy:
             port=22,
             username="deploy",
             mode=HostKeyPolicy.COLLECT,
-            target=target,
+            host_model=target,
             password="s3cr3t",
             capture_out=captures,
         )
@@ -345,7 +341,7 @@ class TestCollectPolicy:
             port=22,
             username="deploy",
             mode=HostKeyPolicy.COLLECT,
-            target=target,
+            host_model=target,
             password="s3cr3t",
             capture_out=captures,
         )
@@ -367,7 +363,7 @@ class TestCollectPolicy:
             port=22,
             username="deploy",
             mode=HostKeyPolicy.COLLECT,
-            target=target,
+            host_model=target,
             password="s3cr3t",
             capture_out=captures,
         )
@@ -386,7 +382,8 @@ class TestCollectPolicy:
         assert rows_after[0].accepted is True
 
         divergences = [
-            d for (t, d) in _quiet_events
+            d
+            for (t, d) in _quiet_events
             if t is EventType.HOST_SSH_FINGERPRINT_DIVERGENCE
         ]
         assert len(divergences) == 1
@@ -413,9 +410,9 @@ class TestAuthenticationResolution:
         )
         db.add(row)
         # last_used_at ancien → touch doit rafraîchir (throttle OK).
-        row.last_used_at = datetime.now(timezone.utc).replace(
-            tzinfo=None
-        ) - timedelta(hours=2)
+        row.last_used_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+            hours=2
+        )
         await db.commit()
         await db.refresh(row)
         return row
@@ -449,7 +446,7 @@ class TestAuthenticationResolution:
     async def test_target_ssh_key_ref_resolves(
         self, db_session: AsyncSession, test_organization
     ):
-        """target.ssh_key_id (voie canonique) → client_keys via resolve_for_target."""
+        """host.ssh_key_id (voie canonique) → client_keys via resolve_for_host."""
         ssh_key = await self._seed_ssh_key(db_session)
         target = await _seed_target(db_session, test_organization.id)
         target.ssh_key_id = ssh_key.id
@@ -461,13 +458,11 @@ class TestAuthenticationResolution:
             port=22,
             username="deploy",
             mode=HostKeyPolicy.STRICT,
-            target=target,
+            host_model=target,
         )
         assert len(kwargs["client_keys"]) == 1
 
-    async def test_password_fallback(
-        self, db_session: AsyncSession, test_organization
-    ):
+    async def test_password_fallback(self, db_session: AsyncSession, test_organization):
         """Fallback credentials legacy : password des credentials chiffrées."""
         target = await _seed_target(db_session, test_organization.id)
         kwargs = await build_ssh_kwargs(
@@ -476,14 +471,12 @@ class TestAuthenticationResolution:
             port=22,
             username="deploy",
             mode=HostKeyPolicy.STRICT,
-            target=target,
+            host_model=target,
         )
         assert kwargs["password"] == "s3cr3t"
         assert "client_keys" not in kwargs
 
-    async def test_explicit_password_and_key_material(
-        self, db_session: AsyncSession
-    ):
+    async def test_explicit_password_and_key_material(self, db_session: AsyncSession):
         """Matériau explicite (test-connection) : password direct puis PEM."""
         kwargs = await build_ssh_kwargs(
             db_session,
@@ -519,7 +512,7 @@ class TestAuthenticationResolution:
                 port=22,
                 username="deploy",
                 mode=mode,
-                target=target,
+                host_model=target,
                 password="s3cr3t",
             )
             assert "known_hosts" not in kwargs

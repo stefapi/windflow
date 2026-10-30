@@ -29,7 +29,7 @@ from app.enums.rbac import Role
 from app.models.deployment import Deployment, DeploymentStatus
 from app.models.organization import Organization
 from app.models.stack import Stack
-from app.models.target import Target
+from app.models.host import Host
 from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
@@ -72,7 +72,7 @@ def _auth_headers(user: User) -> dict[str, str]:
 
 async def _seed_stack_target(
     db_session: AsyncSession, org: Organization
-) -> tuple[Stack, Target]:
+) -> tuple[Stack, Host]:
     """Insère une stack et une target dans l'organisation donnée."""
     stack = Stack(
         name=f"stack-{org.slug}",
@@ -81,7 +81,7 @@ async def _seed_stack_target(
         organization_id=org.id,
         version="1.0.0",
     )
-    target = Target(
+    target = Host(
         name=f"target-{org.slug}",
         host="127.0.0.1",
         credentials={},
@@ -96,7 +96,7 @@ async def _seed_deployment(
     db_session: AsyncSession,
     org: Organization,
     stack: Stack,
-    target: Target,
+    target: Host,
     status: DeploymentStatus = DeploymentStatus.RUNNING,
 ) -> Deployment:
     """Insère un déploiement sans lancer la tâche asynchrone (pattern 103.3)."""

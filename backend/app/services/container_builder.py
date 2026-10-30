@@ -10,7 +10,7 @@ from typing import Optional
 
 from ..helper.compute_helpers import extract_uptime, parse_ports
 from ..models.deployment import Deployment, DeploymentStatus
-from ..models.target import Target
+from ..models.host import Host
 from ..schemas.compute import (
     DiscoveredItem,
     ServiceWithMetrics,
@@ -99,7 +99,7 @@ def get_latest_active_deployment(
 async def build_managed_stacks(
     db_stacks: list,
     managed_by_stack_id: dict[str, list[ContainerInfo]],
-    targets_by_id: dict[str, Target],
+    targets_by_id: dict[str, Host],
     local_target_id: str,
     local_target_name: str,
     docker_for_health: Optional[DockerClientService] = None,
@@ -316,7 +316,7 @@ def build_target_groups(
     managed_stacks: list[StackWithServices],
     discovered_items: list[DiscoveredItem],
     standalone_list: list[StandaloneContainer],
-    targets_by_id: dict[str, Target],
+    targets_by_id: dict[str, Host],
 ) -> list[TargetGroup]:
     """
     Regroupe toutes les ressources par target.

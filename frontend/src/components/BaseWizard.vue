@@ -86,7 +86,7 @@
  * BaseWizard — Generic wizard engine
  *
  * Provides a shared dialog with step navigation, loading, error handling,
- * and a consistent footer. Used by TargetWizard and AdoptionWizard.
+ * and a consistent footer. Used by HostWizard and AdoptionWizard.
  *
  * @slot step-{n}  — Content for step index n
  * @slot footer    — Override the entire footer if needed

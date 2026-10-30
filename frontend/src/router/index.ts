@@ -42,9 +42,14 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/VMs.vue'),
       },
       {
+        path: 'hosts',
+        name: 'Hosts',
+        component: () => import('@/views/Hosts.vue'),
+      },
+      // STORY-166.6 : redirection /targets → /hosts (bookmarks — retrait tracé avec le plan F3)
+      {
         path: 'targets',
-        name: 'Targets',
-        component: () => import('@/views/Targets.vue'),
+        redirect: { name: 'Hosts' },
       },
       {
         path: 'stacks',

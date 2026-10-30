@@ -22,10 +22,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.database import get_alembic_config, get_db
 from app.enums.rbac import Role
+from app.enums.target import (  # enums legacy conservés (divergence n°4)
+    TargetStatus,
+    TargetType,
+)
 from app.main import app
+from app.models.host import Host
 from app.models.organization import Organization
 from app.models.stack import Stack
-from app.models.target import Target, TargetStatus, TargetType
 from app.models.user import User
 from app.services.user_service import UserService
 
@@ -633,18 +637,19 @@ async def admin_client(
 @pytest.fixture(scope="function")
 async def test_target(
     db_session: AsyncSession, test_organization: Organization
-) -> Target:
+) -> Host:
     """
-    Crée une cible de déploiement de test.
+    Crée un hôte de déploiement de test (fixture historiquement nommée
+    ``test_target`` — consommateurs nombreux, nom conservé).
 
     Args:
         db_session: Session de base de données
         test_organization: Organisation de test
 
     Returns:
-        Target: Cible de test créée
+        Host: Hôte de test créé
     """
-    target = Target(
+    target = Host(
         name="Test Docker Target",
         host="localhost",
         port=2375,

@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.host_ssh_fingerprint import HostSSHFingerprint
-from app.models.target import Target
+from app.models.host import Host
 from app.services.ssh_key_service import (  # noqa: F401 (réassurance import 131.2)
     SSHKeyService,
 )
@@ -35,7 +35,7 @@ async def _seed(
     db_session: AsyncSession, organization_id: str
 ) -> tuple[Target, HostSSHFingerprint]:
     """Cible + empreinte PENDING matching (host, 22, ssh-ed25519)."""
-    target = Target(
+    target = Host(
         name="tofu-target",
         host="prod-vm01.example.com",
         credentials={},

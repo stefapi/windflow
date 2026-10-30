@@ -16,8 +16,8 @@ from ...core.exceptions import (
 )
 from ...database import get_db
 from ...models.deployment import Deployment
+from ...models.host import Host
 from ...models.stack import Stack
-from ...models.target import Target
 from ...models.user import User
 from ...schemas.dashboard import (
     ActivityFeedItem,
@@ -66,14 +66,14 @@ async def get_dashboard_stats(
             db, current_user
         )
 
-    # --- Targets ---
-    targets_base = select(Target)
+    # --- Hosts (compteurs legacy total_targets conservés — contrat dashboard figé) ---
+    hosts_base = select(Host)
     if org_filter:
-        targets_base = targets_base.where(Target.organization_id.in_(org_filter))
-    targets_result = await db.execute(targets_base)
-    targets = targets_result.scalars().all()
+        hosts_base = hosts_base.where(Host.organization_id.in_(org_filter))
+    hosts_result = await db.execute(hosts_base)
+    hosts = hosts_result.scalars().all()
 
-    total_targets = len(targets)
+    total_targets = len(hosts)
     target_health: dict[str, int] = {
         "online": 0,
         "offline": 0,
@@ -81,7 +81,7 @@ async def get_dashboard_stats(
         "maintenance": 0,
     }
     targets_detail: list[TargetHealthItem] = []
-    for t in targets:
+    for t in hosts:
         status_key = t.status.value if hasattr(t.status, "value") else str(t.status)
         target_health[status_key] = target_health.get(status_key, 0) + 1
         targets_detail.append(
@@ -202,7 +202,7 @@ async def get_dashboard_stats(
     alert_counter = 0
 
     # Alertes targets hors ligne ou en erreur
-    for t in targets:
+    for t in hosts:
         status_key = t.status.value if hasattr(t.status, "value") else str(t.status)
         if status_key == "error":
             alert_counter += 1

@@ -7,9 +7,42 @@ pour une documentation OpenAPI complète.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic.functional_validators import BeforeValidator
+
+from ..enums.host import WorkloadOrigin
+
+# git_url (STORY-166.4 — D2, règle 40) : URL http/https stricte (rejet
+# des chemins relatifs et schémas exotiques → 422 — pas de surface
+# SSRF : aucun fetch/clone à ce stade, GitOps hors périmètre).
+_git_url_adapter: TypeAdapter[AnyHttpUrl] = TypeAdapter(AnyHttpUrl)
+
+
+def _check_git_url(value: Optional[str]) -> Optional[str]:
+    """Valide une URL de dépôt Git — schéma http/https + host requis."""
+    if value is None or value == "":
+        return None
+    return str(_git_url_adapter.validate_python(value))
+
+
+GitUrl = Annotated[Optional[str], BeforeValidator(_check_git_url)]
+
+
+def _check_uuid_str(value: Optional[str]) -> Optional[str]:
+    """Valide un UUID (environment_id) — rejet des non-UUID → 422.
+
+    Retourne la forme canonique ``str`` (compatible colonne String(36)
+    et ``Stack(**model_dump())`` sans conversion supplémentaire).
+    """
+    if value is None or value == "":
+        return None
+    return str(TypeAdapter(UUID).validate_python(value))
+
+
+EnvironmentId = Annotated[Optional[str], BeforeValidator(_check_uuid_str)]
 
 
 class StackBase(BaseModel):
@@ -195,6 +228,31 @@ class StackCreate(StackBase):
         description="ID de l'organisation",
         json_schema_extra={"example": "org-001"},
     )
+    origin: WorkloadOrigin = Field(
+        default=WorkloadOrigin.MANAGED,
+        description=(
+            "Origine du workload (managed, adopted, external) — défaut "
+            "``managed`` à la création manuelle (STORY-166.4)"
+        ),
+        json_schema_extra={"example": "managed"},
+    )
+    git_url: GitUrl = Field(
+        default=None,
+        max_length=500,
+        description=(
+            "URL du dépôt Git source (http/https uniquement — validation "
+            "stricte, pas de clone à ce stade, GitOps futur)"
+        ),
+        json_schema_extra={"example": "https://git.example.com/org/repo.git"},
+    )
+    environment_id: EnvironmentId = Field(
+        default=None,
+        description=(
+            "Environnement de rattachement (UUID — l'environnement doit "
+            "exister dans l'organisation de la stack, sinon 404)"
+        ),
+        json_schema_extra={"example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"},
+    )
 
 
 class StackUpdate(BaseModel):
@@ -277,6 +335,31 @@ class StackUpdate(BaseModel):
         max_length=255,
         description="Nouveau nom par défaut du déploiement",
         json_schema_extra={"example": "nginx-{{timestamp}}"},
+    )
+    origin: Optional[WorkloadOrigin] = Field(
+        default=None,
+        description=(
+            "Origine du workload (managed, adopted, external) — "
+            "STORY-166.4 (lecture/écriture admin)"
+        ),
+        json_schema_extra={"example": "managed"},
+    )
+    git_url: GitUrl = Field(
+        default=None,
+        max_length=500,
+        description=(
+            "Nouvelle URL du dépôt Git source (http/https strict — pas de "
+            "clone à ce stade)"
+        ),
+        json_schema_extra={"example": "https://git.example.com/org/repo.git"},
+    )
+    environment_id: EnvironmentId = Field(
+        default=None,
+        description=(
+            "Environnement de rattachement (UUID — 404 si inexistant ou "
+            "hors de l'organisation de la stack)"
+        ),
+        json_schema_extra={"example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"},
     )
 
 
@@ -408,6 +491,21 @@ class StackResponse(StackBase):
         ...,
         description="ID de l'organisation",
         json_schema_extra={"example": "org-001"},
+    )
+    origin: WorkloadOrigin = Field(
+        default=WorkloadOrigin.MANAGED,
+        description="Origine du workload (managed, adopted, external)",
+        json_schema_extra={"example": "managed"},
+    )
+    git_url: Optional[str] = Field(
+        default=None,
+        description="URL du dépôt Git source (GitOps futur)",
+        json_schema_extra={"example": "https://git.example.com/org/repo.git"},
+    )
+    environment_id: Optional[str] = Field(
+        default=None,
+        description="Environnement de rattachement",
+        json_schema_extra={"example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"},
     )
     created_at: datetime = Field(
         ...,
@@ -619,6 +717,7 @@ class StackActionResponse(BaseModel):
 
 class RedeployStrategy(str):
     """Stratégies de redéploiement possibles."""
+
     ROLLING = "rolling"
     STOP_START = "stop_start"
 

@@ -32,7 +32,7 @@ from app.core.exceptions import (
     UnprocessableEntityError,
 )
 from app.models.ssh_key import SSHKey
-from app.models.target import Target
+from app.models.host import Host
 from app.schemas.ssh_key import (
     SSHKeyGenerateRequest,
     SSHKeyImportRequest,
@@ -179,7 +179,7 @@ class TestListAndGet:
         )
         for i in range(3):
             db_session.add(
-                Target(
+                Host(
                     name=f"t{i}",
                     host=f"host{i}",
                     credentials={},
@@ -234,11 +234,11 @@ class TestDelete:
 
     async def _seed_key_with_target(
         self, db_session, organization_id
-    ) -> tuple[SSHKey, Target]:
+    ) -> tuple[SSHKey, Host]:
         row, _ = await SSHKeyService.generate(
             db_session, SSHKeyGenerateRequest(name="referenced")
         )
-        target = Target(
+        target = Host(
             name="holder",
             host="h",
             credentials={},
@@ -314,7 +314,7 @@ class TestResolveForTarget:
         row, pem = await SSHKeyService.generate(
             db_session, SSHKeyGenerateRequest(name="resolved")
         )
-        target = Target(
+        target = Host(
             name="t",
             host="h",
             credentials={},
@@ -324,7 +324,7 @@ class TestResolveForTarget:
         db_session.add(target)
         await db_session.commit()
 
-        kwargs = await SSHKeyService.resolve_for_target(db_session, target)
+        kwargs = await SSHKeyService.resolve_for_host(db_session, target)
         assert "client_keys" in kwargs
         assert len(kwargs["client_keys"]) == 1
         assert kwargs["client_keys"][0].get_fingerprint() == row.fingerprint
@@ -336,7 +336,7 @@ class TestResolveForTarget:
         self, db_session: AsyncSession, test_organization
     ):
         """Ni entité ni matériau legacy → {} (auth password ou autre)."""
-        target = Target(
+        target = Host(
             name="t2",
             host="h2",
             credentials={},
@@ -344,7 +344,7 @@ class TestResolveForTarget:
         )
         db_session.add(target)
         await db_session.commit()
-        assert await SSHKeyService.resolve_for_target(db_session, target) == {}
+        assert await SSHKeyService.resolve_for_host(db_session, target) == {}
 
 
 class TestLogsSanitization:

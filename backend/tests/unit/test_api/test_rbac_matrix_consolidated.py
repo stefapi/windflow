@@ -35,7 +35,7 @@ from app.core.cache import reset_role_cache
 from app.enums.rbac import Role
 from app.models.organization import Organization
 from app.models.stack import Stack
-from app.models.target import Target
+from app.models.host import Host
 from app.models.user import User
 
 STACK_CREATE_PAYLOAD: dict = {
@@ -74,7 +74,7 @@ def _auth_headers(user: User) -> dict[str, str]:
 
 async def _seed_foreign_resources(
     db_session: AsyncSession,
-) -> tuple[Organization, Stack, Target]:
+) -> tuple[Organization, Stack, Host]:
     """Organisation étrangère + stack + target (aucun utilisateur commun)."""
     foreign_org = Organization(name="Foreign Org", slug="foreign-org-consolidated")
     db_session.add(foreign_org)
@@ -87,7 +87,7 @@ async def _seed_foreign_resources(
         organization_id=foreign_org.id,
         version="1.0.0",
     )
-    target = Target(
+    target = Host(
         name="foreign-target",
         host="127.0.0.1",
         credentials={},
@@ -187,7 +187,7 @@ class TestOperatorMatrix:
             organization_id=test_organization.id,
             version="1.0.0",
         )
-        target = Target(
+        target = Host(
             name="matrix-op-target",
             host="127.0.0.1",
             credentials={},

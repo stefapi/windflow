@@ -25,7 +25,7 @@ from app.core.secret_manager import (
     reset_secret_manager,
 )
 from app.models.ssh_key import SSHKey
-from app.models.target import Target
+from app.models.host import Host
 
 # Clé de test générée une fois (ed25519 — rapide) ; valeurs factices.
 _TEST_KEY = asyncssh.generate_private_key("ssh-ed25519")
@@ -197,7 +197,7 @@ class TestTargetsRelationship:
 
         for name in ("target-a", "target-b"):
             db_session.add(
-                Target(
+                Host(
                     name=name,
                     host=f"192.0.2.{10 + len(name)}",
                     credentials={},

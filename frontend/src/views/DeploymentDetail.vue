@@ -113,13 +113,13 @@
             </router-link>
             <code v-else>{{ deployment.stack_id.slice(0, 12) }}...</code>
           </el-descriptions-item>
-          <el-descriptions-item label="Target">
+          <el-descriptions-item label="Host">
             <router-link
-              v-if="deployment.target"
-              to="/targets"
+              v-if="deployment.host"
+              to="/hosts"
               class="link"
             >
-              {{ deployment.target.name }} ({{ deployment.target.host }})
+              {{ deployment.host.name }} ({{ deployment.host.host }})
             </router-link>
             <code v-else>{{ deployment.target_id.slice(0, 12) }}...</code>
           </el-descriptions-item>

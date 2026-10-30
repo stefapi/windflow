@@ -15,12 +15,12 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
 from ..database import Base
 
 if TYPE_CHECKING:
-    from .target import Target
+    from .host import Host
 
 
 class HostSSHFingerprint(Base):
@@ -31,9 +31,9 @@ class HostSSHFingerprint(Base):
     la première connexion (TOFU — *Trust On First Use*), blocage en cas
     de divergence (anti-MITM).
 
-    Arbitrage F3 (STORY-131) : l'entité « Host » des specs n'existe pas
-    en base — ``host_id`` référence ``targets.id`` (renommage/split
-    porté par STORY-166, EPIC-013).
+    STORY-166.1 : la FK ``host_id`` référence désormais ``hosts.id``
+    (l'entité Host des specs existe en base — fin de l'arbitrage F3 de
+    STORY-131).
 
     - ``key_type`` : algorithme de la **clé d'hôte** présentée (ex.
       ``ssh-ed25519``) — distinct du ``SSHKey.key_type`` (clé
@@ -67,9 +67,9 @@ class HostSSHFingerprint(Base):
 
     host_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("targets.id", ondelete="CASCADE"),
+        ForeignKey("hosts.id", ondelete="CASCADE"),
         nullable=False,
-        comment="Cible (targets.id — arbitrage F3, renommage STORY-166)",
+        comment="Host (hosts.id — STORY-166.1)",
     )
 
     hostname: Mapped[str] = mapped_column(
@@ -116,10 +116,12 @@ class HostSSHFingerprint(Base):
         nullable=False,
     )
 
-    target: Mapped["Target"] = relationship(
-        "Target",
+    host: Mapped["Host"] = relationship(
+        "Host",
         back_populates="ssh_fingerprints",
     )
+    # Alias de transition (purge STORY-166.6) : relation legacy.
+    target = synonym("host")
 
     def __repr__(self) -> str:
         """Représentation DEBUG (aucun secret — l'empreinte est publique)."""

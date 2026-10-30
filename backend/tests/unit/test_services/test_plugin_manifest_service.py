@@ -15,7 +15,6 @@ from app.core.exceptions import WindFlowException
 from app.schemas.plugin_manifest import PluginManifest
 from app.services.plugin_manifest_service import PluginManifestService
 
-
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
 
@@ -274,9 +273,7 @@ architectures:
 class TestValidateManifestEdgeCases:
     """Tests des cas limites."""
 
-    def test_validate_manifest_empty_yaml(
-        self, service: PluginManifestService
-    ) -> None:
+    def test_validate_manifest_empty_yaml(self, service: PluginManifestService) -> None:
         """Un YAML vide lève une WindFlowException."""
         with pytest.raises(WindFlowException, match="vide"):
             service.validate_manifest("")

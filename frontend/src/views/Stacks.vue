@@ -559,16 +559,16 @@
           />
         </el-form-item>
         <el-form-item
-          label="Target"
+          label="Host"
           required
         >
           <el-select
             v-model="deployForm.target_id"
-            placeholder="Select target"
+            placeholder="Select host"
             style="width: 100%"
           >
             <el-option
-              v-for="target in targetsStore.targets"
+              v-for="target in hostsStore.hosts"
               :key="target.id"
               :label="`${target.name} (${target.host})`"
               :value="target.id"
@@ -665,7 +665,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useStacksStore, useTargetsStore, useDeploymentsStore } from '@/stores'
+import { useStacksStore, useHostsStore, useDeploymentsStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 import { stacksApi, dashboardApi } from '@/services/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -676,7 +676,7 @@ import type { StatusType } from '@/components/ui/StatusBadge.vue'
 import type { ActionType } from '@/components/ui/ActionButtons.vue'
 
 const stacksStore = useStacksStore()
-const targetsStore = useTargetsStore()
+const hostsStore = useHostsStore()
 const deploymentsStore = useDeploymentsStore()
 const authStore = useAuthStore()
 
@@ -1199,7 +1199,7 @@ function formatDate(dateStr: string): string {
 onMounted(() => {
   const orgId = authStore.organizationId || undefined
   stacksStore.fetchStacks(orgId)
-  targetsStore.fetchTargets(orgId)
+  hostsStore.fetchHosts(orgId)
 })
 </script>
 

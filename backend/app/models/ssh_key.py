@@ -7,13 +7,13 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import DateTime, Index, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
 from ..core.secret_manager import get_secret_manager
 from ..database import Base
 
 if TYPE_CHECKING:
-    from .target import Target
+    from .host import Host
 
 
 class SSHKey(Base):
@@ -99,13 +99,16 @@ class SSHKey(Base):
         nullable=False,
     )
 
-    # Relations — N cibles référencent la même clé (FK SET NULL côté
-    # targets : la suppression de la clé déréférence, jamais silencieuse
-    # côté API, portée par STORY-131.2).
-    targets: Mapped[list["Target"]] = relationship(
-        "Target",
+    # Relations — N hosts référencent la même clé (FK SET NULL côté
+    # hosts : la suppression de la clé déréférence, jamais silencieuse
+    # côté API, portée par STORY-131.2). STORY-166.1 : relation canonique
+    # ``hosts`` (Host.ssh_key back_populates="hosts") ; ``targets``
+    # reste un synonym de transition (purge STORY-166.6).
+    hosts: Mapped[list["Host"]] = relationship(
+        "Host",
         back_populates="ssh_key",
     )
+    targets = synonym("hosts")
 
     @property
     def decrypted_private_key(self) -> str:

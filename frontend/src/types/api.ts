@@ -63,14 +63,14 @@ export interface OrganizationUpdate {
   description?: string
 }
 
-// Target types (mirrors backend enums/target.py)
-export type TargetType = 'docker' | 'docker_swarm' | 'kubernetes' | 'ssh' | 'vm' | 'physical'
-export type TargetStatus = 'online' | 'offline' | 'error' | 'maintenance'
+// Host types (STORY-166.6 — surface canonique /hosts, mirrors backend enums/host.py)
+export type HostProfile = 'host_baremetal' | 'host_proxmox' | 'host_remote_docker'
+export type HostStatus = 'online' | 'offline' | 'unreachable' | 'scanning'
 export type SSHAuthMethod = 'local' | 'password' | 'ssh_key'
 export type AccessLevel = 'root' | 'sudo' | 'sudo_passwordless' | 'limited'
 
-// Access Profile (mirrors backend schemas/target.py TargetAccessProfile)
-export interface TargetAccessProfile {
+// Access Profile (mirrors backend schemas/host.py HostAccessProfile)
+export interface HostAccessProfile {
   ssh_user: string
   is_root_user: boolean
   sudo_available: boolean
@@ -140,7 +140,7 @@ export interface HostReachabilityResponse {
   reachable: boolean
 }
 
-// Target Capability types (mirrors backend enums/target.py CapabilityType)
+// Host Capability types (mirrors backend enums/host.py CapabilityType)
 export type CapabilityType =
   | 'docker'
   | 'docker_compose'
@@ -169,7 +169,8 @@ export type CapabilityType =
   | 'virsh'
   | 'multipass'
 
-export interface TargetCapability extends BaseModel {
+export interface HostCapability extends BaseModel {
+  /** Contrat backend actuel : TargetCapabilityResponse émet `target_id` (synonym model) — bascule `host_id` à suivre (plan F3). */
   target_id: string
   capability_type: CapabilityType
   is_available: boolean
@@ -178,60 +179,74 @@ export interface TargetCapability extends BaseModel {
   detected_at: string
 }
 
-export interface TargetCapabilitiesResponse {
+// STORY-166.6 : le backend /hosts/{id}/capabilities expose encore les clés
+// legacy (scan_date/platform_info — contrat figé F3) ; hardware_info est la
+// lecture canonique côté Host.
+export interface HostCapabilitiesResponse {
   scan_date: string | null
   scan_success: boolean | null
   platform_info: Record<string, unknown> | null
   os_info: Record<string, unknown> | null
-  capabilities: TargetCapability[]
+  capabilities: HostCapability[]
 }
 
 export interface HealthCheckResponse {
-  target_id: string
+  host_id: string
   status: string
   last_check: string
   message: string
 }
 
-export interface Target extends BaseModel {
+export interface Host extends BaseModel {
   name: string
-  type: TargetType
+  /** Profil canonique spec 06 ( HostResponse expose aussi l'echo legacy `type`) */
+  profile: HostProfile
+  type: string
   host: string
   port: number
   description: string | null
-  status: TargetStatus
+  status: HostStatus
   auth_method: string | null
   username: string | null
   has_sudo: boolean
   scan_date: string | null
   scan_success: boolean | null
   platform_info: Record<string, unknown> | null
+  hardware_info: Record<string, unknown> | null
+  installed_engines: Array<Record<string, unknown>>
+  last_scan_at: string | null
+  origin: string
+  environment_id: string | null
   os_info: Record<string, unknown> | null
-  access_profile: TargetAccessProfile | null
+  access_profile: HostAccessProfile | null
   extra_metadata: Record<string, unknown>
   organization_id: string
-  capabilities?: TargetCapability[]
+  capabilities?: HostCapability[]
 }
 
-export interface TargetCreate {
+export interface HostCreate {
   name: string
-  type: TargetType
+  profile?: HostProfile
   host: string
   port: number
   description?: string
   credentials: SSHCredentials
+  ssh_key_id?: string
+  environment_id?: string
   organization_id: string
   extra_metadata?: Record<string, unknown>
 }
 
-export interface TargetUpdate {
+export interface HostUpdate {
   name?: string
-  type?: TargetType
+  profile?: HostProfile
   host?: string
   port?: number
   description?: string
   credentials?: SSHCredentialsUpdate
-  status?: TargetStatus
+  ssh_key_id?: string
+  status?: HostStatus
+  environment_id?: string
   extra_metadata?: Record<string, unknown>
 }
 
@@ -284,7 +299,8 @@ export interface Deployment extends BaseModel {
   organization_id: string
   deployed_at: string | null
   stack?: Stack
-  target?: Target
+  /** Enrichissement local : le host déployé (résolu côté client depuis hostsApi) */
+  host?: Host
 }
 
 export interface DeploymentCreate {

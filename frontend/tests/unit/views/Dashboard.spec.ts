@@ -55,8 +55,8 @@ vi.mock('@/stores/auth', () => ({
   }),
 }))
 
-vi.mock('@/stores/targets', () => ({
-  useTargetsStore: () => ({
+vi.mock('@/stores/hosts', () => ({
+  useHostsStore: () => ({
     currentTarget: null,
   }),
 }))

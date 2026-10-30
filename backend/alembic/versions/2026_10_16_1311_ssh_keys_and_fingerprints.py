@@ -62,6 +62,23 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _hosts_table_name(bind: sa.engine.Connection) -> str:
+    """Nom de la table des cibles sur cette base (STORY-166.1).
+
+    ``hosts`` si la migration 1661 a déjà été appliquée (round-trip
+    downgrade/upgrade au-delà de cette révision), ``targets`` sinon
+    (chemin normal baseline → 1311 → … → 1661).
+
+    Mode offline (``--sql``, MockConnection non inspectable) : défaut
+    ``targets`` — cohérent avec une base cible pré-1661.
+    """
+    try:
+        table_names = sa.inspect(bind).get_table_names()
+    except sa.exc.NoInspectionAvailable:
+        return "targets"
+    return "hosts" if "hosts" in table_names else "targets"
+
+
 def _migrate_ssh_private_keys_to_entities() -> None:
     """Extrait les ``ssh_private_key`` des cibles vers des ``ssh_keys``.
 
@@ -80,14 +97,16 @@ def _migrate_ssh_private_keys_to_entities() -> None:
     import asyncssh
 
     from app.core.secret_manager import get_secret_manager
-    from app.models.target import (
+    from app.models.host import (
         decrypt_credentials_from_storage,
         encrypt_credentials_for_storage,
     )
 
     bind = op.get_bind()
     metadata = sa.MetaData()
-    targets_table = sa.Table("targets", metadata, autoload_with=bind)
+    # STORY-166.1 : table des cibles « hosts » sur base déjà renommée
+    # (round-trip), « targets » sinon.
+    targets_table = sa.Table(_hosts_table_name(bind), metadata, autoload_with=bind)
     ssh_keys_table = sa.Table("ssh_keys", metadata, autoload_with=bind)
 
     # Déduplication par fingerprint (AC 2 de la story mère) : les lignes
@@ -278,7 +297,14 @@ def upgrade() -> None:
             comment="Date d'acceptation explicite",
         ),
         sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(["host_id"], ["targets.id"], ondelete="CASCADE"),
+        # STORY-166.1 : la table référencée s'appelle ``hosts`` sur une
+        # base déjà passée par la migration 1661 (round-trip), ``targets``
+        # sinon (chemin normal baseline → 1311 → … → 1661).
+        sa.ForeignKeyConstraint(
+            ["host_id"],
+            [f"{_hosts_table_name(op.get_bind())}.id"],
+            ondelete="CASCADE",
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "host_id",
@@ -292,7 +318,9 @@ def upgrade() -> None:
         batch_op.create_index("idx_host_ssh_fp_host", ["host_id"], unique=False)
 
     # ── 3. FK targets.ssh_key_id (nullable, SET NULL — N cibles ↔ 1 clé) ──
-    with op.batch_alter_table("targets", schema=None) as batch_op:
+    with op.batch_alter_table(
+        _hosts_table_name(op.get_bind()), schema=None
+    ) as batch_op:
         batch_op.add_column(
             sa.Column("ssh_key_id", sa.String(length=36), nullable=True)
         )
@@ -312,7 +340,12 @@ def downgrade() -> None:
     # Non destructif : les clés importées ne sont pas ré-inlinées dans les
     # credentials (limite documentée — la clé publique exportée et le retrait
     # du champ d'origine rendent la reconstruction non réversible).
-    with op.batch_alter_table("targets", schema=None) as batch_op:
+    # STORY-166.1 : la table des cibles peut s'appeler ``hosts`` (base
+    # déjà passée par la 1661 — le downgrade ciblé de cette révision ne
+    # reconstruit pas ``targets``).
+    with op.batch_alter_table(
+        _hosts_table_name(op.get_bind()), schema=None
+    ) as batch_op:
         batch_op.drop_column("ssh_key_id")
 
     op.drop_table("host_ssh_fingerprints")

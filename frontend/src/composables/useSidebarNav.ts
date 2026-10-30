@@ -69,7 +69,7 @@ const infraModeSections: NavSection[] = [
       { icon: Monitor, label: 'VMs', path: '/vms', badge: 'Bientôt' },
       { icon: Connection, label: 'Stacks', path: '/stacks' },
       { icon: DataAnalysis, label: 'Compute', path: '/compute' },
-      { icon: Upload, label: 'Targets', path: '/targets' },
+      { icon: Upload, label: 'Hosts', path: '/hosts' },
     ],
   },
   {

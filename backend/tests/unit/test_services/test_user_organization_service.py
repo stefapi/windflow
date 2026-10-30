@@ -349,8 +349,16 @@ class TestGetUserOrganizationIds:
         await _purge_user_links(db_session, test_user)
         db_session.add_all(
             [
-                _seed_link(test_user, test_organization, joined_at=datetime(2026, 1, 1, tzinfo=timezone.utc)),
-                _seed_link(test_user, other_org, joined_at=datetime(2026, 2, 1, tzinfo=timezone.utc)),
+                _seed_link(
+                    test_user,
+                    test_organization,
+                    joined_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                ),
+                _seed_link(
+                    test_user,
+                    other_org,
+                    joined_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
+                ),
             ]
         )
         await db_session.commit()
@@ -396,8 +404,16 @@ class TestGetPrimaryOrganizationId:
         await _purge_user_links(db_session, test_user)
         db_session.add_all(
             [
-                _seed_link(test_user, other_org, joined_at=datetime(2026, 6, 1, tzinfo=timezone.utc)),
-                _seed_link(test_user, test_organization, joined_at=datetime(2026, 1, 1, tzinfo=timezone.utc)),
+                _seed_link(
+                    test_user,
+                    other_org,
+                    joined_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+                ),
+                _seed_link(
+                    test_user,
+                    test_organization,
+                    joined_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                ),
             ]
         )
         await db_session.commit()

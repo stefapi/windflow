@@ -133,20 +133,20 @@
           </el-select>
         </el-form-item>
 
-        <!-- Sélection de la Target -->
+        <!-- Sélection du host -->
         <el-form-item
-          label="Target"
-          :rules="[{ required: true, message: 'Target requise', trigger: 'change' }]"
+          label="Host"
+          :rules="[{ required: true, message: 'Hôte requis', trigger: 'change' }]"
           prop="target_id"
         >
           <el-select
             v-model="form.target_id"
-            placeholder="Sélectionner une cible"
+            placeholder="Sélectionner un hôte"
             style="width: 100%"
             clearable
           >
             <el-option
-              v-for="target in targetsStore.targets"
+              v-for="target in hostsStore.hosts"
               :key="target.id"
               :label="target.name"
               :value="target.id"
@@ -213,7 +213,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useDeploymentsStore, useStacksStore, useTargetsStore } from '@/stores'
+import { useDeploymentsStore, useStacksStore, useHostsStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import type { DeploymentCreate } from '@/types/api'
@@ -226,7 +226,7 @@ import { stacksApi } from '@/services/api'
 const router = useRouter()
 const deploymentsStore = useDeploymentsStore()
 const stacksStore = useStacksStore()
-const targetsStore = useTargetsStore()
+const hostsStore = useHostsStore()
 const authStore = useAuthStore()
 
 // Surveillance des statuts en temps réel via WebSocket
@@ -528,7 +528,7 @@ onMounted(async () => {
   await Promise.all([
     deploymentsStore.fetchDeployments(orgId),
     stacksStore.fetchStacks(orgId),
-    targetsStore.fetchTargets(orgId)
+    hostsStore.fetchHosts(orgId)
   ])
 })
 </script>

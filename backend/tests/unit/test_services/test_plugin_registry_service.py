@@ -18,7 +18,6 @@ from app.core.exceptions import WindFlowException
 from app.schemas.plugin_registry import RegistryIndex
 from app.services.plugin_registry_service import PluginRegistryService
 
-
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
 
@@ -80,9 +79,7 @@ def valid_index_json() -> Dict[str, Any]:
     }
 
 
-def _make_mock_session_response(
-    status: int = 200, json_data: Any = None
-) -> AsyncMock:
+def _make_mock_session_response(status: int = 200, json_data: Any = None) -> AsyncMock:
     """Crée un mock de réponse HTTP aiohttp (async context manager).
 
     Retourne un AsyncMock qui se comporte comme un async context manager
@@ -184,13 +181,9 @@ class TestFetchIndex:
         assert mock_session.get.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_fetch_index_timeout(
-        self, service: PluginRegistryService
-    ) -> None:
+    async def test_fetch_index_timeout(self, service: PluginRegistryService) -> None:
         """Timeout HTTP → WindFlowException error_type=registry_timeout."""
-        mock_session = _make_mock_session(
-            get_side_effect=asyncio.TimeoutError()
-        )
+        mock_session = _make_mock_session(get_side_effect=asyncio.TimeoutError())
 
         with patch(
             "app.services.plugin_registry_service.aiohttp.ClientSession",
@@ -202,9 +195,7 @@ class TestFetchIndex:
         assert exc_info.value.details.get("error_type") == "registry_timeout"
 
     @pytest.mark.asyncio
-    async def test_fetch_index_http_error(
-        self, service: PluginRegistryService
-    ) -> None:
+    async def test_fetch_index_http_error(self, service: PluginRegistryService) -> None:
         """Erreur HTTP → WindFlowException error_type=registry_unavailable."""
         mock_response = _make_mock_session_response(status=500)
         mock_session = _make_mock_session(get_return=mock_response)

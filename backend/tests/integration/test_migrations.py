@@ -27,6 +27,7 @@ elle modifie les sources et le dossier ``versions/``.
 """
 
 import asyncio
+import json
 import os
 import subprocess
 import sys
@@ -51,18 +52,19 @@ ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 # Tables métier attendues + table technique Alembic (STORY-121.1 :
 # + user_organizations ; STORY-123.1 : + refresh_tokens ; STORY-124.1 :
 # + api_keys ; STORY-125.1 : + audit_logs ; STORY-131.1 : + ssh_keys et
-# host_ssh_fingerprints ; STORY-161 : + scheduled_task_executions).
+# host_ssh_fingerprints ; STORY-161 : + scheduled_task_executions ;
+# STORY-166.1 : targets/target_capabilities → hosts/host_capabilities).
 EXPECTED_TABLES = {
     "users",
     "organizations",
-    "targets",
+    "hosts",
     "stacks",
     "stack_versions",
     "deployments",
     "plugins",
     "plugin_hook_logs",
     "scheduled_tasks",
-    "target_capabilities",
+    "host_capabilities",
     "user_organizations",
     "refresh_tokens",
     "api_keys",
@@ -70,6 +72,7 @@ EXPECTED_TABLES = {
     "ssh_keys",
     "host_ssh_fingerprints",
     "scheduled_task_executions",
+    "environments",  # STORY-166.4
     "alembic_version",
 }
 
@@ -84,6 +87,7 @@ ADDITIVE_TABLES = {
     "ssh_keys",  # STORY-131.1
     "host_ssh_fingerprints",  # STORY-131.1
     "scheduled_task_executions",  # STORY-161
+    "environments",  # STORY-166.4
 }
 
 # URL PostgreSQL de test : paramétrable via l'environnement (CI : service
@@ -195,8 +199,12 @@ def _add_legacy_users_org_column(db_path: Path) -> None:
 
 
 def _drop_targets_ssh_key_id(db_path: Path) -> None:
-    """STORY-131.1 : retire ``targets.ssh_key_id`` d'une base create_all
-    (simulation base pré-1311).
+    """STORY-131.1 : retire ``ssh_key_id`` de la table des cibles d'une
+    base create_all (simulation base pré-1311).
+
+    STORY-166.1 : la table s'appelle désormais ``hosts`` dans les
+    métadonnées courantes (la simulation legacy recrée ``targets`` via
+    la baseline le moment venu — la 1661 gère les deux états).
 
     SQLite refuse ``ALTER TABLE ... DROP COLUMN`` sur une colonne
     référencée par un FK inline (« unknown column in foreign key
@@ -208,10 +216,17 @@ def _drop_targets_ssh_key_id(db_path: Path) -> None:
 
     engine = create_engine(f"sqlite:///{db_path}")
     try:
+        inspector = inspect(engine)
+        table_names = inspector.get_table_names()
+        # STORY-166.1 : create_all courant crée ``hosts`` ; une vraie
+        # base legacy porterait ``targets``.
+        table = "hosts" if "hosts" in table_names else "targets"
+        if table not in table_names:
+            return
         with engine.connect() as conn:
             ctx = MigrationContext.configure(conn)
             operations = Operations(ctx)
-            with operations.batch_alter_table("targets") as batch_op:
+            with operations.batch_alter_table(table) as batch_op:
                 batch_op.drop_column("ssh_key_id")
             conn.commit()
     finally:
@@ -256,6 +271,38 @@ def _restore_legacy_scheduled_tasks(db_path: Path) -> None:
         engine.dispose()
 
 
+def _restore_legacy_stacks_hosts_1662(db_path: Path) -> None:
+    """STORY-166.4 : retire les colonnes additives 1662 (stacks.origin/
+    git_url/environment_id, hosts.environment_id) sur une base create_all
+    (simulation base pré-1662) — **avant** le DROP de ``environments``
+    (sinon FK dangling : la réflexion batch d'Alembic échoue avec
+    ``NoSuchTableError: environments``, pattern
+    ``_drop_targets_ssh_key_id``).
+    """
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn)
+            operations = Operations(ctx)
+            with operations.batch_alter_table("stacks") as batch_op:
+                # L'index doit être droppé dans le même batch (le rebuild
+                # recrée les index reflétés, sinon échec sur colonne
+                # disparue).
+                batch_op.drop_index("ix_stacks_environment_id")
+                batch_op.drop_column("environment_id")
+                batch_op.drop_column("git_url")
+                batch_op.drop_column("origin")
+            with operations.batch_alter_table("hosts") as batch_op:
+                batch_op.drop_index("ix_hosts_environment_id")
+                batch_op.drop_column("environment_id")
+            conn.commit()
+    finally:
+        engine.dispose()
+
+
 class TestExistingDbStampedThenStartupNoDiff:
     """test_existing_db_stamped_then_startup_has_no_diff."""
 
@@ -287,6 +334,9 @@ class TestExistingDbStampedThenStartupNoDiff:
         # STORY-160.1 : la migration d'évolution 1321 ajoute les colonnes
         # spec 17 — l'état legacy simulé ne doit pas déjà les porter.
         _restore_legacy_scheduled_tasks(db_path)
+        # STORY-166.4 : idem pour les colonnes 1662 (avant le DROP
+        # d'environments — FK résolvable pendant le rebuild batch).
+        _restore_legacy_stacks_hosts_1662(db_path)
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         with legacy_engine.begin() as conn:
             for table in sorted(ADDITIVE_TABLES):
@@ -461,6 +511,9 @@ class TestUserOrganizationsTableMigration:
         # ssh_keys (FK résolvable pendant le rebuild batch).
         legacy_engine.dispose()
         _drop_targets_ssh_key_id(db_path)
+        # STORY-166.4 : colonnes 1662 retirées avant le DROP
+        # d'environments (FK résolvable pendant le rebuild batch).
+        _restore_legacy_stacks_hosts_1662(db_path)
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         with legacy_engine.begin() as conn:
             for table in sorted(ADDITIVE_TABLES):
@@ -682,6 +735,9 @@ class TestUsersOrgMigrationData:
         # STORY-160.1 : scheduled_tasks à l'état pré-1321 (task_type +
         # sans colonnes spec 17) avant le stamp baseline.
         _restore_legacy_scheduled_tasks(db_path)
+        # STORY-166.4 : colonnes 1662 retirées avant le DROP
+        # d'environments (FK résolvable pendant le rebuild batch).
+        _restore_legacy_stacks_hosts_1662(db_path)
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         with legacy_engine.begin() as conn:
             for table in sorted(ADDITIVE_TABLES):
@@ -980,6 +1036,7 @@ class TestScheduledTasksSpec17Migration:
         legacy_engine.dispose()
         _drop_targets_ssh_key_id(db_path)
         _restore_legacy_scheduled_tasks(db_path)
+        _restore_legacy_stacks_hosts_1662(db_path)
         engine = create_engine(f"sqlite:///{db_path}")
         with engine.begin() as conn:
             for table in sorted(ADDITIVE_TABLES):
@@ -1095,6 +1152,508 @@ class TestScheduledTasksSpec17Migration:
         assert count == 2, "round-trip ne doit perdre aucune ligne"
 
 
+class TestMigration1661TargetsToHosts:
+    """STORY-166.1 — migration ``1661`` : renommage ``targets``→``hosts``
+    sans perte (schéma canonique, mappings arbitrés, capacités éclatées,
+    3 FK retargetées, drop après validation).
+
+    Fixture réaliste (risque §7.1) : 1 target de **chaque TargetType**
+    (dont localhost, kubernetes distant ± capacité docker), capacités,
+    credentials chiffrés (STORY-103), deployment et fingerprint rattachés.
+    """
+
+    _PRE_1661 = "1341_normalize_event_names"
+
+    @staticmethod
+    def _seed_realistic_legacy_base(db_path: Path) -> dict[str, str]:
+        """Base à l'état pré-1661 (upgrade 1341) + fixtures réalistes.
+
+        Returns:
+            Mapping target_id → TargetType (valeurs stockées = **noms de
+            membres** uppercase, fidèle à la baseline sans
+            ``values_callable``).
+        """
+        from app.core.secret_manager import (
+            reset_secret_manager,
+        )
+        from app.models.host import encrypt_credentials_for_storage
+
+        db_url = f"sqlite+aiosqlite:///{db_path}"
+        assert (
+            _run_alembic(
+                "upgrade", "1341_normalize_event_names", db_url=db_url
+            ).returncode
+            == 0
+        )
+
+        reset_secret_manager()
+        targets: dict[str, str] = {
+            "t-docker-remote": "DOCKER",
+            "t-docker-local": "DOCKER",
+            "t-k8s-docker": "KUBERNETES",
+            "t-k8s-nodocker": "KUBERNETES",
+            "t-vm": "VM",
+            "t-physical": "PHYSICAL",
+        }
+        statuses = {
+            "t-docker-remote": "ONLINE",
+            "t-docker-local": "OFFLINE",
+            "t-k8s-docker": "ERROR",
+            "t-k8s-nodocker": "MAINTENANCE",
+            "t-vm": "ONLINE",
+            "t-physical": "OFFLINE",
+        }
+        addresses = {
+            "t-docker-remote": "192.168.1.10",
+            "t-docker-local": "localhost",
+            "t-k8s-docker": "192.168.1.20",
+            "t-k8s-nodocker": "192.168.1.21",
+            "t-vm": "192.168.1.30",
+            "t-physical": "192.168.1.40",
+        }
+
+        encrypted_credentials = encrypt_credentials_for_storage(
+            {
+                "auth_method": "password",
+                "username": "deploy",
+                "password": "S3cr3t!1661",
+                "sudo_enabled": False,
+            }
+        )
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "INSERT INTO organizations "
+                        "(id, name, slug, settings, created_at, updated_at) "
+                        "VALUES ('org-1661', 'Org 1661', 'org-1661', '{}', "
+                        "'2026-01-01 00:00:00', '2026-01-01 00:00:00')"
+                    )
+                )
+                for tid, type_name in targets.items():
+                    conn.execute(
+                        text(
+                            "INSERT INTO targets "
+                            "(id, name, description, host, port, type, status, "
+                            "credentials, ssh_key_id, last_check, extra_metadata, "
+                            "scan_date, scan_success, platform_info, os_info, "
+                            "access_profile, organization_id, created_at, updated_at"
+                            ") VALUES ("
+                            ":id, :name, NULL, :host, 22, :type, :status, "
+                            ":credentials, NULL, NULL, :extra_metadata, "
+                            "'2026-06-01 10:00:00', 1, :platform_info, NULL, NULL, "
+                            "'org-1661', '2026-01-01 00:00:00', "
+                            "'2026-01-01 00:00:00')"
+                        ),
+                        {
+                            "id": tid,
+                            "name": f"target {tid}",
+                            "host": addresses[tid],
+                            "type": type_name,
+                            "status": statuses[tid],
+                            "credentials": json.dumps(encrypted_credentials),
+                            "extra_metadata": json.dumps({"note": "legacy"}),
+                            "platform_info": json.dumps({"arch": "x86_64"}),
+                        },
+                    )
+                # Capacités : docker **disponible** sur t-k8s-docker
+                # (tie-breaker), docker indisponible sur t-k8s-nodocker,
+                # libvirt sur la VM.
+                for cid, tid, cap, avail in (
+                    ("c-1", "t-k8s-docker", "DOCKER", 1),
+                    ("c-2", "t-k8s-docker", "KUBECTL", 1),
+                    ("c-3", "t-k8s-nodocker", "KUBECTL", 1),
+                    ("c-4", "t-k8s-nodocker", "DOCKER", 0),
+                    ("c-5", "t-vm", "LIBVIRT", 1),
+                    ("c-6", "t-docker-remote", "DOCKER", 1),
+                ):
+                    conn.execute(
+                        text(
+                            "INSERT INTO target_capabilities "
+                            "(id, target_id, capability_type, is_available, "
+                            "version, details, detected_at, created_at, updated_at"
+                            ") VALUES ("
+                            ":id, :tid, :cap, :avail, '1.0', NULL, "
+                            "'2026-06-01 10:00:00', '2026-06-01 10:00:00', "
+                            "'2026-06-01 10:00:00')"
+                        ),
+                        {"id": cid, "tid": tid, "cap": cap, "avail": avail},
+                    )
+                # Deployment + fingerprint rattachés (retarget FK).
+                conn.execute(
+                    text(
+                        "INSERT INTO stacks (id, name, description, version, "
+                        "category, tags, template, variables, icon_url, "
+                        "screenshots, documentation_url, author, license, "
+                        "organization_id, target_type, is_public, downloads, "
+                        "rating, is_archived, created_at, updated_at) "
+                        "VALUES ('stk-1661', 'stack 1661', NULL, '1.0.0', NULL, "
+                        "'[]', '{}', '{}', NULL, '[]', NULL, NULL, 'MIT', "
+                        "'org-1661', 'docker', 0, 0, 0, 0, "
+                        "'2026-01-01 00:00:00', '2026-01-01 00:00:00')"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "INSERT INTO deployments (id, stack_id, target_id, "
+                        "organization_id, name, status, config, variables, "
+                        "task_retry_count, created_at, updated_at) "
+                        "VALUES ('dep-1661', 'stk-1661', 't-docker-remote', "
+                        "'org-1661', 'dep 1661', 'RUNNING', '{}', '{}', 0, "
+                        "'2026-01-01 00:00:00', '2026-01-01 00:00:00')"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "INSERT INTO host_ssh_fingerprints "
+                        "(id, host_id, hostname, port, key_type, fingerprint, "
+                        "accepted, accepted_at, created_at) "
+                        "VALUES ('fp-1661', 't-docker-remote', '192.168.1.10', 22, "
+                        "'ssh-ed25519', 'SHA256:abc123', 1, NULL, "
+                        "'2026-01-01 00:00:00')"
+                    )
+                )
+        finally:
+            engine.dispose()
+        return targets
+
+    def _upgraded(self, tmp_path: Path, name: str) -> tuple[Path, dict[str, str]]:
+        db_path = tmp_path / name
+        targets = self._seed_realistic_legacy_base(db_path)
+        upgrade = _run_alembic(
+            "upgrade", "head", db_url=f"sqlite+aiosqlite:///{db_path}"
+        )
+        assert (
+            upgrade.returncode == 0
+        ), f"upgrade head a échoué :\nstdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+        return db_path, targets
+
+    def test_profiles_follow_arbitration_table(self, tmp_path: Path) -> None:
+        """AC 1 — chaque host porte le **profil canonique attendu**
+        selon la table d'arbitrage (y compris repli kubernetes)."""
+        db_path, _ = self._upgraded(tmp_path, "mig-1661-profiles.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                rows = dict(
+                    conn.exec_driver_sql("SELECT id, profile FROM hosts").fetchall()
+                )
+        finally:
+            engine.dispose()
+        expected = {
+            "t-docker-remote": "host_remote_docker",
+            "t-docker-local": "host_baremetal",
+            "t-k8s-docker": "host_remote_docker",  # repli + capacité docker
+            "t-k8s-nodocker": "host_baremetal",  # repli sans docker
+            "t-vm": "host_baremetal",
+            "t-physical": "host_baremetal",
+        }
+        assert rows == expected, f"Profils arbitrés incorrects : {rows}"
+
+    def test_statuses_mapped_error_to_unreachable(self, tmp_path: Path) -> None:
+        """AC 1 — statuts mappés : error→unreachable, maintenance→offline,
+        online/offline identiques."""
+        db_path, _ = self._upgraded(tmp_path, "mig-1661-status.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                rows = dict(
+                    conn.exec_driver_sql("SELECT id, status FROM hosts").fetchall()
+                )
+        finally:
+            engine.dispose()
+        expected = {
+            "t-docker-remote": "online",
+            "t-docker-local": "offline",
+            "t-k8s-docker": "unreachable",
+            "t-k8s-nodocker": "offline",
+            "t-vm": "online",
+            "t-physical": "offline",
+        }
+        assert rows == expected, f"Statuts mappés incorrects : {rows}"
+
+    def test_capabilities_split_engines_and_hardware(self, tmp_path: Path) -> None:
+        """AC 1 — capacités éclatées : lignes host_capabilities présentes
+        (UNIQUE recréée), installed_engines alimenté, hardware_info ==
+        ancien platform_info."""
+        db_path, _ = self._upgraded(tmp_path, "mig-1661-caps.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                cap_count = conn.execute(
+                    text("SELECT COUNT(*) FROM host_capabilities")
+                ).scalar_one()
+                k8s_engines = conn.execute(
+                    text(
+                        "SELECT installed_engines FROM hosts " "WHERE id='t-k8s-docker'"
+                    )
+                ).scalar_one()
+                hardware = conn.execute(
+                    text("SELECT hardware_info FROM hosts WHERE id='t-vm'")
+                ).scalar_one()
+                # Le driver SQLite désérialise déjà le JSON — accepter
+                # les deux formes (str JSON ou dict parsé).
+                if isinstance(hardware, str):
+                    hardware = json.loads(hardware)
+        finally:
+            engine.dispose()
+
+        assert cap_count == 6, "copie ligne à ligne des capacités incomplète"
+        engines = json.loads(k8s_engines)
+        docker_entries = [e for e in engines if e["capability_type"] == "docker"]
+        assert docker_entries and docker_entries[0]["is_available"] is True
+        assert hardware == {"arch": "x86_64"}
+
+    def test_foreign_keys_retargeted_and_data_preserved(self, tmp_path: Path) -> None:
+        """AC 1 — les 3 FK retargetées vers hosts.id, données préservées."""
+        db_path, _ = self._upgraded(tmp_path, "mig-1661-fk.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                dep_host = conn.execute(
+                    text("SELECT host_id FROM deployments WHERE id='dep-1661'")
+                ).scalar_one()
+                dep_columns = {
+                    col["name"] for col in inspect(engine).get_columns("deployments")
+                }
+                fp_host = conn.execute(
+                    text(
+                        "SELECT host_id FROM host_ssh_fingerprints "
+                        "WHERE id='fp-1661'"
+                    )
+                ).scalar_one()
+                dep_fks = conn.exec_driver_sql(
+                    "PRAGMA foreign_key_list(deployments)"
+                ).fetchall()
+                fp_fks = conn.exec_driver_sql(
+                    "PRAGMA foreign_key_list(host_ssh_fingerprints)"
+                ).fetchall()
+        finally:
+            engine.dispose()
+
+        assert dep_host == "t-docker-remote"
+        assert "host_id" in dep_columns and "target_id" not in dep_columns
+        assert fp_host == "t-docker-remote"
+        assert any(fk[2] == "hosts" for fk in dep_fks)
+        assert any(fk[2] == "hosts" for fk in fp_fks)
+
+    def test_legacy_tables_dropped_and_credentials_verbatim(
+        self, tmp_path: Path
+    ) -> None:
+        """AC 1 — targets/target_capabilities absentes ; credentials
+        copiés **octet à octet** (jamais déchiffrés) ; migrated_type."""
+        db_path, _ = self._upgraded(tmp_path, "mig-1661-drop.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            tables = set(inspect(engine).get_table_names())
+            with engine.connect() as conn:
+                raw_credentials = conn.execute(
+                    text("SELECT credentials FROM hosts WHERE id='t-vm'")
+                ).scalar_one()
+                extra = json.loads(
+                    conn.execute(
+                        text("SELECT extra_metadata FROM hosts WHERE id='t-vm'")
+                    ).scalar_one()
+                )
+        finally:
+            engine.dispose()
+
+        assert "targets" not in tables
+        assert "target_capabilities" not in tables
+        stored = json.loads(raw_credentials)
+        assert set(stored.keys()) == {"_encrypted"}
+        assert stored["_encrypted"].startswith(
+            "gAAAA"
+        ), "credentials doit rester le token Fernet opaque (copie verbatim)"
+        assert extra["migrated_type"] == "vm"
+        assert extra["note"] == "legacy", "métadonnées d'origine perdues"
+
+    def test_full_schema_check_after_1661(self, tmp_path: Path) -> None:
+        """Base migrée → ``alembic check`` sans diff (schéma canonique
+        aligné sur les modèles — garde-fou anti-dérivation)."""
+        db_path, _ = self._upgraded(tmp_path, "mig-1661-check.db")
+        check = _run_alembic("check", db_url=f"sqlite+aiosqlite:///{db_path}")
+        assert check.returncode == 0, (
+            f"alembic check rapporte un diff après 1661 :\n"
+            f"stdout={check.stdout}\nstderr={check.stderr}"
+        )
+
+
+class TestMigration1662EnvironmentsStacksOrigin:
+    """STORY-166.4 — migration ``1662`` : table ``environments`` +
+    ``stacks.origin``/``git_url``/``environment_id`` +
+    ``hosts.environment_id`` + backfill ``adopted``.
+
+    Fixture réaliste : 1 organisation, stacks aux trois profils
+    d'origine (category='adopted' / tags contient 'adopted' / création
+    manuelle), 1 host rattaché.
+    """
+
+    _PRE_1662 = "1661_targets_to_hosts"
+
+    @staticmethod
+    def _seed_pre_1662_base(db_path: Path) -> None:
+        """Base à l'état pré-1662 (upgrade 1661) + fixtures stacks."""
+        db_url = f"sqlite+aiosqlite:///{db_path}"
+        assert (
+            _run_alembic("upgrade", "1661_targets_to_hosts", db_url=db_url).returncode
+            == 0
+        )
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "INSERT INTO organizations "
+                        "(id, name, slug, settings, created_at, updated_at) "
+                        "VALUES ('org-1662', 'Org 1662', 'org-1662', '{}', "
+                        "'2026-01-01 00:00:00', '2026-01-01 00:00:00')"
+                    )
+                )
+                # 3 stacks : category=adopted / tags contient adopted /
+                # création manuelle (aucun signal)
+                for sid, category, tags in (
+                    ("stk-adopted-cat", "adopted", '["adopted", "container"]'),
+                    ("stk-adopted-tags", None, '["adopted"]'),
+                    ("stk-managed", "web", '["web", "proxy"]'),
+                ):
+                    conn.execute(
+                        text(
+                            "INSERT INTO stacks (id, name, description, version, "
+                            "category, tags, template, variables, icon_url, "
+                            "screenshots, documentation_url, author, license, "
+                            "organization_id, target_type, is_public, downloads, "
+                            "rating, is_archived, created_at, updated_at) "
+                            "VALUES (:id, :name, NULL, '1.0.0', :category, :tags, "
+                            "'{}', '{}', NULL, '[]', NULL, NULL, 'MIT', "
+                            "'org-1662', 'docker', 0, 0, 0, 0, "
+                            "'2026-01-01 00:00:00', '2026-01-01 00:00:00')"
+                        ),
+                        {
+                            "id": sid,
+                            "name": f"stack {sid}",
+                            "category": category,
+                            "tags": tags,
+                        },
+                    )
+        finally:
+            engine.dispose()
+
+    def _upgraded(self, tmp_path: Path, name: str) -> Path:
+        db_path = tmp_path / name
+        self._seed_pre_1662_base(db_path)
+        upgrade = _run_alembic(
+            "upgrade", "head", db_url=f"sqlite+aiosqlite:///{db_path}"
+        )
+        assert (
+            upgrade.returncode == 0
+        ), f"upgrade head a échoué :\nstdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+        return db_path
+
+    def test_environments_table_created_with_unique(self, tmp_path: Path) -> None:
+        """AC 2 — table ``environments`` présente, UNIQUE(organization_id,
+        name) posée, colonnes canoniques."""
+        db_path = self._upgraded(tmp_path, "env1662.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            envs = inspect(engine).get_table_names()
+            assert "environments" in envs
+
+            # UNIQUE violé → IntegrityError
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "INSERT INTO environments (id, name, type, "
+                        "organization_id, configuration, is_active, created_at, "
+                        "updated_at) VALUES ('e1', 'prod', 'production', "
+                        "'org-1662', '{}', 1, '2026-01-01 00:00:00', "
+                        "'2026-01-01 00:00:00')"
+                    )
+                )
+                import sqlalchemy as sa
+
+                with pytest.raises(sa.exc.IntegrityError):
+                    conn.execute(
+                        text(
+                            "INSERT INTO environments (id, name, type, "
+                            "organization_id, configuration, is_active, "
+                            "created_at, updated_at) VALUES ('e2', 'prod', "
+                            "'production', 'org-1662', '{}', 1, "
+                            "'2026-01-01 00:00:00', '2026-01-01 00:00:00')"
+                        )
+                    )
+        finally:
+            engine.dispose()
+
+    def test_backfill_origin_adopted(self, tmp_path: Path) -> None:
+        """AC 1 — backfill : category='adopted' OU tags contient 'adopted'
+        → origin='adopted' ; création manuelle → 'managed'."""
+        db_path = self._upgraded(tmp_path, "backfill1662.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                rows = dict(
+                    conn.execute(text("SELECT id, origin FROM stacks")).fetchall()
+                )
+            assert rows["stk-adopted-cat"] == "adopted"
+            assert rows["stk-adopted-tags"] == "adopted"
+            assert rows["stk-managed"] == "managed"
+        finally:
+            engine.dispose()
+
+    def test_new_columns_and_data_preserved(self, tmp_path: Path) -> None:
+        """AC 2/AC 3 — colonnes présentes, données stacks sans perte
+        (counts identiques), git_url NULL."""
+        db_path = self._upgraded(tmp_path, "cols1662.db")
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            inspector = inspect(engine)
+            stacks_cols = {c["name"] for c in inspector.get_columns("stacks")}
+            hosts_cols = {c["name"] for c in inspector.get_columns("hosts")}
+            assert {"origin", "git_url", "environment_id"} <= stacks_cols
+            assert "environment_id" in hosts_cols
+
+            with engine.connect() as conn:
+                count = conn.execute(text("SELECT COUNT(*) FROM stacks")).scalar_one()
+                assert count == 3  # aucune perte
+                git_urls = conn.execute(text("SELECT git_url FROM stacks")).fetchall()
+                assert all(v == (None,) for v in git_urls)
+        finally:
+            engine.dispose()
+
+    def test_downgrade_drops_new_schema_keeps_core_data(self, tmp_path: Path) -> None:
+        """Downgrade ciblé ``1662 → 1661`` : colonnes supprimées, table
+        environments droppée, données cœur intactes."""
+        db_path = tmp_path / "downgrade1662.db"
+        self._seed_pre_1662_base(db_path)
+        db_url = f"sqlite+aiosqlite:///{db_path}"
+
+        assert _run_alembic("upgrade", "head", db_url=db_url).returncode == 0
+        assert (
+            _run_alembic("downgrade", "1661_targets_to_hosts", db_url=db_url).returncode
+            == 0
+        )
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            inspector = inspect(engine)
+            tables = inspector.get_table_names()
+            assert "environments" not in tables
+            stacks_cols = {c["name"] for c in inspector.get_columns("stacks")}
+            assert "origin" not in stacks_cols
+            assert "git_url" not in stacks_cols
+            assert "environment_id" not in stacks_cols
+
+            with engine.connect() as conn:
+                count = conn.execute(text("SELECT COUNT(*) FROM stacks")).scalar_one()
+                assert count == 3  # données cœur intactes
+        finally:
+            engine.dispose()
+
+
 class TestAlembicCheckNoPendingChanges:
     """test_alembic_check_reports_no_pending_changes."""
 
@@ -1144,7 +1703,7 @@ class TestMigratedDbSeedAndAdminLogin:
             # Le scan réseau localhost (subprocess docker/libvirt) est
             # indépendant du schéma et non déterministe en CI → stubbé.
             with patch(
-                "app.database_seed._create_localhost_target",
+                "app.database_seed._create_local_host",
                 new=AsyncMock(return_value=(False, ["scan stubbed in test"])),
             ):
                 await database.seed_tables()
@@ -1289,6 +1848,7 @@ class TestScheduledTaskExecutionsMigration:
         legacy_engine.dispose()
         _drop_targets_ssh_key_id(db_path)
         _restore_legacy_scheduled_tasks(db_path)
+        _restore_legacy_stacks_hosts_1662(db_path)
         legacy_engine = create_engine(f"sqlite:///{db_path}")
         with legacy_engine.begin() as conn:
             for table in sorted(ADDITIVE_TABLES):
@@ -1365,9 +1925,9 @@ class TestScheduledTaskEventNameNormalization:
             "1331_scheduled_task_executions",
             db_url=f"sqlite+aiosqlite:///{db_path}",
         )
-        assert pre.returncode == 0, (
-            f"upgrade 1331 a échoué :\nstdout={pre.stdout}\nstderr={pre.stderr}"
-        )
+        assert (
+            pre.returncode == 0
+        ), f"upgrade 1331 a échoué :\nstdout={pre.stdout}\nstderr={pre.stderr}"
 
         engine = create_engine(f"sqlite:///{db_path}")
         try:
@@ -1391,8 +1951,7 @@ class TestScheduledTaskEventNameNormalization:
                 for alias, canonical in self._CASES.items():
                     stored = conn.execute(
                         text(
-                            "SELECT event_name FROM scheduled_tasks "
-                            "WHERE id = :id"
+                            "SELECT event_name FROM scheduled_tasks " "WHERE id = :id"
                         ),
                         {"id": f"alias-{alias}"},
                     ).scalar_one()
@@ -1415,8 +1974,7 @@ class TestScheduledTaskEventNameNormalization:
         engine = _upgraded_engine(tmp_path, "normalize-fresh.db")
         try:
             columns = {
-                col["name"]
-                for col in inspect(engine).get_columns("scheduled_tasks")
+                col["name"] for col in inspect(engine).get_columns("scheduled_tasks")
             }
             assert "event_name" in columns  # colonne inchangée (data-only)
         finally:

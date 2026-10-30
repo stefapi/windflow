@@ -32,7 +32,7 @@ from app.enums.rbac import Role
 from app.models.deployment import Deployment, DeploymentStatus
 from app.models.organization import Organization
 from app.models.stack import Stack
-from app.models.target import Target
+from app.models.host import Host
 from app.models.user import User
 from app.models.user_organization import UserOrganization
 from app.schemas.user import UserCreate
@@ -90,7 +90,7 @@ async def _seed_org_resources(
         organization_id=org.id,
         version="1.0.0",
     )
-    target = Target(
+    target = Host(
         name=f"target-{suffix}",
         host="127.0.0.1",
         credentials={},

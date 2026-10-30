@@ -16,8 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..helper.compute_helpers import apply_filters
+from ..models.host import Host
 from ..models.stack import Stack
-from ..models.target import Target
 from ..schemas.compute import ComputeGlobalView, ComputeStatsResponse
 from ..services.container_builder import (
     build_discovered_items,
@@ -28,8 +28,8 @@ from ..services.container_builder import (
 
 # Ré-export pour compatibilité (tests existants qui importent depuis compute_service)
 from ..services.container_classifier import (
-    LOCAL_TARGET_ID,
-    LOCAL_TARGET_NAME,
+    LOCAL_HOST_ID,
+    LOCAL_HOST_NAME,
     classify_containers,
 )
 from ..services.docker_client_service import DockerClientService
@@ -37,24 +37,30 @@ from ..services.docker_client_service import DockerClientService
 logger = logging.getLogger(__name__)
 
 
-async def _get_local_target(
+async def _resolve_local_host(
     db: AsyncSession, org_ids: Optional[List[str]]
 ) -> tuple[str, str]:
     """
-    Tente de trouver la target Docker locale dans la DB.
+    Résout le host Docker local dans la DB (STORY-166.3 T8).
+
+    Retourne l'ID du host seedé (premier ``Host`` avec
+    ``host IN ('localhost', '127.0.0.1')``) pour rattacher stacks et
+    containers adoptés au **vrai** host (coopération STORY-166.5 — le
+    seed garantit son existence).
 
     Returns:
-        (target_id, target_name) — soit depuis la DB soit un placeholder
+        (host_id, host_name) — soit du host seedé en DB, soit le
+        placeholder ``("local", "Local Docker")`` si absent.
     """
-    stmt = select(Target).where(Target.host.in_(["localhost", "127.0.0.1"]))
+    stmt = select(Host).where(Host.host.in_(["localhost", "127.0.0.1"]))
     if org_ids:
-        stmt = stmt.where(Target.organization_id.in_(org_ids))
+        stmt = stmt.where(Host.organization_id.in_(org_ids))
     stmt = stmt.limit(1)
     result = await db.execute(stmt)
-    target = result.scalar_one_or_none()
-    if target:
-        return target.id, target.name
-    return LOCAL_TARGET_ID, LOCAL_TARGET_NAME
+    host = result.scalar_one_or_none()
+    if host:
+        return host.id, host.name
+    return LOCAL_HOST_ID, LOCAL_HOST_NAME
 
 
 async def get_compute_stats(
@@ -82,9 +88,9 @@ async def get_compute_stats(
     stacks_count: int = (await db.execute(stacks_stmt)).scalar() or 0
 
     # --- DB : targets ---
-    targets_stmt = select(func.count(Target.id))
+    targets_stmt = select(func.count(Host.id))
     if org_ids:
-        targets_stmt = targets_stmt.where(Target.organization_id.in_(org_ids))
+        targets_stmt = targets_stmt.where(Host.organization_id.in_(org_ids))
     targets_count: int = (await db.execute(targets_stmt)).scalar() or 0
 
     # --- Docker : containers (graceful degradation) ---
@@ -120,7 +126,7 @@ async def get_compute_stats(
                     if all_running:
                         stacks_running_count += 1
                     for c in stack_containers:
-                        t_id = c.labels.get("windflow.target_id", LOCAL_TARGET_ID)
+                        t_id = c.labels.get("windflow.target_id", LOCAL_HOST_ID)
                         stack_target_ids.add(t_id)
             stacks_targets_count = len(stack_target_ids)
 
@@ -128,14 +134,14 @@ async def get_compute_stats(
             discovered_target_ids: set[str] = set()
             for project_name, project_containers in discovered.items():
                 for c in project_containers:
-                    t_id = c.labels.get("windflow.target_id", LOCAL_TARGET_ID)
+                    t_id = c.labels.get("windflow.target_id", LOCAL_HOST_ID)
                     discovered_target_ids.add(t_id)
             discovered_targets_count = len(discovered_target_ids)
 
             # Calcul des targets distinctes pour standalone
             standalone_target_ids: set[str] = set()
             for c in standalone_list:
-                t_id = c.labels.get("windflow.target_id", LOCAL_TARGET_ID)
+                t_id = c.labels.get("windflow.target_id", LOCAL_HOST_ID)
                 standalone_target_ids.add(t_id)
             standalone_targets_count = len(standalone_target_ids)
         else:
@@ -198,12 +204,12 @@ async def get_compute_global(
     stacks_result = await db.execute(stacks_stmt)
     db_stacks = stacks_result.scalars().all()
 
-    # Index des targets pour éviter les N+1
-    targets_stmt = select(Target)
+    # Index des hosts pour éviter les N+1
+    targets_stmt = select(Host)
     if org_ids:
-        targets_stmt = targets_stmt.where(Target.organization_id.in_(org_ids))
+        targets_stmt = targets_stmt.where(Host.organization_id.in_(org_ids))
     targets_result = await db.execute(targets_stmt)
-    targets_by_id: dict[str, Target] = {t.id: t for t in targets_result.scalars().all()}
+    targets_by_id: dict[str, Host] = {t.id: t for t in targets_result.scalars().all()}
 
     # 2. Récupérer les containers Docker (graceful degradation)
     docker_containers: list = []
@@ -231,7 +237,7 @@ async def get_compute_global(
         )
 
     # 4. Construire les objets domaine via les builders
-    local_target_id, local_target_name = await _get_local_target(db, org_ids)
+    local_target_id, local_target_name = await _resolve_local_host(db, org_ids)
     now_iso = datetime.now(timezone.utc).isoformat()
 
     # Client Docker partagé pour les inspections health

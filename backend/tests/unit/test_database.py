@@ -43,7 +43,11 @@ def _sync_table_names(db_path: Path) -> set[str]:
 
 
 def _drop_targets_ssh_key_id(db_path: Path) -> None:
-    """STORY-131.1 : retire ``targets.ssh_key_id`` d'une base create_all.
+    """STORY-131.1 : retire ``ssh_key_id`` de la table des cibles d'une
+    base create_all.
+
+    STORY-166.1 : la table s'appelle ``hosts`` dans les métadonnées
+    courantes (une vraie base legacy porterait ``targets``).
 
     SQLite refuse ``ALTER TABLE ... DROP COLUMN`` sur une colonne
     référencée par un FK inline : le rebuild batch d'Alembic est utilisé
@@ -54,10 +58,15 @@ def _drop_targets_ssh_key_id(db_path: Path) -> None:
 
     engine = create_engine(f"sqlite:///{db_path}")
     try:
+        inspector = inspect(engine)
+        table_names = inspector.get_table_names()
+        table = "hosts" if "hosts" in table_names else "targets"
+        if table not in table_names:
+            return
         with engine.connect() as conn:
             ctx = MigrationContext.configure(conn)
             operations = Operations(ctx)
-            with operations.batch_alter_table("targets") as batch_op:
+            with operations.batch_alter_table(table) as batch_op:
                 batch_op.drop_column("ssh_key_id")
             conn.commit()
     finally:
@@ -349,7 +358,7 @@ class TestStartupSeedPreserved:
             # Le scan réseau localhost (subprocess docker/libvirt) est
             # indépendant du schéma et non déterministe en CI → stubbé.
             with patch(
-                "app.database_seed._create_localhost_target",
+                "app.database_seed._create_local_host",
                 new=AsyncMock(return_value=(False, ["scan stubbed in test"])),
             ):
                 await database.seed_tables()

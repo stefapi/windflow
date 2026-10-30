@@ -644,7 +644,11 @@ async def test_event_trigger_matches_canonical_and_resolves_legacy_alias(
             event_type=EventType.DEPLOYMENT_SUCCEEDED,
             aggregate_id=uuid.uuid4(),
             aggregate_type="deployment",
-            payload={"deployment_id": "dep-9", "message": "ok", "new_status": "running"},
+            payload={
+                "deployment_id": "dep-9",
+                "message": "ok",
+                "new_status": "running",
+            },
         )
     )
     await engine.wait_for_executions()

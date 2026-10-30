@@ -12,6 +12,7 @@ from .compute import router as compute_router
 from .deployments import router as deployments_router
 from .discovery import router as discovery_router
 from .docker import router as docker_router
+from .hosts import router as hosts_router
 from .import_export import router as import_export_router
 from .organizations import router as organizations_router
 from .plugin_registry import router as plugin_registry_router
@@ -21,7 +22,7 @@ from .ssh_keys import router as ssh_keys_router
 from .stacks import router as stacks_router
 from .stats import router as stats_router
 from .system import router as system_router
-from .targets import router as targets_router
+from .targets_legacy import router as targets_alias_router
 from .users import router as users_router
 from .websockets import router as websockets_router
 from .workflows import router as workflows_router
@@ -35,7 +36,11 @@ api_router.include_router(users_router, prefix="/users", tags=["users"])
 api_router.include_router(
     organizations_router, prefix="/organizations", tags=["organizations"]
 )
-api_router.include_router(targets_router, prefix="/targets", tags=["targets"])
+# STORY-166.2 : surface canonique /hosts (famille Hosts — spec 09) +
+# alias /targets déprécié (handlers partagés, header Deprecation,
+# removal plan F3 / STORY-166.6).
+api_router.include_router(hosts_router, prefix="/hosts", tags=["hosts"])
+api_router.include_router(targets_alias_router, tags=["targets"])
 # STORY-131.2 : gestion des clés SSH réutilisables (entité globale
 # partagée — require_admin sur chaque endpoint, pas de scoping org).
 api_router.include_router(ssh_keys_router, prefix="/ssh-keys", tags=["ssh-keys"])

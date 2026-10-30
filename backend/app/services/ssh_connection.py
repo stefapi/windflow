@@ -50,7 +50,7 @@ Résolution de l'authentification (transition STORY-131) :
 - ``ssh_key_id`` explicite ou ``target.ssh_key_id`` → clé réutilisable
   (voie canonique) : ``SSHKey.decrypted_private_key`` en
   ``client_keys`` + ``touch_last_used()`` throttlé — via
-  ``SSHKeyService.resolve_for_target()`` ;
+  ``SSHKeyService.resolve_for_host()`` ;
 - sinon fallback credentials legacy : ``password`` ou
   ``ssh_private_key`` résiduel des credentials chiffrées (double
   lecture STORY-103.2) — compatibilité totale pendant la transition.
@@ -81,8 +81,8 @@ from ..core.exceptions import (
     SSHHostKeyMismatchError,
     SSHHostKeyNotAcceptedError,
 )
+from ..models.host import Host
 from ..models.host_ssh_fingerprint import HostSSHFingerprint
-from ..models.target import Target
 from ..services.audit_service import AuditService
 from ..services.ssh_key_service import SSHKeyService
 
@@ -445,7 +445,7 @@ async def _verify_collect(
 async def _resolve_authentication_kwargs(
     db: AsyncSession,
     *,
-    target: Target | None,
+    host_model: Host | None,
     ssh_key_id: str | None,
     password: str | None,
     ssh_private_key: str | None,
@@ -477,10 +477,10 @@ async def _resolve_authentication_kwargs(
         await SSHKeyService.touch_last_used(db, ssh_key_id)
         return {"client_keys": [client_key]}
 
-    if target is not None and target.ssh_key_id is not None:
+    if host_model is not None and host_model.ssh_key_id is not None:
         # Voie canonique — resolve_for_target gère clé référencée +
         # fallback legacy interne + touch_last_used throttlé.
-        resolved = await SSHKeyService.resolve_for_target(db, target)
+        resolved = await SSHKeyService.resolve_for_host(db, host_model)
         if resolved:
             return resolved
 
@@ -490,7 +490,7 @@ async def _resolve_authentication_kwargs(
     # Fallback credentials legacy : dict explicite, sinon credentials
     # déchiffrées de la cible (double lecture STORY-103.2).
     creds = credentials or (
-        target.decrypted_credentials if target is not None else {}
+        host_model.decrypted_credentials if host_model is not None else {}
     )
     legacy_key = creds.get("ssh_private_key")
     if isinstance(legacy_key, str) and legacy_key.strip():
@@ -512,7 +512,7 @@ async def build_ssh_kwargs(
     port: int,
     username: str | None,
     mode: HostKeyPolicy,
-    target: Target | None = None,
+    host_model: Host | None = None,
     ssh_key_id: str | None = None,
     password: str | None = None,
     ssh_private_key: str | None = None,
@@ -531,7 +531,7 @@ async def build_ssh_kwargs(
 
     1. ``ssh_key_id`` explicite (via :meth:`SSHKeyService.get` +
        ``decrypted_private_key`` + ``touch_last_used``) ;
-    2. ``target.ssh_key_id`` (voie canonique —
+    2. ``host.ssh_key_id`` (voie canonique —
        :meth:`SSHKeyService.resolve_for_target`, qui gère aussi le
        fallback legacy interne et le throttling) ;
     3. ``ssh_private_key`` / ``passphrase`` explicites (test-connection,
@@ -545,14 +545,14 @@ async def build_ssh_kwargs(
         username: Utilisateur SSH (requis par asyncssh).
         mode: Politique de vérification (STRICT sessions
             opérationnelles, COLLECT test-connection).
-        target: Cible persistée éventuelle — fournit ``ssh_key_id``,
+        host_model: Host persisté éventuel — fournit ``ssh_key_id``,
             les credentials de fallback et l'identité ``id`` du TOFU.
             Si ``None`` (scan ad hoc, discovery pré-création,
             test-connection), STRICT bloque au premier contact sans
             persister (cf. docstring module) et COLLECT retourne
             ``unknown``.
         ssh_key_id: Clé SSH réutilisable explicite (prime sur
-            ``target.ssh_key_id``).
+            ``host.ssh_key_id``).
         password: Mot de passe SSH explicite (fallback).
         ssh_private_key: Clé privée PEM explicite (fallback).
         passphrase: Passphrase de la clé privée explicite.
@@ -575,7 +575,7 @@ async def build_ssh_kwargs(
     # Identité TOFU : la cible persistée si disponible (arbitrage F3
     # STORY-131 — host_ssh_fingerprints.host_id → targets.id), sinon
     # None (aucune lecture/écriture d'empreinte possible).
-    host_id = target.id if target is not None else None
+    host_id = host_model.id if host_model is not None else None
 
     async def _verify_host_key(
         _host: str,
@@ -620,7 +620,7 @@ async def build_ssh_kwargs(
     # ── Authentification ──────────────────────────────────────────
     resolved = await _resolve_authentication_kwargs(
         db,
-        target=target,
+        host_model=host_model,
         ssh_key_id=ssh_key_id,
         password=password,
         ssh_private_key=ssh_private_key,

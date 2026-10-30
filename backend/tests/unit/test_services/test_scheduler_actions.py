@@ -84,7 +84,7 @@ class _FakeSessionContext:
 
 
 class _FakeScanner:
-    """Scanner factice — scan_and_update_target écho la cible."""
+    """Scanner factice — scan_and_update_host écho le host."""
 
     instances: list["_FakeScanner"] = []
 
@@ -95,22 +95,22 @@ class _FakeScanner:
 
             return AsyncMock(side_effect=_scan)
 
-        self.scan_and_update_target = _make_scan()
+        self.scan_and_update_host = _make_scan()
         type(self).instances.append(self)
 
 
 @pytest.fixture
 def fake_scanner(monkeypatch: pytest.MonkeyPatch) -> type[_FakeScanner]:
-    """Remplace TargetScannerService dans scheduler_actions (classe usine)."""
+    """Remplace HostScannerService dans scheduler_actions (classe usine)."""
     _FakeScanner.instances = []
-    monkeypatch.setattr(scheduler_actions_module, "TargetScannerService", _FakeScanner)
+    monkeypatch.setattr(scheduler_actions_module, "HostScannerService", _FakeScanner)
     return _FakeScanner
 
 
 @pytest.fixture
 def fake_db(monkeypatch: pytest.MonkeyPatch):
     """Fabrique de sessions factice injectée dans app.database."""
-    holder = SimpleNamespace(target=None)
+    holder = SimpleNamespace(host=None)
 
     def _factory():
         return _FakeSessionContext(holder.target)
@@ -181,7 +181,7 @@ def audit_log_mock(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
 
 
 async def test_host_scan_calls_scanner_with_target_id(fake_scanner, fake_db):
-    """host.scan résout la cible et appelle scan_and_update_target."""
+    """host.scan résout le host et appelle scan_and_update_host."""
     target = _fake_target("tgt-42")
     fake_db.target = target
     scanner = fake_scanner.instances[0] if fake_scanner.instances else None
@@ -199,9 +199,9 @@ async def test_host_scan_calls_scanner_with_target_id(fake_scanner, fake_db):
 
 
 def _last_scanner_call(factory: type[_FakeScanner]):
-    """Arguments du dernier appel scan_and_update_target."""
+    """Arguments du dernier appel scan_and_update_host."""
     assert factory.instances, "aucun scanner instancié"
-    mock = factory.instances[-1].scan_and_update_target
+    mock = factory.instances[-1].scan_and_update_host
     assert mock.await_count == 1
     return mock.await_args.args
 
@@ -226,11 +226,9 @@ async def test_host_scan_scanner_error_wrapped(fake_scanner, fake_db, monkeypatc
     class _FailingScanner(_FakeScanner):
         def __init__(self) -> None:
             super().__init__()
-            self.scan_and_update_target = AsyncMock(side_effect=failing)
+            self.scan_and_update_host = AsyncMock(side_effect=failing)
 
-    monkeypatch.setattr(
-        scheduler_actions_module, "TargetScannerService", _FailingScanner
-    )
+    monkeypatch.setattr(scheduler_actions_module, "HostScannerService", _FailingScanner)
     with pytest.raises(WindFlowException) as excinfo:
         await host_scan({"target_id": "tgt-1"})
     # Le message ne fuit jamais le détail de l'erreur interne (credentials).

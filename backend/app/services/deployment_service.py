@@ -831,30 +831,33 @@ class DeploymentService:
             except Exception as e:
                 logger.error(f"Erreur lors de l'émission de l'événement de logs: {e}")
 
-        # Update target health status on deployment completion/failure
+        # Update host health status on deployment completion/failure
         if status in (DeploymentStatus.RUNNING, DeploymentStatus.FAILED):
             try:
-                from ..enums.target import TargetStatus
-                from ..models.target import Target
+                from ..enums.host import HostStatus
+                from ..models.host import Host
 
-                target_result = await db.execute(
-                    select(Target).where(Target.id == deployment.target_id)
+                host_result = await db.execute(
+                    select(Host).where(Host.id == deployment.host_id)
                 )
-                target = target_result.scalar_one_or_none()
-                if target:
+                host = host_result.scalar_one_or_none()
+                if host:
                     if status == DeploymentStatus.RUNNING:
-                        # Successful deployment ⇒ target is online
-                        target.status = TargetStatus.ONLINE
+                        # Successful deployment ⇒ host is online
+                        # STORY-166.1 : statut canonique HostStatus (les
+                        # valeurs legacy ne sont plus écrites après la
+                        # migration 1661).
+                        host.status = HostStatus.ONLINE
                     else:
                         # Failed deployment ⇒ run a quick health check
-                        from .target_service import TargetService
+                        from .host_service import HostService
 
-                        await TargetService.check_health(db, target)
-            except Exception as target_exc:
+                        await HostService.check_health(db, host)
+            except Exception as host_exc:
                 logger.warning(
-                    "Could not update target health after deployment %s: %s",
+                    "Could not update host health after deployment %s: %s",
                     deployment_id,
-                    target_exc,
+                    host_exc,
                 )
 
         return deployment

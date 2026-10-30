@@ -30,9 +30,9 @@ vi.mock('@/stores/auth', () => ({
 }))
 
 // Mock targets store
-vi.mock('@/stores/targets', () => ({
-  useTargetsStore: vi.fn(() => ({
-    targets: [
+vi.mock('@/stores/hosts', () => ({
+  useHostsStore: vi.fn(() => ({
+    hosts: [
       { id: '1', name: 'Target 1', type: 'docker' },
       { id: '2', name: 'Target 2', type: 'ssh' },
     ],
@@ -191,7 +191,7 @@ describe('SidebarNav', () => {
       const html = wrapper.html()
       expect(html).toContain('VMs')
       expect(html).toContain('Compute')
-      expect(html).toContain('Targets')
+      expect(html).toContain('Hosts')
       expect(html).toContain('Stacks')
       // Note: Deployments n'est plus dans la sidebar (STORY-411)
     })
@@ -408,7 +408,7 @@ describe('STORY-002: Mode App', () => {
       expect(html).not.toContain('Volumes')
       expect(html).not.toContain('Networks')
       expect(html).not.toContain('Images')
-      expect(html).not.toContain('Targets')
+      expect(html).not.toContain('Hosts')
       expect(html).not.toContain('Stacks')
       expect(html).not.toContain('Compute')
     })

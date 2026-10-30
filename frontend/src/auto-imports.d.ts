@@ -61,6 +61,7 @@ declare global {
   const getCurrentWatcher: typeof import('vue')['getCurrentWatcher']
   const globalModal: typeof import('@/composables/ui')['globalModal']
   const h: typeof import('vue')['h']
+  const hostsApi: typeof import('./services/api')['hostsApi']
   const http: typeof import('./services/http')['default']
   const ignorableWatch: typeof import('@vueuse/core')['ignorableWatch']
   const imagesApi: typeof import('./services/api')['imagesApi']
@@ -132,7 +133,6 @@ declare global {
   const storeToRefs: typeof import('pinia')['storeToRefs']
   const syncRef: typeof import('@vueuse/core')['syncRef']
   const syncRefs: typeof import('@vueuse/core')['syncRefs']
-  const targetsApi: typeof import('./services/api')['targetsApi']
   const templateRef: typeof import('@vueuse/core')['templateRef']
   const throttledRef: typeof import('@vueuse/core')['throttledRef']
   const throttledWatch: typeof import('@vueuse/core')['throttledWatch']
@@ -416,6 +416,7 @@ declare module 'vue' {
     readonly getCurrentWatcher: UnwrapRef<typeof import('vue')['getCurrentWatcher']>
     readonly globalModal: UnwrapRef<typeof import('@/composables/ui')['globalModal']>
     readonly h: UnwrapRef<typeof import('vue')['h']>
+    readonly hostsApi: UnwrapRef<typeof import('./services/api')['hostsApi']>
     readonly http: UnwrapRef<typeof import('./services/http')['default']>
     readonly ignorableWatch: UnwrapRef<typeof import('@vueuse/core')['ignorableWatch']>
     readonly imagesApi: UnwrapRef<typeof import('./services/api')['imagesApi']>
@@ -487,7 +488,6 @@ declare module 'vue' {
     readonly storeToRefs: UnwrapRef<typeof import('pinia')['storeToRefs']>
     readonly syncRef: UnwrapRef<typeof import('@vueuse/core')['syncRef']>
     readonly syncRefs: UnwrapRef<typeof import('@vueuse/core')['syncRefs']>
-    readonly targetsApi: UnwrapRef<typeof import('./services/api')['targetsApi']>
     readonly templateRef: UnwrapRef<typeof import('@vueuse/core')['templateRef']>
     readonly throttledRef: UnwrapRef<typeof import('@vueuse/core')['throttledRef']>
     readonly throttledWatch: UnwrapRef<typeof import('@vueuse/core')['throttledWatch']>

@@ -1,0 +1,222 @@
+{
+  "host": "prod-server-01",
+  "scan_date": "2026-10-24T12:00:00Z",
+  "success": true,
+  "docker": {
+    "installed": true,
+    "version": "27.3.1",
+    "running": true,
+    "socket_accessible": true,
+    "compose": {
+      "available": true,
+      "version": "v2.29.7",
+      "plugin_based": true
+    },
+    "swarm": {
+      "available": true,
+      "active": true,
+      "node_role": "manager",
+      "details": {
+        "LocalNodeState": "active",
+        "ControlAvailable": true,
+        "Error": "",
+        "NodeAddr": "10.0.0.5"
+      }
+    },
+    "socket": {
+      "path": "/var/run/docker.sock",
+      "exists": true,
+      "accessible": true,
+      "mode": "system"
+    }
+  },
+  "virtualization": {
+    "libvirt": {
+      "available": false,
+      "version": null,
+      "details": null
+    },
+    "virsh": {
+      "available": true,
+      "version": "10.0.0",
+      "details": null
+    },
+    "virtualbox": {
+      "available": false,
+      "version": null,
+      "details": null
+    },
+    "vagrant": {
+      "available": false,
+      "version": null,
+      "details": null
+    },
+    "proxmox": {
+      "available": false,
+      "version": null,
+      "details": null
+    },
+    "qemu_kvm": {
+      "available": true,
+      "version": "8.2.2",
+      "details": {
+        "kvm_device": true
+      }
+    },
+    "podman": {
+      "available": true,
+      "version": "5.2.3",
+      "details": {
+        "socket": {
+          "path": "/run/user/1000/podman/podman.sock",
+          "exists": true,
+          "accessible": true,
+          "mode": "session"
+        },
+        "info": {
+          "version": {
+            "Version": "5.2.3"
+          }
+        }
+      }
+    },
+    "multipass": {
+      "available": false,
+      "version": null,
+      "details": null
+    }
+  },
+  "kubernetes": {
+    "kubectl": {
+      "available": true,
+      "version": "v1.31.0",
+      "details": {
+        "version": "v1.31.0",
+        "major": "1",
+        "minor": "31"
+      }
+    },
+    "kubeadm": {
+      "available": false,
+      "version": null,
+      "details": null
+    },
+    "k3s": {
+      "available": false,
+      "version": null,
+      "details": null
+    },
+    "microk8s": {
+      "available": false,
+      "version": null,
+      "details": null
+    },
+    "helm": {
+      "available": true,
+      "version": "3.16.1",
+      "details": null
+    }
+  },
+  "container_runtimes": {
+    "lxc": {
+      "available": false,
+      "version": null,
+      "install_method": null,
+      "socket": null,
+      "details": null
+    },
+    "lxd": {
+      "available": true,
+      "version": "5.21.2",
+      "install_method": "snap",
+      "socket": {
+        "path": "/var/snap/lxd/common/lxd/unix.socket",
+        "exists": true,
+        "accessible": true,
+        "mode": "system"
+      },
+      "details": {
+        "snap_info": "lxd 5.21.2",
+        "service_status": "active"
+      }
+    },
+    "incus": {
+      "available": false,
+      "version": null,
+      "install_method": null,
+      "socket": null,
+      "details": null
+    },
+    "containerd": {
+      "available": true,
+      "version": "v1.7.22",
+      "install_method": null,
+      "socket": {
+        "path": "/run/containerd/containerd.sock",
+        "exists": true,
+        "accessible": true,
+        "mode": "system"
+      },
+      "details": {
+        "managed_by": "k3s"
+      }
+    }
+  },
+  "oci_tools": {
+    "runc": {
+      "available": true,
+      "version": "1.1.14",
+      "details": null
+    },
+    "crun": {
+      "available": false,
+      "version": null,
+      "details": null
+    },
+    "buildah": {
+      "available": true,
+      "version": "1.37.2",
+      "details": null
+    },
+    "skopeo": {
+      "available": true,
+      "version": "1.16.1",
+      "details": null
+    },
+    "podman_compose": {
+      "available": false,
+      "version": null,
+      "details": null
+    }
+  },
+  "platform": {
+    "architecture": "x86_64",
+    "cpu_model": "AMD Ryzen 9 7950X 16-Core Processor",
+    "cpu_cores": 32,
+    "total_memory_gb": 62.53
+  },
+  "os": {
+    "system": "Linux",
+    "distribution": "Debian GNU/Linux",
+    "version": "12 (bookworm)",
+    "kernel": "6.1.0-18-amd64",
+    "uname": null
+  },
+  "platform_info": null,
+  "os_info": null,
+  "discovered_sockets": {
+    "docker": {
+      "path": "/var/run/docker.sock",
+      "exists": true,
+      "accessible": true,
+      "mode": "system"
+    },
+    "podman": {
+      "path": "/run/user/1000/podman/podman.sock",
+      "exists": true,
+      "accessible": true,
+      "mode": "session"
+    }
+  },
+  "errors": []
+}

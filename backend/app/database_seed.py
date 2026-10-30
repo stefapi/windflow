@@ -6,7 +6,8 @@ Module de seeding pour initialisation de la base de données.
 Crée les données minimales requises au premier démarrage :
 - Organisation par défaut
 - Utilisateur admin avec droits superuser
-- Cible localhost auto-scannée
+- Host local auto-détecté avec capacités scannées (STORY-166.5 —
+  désactivable via ``AUTO_DETECT_LOCAL_HOST=false``)
 """
 
 from typing import List, Tuple
@@ -15,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
+from .enums.host import HostProfile
 from .models.organization import Organization
 from .models.user import User
 from .schemas.user import UserCreate
@@ -93,19 +95,27 @@ async def seed_database(session: AsyncSession) -> None:
         )
         await session.commit()
 
-        target_created, target_messages = await _create_localhost_target(
-            session, default_org.id
-        )
-
         print("✓ Base de données initialisée avec succès")
         print(f"  - Organisation: {default_org.name} ({default_org.slug})")
         print(f"  - Admin: {settings.admin_username} ({settings.admin_email})")
-        if target_created:
-            print("  - Target: localhost (créée automatiquement)")
+        if settings.auto_detect_local_host:
+            host_created, host_messages = await _create_local_host(
+                session, default_org.id
+            )
+            if host_created:
+                print("  - Host: localhost (créé automatiquement)")
+            else:
+                print("  - Host: localhost non créé (voir détails)")
+            for message in host_messages:
+                print(f"    • {message}")
         else:
-            print("  - Target: localhost non créée (voir détails)")
-        for message in target_messages:
-            print(f"    • {message}")
+            # Setting off (STORY-166.5) : aucun scan, aucun host créé
+            # (AC 1) — le chargement des stack definitions ci-dessous
+            # continue normalement (le setting ne porte que sur le host).
+            print(
+                "  - Host local: auto-détection désactivée "
+                "(AUTO_DETECT_LOCAL_HOST=false)"
+            )
         print(
             "  - Mot de passe admin: configuré via ADMIN_PASSWORD/SUPERADMIN_PASSWORD"
         )
@@ -120,27 +130,61 @@ async def seed_database(session: AsyncSession) -> None:
         raise
 
 
-async def _create_localhost_target(
+async def _create_local_host(
     session: AsyncSession, organization_id: str
 ) -> Tuple[bool, List[str]]:
-    """
-    Scanne localhost et crée la cible associée lors du premier démarrage.
+    """Scanne localhost et crée le host local au premier démarrage (STORY-166.5).
+
+    Aligné sur le modèle ``Host`` canonique (STORY-166.1) :
+
+    - profil canonique ``host_baremetal`` (pilotage direct de la machine
+      locale — un Docker sur socket local est ``host_baremetal``, pas
+      ``host_remote_docker``) ;
+    - ``origin=managed`` : le host est seedé/piloté par WindFlow lui-même
+      (arbitrage cohérent 166.4 T5 — ``WorkloadOrigin`` décrit la
+      provenance du pilotage, ``external`` serait mensonger) ;
+    - ``extra_metadata`` trace la création : ``creation_source=
+      "database_seed"`` + ``seed_profile="host_baremetal"``.
+
+    Arbitrage ``host.added`` (analyse STORY-166.5) : **pas d'émission au
+    seed** — le bus d'événements n'est pas encore consommable au bootstrap
+    (le seed tourne dans le lifespan, avant la mise à disposition de
+    l'API/bus) ; l'émission serait au mieux du bruit best-effort. La
+    traçabilité est garantie par ``extra_metadata.creation_source``.
+
+    Idempotence : garde explicite ``get_by_name("localhost")`` avant tout
+    scan/création — un redémarrage ne duplique jamais le host (AC 2) et
+    le scan coûteux n'est pas relancé inutilement.
+
+    Sécurité (règle 40) : ``SSHCredentials(auth_method=LOCAL)`` — aucun
+    credentials réel, aucun ``connection_config`` ; les détails remontés
+    en console ne contiennent que des versions d'outils détectés.
 
     Returns:
         Tuple[bool, List[str]]: Statut de création et détails d'exécution.
     """
-    from .schemas.target import TargetCreate
-    from .services.target_scan_parsers import build_capabilities_payload
-    from .services.target_scanner_service import TargetScannerService
-    from .services.target_service import TargetService
+    from .enums.host import SSHAuthMethod as _SSHAuthMethod
+    from .enums.host import WorkloadOrigin
+    from .schemas.host import HostCreateRequest
+    from .schemas.host import SSHCredentials as _SSHCredentials
+    from .services.host_scan_parsers import build_capabilities_payload
+    from .services.host_scanner_service import HostScannerService
+    from .services.host_service import HostService
 
     details: List[str] = []
+
+    # Idempotence explicite (AC 2) : ne jamais dupliquer le host local.
+    existing = await HostService.get_by_name(session, organization_id, "localhost")
+    if existing is not None:
+        details.append("host localhost déjà présent, ignoré")
+        return False, details
+
     try:
-        scanner = TargetScannerService()
+        scanner = HostScannerService()
         scan_result = await scanner.scan_localhost()
 
-        target_type = _default_seed_target_type()
-        details.append(f"type seed par défaut: {target_type.value}")
+        profile = _default_seed_host_profile()
+        details.append(f"profil seed par défaut: {profile.value}")
 
         if scan_result.docker and scan_result.docker.installed:
             docker_version = scan_result.docker.version or "présent"
@@ -154,21 +198,27 @@ async def _create_localhost_target(
         if libvirt_tool and libvirt_tool.available:
             details.append(f"Libvirt: {libvirt_tool.version or 'présent'}")
 
-        from .enums.target import SSHAuthMethod as _SSHAuthMethod
-        from .schemas.target import SSHCredentials as _SSHCredentials
-
-        target_payload = TargetCreate(
+        host_payload = HostCreateRequest(
             name="localhost",
             description="Local machine automatically discovered during initial database bootstrap",
             host="localhost",
             port=22,
-            type=target_type,
+            profile=profile,
             credentials=_SSHCredentials(auth_method=_SSHAuthMethod.LOCAL),
             organization_id=organization_id,
-            extra_metadata={"auto_created": True, "creation_source": "database_seed"},
+            extra_metadata={
+                "auto_created": True,
+                "creation_source": "database_seed",
+                "seed_profile": "host_baremetal",
+            },
         )
 
-        target = await TargetService.create(session, target_payload)
+        host = await HostService.create(session, host_payload)
+
+        # origin explicite (arbitrage analyse : managed — cf. docstring).
+        host.origin = WorkloadOrigin.MANAGED
+        session.add(host)
+        await session.commit()
 
         capabilities_payload = build_capabilities_payload(scan_result)
         platform_payload = (
@@ -178,9 +228,9 @@ async def _create_localhost_target(
         )
         os_payload = scan_result.os.model_dump(mode="json") if scan_result.os else None
 
-        await TargetService.apply_scan_result(
+        await HostService.apply_scan_result(
             db=session,
-            target=target,
+            host=host,
             capabilities=capabilities_payload,
             scan_date=scan_result.scan_date,
             success=scan_result.success,
@@ -192,20 +242,19 @@ async def _create_localhost_target(
 
     except Exception as exc:  # noqa: B902 - log et continuer
         details.append(f"erreur: {exc}")
-        if "target" in locals():
-            await TargetService.mark_scan_failed(session, target)
+        if "host" in locals():
+            await HostService.mark_scan_failed(session, host)
         return False, details
 
 
-def _default_seed_target_type() -> "TargetType":  # type: ignore[name-defined]  # noqa: F821
-    """Retourne le type technique par défaut utilisé au bootstrap.
+def _default_seed_host_profile() -> HostProfile:
+    """Retourne le profil canonique du host seedé au bootstrap.
 
-    Le typage fonctionnel d'une cible doit être déduit des entrées
-    persistées dans `target_capabilities`, pas d'un champ exclusif.
+    ``host_baremetal`` : la machine locale est pilotée directement (accès
+    local) — le typage fonctionnel est déduit des capacités persistées
+    (``host_capabilities``), pas d'un champ exclusif.
     """
-    from .enums.target import TargetType
-
-    return TargetType.PHYSICAL
+    return HostProfile.HOST_BAREMETAL
 
 
 async def seed_stack_definitions(session: AsyncSession, organization_id: str) -> None:

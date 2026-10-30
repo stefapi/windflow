@@ -56,13 +56,24 @@ async def deploy_stack_async(
     from sqlalchemy import select
 
     from app.database import AsyncSessionLocal  # type: ignore[import-not-found]
-    from app.models.deployment import Deployment, DeploymentStatus  # type: ignore[import-not-found]
-    from app.models.stack import Stack  # type: ignore[import-not-found]
     from app.enums.target import TargetType  # type: ignore[import-not-found]
-    from app.services.deployment_events import get_deployment_events  # type: ignore[import-not-found]
-    from app.services.deployment_service import DeploymentService  # type: ignore[import-not-found]
-    from app.services.docker_compose_service import DockerComposeService  # type: ignore[import-not-found]
-    from app.services.docker_service import DockerService  # type: ignore[import-not-found]
+    from app.models.deployment import (  # type: ignore[import-not-found]
+        Deployment,
+        DeploymentStatus,
+    )
+    from app.models.stack import Stack  # type: ignore[import-not-found]
+    from app.services.deployment_events import (
+        get_deployment_events,  # type: ignore[import-not-found]
+    )
+    from app.services.deployment_service import (
+        DeploymentService,  # type: ignore[import-not-found]
+    )
+    from app.services.docker_compose_service import (
+        DockerComposeService,  # type: ignore[import-not-found]
+    )
+    from app.services.docker_service import (
+        DockerService,  # type: ignore[import-not-found]
+    )
 
     logger.info(
         f"[FALLBACK-ASYNCIO] Début du déploiement {deployment_id} "
@@ -588,13 +599,13 @@ async def health_check_targets_async() -> Dict[str, Any]:
     from datetime import datetime
 
     from app.database import AsyncSessionLocal
-    from app.services.target_service import TargetService  # type: ignore[import-not-found]
+    from app.services.host_service import HostService  # type: ignore[import-not-found]
 
     logger.info("[FALLBACK-ASYNCIO] Exécution du health check périodique des targets")
 
     try:
         async with AsyncSessionLocal() as db:
-            results = await TargetService.check_all_health(db)
+            results = await HostService.check_all_health(db)
 
             online = sum(1 for r in results if r.get("status") == "online")
             offline = sum(1 for r in results if r.get("status") == "offline")

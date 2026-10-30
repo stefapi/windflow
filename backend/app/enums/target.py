@@ -1,14 +1,37 @@
-"""
-Centralized enums for the target domain.
+"""Module de transition du domaine ``Target`` (STORY-166.1, purge 166.6).
 
-Single source of truth — imported by models, schemas, and services.
+Les définitions **legacy** (``TargetType``, ``TargetStatus``) sont
+conservées ici : ``TargetType`` reste utilisé par les stack definitions
+(``target_type`` YAML) et ``stacks.target_type`` (divergence n°4 de
+STORY-166 — incorporation F3 reportée).
+
+Les enums d'accès (``SSHAuthMethod``, ``AccessLevel``, ``CapabilityType``)
+et les enums canoniques (``HostProfile``, ``HostStatus``,
+``WorkloadOrigin``) sont **définis** dans :mod:`app.enums.host` et
+**re-exportés** ici — tous les imports legacy
+``from app.enums.target import X`` continuent de fonctionner sans
+modification (AC 2 — transition sans casse).
+
+⚠️ ``TargetStatus`` ne peut pas être un simple alias de ``HostStatus`` :
+leurs valeurs divergent (``error``/``maintenance`` legacy vs
+``unreachable``/``scanning`` canoniques) — la conversion passe par
+:func:`app.helper.target_host_migration.map_target_status`.
 """
 
 from enum import Enum
 
+from .host import (  # noqa: F401
+    AccessLevel,
+    CapabilityType,
+    HostProfile,
+    HostStatus,
+    SSHAuthMethod,
+    WorkloadOrigin,
+)
+
 
 class TargetType(str, Enum):
-    """Types de cibles de déploiement supportés."""
+    """Types de cibles de déploiement supportés (legacy — spec stack definitions)."""
 
     DOCKER = "docker"
     DOCKER_COMPOSE = "docker_compose"
@@ -19,69 +42,9 @@ class TargetType(str, Enum):
 
 
 class TargetStatus(str, Enum):
-    """Statuts possibles pour une cible."""
+    """Statuts possibles pour une cible (legacy — remplacé par ``HostStatus``)."""
 
     ONLINE = "online"
     OFFLINE = "offline"
     ERROR = "error"
     MAINTENANCE = "maintenance"
-
-
-class SSHAuthMethod(str, Enum):
-    """Méthodes d'authentification SSH supportées."""
-
-    LOCAL = "local"
-    PASSWORD = "password"
-    SSH_KEY = "ssh_key"
-
-
-class AccessLevel(str, Enum):
-    """Niveau d'accès détecté sur une cible."""
-
-    ROOT = "root"        # SSH user is root
-    SUDO = "sudo"        # Can escalate to root via sudo (with password)
-    SUDO_PASSWORDLESS = "sudo_passwordless"  # sudo without password
-    LIMITED = "limited"  # No root access, standard user only
-
-
-class CapabilityType(str, Enum):
-    """Types de capacités détectées sur une cible."""
-
-    # Virtualisation
-    LIBVIRT = "libvirt"
-    VIRSH = "virsh"
-    VIRTUALBOX = "virtualbox"
-    VAGRANT = "vagrant"
-    PROXMOX = "proxmox"
-    QEMU_KVM = "qemu_kvm"
-    MULTIPASS = "multipass"
-
-    # Conteneurisation — Docker
-    DOCKER = "docker"
-    DOCKER_COMPOSE = "docker_compose"
-    DOCKER_SWARM = "docker_swarm"
-
-    # Conteneurisation — Podman
-    PODMAN = "podman"
-    PODMAN_COMPOSE = "podman_compose"
-
-    # Conteneurisation — Système (LXC/LXD/Incus)
-    LXC = "lxc"
-    LXD = "lxd"
-    INCUS = "incus"
-
-    # Runtimes OCI bas niveau
-    RUNC = "runc"
-    CRUN = "crun"
-    CONTAINERD = "containerd"
-
-    # Outils OCI
-    BUILDAH = "buildah"
-    SKOPEO = "skopeo"
-
-    # Kubernetes / Orchestration
-    KUBECTL = "kubectl"
-    KUBEADM = "kubeadm"
-    K3S = "k3s"
-    MICROK8S = "microk8s"
-    HELM = "helm"

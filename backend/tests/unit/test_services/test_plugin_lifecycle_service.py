@@ -20,7 +20,6 @@ from app.models.plugin_hook_log import PluginHookLog
 from app.models.user import User
 from app.services.plugin_lifecycle_service import PluginLifecycleService
 
-
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
 
@@ -121,9 +120,18 @@ async def plugin_with_password_config(
         db_session,
         test_organization,
         test_superuser,
-        config_values={"api_key": "super-secret-key", "host": "localhost", "port": 8080},
+        config_values={
+            "api_key": "super-secret-key",
+            "host": "localhost",
+            "port": 8080,
+        },
         config_fields=[
-            {"key": "api_key", "label": "API Key", "type": "password", "required": True},
+            {
+                "key": "api_key",
+                "label": "API Key",
+                "type": "password",
+                "required": True,
+            },
             {"key": "host", "label": "Host", "type": "string", "required": True},
             {"key": "port", "label": "Port", "type": "integer", "required": False},
         ],
@@ -138,19 +146,17 @@ def _mock_subprocess_success(stdout: str = "OK", stderr: str = ""):
     """Crée un mock de subprocess qui réussit."""
     mock_proc = MagicMock()
     mock_proc.returncode = 0
-    mock_proc.communicate = AsyncMock(
-        return_value=(stdout.encode(), stderr.encode())
-    )
+    mock_proc.communicate = AsyncMock(return_value=(stdout.encode(), stderr.encode()))
     return mock_proc
 
 
-def _mock_subprocess_failure(exit_code: int = 1, stdout: str = "", stderr: str = "Error occurred"):
+def _mock_subprocess_failure(
+    exit_code: int = 1, stdout: str = "", stderr: str = "Error occurred"
+):
     """Crée un mock de subprocess qui échoue."""
     mock_proc = MagicMock()
     mock_proc.returncode = exit_code
-    mock_proc.communicate = AsyncMock(
-        return_value=(stdout.encode(), stderr.encode())
-    )
+    mock_proc.communicate = AsyncMock(return_value=(stdout.encode(), stderr.encode()))
     return mock_proc
 
 
@@ -169,7 +175,9 @@ class TestExecuteHookSuccess:
         test_superuser: User,
     ) -> None:
         """Hook on_install s'exécute avec succès, log enregistré en BDD avec status=success."""
-        with patch("app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec") as mock_exec:
+        with patch(
+            "app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_exec.return_value = _mock_subprocess_success("Installation done")
 
             result = await service.execute_hook(
@@ -204,7 +212,9 @@ class TestExecuteHookSuccess:
         test_superuser: User,
     ) -> None:
         """Hook on_configure s'exécute avec succès."""
-        with patch("app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec") as mock_exec:
+        with patch(
+            "app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_exec.return_value = _mock_subprocess_success("Configured")
 
             result = await service.execute_hook(
@@ -223,7 +233,9 @@ class TestExecuteHookSuccess:
         test_superuser: User,
     ) -> None:
         """Hook on_uninstall s'exécute avant suppression."""
-        with patch("app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec") as mock_exec:
+        with patch(
+            "app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_exec.return_value = _mock_subprocess_success("Uninstalled")
 
             result = await service.execute_hook(
@@ -241,7 +253,9 @@ class TestExecuteHookSuccess:
         test_superuser: User,
     ) -> None:
         """Hook on_start s'exécute avec succès (méthode exposée, non câblée)."""
-        with patch("app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec") as mock_exec:
+        with patch(
+            "app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_exec.return_value = _mock_subprocess_success("Started")
 
             result = await service.execute_hook(
@@ -259,7 +273,9 @@ class TestExecuteHookSuccess:
         test_superuser: User,
     ) -> None:
         """Hook on_stop s'exécute avec succès (méthode exposée, non câblée)."""
-        with patch("app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec") as mock_exec:
+        with patch(
+            "app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_exec.return_value = _mock_subprocess_success("Stopped")
 
             result = await service.execute_hook(
@@ -284,7 +300,9 @@ class TestExecuteHookFailure:
         test_superuser: User,
     ) -> None:
         """Hook en échec → plugin status ERROR, log avec exit_code et stderr."""
-        with patch("app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec") as mock_exec:
+        with patch(
+            "app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_exec.return_value = _mock_subprocess_failure(
                 exit_code=1, stderr="Something went wrong"
             )
@@ -319,7 +337,9 @@ class TestExecuteHookFailure:
         test_superuser: User,
     ) -> None:
         """Hook qui dépasse le timeout (30s) → échec avec message approprié."""
-        with patch("app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec") as mock_exec:
+        with patch(
+            "app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_proc = MagicMock()
             mock_proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
             mock_proc.kill = MagicMock()
@@ -353,7 +373,9 @@ class TestExecuteHookFailure:
         test_superuser: User,
     ) -> None:
         """Script inexistant → hook en échec avec exit_code et stderr capturés."""
-        with patch("app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec") as mock_exec:
+        with patch(
+            "app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_exec.side_effect = FileNotFoundError("No such file")
 
             with pytest.raises(WindFlowException):
@@ -501,7 +523,9 @@ class TestOutputCapture:
         test_superuser: User,
     ) -> None:
         """Stdout et stderr capturés dans le log."""
-        with patch("app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec") as mock_exec:
+        with patch(
+            "app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_exec.return_value = _mock_subprocess_success(
                 stdout="Line 1\nLine 2", stderr="Warning message"
             )
@@ -534,7 +558,9 @@ class TestOutputCapture:
         test_superuser: User,
     ) -> None:
         """duration_ms calculé correctement (started_at → completed_at)."""
-        with patch("app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec") as mock_exec:
+        with patch(
+            "app.services.plugin_lifecycle_service.asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_exec.return_value = _mock_subprocess_success("OK")
 
             result = await service.execute_hook(

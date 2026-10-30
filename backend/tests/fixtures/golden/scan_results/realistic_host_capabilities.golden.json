@@ -1,0 +1,145 @@
+[
+  {
+    "capability_type": "virsh",
+    "is_available": true,
+    "version": "10.0.0",
+    "details": null,
+    "detected_at": "2026-10-24T12:00:00+00:00"
+  },
+  {
+    "capability_type": "qemu_kvm",
+    "is_available": true,
+    "version": "8.2.2",
+    "details": {
+      "kvm_device": true
+    },
+    "detected_at": "2026-10-24T12:00:00+00:00"
+  },
+  {
+    "capability_type": "podman",
+    "is_available": true,
+    "version": "5.2.3",
+    "details": {
+      "socket": {
+        "path": "/run/user/1000/podman/podman.sock",
+        "exists": true,
+        "accessible": true,
+        "mode": "session"
+      },
+      "info": {
+        "version": {
+          "Version": "5.2.3"
+        }
+      }
+    },
+    "detected_at": "2026-10-24T12:00:00+00:00"
+  },
+  {
+    "capability_type": "docker",
+    "is_available": true,
+    "version": "27.3.1",
+    "details": {
+      "running": true,
+      "socket_accessible": true,
+      "socket": {
+        "path": "/var/run/docker.sock",
+        "exists": true,
+        "accessible": true,
+        "mode": "system"
+      }
+    },
+    "detected_at": "2026-10-24T12:00:00+00:00"
+  },
+  {
+    "capability_type": "docker_compose",
+    "is_available": true,
+    "version": "v2.29.7",
+    "details": {
+      "plugin_based": true
+    },
+    "detected_at": "2026-10-24T12:00:00+00:00"
+  },
+  {
+    "capability_type": "docker_swarm",
+    "is_available": true,
+    "version": null,
+    "details": {
+      "LocalNodeState": "active",
+      "ControlAvailable": true,
+      "Error": "",
+      "NodeAddr": "10.0.0.5"
+    },
+    "detected_at": "2026-10-24T12:00:00+00:00"
+  },
+  {
+    "capability_type": "kubectl",
+    "is_available": true,
+    "version": "v1.31.0",
+    "details": {
+      "version": "v1.31.0",
+      "major": "1",
+      "minor": "31"
+    },
+    "detected_at": "2026-10-24T12:00:00+00:00"
+  },
+  {
+    "capability_type": "helm",
+    "is_available": true,
+    "version": "3.16.1",
+    "details": null,
+    "detected_at": "2026-10-24T12:00:00+00:00"
+  },
+  {
+    "capability_type": "lxd",
+    "is_available": true,
+    "version": "5.21.2",
+    "details": {
+      "socket": {
+        "path": "/var/snap/lxd/common/lxd/unix.socket",
+        "exists": true,
+        "accessible": true,
+        "mode": "system"
+      },
+      "install_method": "snap",
+      "snap_info": "lxd 5.21.2",
+      "service_status": "active"
+    },
+    "detected_at": "2026-10-24T12:00:00+00:00"
+  },
+  {
+    "capability_type": "containerd",
+    "is_available": true,
+    "version": "v1.7.22",
+    "details": {
+      "socket": {
+        "path": "/run/containerd/containerd.sock",
+        "exists": true,
+        "accessible": true,
+        "mode": "system"
+      },
+      "managed_by": "k3s"
+    },
+    "detected_at": "2026-10-24T12:00:00+00:00"
+  },
+  {
+    "capability_type": "runc",
+    "is_available": true,
+    "version": "1.1.14",
+    "details": null,
+    "detected_at": "2026-10-24T12:00:00+00:00"
+  },
+  {
+    "capability_type": "buildah",
+    "is_available": true,
+    "version": "1.37.2",
+    "details": null,
+    "detected_at": "2026-10-24T12:00:00+00:00"
+  },
+  {
+    "capability_type": "skopeo",
+    "is_available": true,
+    "version": "1.16.1",
+    "details": null,
+    "detected_at": "2026-10-24T12:00:00+00:00"
+  }
+]

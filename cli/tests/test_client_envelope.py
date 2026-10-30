@@ -191,7 +191,7 @@ class TestGetPaginated:
         mock_http.get.return_value = response
         isolated_client._client = mock_http
 
-        isolated_client.get_paginated("/targets", params={"status": "up"}, per_page=50)
+        isolated_client.get_paginated("/hosts", params={"status": "up"}, per_page=50)
 
         call = mock_http.get.call_args
         sent_params = call.kwargs.get("params") or call[1]["params"]
@@ -243,7 +243,7 @@ class TestGetAll:
         mock_http.get.side_effect = responses
         isolated_client._client = mock_http
 
-        result = isolated_client.get_all("/targets")
+        result = isolated_client.get_all("/hosts")
 
         assert mock_http.get.call_count == 2
         assert len(result.items) == 102

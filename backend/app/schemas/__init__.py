@@ -22,6 +22,12 @@ from .deployment import (
     DeploymentResponse,
     DeploymentUpdate,
 )
+from .host import (
+    HostCreateRequest,
+    HostHealthCheckResponse,
+    HostResponse,
+    HostUpdate,
+)
 from .organization import (
     OrganizationBase,
     OrganizationCreate,
@@ -29,7 +35,6 @@ from .organization import (
     OrganizationUpdate,
 )
 from .stack import StackBase, StackCreate, StackResponse, StackUpdate
-from .target import TargetCreate, TargetResponse, TargetUpdate
 from .target_capability import TargetCapabilityBase, TargetCapabilityResponse
 from .user import (
     LoginResponse,
@@ -61,10 +66,11 @@ __all__ = [
     "OrganizationCreate",
     "OrganizationUpdate",
     "OrganizationResponse",
-    # Target schemas
-    "TargetCreate",
-    "TargetUpdate",
-    "TargetResponse",
+    # Host schemas (canoniques — STORY-166.2)
+    "HostCreateRequest",
+    "HostUpdate",
+    "HostResponse",
+    "HostHealthCheckResponse",
     # Stack schemas
     "StackBase",
     "StackCreate",

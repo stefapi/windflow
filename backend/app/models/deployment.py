@@ -17,15 +17,15 @@ from uuid import uuid4
 from sqlalchemy import JSON, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
 from ..core.secret_manager import SecretManager, get_secret_manager
 from ..database import Base
 
 if TYPE_CHECKING:
+    from .host import Host
     from .organization import Organization
     from .stack import Stack
-    from .target import Target
 
 # Heuristique de sensibilité — même règle que la détection des secrets
 # d'environnement de l'adoption (adoption_service._SECRET_PATTERNS) et du
@@ -154,7 +154,7 @@ class Deployment(Base):
         String(36), primary_key=True, default=lambda: str(uuid4())
     )
 
-    # Relations avec stack et target
+    # Relations avec stack et host (STORY-166.1 : target_id renommée host_id)
     stack_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("stacks.id", ondelete="CASCADE"),
@@ -162,12 +162,15 @@ class Deployment(Base):
         index=True,
     )
 
-    target_id: Mapped[str] = mapped_column(
+    host_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("targets.id", ondelete="CASCADE"),
+        ForeignKey("hosts.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
+    # Alias de transition (purge STORY-166.6) : les services/API non encore
+    # renommés continuent d'écrire/lire ``target_id`` — même colonne hosts.
+    target_id = synonym("host_id")
 
     # Organisation (multi-tenant)
     organization_id: Mapped[str] = mapped_column(
@@ -236,7 +239,9 @@ class Deployment(Base):
 
     stack: Mapped["Stack"] = relationship("Stack", back_populates="deployments")
 
-    target: Mapped["Target"] = relationship("Target", back_populates="deployments")
+    host: Mapped["Host"] = relationship("Host", back_populates="deployments")
+    # Alias de transition : relation legacy ``target`` (purge STORY-166.6).
+    target = synonym("host")
 
     # ─── Snapshots : accès déchiffré + migration double lecture ──────
 

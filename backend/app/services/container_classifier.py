@@ -22,9 +22,14 @@ LABEL_WINDFLOW_STACK_ID = "windflow.stack_id"
 LABEL_COMPOSE_PROJECT = "com.docker.compose.project"
 LABEL_COMPOSE_CONFIG_FILES = "com.docker.compose.project.config_files"
 
-# Placeholder pour la target locale (Docker sur Unix socket)
-LOCAL_TARGET_ID = "local"
-LOCAL_TARGET_NAME = "Local Docker"
+# Placeholder pour le host local (Docker sur Unix socket) — fallback si
+# aucun host seedé en base (STORY-166.3 T8 / coordination 166.5).
+LOCAL_HOST_ID = "local"
+LOCAL_HOST_NAME = "Local Docker"
+
+# Alias de transition (STORY-166.3) — purge par STORY-166.6
+LOCAL_TARGET_ID = LOCAL_HOST_ID
+LOCAL_TARGET_NAME = LOCAL_HOST_NAME
 
 
 def is_windflow_managed(labels: dict[str, str]) -> bool:

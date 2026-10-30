@@ -104,7 +104,9 @@ class EventType(str, Enum):
     DEPLOYMENT_SUCCEEDED = "deployment.succeeded"
     DEPLOYMENT_FAILED = "deployment.failed"
 
-    # host.* (émetteurs : targets/crud.py + health check périodique)
+    # host.* (émetteurs : hosts/crud.py + health check périodique —
+    # STORY-166.2 : surface canonique /api/v1/hosts, alias /targets
+    # déprécié pour la transition)
     HOST_ADDED = "host.added"
     HOST_REMOVED = "host.removed"
     HOST_OFFLINE = "host.offline"

@@ -60,7 +60,7 @@ from typing import Any
 from ..core.exceptions import NotFoundError, WindFlowException
 from .audit_service import AuditService
 from .docker_client_service import DockerClientService, PruneResult
-from .target_scanner_service import TargetScannerService
+from .host_scanner_service import HostScannerService
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +95,9 @@ def _sanitize_payload(params: dict[str, Any]) -> str:
 async def host_scan(params: dict[str, Any]) -> dict[str, Any]:
     """Handler de ``host.scan`` : rescan de la cible et persistance.
 
-    Résout la cible ``target_id`` en base, délègue à
-    :meth:`TargetScannerService.scan_and_update_target`
+    Résout le host (paramètre ``target_id`` — contrat
+    ``HostScanParams``, STORY-160.3) en base, délègue à
+    :meth:`HostScannerService.scan_and_update_host`
     (dispatch interne localhost/remote, TOFU STRICT) et retourne un
     résultat typé borné (machines découvertes = capacités détectées,
     durée) — jamais les credentials ni le détail du scan.
@@ -117,17 +118,17 @@ async def host_scan(params: dict[str, Any]) -> dict[str, Any]:
     import time
 
     from ..database import AsyncSessionLocal
-    from ..models.target import Target
+    from ..models.host import Host
 
     target_id = str(params["target_id"])
     started = time.monotonic()
     async with AsyncSessionLocal() as session:
-        target = await session.get(Target, target_id)
-        if target is None:
-            raise NotFoundError("Target", target_id)
-        scanner = TargetScannerService()
+        host = await session.get(Host, target_id)
+        if host is None:
+            raise NotFoundError("Host", target_id)
+        scanner = HostScannerService()
         try:
-            updated = await scanner.scan_and_update_target(target, session)
+            updated = await scanner.scan_and_update_host(host, session)
         except Exception as exc:
             # L'échec du scanner doit rester lisible côté moteur, sans
             # jamais exposer des credentials dans le message.

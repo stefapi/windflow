@@ -20,6 +20,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import unwrap
 
 from app.core.secret_manager import SecretManager
 from app.models.deployment import (
@@ -28,10 +29,9 @@ from app.models.deployment import (
     is_sensitive_variable,
 )
 from app.models.stack import Stack
-from app.models.target import Target, TargetStatus, TargetType
+from app.models.host import Host, TargetStatus, TargetType
 from app.schemas.deployment import DeploymentCreate
 from app.services.deployment_service import DeploymentService
-from tests.conftest import unwrap
 
 # Secrets factices de test — jamais utilisés hors de ces tests.
 LEGACY_PASSWORD = "LegacyClearTextPassword123!"
@@ -104,7 +104,7 @@ class TestZeroCredentialReadableAfterMigration:
            des tokens Fernet ``gAAAA``.
         """
         # ── 1. Seed : cible avec credentials hérités en clair ──────────
-        legacy_target = Target(
+        legacy_target = Host(
             name="Legacy Target",
             host="192.168.1.50",
             port=22,
@@ -170,8 +170,9 @@ class TestZeroCredentialReadableAfterMigration:
         await db_session.commit()
 
         # ── 4. Inspection brute des colonnes (oracle at-rest) ──────────
+        # STORY-166.1 : la table s'appelle désormais ``hosts``.
         raw_targets = await _fetch_raw_columns(
-            db_session, "SELECT credentials FROM targets"
+            db_session, "SELECT credentials FROM hosts"
         )
         assert len(raw_targets) >= 1
         for row in raw_targets:
@@ -188,9 +189,9 @@ class TestZeroCredentialReadableAfterMigration:
             if not stored_credentials:
                 continue  # cible sans credentials : rien à chiffrer
             token = stored_credentials.get("_encrypted")
-            assert isinstance(token, str) and SecretManager.is_encrypted(token), (
-                f"targets.credentials n'est pas au format chiffré : {raw_credentials!r}"
-            )
+            assert isinstance(token, str) and SecretManager.is_encrypted(
+                token
+            ), f"targets.credentials n'est pas au format chiffré : {raw_credentials!r}"
 
         raw_deployments = await _fetch_raw_columns(
             db_session, "SELECT config, variables FROM deployments"
@@ -236,7 +237,7 @@ class TestZeroCredentialReadableAfterMigration:
         db_session: AsyncSession,
         test_organization,
         test_stack: Stack,
-        test_target: Target,
+        test_target: Host,
     ):
         """Variante : snapshot legacy attaché à une cible fixture ``{}``.
 
@@ -274,9 +275,10 @@ class TestZeroCredentialReadableAfterMigration:
         assert "admin-token-legacy-xyz" not in str(raw[0]["config"])
 
         # La cible fixture credentials={} reste non migrée (aucun secret).
+        # STORY-166.1 : table ``hosts``.
         raw_target = await _fetch_raw_columns(
             db_session,
-            f"SELECT credentials FROM targets WHERE id = '{test_target.id}'",
+            f"SELECT credentials FROM hosts WHERE id = '{test_target.id}'",
         )
         assert raw_target[0]["credentials"] == {}
 
@@ -291,7 +293,7 @@ class TestMaskingAcrossApiEndpoints:
         db_session: AsyncSession,
         test_organization,
         test_stack: Stack,
-        test_target: Target,
+        test_target: Host,
     ):
         """Endpoints deployments/targets : masquage ``***`` et zéro clair.
 
@@ -359,7 +361,6 @@ class TestMaskingAcrossApiEndpoints:
             assert secret not in targets_text
         assert "credentials" not in targets_text
         assert "password" not in targets_text.lower()
-
         # ── GET /targets/{id} : détail sans credentials ────────────────
         target_response = await admin_client.get(
             f"/api/v1/targets/{test_target.id}", follow_redirects=True
@@ -368,6 +369,24 @@ class TestMaskingAcrossApiEndpoints:
         target_detail = str(unwrap(target_response))
         assert "credentials" not in target_detail
         assert "password" not in target_detail.lower()
+
+        # ── GET /hosts + /hosts/{id} (STORY-166.2) : surface canonique,
+        #    mêmes garanties — aucun secret en réponse ──────────────────
+        hosts_response = await admin_client.get("/api/v1/hosts", follow_redirects=True)
+        assert hosts_response.status_code == 200
+        hosts_text = str(unwrap(hosts_response))
+        for secret in secrets:
+            assert secret not in hosts_text
+        assert "credentials" not in hosts_text
+        assert "password" not in hosts_text.lower()
+
+        host_detail_response = await admin_client.get(
+            f"/api/v1/hosts/{test_target.id}", follow_redirects=True
+        )
+        assert host_detail_response.status_code == 200
+        host_detail = str(unwrap(host_detail_response))
+        assert "credentials" not in host_detail
+        assert "password" not in host_detail.lower()
 
         # ── Oracle at-rest : la base contient des tokens, pas du clair ─
         await db_session.commit()

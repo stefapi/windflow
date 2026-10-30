@@ -270,7 +270,6 @@ class TestGetAdoptionData:
     async def test_docker_unavailable(self) -> None:
         """Retourne 503 si Docker n'est pas accessible."""
         from app.core.exceptions import ServiceUnavailableError
-
         from app.services.adoption_service import get_adoption_data
 
         mock_db = MagicMock()
@@ -291,7 +290,6 @@ class TestGetAdoptionData:
     async def test_composition_not_found(self) -> None:
         """Retourne 404 si le projet compose n'existe pas."""
         from app.core.exceptions import NotFoundError
-
         from app.services.adoption_service import get_adoption_data
 
         mock_db = MagicMock()
@@ -355,7 +353,6 @@ class TestAdoptDiscoveredItem:
     async def test_duplicate_name(self) -> None:
         """Retourne 409 si le nom de stack existe déjà."""
         from app.core.exceptions import ConflictError
-
         from app.services.adoption_service import adopt_discovered_item
 
         mock_db = AsyncMock()
@@ -418,3 +415,162 @@ class TestAdoptDiscoveredItem:
             # Vérifier que les objets DB ont été ajoutés
             assert mock_db.add.call_count == 2  # Stack + Deployment
             mock_db.commit.assert_called_once()
+
+
+# =============================================================================
+# STORY-166.4 — axe origin : l'adoption marque origin=adopted (stack
+# uniquement — hosts.origin NON modifié, arbitrage d'analyse).
+# =============================================================================
+
+
+class TestAdoptionOrigin:
+    """AC 1 — adoption d'un conteneur découvert → Stack.origin == 'adopted'."""
+
+    @staticmethod
+    def _make_db() -> AsyncMock:
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+        mock_db.commit = AsyncMock()
+        mock_db.refresh = AsyncMock()
+        return mock_db
+
+    @staticmethod
+    def _make_container(labels: dict | None = None) -> MagicMock:
+        from app.services.container_classifier import LABEL_COMPOSE_PROJECT
+
+        mock_container = MagicMock()
+        mock_container.id = "abc123"
+        mock_container.name = "myapp-web"
+        mock_container.image = "nginx:latest"
+        mock_container.state = "running"
+        mock_container.labels = labels or {LABEL_COMPOSE_PROJECT: "myproject"}
+        return mock_container
+
+    def _captured_stack(self, mock_db) -> object:
+        """Retourne le Stack passé à db.add (1er appel)."""
+        added = [call.args[0] for call in mock_db.add.call_args_list]
+        stacks = [obj for obj in added if type(obj).__name__ == "Stack"]
+        assert stacks, "Aucun Stack ajouté à la session"
+        return stacks[0]
+
+    @pytest.mark.asyncio
+    async def test_adoption_marks_stack_origin_adopted(self) -> None:
+        """AC 1 — la stack résultante porte origin='adopted'."""
+        from app.services.adoption_service import adopt_discovered_item
+
+        mock_db = self._make_db()
+        request = AdoptionRequest(
+            discovered_id="compose:myproject@local",
+            type="composition",
+            stack_name="adopted-stack",
+        )
+
+        with patch("app.services.adoption_service.DockerClientService") as MockDocker:
+            mock_docker = AsyncMock()
+            mock_docker.ping.return_value = True
+            mock_docker.list_containers.return_value = [self._make_container()]
+            mock_docker.close = AsyncMock()
+            MockDocker.return_value = mock_docker
+
+            result = await adopt_discovered_item(mock_db, "org1", request)
+            assert result.success is True
+
+            stack = self._captured_stack(mock_db)
+            assert stack.origin == "adopted"
+            # Non-régression (AC 3) : tags + category conservés
+            assert stack.category == "adopted"
+            assert "adopted" in stack.tags
+
+    @pytest.mark.asyncio
+    async def test_adoption_does_not_touch_host_origin(self) -> None:
+        """Arbitrage T5 — hosts.origin NON modifié : aucun Host ajouté ni
+        updaté à l'adoption (le host local reste managed)."""
+        from app.services.adoption_service import adopt_discovered_item
+
+        mock_db = self._make_db()
+        request = AdoptionRequest(
+            discovered_id="compose:myproject@local",
+            type="composition",
+            stack_name="adopted-stack-2",
+        )
+
+        with patch("app.services.adoption_service.DockerClientService") as MockDocker:
+            mock_docker = AsyncMock()
+            mock_docker.ping.return_value = True
+            mock_docker.list_containers.return_value = [self._make_container()]
+            mock_docker.close = AsyncMock()
+            MockDocker.return_value = mock_docker
+
+            await adopt_discovered_item(mock_db, "org1", request)
+
+            added = [call.args[0] for call in mock_db.add.call_args_list]
+            hosts = [obj for obj in added if type(obj).__name__ == "Host"]
+            assert hosts == []
+
+    @pytest.mark.asyncio
+    async def test_windflow_labeled_container_adoption_refused(self) -> None:
+        """T6 — garde-fou : container portant ``windflow.stack_id`` → 409
+        (déjà piloté, pas « découvert »)."""
+        from app.core.exceptions import ConflictError
+        from app.services.adoption_service import adopt_discovered_item
+        from app.services.container_classifier import (
+            LABEL_COMPOSE_PROJECT,
+            LABEL_WINDFLOW_STACK_ID,
+        )
+
+        mock_db = self._make_db()
+        request = AdoptionRequest(
+            discovered_id="compose:myproject@local",
+            type="composition",
+            stack_name="should-not-be-created",
+        )
+
+        labeled = self._make_container(
+            {
+                LABEL_COMPOSE_PROJECT: "myproject",
+                LABEL_WINDFLOW_STACK_ID: "stk-existing",
+            }
+        )
+
+        with patch("app.services.adoption_service.DockerClientService") as MockDocker:
+            mock_docker = AsyncMock()
+            mock_docker.ping.return_value = True
+            mock_docker.list_containers.return_value = [labeled]
+            mock_docker.close = AsyncMock()
+            MockDocker.return_value = mock_docker
+
+            with pytest.raises(ConflictError) as exc_info:
+                await adopt_discovered_item(mock_db, "org1", request)
+            assert exc_info.value.status_code == 409
+
+            # Aucune écriture
+            mock_db.add.assert_not_called()
+            mock_db.commit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_deployment_created_on_adoption(self) -> None:
+        """AC 3 — non-régression : le deployment est bien créé."""
+        from app.services.adoption_service import adopt_discovered_item
+
+        mock_db = self._make_db()
+        request = AdoptionRequest(
+            discovered_id="compose:myproject@local",
+            type="composition",
+            stack_name="adopted-stack-3",
+        )
+
+        with patch("app.services.adoption_service.DockerClientService") as MockDocker:
+            mock_docker = AsyncMock()
+            mock_docker.ping.return_value = True
+            mock_docker.list_containers.return_value = [self._make_container()]
+            mock_docker.close = AsyncMock()
+            MockDocker.return_value = mock_docker
+
+            await adopt_discovered_item(mock_db, "org1", request)
+
+            added = [call.args[0] for call in mock_db.add.call_args_list]
+            deployments = [obj for obj in added if type(obj).__name__ == "Deployment"]
+            assert len(deployments) == 1
+            assert deployments[0].status.value == "running"

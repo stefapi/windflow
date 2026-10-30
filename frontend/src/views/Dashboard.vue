@@ -123,9 +123,9 @@
         <ResourceMetricsWidget
           :metrics="dashboardStore.resourceMetrics"
           :error="metricsError"
-          :target-name="targetsStore.currentTarget?.name ?? undefined"
+          :host-name="hostsStore.currentHost?.name ?? undefined"
           :loading="dashboardStore.loading"
-          :no-target="!targetsStore.currentTarget"
+          :no-target="!hostsStore.currentHost"
         />
       </el-col>
       <el-col :span="12">
@@ -208,7 +208,7 @@ import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { Monitor, Files, Box } from '@element-plus/icons-vue'
 import { useDashboardStore, usePluginWidgetStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
-import { useTargetsStore } from '@/stores/targets'
+import { useHostsStore } from '@/stores/hosts'
 import { useDashboardApps } from '@/composables/useDashboardApps'
 import CounterCard from '@/components/ui/CounterCard.vue'
 import TargetHealthWidget from '@/components/dashboard/TargetHealthWidget.vue'
@@ -228,7 +228,7 @@ const PlaceholderWidget = import.meta.env.DEV
 
 const authStore = useAuthStore()
 const dashboardStore = useDashboardStore()
-const targetsStore = useTargetsStore()
+const hostsStore = useHostsStore()
 const pluginWidgetStore = usePluginWidgetStore()
 
 // Dashboard apps composable

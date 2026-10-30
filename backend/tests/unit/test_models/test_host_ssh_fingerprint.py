@@ -16,7 +16,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.models.host_ssh_fingerprint import HostSSHFingerprint
-from app.models.target import Target
+from app.models.host import Host
 
 
 def _make_fingerprint(
@@ -43,7 +43,7 @@ class TestUniqueConstraint:
         self, db_session, test_organization
     ) -> None:
         """Deux lignes identiques (même algo) → IntegrityError."""
-        target = Target(
+        target = Host(
             name="fp-target-1",
             host="192.0.2.10",
             credentials={},
@@ -65,7 +65,7 @@ class TestUniqueConstraint:
     ) -> None:
         """Même hôte/port, algorithmes différents → 2 lignes (multi-
         algorithmes spec 06 : pas de collision)."""
-        target = Target(
+        target = Host(
             name="fp-target-2",
             host="192.0.2.11",
             credentials={},
@@ -88,7 +88,7 @@ class TestUniqueConstraint:
 
     async def test_different_port_allowed(self, db_session, test_organization) -> None:
         """Même hôte, ports différents → 2 lignes (contrainte inclut port)."""
-        target = Target(
+        target = Host(
             name="fp-target-3",
             host="192.0.2.12",
             credentials={},
@@ -114,7 +114,7 @@ class TestTargetDeletionCascades:
         self, db_session, test_organization
     ) -> None:
         """Suppression de la cible → lignes host_ssh_fingerprints purgées."""
-        target = Target(
+        target = Host(
             name="fp-target-4",
             host="192.0.2.13",
             credentials={},
@@ -149,13 +149,13 @@ class TestTargetDeletionCascades:
     ) -> None:
         """Isolation : la purge ne touche pas les empreintes des autres
         cibles."""
-        target_a = Target(
+        target_a = Host(
             name="fp-target-5a",
             host="192.0.2.14",
             credentials={},
             organization_id=test_organization.id,
         )
-        target_b = Target(
+        target_b = Host(
             name="fp-target-5b",
             host="192.0.2.15",
             credentials={},
@@ -185,7 +185,7 @@ class TestDefaults:
         self, db_session, test_organization
     ) -> None:
         """Empreinte fraîche : non acceptée, port par défaut 22."""
-        target = Target(
+        target = Host(
             name="fp-target-6",
             host="192.0.2.16",
             credentials={},

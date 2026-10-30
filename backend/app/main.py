@@ -31,6 +31,7 @@ from scalar_fastapi import get_scalar_api_reference
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .api.v1 import api_router
+from .api.v1.targets_legacy import DeprecationHeadersMiddleware
 from .config import enforce_production_secrets, settings
 from .core.exceptions import WindFlowException
 from .database import db
@@ -199,14 +200,14 @@ async def lifespan(app: FastAPI):
     try:
         # Import with relative paths (works regardless of entry point)
         from .database import AsyncSessionLocal as _AsyncSessionLocal
-        from .services.target_service import TargetService as _TargetService
+        from .services.host_service import HostService as _HostService
 
         async def _periodic_health_check() -> None:
             """Background loop: run target health check every 5 minutes."""
             while True:
                 try:
                     async with _AsyncSessionLocal() as db:
-                        await _TargetService.check_all_health(db)
+                        await _HostService.check_all_health(db)
                 except Exception as exc:
                     logger.error("Periodic health check error: %s", exc)
                 await asyncio.sleep(300)  # 5 minutes
@@ -556,6 +557,23 @@ format). See schemas `APIResponse`, `PaginatedResponse`, `ErrorResponse`,
             "name": "organizations",
             "description": "Multi-tenant organization management",
         },
+        {
+            "name": "hosts",
+            "description": (
+                "Deployment hosts management (canonical surface — spec 09): "
+                "CRUD, health-check, capabilities, scan, connectivity tests, "
+                "SSH fingerprints (TOFU)"
+            ),
+        },
+        {
+            "name": "targets",
+            "description": (
+                "Deprecated alias of /api/v1/hosts (STORY-166.2) — every "
+                "response carries `Deprecation: true` + `Sunset` headers. "
+                "Migrate to the canonical /api/v1/hosts surface; removal "
+                "planned by STORY-166.6 (plan F3)."
+            ),
+        },
         {"name": "users", "description": "User account management"},
         {"name": "health", "description": "Health checks and monitoring"},
         {
@@ -578,6 +596,14 @@ format). See schemas `APIResponse`, `PaginatedResponse`, `ErrorResponse`,
 
 # === MIDDLEWARE CONFIGURATION ===
 # ⚠️  Order is CRITICAL - see backend/app/middleware/README.md
+
+# 0. Deprecation headers (STORY-166.2) — ASGI pur, ajouté en premier
+# dans le code donc le PLUS EXTERNE de la pile : ses headers sont posés
+# au plus près du protocole, après toutes les reconstructions de réponse
+# (error handler, enveloppe API) — la marque de dépréciation de l'alias
+# /targets survit à toute réponse, y compris les erreurs.
+app.add_middleware(DeprecationHeadersMiddleware)
+logger.info("✓ /targets deprecation headers middleware enabled (STORY-166.2)")
 
 # 1. CORS (first to receive request)
 if settings.cors_enabled:

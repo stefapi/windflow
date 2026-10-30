@@ -194,7 +194,7 @@ describe('ResourceMetricsWidget', () => {
       expect(wrapper.text()).toContain('Unable to retrieve system metrics')
     })
 
-    it('should show no target state when noTarget is true', () => {
+    it('should show no host state when noTarget is true', () => {
       const wrapper = mount(ResourceMetricsWidget, {
         props: {
           metrics: null,
@@ -211,7 +211,7 @@ describe('ResourceMetricsWidget', () => {
       })
 
       expect(wrapper.find('.resource-metrics-widget__no-target').exists()).toBe(true)
-      expect(wrapper.text()).toContain('No target selected')
+      expect(wrapper.text()).toContain('No host selected')
     })
 
     it('should show loading state when loading is true', () => {

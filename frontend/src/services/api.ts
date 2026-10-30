@@ -13,10 +13,10 @@ import type {
   Organization,
   OrganizationCreate,
   OrganizationUpdate,
-  Target,
-  TargetCreate,
-  TargetUpdate,
-  TargetCapabilitiesResponse,
+  Host,
+  HostCreate,
+  HostUpdate,
+  HostCapabilitiesResponse,
   HealthCheckResponse,
   ConnectionTestRequest,
   ConnectionTestResponse,
@@ -138,27 +138,27 @@ export const organizationsApi = {
   bulkDelete: (organizationIds: string[]) => http.post<{ success: string[]; failed: string[]; message: string }>('/organizations/bulk/delete', { organization_ids: organizationIds }),
 }
 
-// Targets API — STORY-128 : pagination standard spec 09.
-export const targetsApi = {
-  list: (params?: { page?: number; per_page?: number; organization_id?: string }) => http.get<Target[]>('/targets', { params }),
+// Hosts API (STORY-166.6 — surface canonique /api/v1/hosts, STORY-128 : pagination standard spec 09)
+export const hostsApi = {
+  list: (params?: { page?: number; per_page?: number; organization_id?: string }) => http.get<Host[]>('/hosts', { params }),
 
-  get: (id: string) => http.get<Target>(`/targets/${id}`),
+  get: (id: string) => http.get<Host>(`/hosts/${id}`),
 
-  create: (data: TargetCreate) => http.post<Target>('/targets', data),
+  create: (data: HostCreate) => http.post<Host>('/hosts', data),
 
-  update: (id: string, data: TargetUpdate) => http.put<Target>(`/targets/${id}`, data),
+  update: (id: string, data: HostUpdate) => http.put<Host>(`/hosts/${id}`, data),
 
-  delete: (id: string) => http.delete(`/targets/${id}`),
+  delete: (id: string) => http.delete(`/hosts/${id}`),
 
-  scan: (id: string) => http.post<Target>(`/targets/${id}/scan`),
+  scan: (id: string) => http.post<Host>(`/hosts/${id}/scan`),
 
-  getCapabilities: (id: string) => http.get<TargetCapabilitiesResponse>(`/targets/${id}/capabilities`),
+  getCapabilities: (id: string) => http.get<HostCapabilitiesResponse>(`/hosts/${id}/capabilities`),
 
-  testReachability: (data: HostReachabilityRequest) => http.post<HostReachabilityResponse>('/targets/test-reachability', data),
-  testConnection: (data: ConnectionTestRequest) => http.post<ConnectionTestResponse>('/targets/test-connection', data),
+  testReachability: (data: HostReachabilityRequest) => http.post<HostReachabilityResponse>('/hosts/test-reachability', data),
+  testConnection: (data: ConnectionTestRequest) => http.post<ConnectionTestResponse>('/hosts/test-connection', data),
 
-  /** Perform a lightweight TCP health check on a target */
-  healthCheck: (id: string) => http.post<HealthCheckResponse>(`/targets/${id}/health-check`),
+  /** Perform a lightweight TCP health check on a host */
+  healthCheck: (id: string) => http.post<HealthCheckResponse>(`/hosts/${id}/health-check`),
 }
 
 // Stacks API — STORY-128 : pagination standard spec 09.
@@ -380,7 +380,7 @@ export default {
   auth: authApi,
   users: usersApi,
   organizations: organizationsApi,
-  targets: targetsApi,
+  hosts: hostsApi,
   stacks: stacksApi,
   deployments: deploymentsApi,
   workflows: workflowsApi,

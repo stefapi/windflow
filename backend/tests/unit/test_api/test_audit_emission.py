@@ -292,7 +292,7 @@ class TestAuthAudit:
 
 
 class TestDeletionsAudit:
-    """target.deleted / organization.deleted / container.deleted."""
+    """host.removed / organization.deleted / container.deleted."""
 
     async def test_target_and_organization_deletion_audited(
         self,
@@ -302,16 +302,17 @@ class TestDeletionsAudit:
         test_target,
         test_organization,
     ):
-        """DELETE target → ``target.deleted`` (org du target) ; DELETE
-        organization (superuser) → ``organization.deleted``."""
+        """DELETE host → ``host.removed`` (org du host — STORY-166.2, action
+        alignée sur la nomenclature canonique) ; DELETE
+                organization (superuser) → ``organization.deleted``."""
         headers = await _auth_headers(test_superuser)
 
         target_response = await client.delete(
-            f"/api/v1/targets/{test_target.id}", headers=headers
+            f"/api/v1/hosts/{test_target.id}", headers=headers
         )
         assert target_response.status_code == 204, target_response.text
 
-        target_lines = await _audit_lines(db_session, "target.deleted")
+        target_lines = await _audit_lines(db_session, "host.removed")
         assert len(target_lines) == 1
         assert target_lines[0].organization_id == test_target.organization_id
         assert target_lines[0].resource_id == str(test_target.id)

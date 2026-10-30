@@ -140,20 +140,20 @@
 
       <!-- Active Target Selector -->
       <el-tooltip
-        :content="activeTargetName"
+        :content="activeHostName"
         placement="right"
         :disabled="!isCollapsed"
         :show-after="300"
       >
         <div
           class="target-selector"
-          @click="openTargetSelector"
+          @click="openHostSelector"
         >
-          <span class="target-indicator">{{ targetIndicator }}</span>
+          <span class="target-indicator">{{ hostIndicator }}</span>
           <span
             v-show="!isCollapsed"
             class="target-name"
-          >{{ activeTargetName }}</span>
+          >{{ activeHostName }}</span>
         </div>
       </el-tooltip>
 
@@ -197,7 +197,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useTargetsStore } from '@/stores/targets'
+import { useHostsStore } from '@/stores/hosts'
 import { usePluginNavStore } from '@/stores/pluginNav'
 import { useSidebar } from '@/composables/useSidebar'
 import { useSidebarNav } from '@/composables/useSidebarNav'
@@ -213,7 +213,7 @@ import type { PluginNavItem } from '@/types/navigation'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const targetsStore = useTargetsStore()
+const hostsStore = useHostsStore()
 const pluginNavStore = usePluginNavStore()
 
 // Sidebar responsive state
@@ -237,16 +237,16 @@ const pluginItems = computed<PluginNavItem[]>(() => {
   return items
 })
 
-// Active target info
-const activeTargetName = computed(() => {
-  if (targetsStore.currentTarget) {
-    return `${targetsStore.currentTarget.name}`
+// Active host info
+const activeHostName = computed(() => {
+  if (hostsStore.currentHost) {
+    return `${hostsStore.currentHost.name}`
   }
   return 'Aucun target'
 })
 
-const targetIndicator = computed(() => {
-  if (targetsStore.currentTarget) {
+const hostIndicator = computed(() => {
+  if (hostsStore.currentHost) {
     return '🟢'
   }
   return '⚪'
@@ -265,9 +265,9 @@ function navigate(path: string): void {
   router.push(path)
 }
 
-// Open target selector (could open a dialog/dropdown)
-function openTargetSelector(): void {
-  router.push('/targets')
+// Open host selector (could open a dialog/dropdown)
+function openHostSelector(): void {
+  router.push('/hosts')
 }
 
 // Handle user dropdown commands

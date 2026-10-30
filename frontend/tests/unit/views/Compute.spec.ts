@@ -9,11 +9,11 @@ const { modeState } = vi.hoisted(() => ({
 }))
 
 // Mocks stores
-const { mockFetchStats, mockFetchGlobal, mockFetchGlobalByTarget, mockFetchTargets } = vi.hoisted(() => ({
+const { mockFetchStats, mockFetchGlobal, mockFetchGlobalByTarget, mockFetchHosts } = vi.hoisted(() => ({
   mockFetchStats: vi.fn(),
   mockFetchGlobal: vi.fn(),
   mockFetchGlobalByTarget: vi.fn(),
-  mockFetchTargets: vi.fn(),
+  mockFetchHosts: vi.fn(),
 }))
 
 vi.mock('@/stores', () => ({
@@ -38,12 +38,12 @@ vi.mock('@/stores', () => ({
     fetchGlobal: mockFetchGlobal,
     fetchGlobalByTarget: mockFetchGlobalByTarget,
   }),
-  useTargetsStore: () => ({
-    targets: [
+  useHostsStore: () => ({
+    hosts: [
       { id: 'target-1', name: 'localhost' },
       { id: 'target-2', name: 'vps-ovh' },
     ],
-    fetchTargets: mockFetchTargets,
+    fetchHosts: mockFetchHosts,
   }),
 }))
 
@@ -224,7 +224,7 @@ describe('Compute.vue', () => {
 
     expect(mockFetchStats).toHaveBeenCalledWith('test-org')
     expect(mockFetchGlobal).toHaveBeenCalled()
-    expect(mockFetchTargets).toHaveBeenCalledWith('test-org')
+    expect(mockFetchHosts).toHaveBeenCalledWith('test-org')
   })
 
   it('should render ComputeStatsBanner component', () => {

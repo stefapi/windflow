@@ -234,12 +234,13 @@ describe('RecentDeploymentsWidget', () => {
       expect(wrapper.text()).toContain('il y a 2h')
     })
 
-    it('should display target name when available', async () => {
+    it('should display host name when available', async () => {
       mockDeploymentsResponse.data.items = [
         createDeployment({
-          target: {
-            id: 'target-1',
+          host: {
+            id: 'host-1',
             name: 'Production Server',
+            profile: 'host_remote_docker',
             type: 'docker',
             host: 'localhost',
             port: 2375,

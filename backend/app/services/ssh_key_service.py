@@ -51,8 +51,8 @@ from ..core.exceptions import (
     UnprocessableEntityError,
 )
 from ..core.secret_manager import get_secret_manager
+from ..models.host import Host
 from ..models.ssh_key import SSHKey
-from ..models.target import Target
 from ..schemas.ssh_key import (
     SSHKeyGenerateRequest,
     SSHKeyImportRequest,
@@ -285,8 +285,8 @@ class SSHKeyService:
             pour la page courante.
         """
         count_target = (
-            select(func.count(Target.id))
-            .where(Target.ssh_key_id == SSHKey.id)
+            select(func.count(Host.id))
+            .where(Host.ssh_key_id == SSHKey.id)
             .correlate(SSHKey)
             .scalar_subquery()
         )
@@ -325,7 +325,7 @@ class SSHKeyService:
             Liste des ``targets.id`` avec ``ssh_key_id == key_id``.
         """
         rows = (
-            (await db.execute(select(Target.id).where(Target.ssh_key_id == key_id)))
+            (await db.execute(select(Host.id).where(Host.ssh_key_id == key_id)))
             .scalars()
             .all()
         )
@@ -409,8 +409,8 @@ class SSHKeyService:
         dereferenced = 0
         if referencing:
             await db.execute(
-                update(Target)
-                .where(Target.ssh_key_id == key_id)
+                update(Host)
+                .where(Host.ssh_key_id == key_id)
                 .values(ssh_key_id=None)
                 .execution_options(synchronize_session=False)
             )
@@ -461,17 +461,17 @@ class SSHKeyService:
             logger.warning("ssh_key.last_used_update_failed key_id=%s", key_id)
 
     @staticmethod
-    async def resolve_for_target(db: AsyncSession, target: Target) -> dict[str, Any]:
+    async def resolve_for_host(db: AsyncSession, host: Host) -> dict[str, Any]:
         """Résout les kwargs asyncssh d'authentification par clé d'une cible.
 
-        Priorité : ``target.ssh_key_id`` (entité réutilisable —
+        Priorité : ``host.ssh_key_id`` (entité réutilisable —
         STORY-131.1) puis, à défaut, le matériau legacy éventuel des
         credentials chiffrées (double lecture, STORY-103.2). La clé
         privée déchiffrée ne vit qu'en mémoire (jamais loggée).
 
         Args:
             db: Session de base de données async.
-            target: Cible à accès SSH.
+            host: Host à accès SSH.
 
         Returns:
             Kwargs ``{"client_keys": [asyncssh.SSHKey], ...}`` pour
@@ -485,11 +485,11 @@ class SSHKeyService:
         """
         private_pem: Optional[str] = None
 
-        if target.ssh_key_id is not None:
-            row = await SSHKeyService.get(db, target.ssh_key_id)
+        if host.ssh_key_id is not None:
+            row = await SSHKeyService.get(db, host.ssh_key_id)
             private_pem = row.decrypted_private_key
         else:
-            credentials = target.decrypted_credentials
+            credentials = host.decrypted_credentials
             legacy_key = credentials.get("ssh_private_key")
             if isinstance(legacy_key, str) and legacy_key.strip():
                 private_pem = legacy_key
@@ -501,12 +501,12 @@ class SSHKeyService:
             client_key = asyncssh.import_private_key(private_pem)
         except asyncssh.KeyImportError:  # pragma: no cover - garde défensive
             logger.error(
-                "ssh_key.resolve_failed key_id=%s target_id=%s",
-                target.ssh_key_id,
-                target.id,
+                "ssh_key.resolve_failed key_id=%s host_id=%s",
+                host.ssh_key_id,
+                host.id,
             )
             return {}
 
-        if target.ssh_key_id is not None:
-            await SSHKeyService.touch_last_used(db, target.ssh_key_id)
+        if host.ssh_key_id is not None:
+            await SSHKeyService.touch_last_used(db, host.ssh_key_id)
         return {"client_keys": [client_key]}

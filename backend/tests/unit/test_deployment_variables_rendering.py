@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.stack import Stack
-from app.models.target import Target
+from app.models.host import Host
 from app.schemas.deployment import DeploymentCreate
 from app.services.deployment_service import DeploymentService
 
@@ -35,9 +35,9 @@ class TestDeploymentVariablesRendering:
         pas les macros brutes comme {{ generate_password(24) }}.
         """
         # Créer une target de test
-        from app.models.target import TargetStatus, TargetType
+        from app.enums.target import TargetStatus, TargetType
 
-        target = Target(
+        target = Host(
             name="Test Target",
             description="Target de test",
             host="localhost",
@@ -125,9 +125,9 @@ class TestDeploymentVariablesRendering:
         overrident les defaults du stack.
         """
         # Créer une target de test
-        from app.models.target import TargetStatus, TargetType
+        from app.enums.target import TargetStatus, TargetType
 
-        target = Target(
+        target = Host(
             name="Test Target 2",
             description="Target de test",
             host="localhost",
@@ -190,9 +190,9 @@ class TestDeploymentVariablesRendering:
         des valeurs différentes.
         """
         # Créer une target de test
-        from app.models.target import TargetStatus, TargetType
+        from app.enums.target import TargetStatus, TargetType
 
-        target = Target(
+        target = Host(
             name="Test Target 3",
             description="Target de test",
             host="localhost",

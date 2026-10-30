@@ -28,18 +28,19 @@ SCRIPT_LOCATION = REPO_ROOT / "backend" / "alembic"
 # Tables attendues : exactement celles des modèles ORM (STORY-121.1 :
 # + user_organizations ; STORY-123.1 : + refresh_tokens ; STORY-124.1 :
 # + api_keys ; STORY-125.1 : + audit_logs ; STORY-131.1 : + ssh_keys et
-# host_ssh_fingerprints ; STORY-161 : + scheduled_task_executions).
+# host_ssh_fingerprints ; STORY-161 : + scheduled_task_executions ;
+# STORY-166.1 : targets/target_capabilities → hosts/host_capabilities).
 EXPECTED_TABLES = {
     "users",
     "organizations",
-    "targets",
+    "hosts",
     "stacks",
     "stack_versions",
     "deployments",
     "plugins",
     "plugin_hook_logs",
     "scheduled_tasks",
-    "target_capabilities",
+    "host_capabilities",
     "user_organizations",
     "refresh_tokens",
     "api_keys",
@@ -47,6 +48,7 @@ EXPECTED_TABLES = {
     "ssh_keys",
     "host_ssh_fingerprints",
     "scheduled_task_executions",
+    "environments",  # STORY-166.4
 }
 
 # Tables/créées par les migrations additives post-baseline — droppées
@@ -60,11 +62,17 @@ ADDITIVE_TABLES = {
     "ssh_keys",  # STORY-131.1
     "host_ssh_fingerprints",  # STORY-131.1
     "scheduled_task_executions",  # STORY-161
+    "environments",  # STORY-166.4
 }
 
 
 def _drop_targets_ssh_key_id(db_path: Path) -> None:
-    """Retire ``targets.ssh_key_id`` d'une base create_all (pré-1311).
+    """Retire ``ssh_key_id`` de la table des cibles d'une base create_all
+    (pré-1311).
+
+    STORY-166.1 : la table s'appelle ``hosts`` dans les métadonnées
+    courantes (une vraie base legacy porterait ``targets`` — la 1311
+    gère les deux).
 
     SQLite refuse ``ALTER TABLE ... DROP COLUMN`` sur une colonne
     référencée par un FK inline (« unknown column in foreign key
@@ -76,10 +84,15 @@ def _drop_targets_ssh_key_id(db_path: Path) -> None:
 
     engine = create_engine(f"sqlite:///{db_path}")
     try:
+        inspector = inspect(engine)
+        table_names = inspector.get_table_names()
+        table = "hosts" if "hosts" in table_names else "targets"
+        if table not in table_names:
+            return
         with engine.connect() as conn:
             ctx = MigrationContext.configure(conn)
             operations = Operations(ctx)
-            with operations.batch_alter_table("targets") as batch_op:
+            with operations.batch_alter_table(table) as batch_op:
                 batch_op.drop_column("ssh_key_id")
             conn.commit()
     finally:
@@ -118,6 +131,37 @@ def _restore_legacy_scheduled_tasks(db_path: Path) -> None:
                     "VARCHAR(20) NOT NULL DEFAULT 'CUSTOM'"
                 )
             )
+            conn.commit()
+    finally:
+        engine.dispose()
+
+
+def _restore_legacy_stacks_hosts_1662(db_path: Path) -> None:
+    """STORY-166.4 : retire les colonnes additives 1662 (stacks.origin/
+    git_url/environment_id, hosts.environment_id) sur une base create_all
+    (simulation base pré-1662) — **avant** le DROP de ``environments``
+    (sinon FK dangling : la réflexion batch d'Alembic échoue avec
+    ``NoSuchTableError: environments``, pattern ``_drop_targets_ssh_key_id``).
+
+    Les index ``ix_*_environment_id`` sont droppés dans le même batch
+    (le rebuild recrée les index reflétés).
+    """
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn)
+            operations = Operations(ctx)
+            with operations.batch_alter_table("stacks") as batch_op:
+                batch_op.drop_index("ix_stacks_environment_id")
+                batch_op.drop_column("environment_id")
+                batch_op.drop_column("git_url")
+                batch_op.drop_column("origin")
+            with operations.batch_alter_table("hosts") as batch_op:
+                batch_op.drop_index("ix_hosts_environment_id")
+                batch_op.drop_column("environment_id")
             conn.commit()
     finally:
         engine.dispose()
@@ -274,6 +318,9 @@ class TestExistingDatabaseStampScenario:
         # STORY-160.1 : scheduled_tasks à l'état pré-1321 (sinon
         # duplicate column lors de l'upgrade 1321).
         _restore_legacy_scheduled_tasks(db_path)
+        # STORY-166.4 : colonnes 1662 retirées avant le DROP
+        # d'environments (FK résolvable pendant le rebuild batch).
+        _restore_legacy_stacks_hosts_1662(db_path)
         sync_engine = create_engine(f"sqlite:///{db_path}")
         with sync_engine.begin() as conn:
             conn.execute(text("DROP TABLE user_organizations"))
@@ -284,6 +331,8 @@ class TestExistingDatabaseStampScenario:
             conn.execute(text("DROP TABLE host_ssh_fingerprints"))
             # STORY-161 : table additive scheduled_task_executions.
             conn.execute(text("DROP TABLE scheduled_task_executions"))
+            # STORY-166.4 : table additive environments.
+            conn.execute(text("DROP TABLE environments"))
         # STORY-121.3 : recréer la colonne héritée users.organization_id
         # (+ index) — le schéma courant (modèles) ne la crée plus mais la
         # migration 1213 s'attend à la trouver sur une base pré-121.3
@@ -333,10 +382,11 @@ class TestExistingDatabaseStampScenario:
         assert (
             before | ADDITIVE_TABLES | {"alembic_version"} == after
         ), "Le schéma d'origine a été altéré ou une table additive manque"
-        # La colonne additive est recréée par la migration 1311.
+        # La colonne additive est recréée par la migration 1311 (sur la
+        # table canonique hosts — STORY-166.1).
         engine2 = create_engine(f"sqlite:///{db_path}")
         try:
-            target_cols = {c["name"] for c in inspect(engine2).get_columns("targets")}
+            target_cols = {c["name"] for c in inspect(engine2).get_columns("hosts")}
         finally:
             engine2.dispose()
         assert "ssh_key_id" in target_cols
@@ -354,12 +404,19 @@ class TestDowngrade:
     """Complément baseline : downgrade complet fonctionnel."""
 
     def test_downgrade_base_drops_all_tables(self, tmp_path: Path) -> None:
-        """upgrade head puis downgrade base → toutes les tables modèles
-        sont supprimées (downgrade complet implémenté)."""
+        """upgrade 1341 (pré-1661) puis downgrade base → toutes les
+        tables modèles sont supprimées (downgrade complet implémenté).
+
+        STORY-166.1 : le downgrade de la migration 1661 est un no-op
+        documenté (irreversible — mapping 6→3 valeurs et éclat des
+        capacités) : le downgrade complet depuis head n'est plus
+        supporté au-delà de 1341 ; le scénario historique « drop de
+        toutes les tables » reste vérifié depuis la révision pré-1661.
+        """
         db_path = tmp_path / "downgrade.db"
         db_url = f"sqlite+aiosqlite:///{db_path}"
 
-        up = _run_alembic("upgrade", "head", db_url=db_url)
+        up = _run_alembic("upgrade", "1341_normalize_event_names", db_url=db_url)
         assert up.returncode == 0, up.stderr
 
         down = _run_alembic("downgrade", "base", db_url=db_url)

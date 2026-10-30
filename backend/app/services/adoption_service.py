@@ -22,6 +22,7 @@ from ..core.exceptions import (
     ServiceUnavailableError,
     WindFlowException,
 )
+from ..enums.host import WorkloadOrigin
 from ..models.deployment import Deployment, DeploymentStatus
 from ..models.stack import Stack
 from ..schemas.adoption import (
@@ -36,8 +37,9 @@ from ..schemas.adoption import (
 )
 from ..services.container_classifier import (
     LABEL_COMPOSE_PROJECT,
-    LOCAL_TARGET_ID,
-    LOCAL_TARGET_NAME,
+    LABEL_WINDFLOW_STACK_ID,
+    LOCAL_HOST_ID,
+    LOCAL_HOST_NAME,
 )
 from ..services.docker_client_service import DockerClientService
 
@@ -269,8 +271,8 @@ async def get_adoption_data(
 
         # Parser item_id pour extraire le projet/target
         project_name: Optional[str] = None
-        target_id = LOCAL_TARGET_ID
-        target_name = LOCAL_TARGET_NAME
+        target_id = LOCAL_HOST_ID
+        target_name = LOCAL_HOST_NAME
 
         if item_type == "composition" and item_id.startswith("compose:"):
             # Format : "compose:<project>@<target>"
@@ -423,7 +425,7 @@ async def adopt_discovered_item(
     # 2. Collecter les containers Docker correspondants
     docker: Optional[DockerClientService] = None
     container_ids: list[str] = []
-    target_id = request.target_id or LOCAL_TARGET_ID
+    target_id = request.target_id or LOCAL_HOST_ID
     compose_content = request.compose_content
 
     try:
@@ -459,6 +461,24 @@ async def adopt_discovered_item(
                 if c.id == cid or c.id.startswith(cid):
                     container_ids.append(c.id)
                     break
+
+        # Garde-fou détection d'origine par runtime (STORY-166.4 T6,
+        # spec 03 § Détection de l'origine) : un container portant le
+        # label ``windflow.stack_id`` est **déjà piloté** par WindFlow —
+        # il n'est pas « découvert », l'adoption créerait un doublon de
+        # stack (409). Log DEBUG sans donnée sensible.
+        for c in all_containers:
+            if c.id in container_ids and c.labels.get(LABEL_WINDFLOW_STACK_ID):
+                logger.debug(
+                    "Adoption refusée : container déjà piloté WindFlow "
+                    "(label %s présent)",
+                    LABEL_WINDFLOW_STACK_ID,
+                )
+                raise ConflictError(
+                    "Cet objet est déjà piloté par WindFlow (label "
+                    f"'{LABEL_WINDFLOW_STACK_ID}' présent) — il n'est pas "
+                    "découvert, l'adoption ne s'applique pas."
+                )
 
         if not container_ids:
             raise NotFoundError(
@@ -501,6 +521,12 @@ async def adopt_discovered_item(
         category="adopted",
         tags=["adopted", request.item_type],
         deployment_name=request.stack_name,
+        # STORY-166.4 : l'axe origine décrit le **workload** — la stack
+        # résultante d'une adoption porte ``adopted``. ⚠️ Arbitrage
+        # d'analyse : ``hosts.origin`` n'est PAS modifié à l'adoption
+        # (le host local reste ``managed`` — il est piloté par WindFlow ;
+        # l'axe origin s'applique aux entités pilotées, pas au substrat).
+        origin=WorkloadOrigin.ADOPTED.value,
         created_at=now,
         updated_at=now,
     )

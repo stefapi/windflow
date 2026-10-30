@@ -30,7 +30,7 @@ import asyncssh
 from sqlalchemy import create_engine, inspect, text
 
 from app.core.secret_manager import SecretManager
-from app.models.target import encrypt_credentials_for_storage
+from app.models.host import encrypt_credentials_for_storage
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
@@ -200,7 +200,9 @@ class TestUpgradeSchema:
         """Base vierge → head : ssh_keys + host_ssh_fingerprints créées,
         colonne ``targets.ssh_key_id`` présente."""
         db_path = tmp_path / "schema-1311.db"
-        up = _run_alembic("upgrade", "head", db_url=f"sqlite+aiosqlite:///{db_path}")
+        up = _run_alembic(
+            "upgrade", "1311_ssh_keys", db_url=f"sqlite+aiosqlite:///{db_path}"
+        )
         assert up.returncode == 0, f"upgrade head a échoué : {up.stderr}"
 
         engine = create_engine(f"sqlite:///{db_path}")
@@ -239,7 +241,9 @@ class TestDataMigration:
         db_path = tmp_path / name
         _seed_legacy_base(db_path)
         _seed_unreadable_target(db_path)
-        up = _run_alembic("upgrade", "head", db_url=f"sqlite+aiosqlite:///{db_path}")
+        up = _run_alembic(
+            "upgrade", "1311_ssh_keys", db_url=f"sqlite+aiosqlite:///{db_path}"
+        )
         assert (
             up.returncode == 0
         ), f"upgrade head a échoué (R1 non toléré) : {up.stdout}\n{up.stderr}"
@@ -337,7 +341,7 @@ class TestDataMigration:
         _seed_legacy_base(db_path)
         db_url = f"sqlite+aiosqlite:///{db_path}"
 
-        up = _run_alembic("upgrade", "head", db_url=db_url)
+        up = _run_alembic("upgrade", "1311_ssh_keys", db_url=db_url)
         assert up.returncode == 0, up.stderr
         keys_after_first = _rows(db_path, "SELECT id, name FROM ssh_keys")
         assert len(keys_after_first) == 1
@@ -345,7 +349,7 @@ class TestDataMigration:
         down = _run_alembic("downgrade", "1251_audit_logs", db_url=db_url)
         assert down.returncode == 0, down.stderr
 
-        up2 = _run_alembic("upgrade", "head", db_url=db_url)
+        up2 = _run_alembic("upgrade", "1311_ssh_keys", db_url=db_url)
         assert up2.returncode == 0, up2.stderr
 
         # Après downgrade, les clés importées ont été supprimées avec la
@@ -372,7 +376,7 @@ class TestDowngrade:
         db_path = tmp_path / "down-1311.db"
         db_url = f"sqlite+aiosqlite:///{db_path}"
 
-        up = _run_alembic("upgrade", "head", db_url=db_url)
+        up = _run_alembic("upgrade", "1311_ssh_keys", db_url=db_url)
         assert up.returncode == 0, up.stderr
 
         down = _run_alembic("downgrade", "1251_audit_logs", db_url=db_url)

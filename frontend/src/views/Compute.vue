@@ -99,9 +99,9 @@
           {{ tech }}
         </span>
 
-        <span class="text-xs text-gray-500 font-semibold ml-2">Target :</span>
+        <span class="text-xs text-gray-500 font-semibold ml-2">Host :</span>
         <span
-          v-for="target in targetsStore.targets"
+          v-for="target in hostsStore.hosts"
           :key="target.id"
           class="pill"
           :class="activeTargets.includes(target.id) ? 'text-accent bg-accent-light border-accent' : 'text-text-secondary bg-bg-secondary border-border hover:bg-bg-elevated'"
@@ -332,7 +332,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
-import { useComputeStore, useTargetsStore } from '@/stores'
+import { useComputeStore, useHostsStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 import { useModeStore } from '@/stores/mode'
 import ComputeStatsBanner from '@/components/ComputeStatsBanner.vue'
@@ -352,7 +352,7 @@ import type { ControlLevel, AdoptionResponse } from '@/types/api'
 import type { AppCardData } from '@/components/compute/helpers'
 
 const computeStore = useComputeStore()
-const targetsStore = useTargetsStore()
+const hostsStore = useHostsStore()
 const authStore = useAuthStore()
 const modeStore = useModeStore()
 
@@ -575,7 +575,7 @@ onMounted(() => {
   const orgId = authStore.organizationId ?? undefined
   computeStore.fetchStats(orgId)
   computeStore.fetchGlobal({ ...filterParams.value, organization_id: orgId })
-  targetsStore.fetchTargets(orgId)
+  hostsStore.fetchHosts(orgId)
 })
 </script>
 

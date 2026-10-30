@@ -34,7 +34,7 @@ from tests.conftest import create_user_with_role, error_code, unwrap
 from app.auth.jwt import create_access_token
 from app.enums.rbac import Role
 from app.models.ssh_key import SSHKey
-from app.models.target import Target
+from app.models.host import Host
 from app.models.user import User
 
 SSH_KEYS_URL = "/api/v1/ssh-keys"
@@ -238,7 +238,7 @@ class TestDetailRenameDelete:
         headers = _auth_headers(test_superuser)
         body = await _generate_key(client, headers, "referenced")
         db_session.add(
-            Target(
+            Host(
                 name="holder",
                 host="h",
                 credentials={},
@@ -259,7 +259,7 @@ class TestDetailRenameDelete:
 
         # La cible est déréférencée (ssh_key_id NULL) et la clé supprimée.
         target = (
-            await db_session.execute(select(Target).where(Target.name == "holder"))
+            await db_session.execute(select(Host).where(Host.name == "holder"))
         ).scalar_one()
         assert target.ssh_key_id is None
         remaining = (await db_session.execute(select(SSHKey.id))).scalars().all()

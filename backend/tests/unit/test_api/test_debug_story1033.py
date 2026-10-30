@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.deployment import Deployment, DeploymentStatus
 from app.models.organization import Organization
 from app.models.stack import Stack
-from app.models.target import Target
+from app.models.host import Host
 
 
 @pytest.fixture(autouse=True)
@@ -39,7 +39,7 @@ async def test_debug_get_deployment_500(
         organization_id=test_organization.id,
         version="1.0.0",
     )
-    target = Target(
+    target = Host(
         name="dbg-target",
         host="127.0.0.1",
         credentials={},

@@ -17,14 +17,14 @@ déjà établie (la vérification TOFU se joue en amont, dans le helper
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 import asyncssh
+import pytest
 
 from app.core.exceptions import CommandExecutionError
 from app.schemas.target_scan import ScanRequest
 from app.services.commands import CommandResult, SSHCommandExecutor
+from app.services.host_scanner_service import TargetScannerService
 from app.services.ssh_connection import HostKeyPolicy
-from app.services.target_scanner_service import TargetScannerService
 
 
 def _make_conn() -> MagicMock:
@@ -43,7 +43,9 @@ class TestSSHCommandExecutorUnchanged:
 
     def test_signature_unchanged(self):
         """Signature historique (connection, sudo_user, sudo_password)."""
-        executor = SSHCommandExecutor(_make_conn(), sudo_user="root", sudo_password="pw")
+        executor = SSHCommandExecutor(
+            _make_conn(), sudo_user="root", sudo_password="pw"
+        )
         assert executor._sudo_user == "root"
         assert executor._sudo_password == "pw"
 
@@ -99,9 +101,7 @@ class TestSSHCommandExecutorUnchanged:
         """Erreur SSH en cours de commande → CommandExecutionError 255."""
         conn = MagicMock()
         conn.run = AsyncMock(
-            side_effect=asyncssh.Error(
-                asyncssh.DISC_CONNECTION_LOST, "connection lost"
-            )
+            side_effect=asyncssh.Error(asyncssh.DISC_CONNECTION_LOST, "connection lost")
         )
         executor = SSHCommandExecutor(conn)
         with pytest.raises(CommandExecutionError) as exc_info:
@@ -122,7 +122,7 @@ class TestScannerDelegatesToHelper:
             "server_host_key_verify": lambda: None,
         }
         with patch(
-            "app.services.target_scanner_service.build_ssh_kwargs",
+            "app.services.host_scanner_service.build_ssh_kwargs",
             new=AsyncMock(return_value=sentinel_kwargs),
         ) as mock_helper:
             result = await TargetScannerService._build_ssh_kwargs(
@@ -136,12 +136,13 @@ class TestScannerDelegatesToHelper:
     async def test_scan_remote_wraps_tofu_blocking_as_command_error(self):
         """Blocage TOFU (SSHHostKeyNotAcceptedError) → CommandExecutionError
         wrapping (contrat historique de scan_remote inchangé côté appelants)."""
-        from app.core.exceptions import SSHHostKeyNotAcceptedError
         from unittest.mock import patch
+
+        from app.core.exceptions import SSHHostKeyNotAcceptedError
 
         scanner = TargetScannerService()
         with patch(
-            "app.services.target_scanner_service.build_ssh_kwargs",
+            "app.services.host_scanner_service.build_ssh_kwargs",
             new=AsyncMock(side_effect=SSHHostKeyNotAcceptedError()),
         ):
             with pytest.raises(CommandExecutionError) as exc_info:

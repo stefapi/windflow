@@ -49,7 +49,7 @@
       class="resource-metrics-widget__no-target"
     >
       <el-icon><InfoFilled /></el-icon>
-      <span>No target selected. <router-link to="/targets">Select a target</router-link> to view its metrics.</span>
+      <span>No host selected. <router-link to="/hosts">Select a host</router-link> to view its metrics.</span>
     </div>
 
     <!-- Loading state -->

@@ -12,9 +12,12 @@ from app.core.exceptions import WindFlowException
 from app.models.organization import Organization
 from app.models.plugin import Plugin, PluginStatus
 from app.models.user import User
-from app.schemas.plugin import PluginConfigureRequest, PluginInstallRequest, PluginUpdateRequest
+from app.schemas.plugin import (
+    PluginConfigureRequest,
+    PluginInstallRequest,
+    PluginUpdateRequest,
+)
 from app.services.plugin_manager_service import PluginManagerService
-
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 

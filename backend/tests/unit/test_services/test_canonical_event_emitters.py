@@ -6,7 +6,7 @@
 - ``container.created|started|stopped|removed`` (``api/v1/docker.py``) —
   endpoints réels, Docker client mocké (pattern ``test_docker_rbac``),
   bus espion ;
-- ``host.added``/``host.removed`` (``api/v1/targets/crud.py``) —
+- ``host.added``/``host.removed`` (``api/v1/hosts/crud.py``) —
   endpoints réels, payloads **sans credentials** (règle 40) ;
 - ``plugin.installed``/``plugin.removed`` (plugin manager) — publication
   bus vérifiée via ``_publish_to_bus`` (best-effort, jamais bloquant) ;
@@ -197,21 +197,21 @@ async def test_start_stop_remove_emit_canonical_events(client, db_session, spy_b
 
 
 # ===========================================================================
-# T5 — host.added / host.removed (api/v1/targets/crud.py)
+# T5 — host.added / host.removed (api/v1/hosts/crud.py)
 # ===========================================================================
 
 
 async def test_create_and_delete_target_emit_host_events(client, db_session, spy_bus):
-    """POST /targets → host.added ; DELETE /targets/{id} → host.removed
+    """POST /hosts → host.added ; DELETE /hosts/{id} → host.removed
     (payloads SANS credentials — règle 40)."""
     user, org = await _make_admin(db_session, "targets-admin")
 
     with patch(
-        "app.api.v1.targets.crud.TargetService.check_health",
+        "app.api.v1.hosts.crud.HostService.check_health",
         new=AsyncMock(return_value=None),
-    ), patch("app.api.v1.targets.crud.AuditService.log_from_request", new=AsyncMock()):
+    ), patch("app.api.v1.hosts.crud.AuditService.log_from_request", new=AsyncMock()):
         created = await client.post(
-            "/api/v1/targets/",
+            "/api/v1/hosts/",
             json={
                 "name": "host-canonical",
                 "host": "127.0.0.1",
@@ -225,7 +225,7 @@ async def test_create_and_delete_target_emit_host_events(client, db_session, spy
         host_id = created.json()["data"]["id"]
 
         deleted = await client.delete(
-            f"/api/v1/targets/{host_id}", headers=_auth_headers(user)
+            f"/api/v1/hosts/{host_id}", headers=_auth_headers(user)
         )
         assert deleted.status_code == 204, deleted.text
 
@@ -251,37 +251,37 @@ async def test_create_and_delete_target_emit_host_events(client, db_session, spy
 async def test_health_check_transition_emits_host_offline(db_session):
     """ONLINE → probe injoignable → host.offline une seule fois par
     transition (pas de spam OFFLINE→OFFLINE)."""
-    from app.enums.target import TargetStatus
-    from app.models.target import Target
-    from app.services.target_service import TargetService
+    from app.enums.host import HostStatus
+    from app.models.host import Host
+    from app.services.host_service import HostService
 
     bus = SpyBus()
-    target = Target(
+    host = Host(
         id=str(uuid4()),
         name="host-offline-test",
         host="127.0.0.1",
         port=59999,  # fermé → OFFLINE
         type="physical",
-        status=TargetStatus.ONLINE,
+        status=HostStatus.ONLINE,
         organization_id=str(uuid4()),
     )
-    db_session.add(target)
+    db_session.add(host)
     await db_session.commit()
 
     with patch("app.core.events.get_event_bus", return_value=bus), patch.object(
-        TargetService, "HEALTH_CHECK_TIMEOUT", 0.2
+        HostService, "HEALTH_CHECK_TIMEOUT", 0.2
     ):
-        new_status = await TargetService.check_health(db_session, target)
-        assert new_status == TargetStatus.OFFLINE
+        new_status = await HostService.check_health(db_session, host)
+        assert new_status == HostStatus.OFFLINE
         offline_events = bus.of_type(EventType.HOST_OFFLINE)
         assert len(offline_events) == 1
         payload = offline_events[0].payload
-        assert payload["host_id"] == str(target.id)
+        assert payload["host_id"] == str(host.id)
         assert payload["name"] == "host-offline-test"
         assert "last_seen" in payload
 
         # Déjà OFFLINE → nouvelle vérification : pas de nouvel événement
-        await TargetService.check_health(db_session, target)
+        await HostService.check_health(db_session, host)
 
     assert len(bus.of_type(EventType.HOST_OFFLINE)) == 1
 

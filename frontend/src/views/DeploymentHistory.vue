@@ -67,7 +67,7 @@
                 Stack: {{ deployment.stack?.name }}
               </p>
               <p class="text-sm text-gray-600">
-                Cible: {{ deployment.target?.name }}
+                Cible: {{ deployment.host?.name }}
               </p>
             </div>
             <el-tag :type="getStatusTagType(deployment.status)">

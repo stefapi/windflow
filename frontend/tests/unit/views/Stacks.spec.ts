@@ -44,7 +44,7 @@ vi.mock('@/services/api', () => ({
     archive: vi.fn().mockResolvedValue({ data: { success: true, message: 'Stack archived', stack_id: 'stack-1', stack_name: 'Test Stack', affected_services: 0, action: 'archive' } }),
     unarchive: vi.fn().mockResolvedValue({ data: { success: true, message: 'Stack unarchived', stack_id: 'stack-1', stack_name: 'Test Stack', affected_services: 0, action: 'unarchive' } }),
   },
-  targetsApi: {
+  hostsApi: {
     list: vi.fn().mockResolvedValue({ data: { items: [] } }),
   },
   dashboardApi: {
@@ -79,10 +79,10 @@ vi.mock('@/stores', () => ({
     archiveStack: vi.fn(),
     unarchiveStack: vi.fn(),
   }),
-  useTargetsStore: () => ({
-    targets: [],
+  useHostsStore: () => ({
+    hosts: [],
     loading: false,
-    fetchTargets: vi.fn(),
+    fetchHosts: vi.fn(),
   }),
   useDeploymentsStore: () => ({
     createDeployment: vi.fn(),

@@ -8,7 +8,7 @@ from httpx import AsyncClient
 from tests.conftest import unwrap
 
 from app.models.stack import Stack
-from app.models.target import Target
+from app.models.host import Host
 
 ORCH_PATCH = (
     "app.services.deployment_orchestrator.DeploymentOrchestrator.start_deployment"
@@ -20,7 +20,7 @@ class TestDeploymentsAPI:
     """Tests d'intégration pour l'API de déploiements."""
 
     async def test_create_deployment(
-        self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Target
+        self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Host
     ):
         """Test de création d'un déploiement via API."""
         with patch(ORCH_PATCH, new_callable=AsyncMock, return_value=None):
@@ -45,7 +45,7 @@ class TestDeploymentsAPI:
         assert "id" in data
 
     async def test_get_deployment_by_id(
-        self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Target
+        self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Host
     ):
         """Test de récupération d'un déploiement par ID."""
         with patch(ORCH_PATCH, new_callable=AsyncMock, return_value=None):
@@ -76,7 +76,7 @@ class TestDeploymentsAPI:
         assert response.status_code == 404
 
     async def test_list_deployments(
-        self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Target
+        self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Host
     ):
         """Test de listage des déploiements (contrat paginé STORY-128)."""
         with patch(ORCH_PATCH, new_callable=AsyncMock, return_value=None):
@@ -100,7 +100,7 @@ class TestDeploymentsAPI:
         assert body["pagination"]["total"] >= 3
 
     async def test_list_deployments_with_pagination(
-        self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Target
+        self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Host
     ):
         """Test de listage avec pagination page/per_page (STORY-128)."""
         with patch(ORCH_PATCH, new_callable=AsyncMock, return_value=None):
@@ -126,7 +126,7 @@ class TestDeploymentsAPI:
         assert body["pagination"]["per_page"] == 2
 
     async def test_create_deployment_unauthenticated(
-        self, client: AsyncClient, test_stack: Stack, test_target: Target
+        self, client: AsyncClient, test_stack: Stack, test_target: Host
     ):
         """Test de création sans authentification."""
         response = await client.post(
@@ -162,7 +162,7 @@ class TestDeploymentsAPI:
         test_session_factory,
         test_organization,
         test_stack: Stack,
-        test_target: Target,
+        test_target: Host,
     ):
         """STORY-163 (AC 3) : un cycle de déploiement réel (DB de test,
         Docker mocké) produit des messages DEPLOYMENT_PROGRESS via
@@ -229,7 +229,7 @@ class TestDeploymentsAPI:
         assert "starting" in steps and "completed" in steps
 
     async def test_delete_deployment(
-        self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Target
+        self, authenticated_client: AsyncClient, test_stack: Stack, test_target: Host
     ):
         """Test de suppression d'un déploiement."""
         with patch(ORCH_PATCH, new_callable=AsyncMock, return_value=None):

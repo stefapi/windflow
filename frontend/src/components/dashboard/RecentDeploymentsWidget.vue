@@ -70,11 +70,11 @@
           <div class="deployment-row__meta">
             <span class="deployment-time">{{ formatRelativeTime(deployment.created_at) }}</span>
             <span
-              v-if="deployment.target?.name"
-              class="deployment-target"
+              v-if="deployment.host?.name"
+              class="deployment-host"
             >
               <el-icon><Monitor /></el-icon>
-              {{ deployment.target.name }}
+              {{ deployment.host.name }}
             </span>
           </div>
         </div>
@@ -300,7 +300,7 @@ defineExpose({
   white-space: nowrap;
 }
 
-.deployment-target {
+.deployment-host {
   display: flex;
   align-items: center;
   gap: 0.25rem;

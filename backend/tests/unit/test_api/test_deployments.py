@@ -22,7 +22,7 @@ from app.models.deployment import (
 )
 from app.models.organization import Organization
 from app.models.stack import Stack
-from app.models.target import Target
+from app.models.host import Host
 from app.models.user import User
 
 PLAIN_SECRET = "S3cr3t!Pass-103-3"
@@ -47,7 +47,7 @@ async def _seed_deployment(
     db_session: AsyncSession,
     organization: Organization,
     stack: Stack,
-    target: Target,
+    target: Host,
     variables: dict,
 ) -> Deployment:
     """Insère un déploiement avec le snapshot donné (sans lancer la tâche)."""
@@ -84,7 +84,7 @@ class TestDeploymentsApiNeverReturnsPlainValues:
             organization_id=test_organization.id,
             version="1.0.0",
         )
-        target = Target(
+        target = Host(
             name="sec-target",
             host="127.0.0.1",
             credentials={},
@@ -136,7 +136,7 @@ class TestDeploymentsApiNeverReturnsPlainValues:
             organization_id=test_organization.id,
             version="1.0.0",
         )
-        target = Target(
+        target = Host(
             name="sec-target-legacy",
             host="127.0.0.1",
             credentials={},
@@ -171,7 +171,7 @@ class TestDeploymentsApiNeverReturnsPlainValues:
             organization_id=test_organization.id,
             version="1.0.0",
         )
-        target = Target(
+        target = Host(
             name="sec-target-atrest",
             host="127.0.0.1",
             credentials={},

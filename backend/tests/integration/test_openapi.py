@@ -204,3 +204,61 @@ async def test_openapi_license_info(client: AsyncClient):
 
     assert "license" in info
     assert "name" in info["license"]
+
+
+# ============================================================================
+# STORY-166.2 — Double nommage /hosts (canonique) + /targets (alias déprécié)
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_hosts_canonical_surface_documented(client: AsyncClient):
+    """STORY-166.2 : /api/v1/hosts documenté, non déprécié, avec summaries."""
+    response = await client.get("/openapi.json")
+    schema = response.json()
+
+    hosts_paths = [p for p in schema["paths"] if p.startswith("/api/v1/hosts")]
+    assert len(hosts_paths) >= 13, f"/hosts incomplet : {len(hosts_paths)} paths"
+
+    ops = [
+        op
+        for p in hosts_paths
+        for m, op in schema["paths"][p].items()
+        if isinstance(op, dict)
+    ]
+    assert len(ops) >= 16  # 16 endpoints (CRUD 5, health, caps 3, fps 3, etc.)
+    for op in ops:
+        assert not op.get("deprecated"), f"op canonique dépréciée : {op}"
+    # Documentation riche : summaries quasi systématiques
+    assert sum(1 for op in ops if op.get("summary")) >= len(ops) * 0.9
+
+
+@pytest.mark.asyncio
+async def test_targets_alias_marked_deprecated(client: AsyncClient):
+    """STORY-166.2 : opérations /api/v1/targets marquées deprecated: true."""
+    response = await client.get("/openapi.json")
+    schema = response.json()
+
+    targets_paths = [p for p in schema["paths"] if p.startswith("/api/v1/targets")]
+    assert len(targets_paths) >= 13
+
+    ops = [
+        op
+        for p in targets_paths
+        for m, op in schema["paths"][p].items()
+        if isinstance(op, dict)
+    ]
+    assert len(ops) >= 16
+    for op in ops:
+        assert op.get("deprecated") is True, f"alias non déprécié : {op.get('summary')}"
+
+
+@pytest.mark.asyncio
+async def test_targets_alias_tag_documents_deprecation(client: AsyncClient):
+    """Le tag ``targets`` documente l'alias déprécié + le canonique /hosts."""
+    response = await client.get("/openapi.json")
+    schema = response.json()
+
+    tags = {t["name"]: t.get("description", "") for t in schema.get("tags", [])}
+    assert "Deprecated" in tags.get("targets", "")
+    assert "hosts" in tags

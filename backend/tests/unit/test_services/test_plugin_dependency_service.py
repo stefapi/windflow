@@ -16,7 +16,6 @@ from app.models.user import User
 from app.schemas.plugin_manifest import PluginManifest
 from app.services.plugin_dependency_service import PluginDependencyService
 
-
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
 
@@ -180,8 +179,11 @@ class TestCheckInstallDependencies:
     ) -> None:
         """Cas d'erreur : plugin en conflit déjà installé."""
         await _create_installed_plugin(
-            db_session, "nginx-proxy-manager", "1.0.0",
-            test_organization.id, test_superuser.id,
+            db_session,
+            "nginx-proxy-manager",
+            "1.0.0",
+            test_organization.id,
+            test_superuser.id,
         )
 
         manifest = _make_manifest(conflicts=["nginx-proxy-manager"])
@@ -264,8 +266,11 @@ class TestCheckUninstallDependents:
         )
         # Installer traefik qui dépend de docker
         await _create_installed_plugin(
-            db_session, "traefik", "1.0.0",
-            test_organization.id, test_superuser.id,
+            db_session,
+            "traefik",
+            "1.0.0",
+            test_organization.id,
+            test_superuser.id,
             requires=["docker"],
         )
 
@@ -290,14 +295,20 @@ class TestCheckUninstallDependents:
         )
         # B dépend de C
         await _create_installed_plugin(
-            db_session, "plugin-b", "1.0.0",
-            test_organization.id, test_superuser.id,
+            db_session,
+            "plugin-b",
+            "1.0.0",
+            test_organization.id,
+            test_superuser.id,
             requires=["plugin-c"],
         )
         # A dépend de B
         await _create_installed_plugin(
-            db_session, "plugin-a", "1.0.0",
-            test_organization.id, test_superuser.id,
+            db_session,
+            "plugin-a",
+            "1.0.0",
+            test_organization.id,
+            test_superuser.id,
             requires=["plugin-b"],
         )
 
@@ -441,8 +452,6 @@ class TestValidateVersionConstraint:
         """``"2.0.0"`` != ``"1.0.0"`` → True."""
         assert service.validate_version_constraint("2.0.0", "!=1.0.0") is True
 
-    def test_invalid_constraint_format(
-        self, service: PluginDependencyService
-    ) -> None:
+    def test_invalid_constraint_format(self, service: PluginDependencyService) -> None:
         """Format invalide → False."""
         assert service.validate_version_constraint("1.0.0", "bad") is False

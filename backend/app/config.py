@@ -466,6 +466,18 @@ class Settings(BaseSettings):
     default_org_name: str = "Default Organization"
     default_org_slug: str = "default"
 
+    # === Database seed / bootstrap (STORY-166.5) ===
+    auto_detect_local_host: bool = Field(
+        default=True,
+        description=(
+            "Détecte et seed le host local au premier démarrage (scan des "
+            "capacités inclus — profil canonique host_baremetal, "
+            "origin=managed). Désactivable (AUTO_DETECT_LOCAL_HOST=false) "
+            "pour les installations sans substrat local : aucun host n'est "
+            "créé et le scan localhost ne s'exécute pas."
+        ),
+    )
+
     # Stack Definitions Auto-loading
     stack_definitions_path: str = "stacks_definitions"
     auto_load_stack_definitions: bool = True
