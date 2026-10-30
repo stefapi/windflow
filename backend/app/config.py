@@ -154,6 +154,28 @@ class Settings(BaseSettings):
         "purge runs (background lifespan job).",
     )
 
+    # === Rétention des événements de déploiement (STORY-167 — AC 4) ===
+    # Rétention des lignes deployment_events. None = purge désactivée
+    # (conservation infinie — pattern audit 125.3 / exécutions 161,
+    # défaut). Env var : DEPLOYMENT_EVENTS_RETENTION_DAYS.
+    deployment_events_retention_days: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Deployment events retention in days (None = purge "
+        "disabled, keep forever).",
+    )
+    # Intervalle du job de purge des événements (STORY-167 — boucle
+    # asyncio dédiée au lifespan, 6ᵉ tâche de fond ; coordonnée avec
+    # l'action scheduler `deployment_events.purge`, les deux délèguent
+    # au même purge_expired idempotent). Env var :
+    # DEPLOYMENT_EVENTS_PURGE_INTERVAL_HOURS.
+    deployment_events_purge_interval_hours: int = Field(
+        default=24,
+        ge=1,
+        description="Interval (hours) between deployment events purge "
+        "runs (background lifespan job).",
+    )
+
     @field_validator("scheduler_default_timezone")
     @classmethod
     def _validate_default_timezone(cls, value: Optional[str]) -> Optional[str]:

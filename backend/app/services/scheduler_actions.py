@@ -272,6 +272,35 @@ async def admin_backup(params: dict[str, Any]) -> None:
     raise ActionNotImplementedError(f"admin.backup : {_BACKUP_STUB_REASON}")
 
 
+async def deployment_events_purge(params: dict[str, Any]) -> dict[str, Any]:
+    """Handler de ``deployment_events.purge`` : rétention des events.
+
+    Exécutée comme tâche ordinaire du scheduler (spec 17 § Maintenance
+    planifiée, STORY-167) : session courte dédiée, délégation au même
+    :meth:`DeploymentEventStore.purge_expired` idempotent que la boucle
+    lifespan — une exécution simultanée des deux mécanismes est
+    inoffensive (purge par cutoff, la seconde passe est un no-op).
+
+    Args:
+        params: Paramètres validés (``DeploymentEventsPurgeParams.
+            model_dump()``) — ``retention_days`` (défaut 30, borné).
+
+    Returns:
+        Résumé typé ``{"removed": n, "retention_days": ...}`` — jamais
+        de paramètre sensible (rules 40).
+    """
+    from .deployment_event_store import DeploymentEventStore
+
+    retention_days = int(params.get("retention_days", 30))
+    removed = await DeploymentEventStore().purge_expired(retention_days)
+    logger.info(
+        "deployment_events.purge : %d événement(s) supprimé(s) " "(rétention %d j)",
+        removed,
+        retention_days,
+    )
+    return {"removed": removed, "retention_days": retention_days}
+
+
 async def notification_send(params: dict[str, Any]) -> None:
     """Handler stub de ``notification.send`` (renvoi P2-15).
 
@@ -313,6 +342,7 @@ def register_scheduler_actions() -> None:
     handlers = {
         "host.scan": host_scan,
         "compute.docker.prune": compute_docker_prune,
+        "deployment_events.purge": deployment_events_purge,
         "stack.backup": stack_backup,
         "admin.backup": admin_backup,
         "notification.send": notification_send,

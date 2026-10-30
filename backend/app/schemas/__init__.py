@@ -19,6 +19,7 @@ from .compute import (
 from .deployment import (
     DeploymentBase,
     DeploymentCreate,
+    DeploymentEventResponse,
     DeploymentResponse,
     DeploymentUpdate,
 )
@@ -85,6 +86,7 @@ __all__ = [
     "DeploymentCreate",
     "DeploymentUpdate",
     "DeploymentResponse",
+    "DeploymentEventResponse",
     # Compute schemas
     "ServiceWithMetrics",
     "StandaloneContainer",

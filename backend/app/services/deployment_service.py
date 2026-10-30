@@ -18,12 +18,36 @@ from ..models.deployment import (
     DeploymentStatus,
     encrypt_variables_for_storage,
 )
+from ..models.deployment_event import DeploymentEventLevel, DeploymentEventType
 from ..models.stack import Stack
 from ..schemas.deployment import DeploymentCreate, DeploymentUpdate
 from .audit_service import AuditService
 from .deployment_events import deployment_events
 
 logger = logging.getLogger(__name__)
+
+# STORY-167 (décision d'analyse 1) : mapping statut métier → event_type
+# spec 06. STOPPED (annulation) → rollback : le domaine spec 06 n'a pas
+# de type « stopped » (divergence documentée) ; PENDING → deploying
+# (défaut). Divergence success ↔ running : l'event « success » marque la
+# transition vers RUNNING (STORY-162).
+_EVENT_TYPE_BY_STATUS: dict[DeploymentStatus, DeploymentEventType] = {
+    DeploymentStatus.PENDING: DeploymentEventType.DEPLOYING,
+    DeploymentStatus.DEPLOYING: DeploymentEventType.DEPLOYING,
+    DeploymentStatus.RUNNING: DeploymentEventType.SUCCESS,
+    DeploymentStatus.FAILED: DeploymentEventType.ERROR,
+    DeploymentStatus.ROLLING_BACK: DeploymentEventType.ROLLBACK,
+    DeploymentStatus.STOPPED: DeploymentEventType.ROLLBACK,
+}
+
+# STORY-167 (décision 1) : mapping préfixe de ligne → level spec 06
+# (convention des préfixes du pipeline) ; [INFO]/[SUCCESS] et le
+# reste → info.
+_LEVEL_BY_LOG_PREFIX: tuple[tuple[str, DeploymentEventLevel], ...] = (
+    ("[ERROR]", DeploymentEventLevel.ERROR),
+    ("[SYSTEM]", DeploymentEventLevel.WARNING),
+)
+_DEFAULT_EVENT_LEVEL = DeploymentEventLevel.INFO
 
 
 class DeploymentService:
@@ -730,6 +754,41 @@ class DeploymentService:
                     f"Déploiement {deployment_id} terminé en {duration:.2f}s "
                     f"avec statut {status.value}"
                 )
+
+        # STORY-167 (AC 3 — double écriture, décision 1) : insertion d'un
+        # DeploymentEvent typé **dans la même transaction** que le
+        # changement de statut — un échec d'insert annule le statut (la
+        # persistance des events est désormais partie du contrat). La
+        # colonne texte ``logs`` ci-dessus continue d'être alimentée
+        # (payload brut — critère P2-7). Le payload ``data`` est limité
+        # aux identifiants/métriques non sensibles (rules 40) — jamais
+        # ``variables`` ni ``configuration``.
+        from .deployment_event_store import DeploymentEventStore
+
+        log_message = logs or error_message
+        event_level = _DEFAULT_EVENT_LEVEL
+        if log_message:
+            for prefix, mapped_level in _LEVEL_BY_LOG_PREFIX:
+                if str(log_message).startswith(prefix):
+                    event_level = mapped_level
+                    break
+        event_data: dict[str, Any] = {
+            "old_status": getattr(old_status, "value", old_status),
+            "new_status": status.value,
+        }
+        if deployment.container_id:
+            event_data["container_id"] = deployment.container_id
+        if deployment.deploy_duration_seconds is not None:
+            event_data["duration_seconds"] = deployment.deploy_duration_seconds
+
+        await DeploymentEventStore().append_event(
+            db,
+            deployment_id=deployment_id,
+            event_type=_EVENT_TYPE_BY_STATUS[status].value,
+            level=event_level.value,
+            message=log_message,
+            data=event_data,
+        )
 
         await db.commit()
         await db.refresh(deployment)

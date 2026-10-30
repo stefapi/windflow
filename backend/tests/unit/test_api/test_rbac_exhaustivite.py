@@ -71,7 +71,8 @@ EXPECTED_ROUTE_COUNTS: dict[str, int] = {
     # get/put/delete, toutes require_admin).
     "ssh_keys": 6,
     "stacks": 15,
-    "deployments": 8,
+    # STORY-167 : +1 route events (GET /deployments/{id}/events).
+    "deployments": 9,
     "workflows": 1,
     "websockets": 8,
     "stats": 2,

@@ -205,6 +205,8 @@ class TestRunMigrationsExistingUnversionedDb:
             conn.execute(text("DROP TABLE host_ssh_fingerprints"))
             # STORY-161 : table additive scheduled_task_executions.
             conn.execute(text("DROP TABLE scheduled_task_executions"))
+            # STORY-167 : table additive deployment_events.
+            conn.execute(text("DROP TABLE deployment_events"))
         # STORY-121.3 : simuler la colonne héritée users.organization_id
         # (+ index) — absente du schéma courant mais attendue par la
         # migration 1213 sur une base pré-121.3

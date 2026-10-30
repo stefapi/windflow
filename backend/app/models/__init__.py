@@ -5,6 +5,7 @@ Modèles de données SQLAlchemy pour WindFlow.
 from .api_key import APIKey
 from .audit_log import AuditLog
 from .deployment import Deployment
+from .deployment_event import DeploymentEvent
 from .environment import Environment
 from .host import Host
 from .host_capability import HostCapability
@@ -29,6 +30,7 @@ __all__ = [
     "Environment",
     "Stack",
     "Deployment",
+    "DeploymentEvent",
     "StackVersion",
     "HostCapability",
     "ScheduledTask",

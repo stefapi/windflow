@@ -339,6 +339,61 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"✗ Periodic executions purge could not start: {e}")
 
+    # Periodic deployment events purge (STORY-167 — 6ᵉ tâche lifespan,
+    # pattern audit 125.3 / exécutions 161 : boucle dédiée, sans fusion
+    # des boucles existantes). Consomme DeploymentEventStore.purge_expired
+    # — purge par cutoff idempotente, coordonnée avec l'action scheduler
+    # ``deployment_events.purge`` (une exécution simultanée est
+    # inoffensive). Les deployments et l'audit ne sont jamais touchés.
+    # Logs = comptages uniquement.
+    deployment_events_purge_task: asyncio.Task | None = None
+    if settings.deployment_events_retention_days is None:
+        # Démarrage conditionnel : rétention désactivée (défaut) — pas
+        # de boucle, un réveil ne ferait que des no-op.
+        logger.info(
+            "○ Deployment events retention disabled (keep forever) "
+            "— purge job not started"
+        )
+    else:
+        try:
+            from .services.deployment_event_store import (
+                DeploymentEventStore as _DeploymentEventsStore,
+            )
+
+            _deployment_events_interval = (
+                settings.deployment_events_purge_interval_hours * 3600
+            )
+            _deployment_events_store = _DeploymentEventsStore()
+
+            async def _periodic_deployment_events_purge() -> None:
+                """Background loop: purge deployment events past retention."""
+                while True:
+                    try:
+                        removed = await _deployment_events_store.purge_expired(
+                            settings.deployment_events_retention_days or 1
+                        )
+                        if removed:
+                            logger.info(
+                                "Deployment events purge: %d entries removed",
+                                removed,
+                            )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        logger.error("Deployment events purge error: %s", exc)
+                    await asyncio.sleep(_deployment_events_interval)
+
+            deployment_events_purge_task = asyncio.create_task(
+                _periodic_deployment_events_purge()
+            )
+            logger.info(
+                "✓ Periodic deployment events purge started "
+                f"(retention={settings.deployment_events_retention_days}d, "
+                f"every {settings.deployment_events_purge_interval_hours}h)"
+            )
+        except Exception as e:
+            logger.warning(f"✗ Periodic deployment events purge could not start: {e}")
+
     # Scheduler engine (STORY-160.2 — 4ᵉ tâche lifespan, arbitrage F1 :
     # runtime asyncio dans le processus API). Évalue les crons des
     # définitions spec 17 via croniter vendored et exécute les actions du
@@ -441,6 +496,16 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         logger.info("✓ Periodic scheduled task executions purge task cancelled")
+
+    # Cancel periodic deployment events purge (STORY-167 — pas démarrée
+    # si rétention désactivée : None → garde satisfaite)
+    if deployment_events_purge_task and not deployment_events_purge_task.done():
+        deployment_events_purge_task.cancel()
+        try:
+            await deployment_events_purge_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("✓ Periodic deployment events purge task cancelled")
 
     # Plugin hooks shutdown (STORY-163 — désabonnement du pont avant
     # l'arrêt du bus, même séquence que scheduler_event_triggers).

@@ -73,6 +73,7 @@ EXPECTED_TABLES = {
     "host_ssh_fingerprints",
     "scheduled_task_executions",
     "environments",  # STORY-166.4
+    "deployment_events",  # STORY-167
     "alembic_version",
 }
 
@@ -88,6 +89,7 @@ ADDITIVE_TABLES = {
     "host_ssh_fingerprints",  # STORY-131.1
     "scheduled_task_executions",  # STORY-161
     "environments",  # STORY-166.4
+    "deployment_events",  # STORY-167
 }
 
 # URL PostgreSQL de test : paramétrable via l'environnement (CI : service

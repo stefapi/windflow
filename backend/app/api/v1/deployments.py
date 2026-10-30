@@ -4,10 +4,10 @@ Routes de gestion des déploiements.
 
 import logging
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...auth.rbac import require_admin, require_operator, require_viewer
@@ -25,11 +25,13 @@ from ...models.user import User
 from ...schemas.common import PaginatedResponse
 from ...schemas.deployment import (
     DeploymentCreate,
+    DeploymentEventResponse,
     DeploymentLogsResponse,
     DeploymentResponse,
     DeploymentUpdate,
 )
 from ...services.audit_service import AuditService
+from ...services.deployment_event_store import DeploymentEventStore
 from ...services.deployment_service import DeploymentService
 from ...services.stack_service import StackService
 from ...services.user_organization_service import UserOrganizationService
@@ -450,6 +452,226 @@ async def get_deployment_logs(
         deployment_id=deployment.id,
         logs=deployment.logs,
         updated_at=deployment.updated_at,
+    )
+
+
+# Exemples OpenAPI (STORY-167) — documentation maximale rules 20.
+_DEPLOYMENT_EVENT_LIST_EXAMPLE: dict = {
+    "data": [
+        {
+            "id": "aa1e8400-e29b-41d4-a716-446655440010",
+            "deployment_id": "990e8400-e29b-41d4-a716-446655440000",
+            "event_type": "deploying",
+            "level": "info",
+            "message": "[INFO] Starting deployment of stack nginx",
+            "data": {"old_status": "pending", "new_status": "deploying"},
+            "created_at": "2026-01-02T22:30:00Z",
+        },
+        {
+            "id": "aa1e8400-e29b-41d4-a716-446655440011",
+            "deployment_id": "990e8400-e29b-41d4-a716-446655440000",
+            "event_type": "error",
+            "level": "error",
+            "message": "[ERROR] Image pull failed",
+            "data": {"old_status": "deploying", "new_status": "failed"},
+            "created_at": "2026-01-02T22:31:00Z",
+        },
+    ],
+    "pagination": {"page": 1, "per_page": 20, "total": 2, "pages": 1},
+    "message": None,
+}
+
+
+@router.get(
+    "/{deployment_id}/events",
+    response_model=PaginatedResponse,
+    dependencies=[Depends(conditional_rate_limiter(100, 60))],
+    summary="List deployment events (structured, paginated)",
+    description="""
+Retrieve the structured, timestamped event history of a deployment
+(STORY-167 — table `deployment_events`, spec 06): each pipeline step
+(status change, execution step, error, rollback) is persisted as a
+typed event `event_type` / `level` / `message` / `data` / `created_at`.
+
+Completes `GET /deployments/{id}/logs` (raw text payload, unchanged) —
+this endpoint is the queryable, filterable history.
+
+## Pagination
+- `?page=1&per_page=20` (max 100) — STORY-128 canonical format,
+  response envelope `PaginatedResponse{data, pagination{...}}`
+- **Stable order**: `ORDER BY created_at ASC, id ASC` — chronological
+  order of the deployment run (pulling → … → success/error), no
+  duplicates/holes across pages
+
+## Filtering
+- `event_type`: closed domain `pulling|deploying|health_check|success|error|rollback`
+- `level`: closed domain `debug|info|warning|error`
+- `after` / `before`: ISO 8601 datetime bounds (inclusive)
+- Filters combine (AND) and apply to both the list and the `pagination.total` COUNT
+
+## Notes
+- `success` marks the transition to status `running` (documented
+  divergence, STORY-162)
+- The `data` payload only ever contains non-sensitive identifiers and
+  metrics (rules 40 — never variables/configuration/secrets)
+
+## Access Control
+- **Minimum role**: Viewer — read-only access, organization member of
+  the deployment's organization (isolation enforced)
+""",
+    responses={
+        200: {
+            "description": "Paginated deployment events — enveloppe spec 09",
+            "content": {
+                "application/json": {
+                    "example": _DEPLOYMENT_EVENT_LIST_EXAMPLE,
+                }
+            },
+        },
+        401: {
+            "description": "Authentication required",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "INVALID_OR_EXPIRED_TOKEN",
+                            "message": "Missing or invalid authentication token",
+                        }
+                    }
+                }
+            },
+        },
+        403: {
+            "description": "Not a member of the deployment's organization",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "PERMISSION_DENIED",
+                            "message": "Accès refusé à ce déploiement",
+                        }
+                    }
+                }
+            },
+        },
+        404: {
+            "description": "Deployment not found",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "NOT_FOUND",
+                            "message": "Déploiement non trouvé",
+                        }
+                    }
+                }
+            },
+        },
+        422: {
+            "description": "Invalid filter value (event_type/level/date) or per_page > 100",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Validation Error",
+                        }
+                    }
+                }
+            },
+        },
+    },
+    tags=["deployments"],
+)
+async def get_deployment_events(
+    request: Request,
+    deployment_id: UUID,
+    event_type: Optional[str] = Query(
+        None,
+        pattern="^(pulling|deploying|health_check|success|error|rollback)$",
+        description="Filter by event type (spec 06 closed domain).",
+    ),
+    level: Optional[str] = Query(
+        None,
+        pattern="^(debug|info|warning|error)$",
+        description="Filter by severity level (spec 06 closed domain).",
+    ),
+    after: Optional[datetime] = Query(
+        None,
+        description="ISO 8601 — events created at or after this datetime.",
+    ),
+    before: Optional[datetime] = Query(
+        None,
+        description="ISO 8601 — events created at or before this datetime.",
+    ),
+    page: int = PaginationQuery.page,
+    per_page: int = PaginationQuery.per_page,
+    current_user: User = Depends(require_viewer),
+    session: AsyncSession = Depends(get_db),
+):
+    """Liste paginée filtrable des événements structurés d'un déploiement."""
+    correlation_id = getattr(request.state, "correlation_id", None)
+
+    logger.info(
+        f"Retrieving events for deployment: {deployment_id}",
+        extra={
+            "correlation_id": correlation_id,
+            "user_id": str(current_user.id),
+            "deployment_id": str(deployment_id),
+        },
+    )
+
+    # Résolution du déploiement → 404 (pattern get_deployment_logs).
+    deployment = await DeploymentService.get_by_id(session, str(deployment_id))
+    if not deployment:
+        logger.warning(
+            f"Deployment not found: {deployment_id}",
+            extra={
+                "correlation_id": correlation_id,
+                "deployment_id": str(deployment_id),
+            },
+        )
+        raise NotFoundError(f"Déploiement {deployment_id} non trouvé")
+
+    # Isolation inter-organisation → 403 (pattern get_deployment_logs).
+    if not await UserOrganizationService.is_member(
+        session, current_user, deployment.organization_id
+    ):
+        logger.warning(
+            f"Access denied to deployment events: {deployment_id}",
+            extra={
+                "correlation_id": correlation_id,
+                "user_id": str(current_user.id),
+                "deployment_id": str(deployment_id),
+            },
+        )
+        raise PermissionDeniedError("Accès refusé à ce déploiement")
+
+    items, total = await DeploymentEventStore().list_for_deployment(
+        session,
+        str(deployment_id),
+        event_type=event_type,
+        level=level,
+        after=after,
+        before=before,
+        page=page,
+        per_page=per_page,
+    )
+    data: List[DeploymentEventResponse] = [
+        DeploymentEventResponse(
+            id=event.id,
+            deployment_id=event.deployment_id,
+            event_type=event.event_type,  # type: ignore[arg-type]
+            level=event.level,  # type: ignore[arg-type]
+            message=event.message,
+            data=event.data,
+            created_at=event.created_at,
+        )
+        for event in items
+    ]
+    return PaginatedResponse(
+        data=[item.model_dump(mode="json") for item in data],
+        pagination=build_meta(page, per_page, total),
     )
 
 

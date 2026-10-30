@@ -79,6 +79,23 @@ class DockerPruneParams(ActionParams):
     )
 
 
+class DeploymentEventsPurgeParams(ActionParams):
+    """Paramètres de l'action ``deployment_events.purge`` (STORY-167).
+
+    Rétention des événements de déploiement exécutée comme tâche
+    ordinaire du scheduler (spec 17 — maintenance planifiée, coordonnée
+    avec la boucle lifespan : les deux délèguent au même
+    ``purge_expired`` idempotent).
+    """
+
+    retention_days: int = Field(
+        default=30,
+        ge=1,
+        le=3650,
+        description="Rétention des événements en jours (cutoff created_at)",
+    )
+
+
 class StackBackupParams(ActionParams):
     """Paramètres de l'action ``stack.backup`` (stub explicite — renvoi
     F8 / initiative backup)."""

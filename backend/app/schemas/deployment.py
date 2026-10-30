@@ -13,7 +13,7 @@ valeur en base soit chiffrée (token Fernet) ou non (donnée legacy).
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -352,6 +352,97 @@ class DeploymentListResponse(BaseModel):
         ge=1,
         description="Taille de la page courante",
         json_schema_extra={"example": 20},
+    )
+
+
+# Domaines fermés spec 06 (STORY-167) — Literal : toute valeur hors
+# domaine est rejetée en 422 par la validation Pydantic.
+DEPLOYMENT_EVENT_TYPES: tuple[str, ...] = (
+    "pulling",
+    "deploying",
+    "health_check",
+    "success",
+    "error",
+    "rollback",
+)
+DEPLOYMENT_EVENT_LEVELS: tuple[str, ...] = (
+    "debug",
+    "info",
+    "warning",
+    "error",
+)
+
+
+class DeploymentEventResponse(BaseModel):
+    """Schema de réponse d'un événement de déploiement (STORY-167).
+
+    Contrat de sortie de ``GET /deployments/{id}/events`` — événements
+    typés horodatés persistés dans ``deployment_events`` (spec 06). Le
+    payload ``data`` ne contient par construction que des identifiants
+    et métriques non sensibles (liste blanche au moment de l'append,
+    rules 40) : il est renvoyé tel quel.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": "aa1e8400-e29b-41d4-a716-446655440010",
+                "deployment_id": "990e8400-e29b-41d4-a716-446655440000",
+                "event_type": "deploying",
+                "level": "info",
+                "message": "[INFO] Creating container on host docker-local",
+                "data": {"old_status": "deploying", "new_status": "running"},
+                "created_at": "2026-01-02T22:31:01Z",
+            }
+        }
+    )
+
+    id: str = Field(
+        ...,
+        description="Identifiant unique de l'événement (uuid4)",
+        json_schema_extra={"example": "aa1e8400-e29b-41d4-a716-446655440010"},
+    )
+    deployment_id: str = Field(
+        ...,
+        description="ID du déploiement concerné",
+        json_schema_extra={"example": "990e8400-e29b-41d4-a716-446655440000"},
+    )
+    event_type: Literal[
+        "pulling", "deploying", "health_check", "success", "error", "rollback"
+    ] = Field(
+        ...,
+        description=(
+            "Type d'événement (domaine fermé spec 06). Divergence "
+            "documentée : `success` marque la transition vers le statut "
+            "métier `running` (STORY-162)."
+        ),
+        json_schema_extra={"example": "deploying"},
+    )
+    level: Literal["debug", "info", "warning", "error"] = Field(
+        ...,
+        description="Niveau de sévérité (domaine fermé spec 06)",
+        json_schema_extra={"example": "info"},
+    )
+    message: Optional[str] = Field(
+        None,
+        description="Ligne de journal lisible (jamais de secret — rules 40)",
+        json_schema_extra={"example": "[INFO] Creating container on host docker-local"},
+    )
+    data: Optional[Dict[str, Any]] = Field(
+        None,
+        description=(
+            "Données additionnelles non sensibles (identifiants, "
+            "métriques — liste blanche : old_status/new_status, "
+            "container_id, duration_seconds…)"
+        ),
+        json_schema_extra={
+            "example": {"old_status": "deploying", "new_status": "running"}
+        },
+    )
+    created_at: datetime = Field(
+        ...,
+        description="Horodatage de l'événement (UTC naïf)",
+        json_schema_extra={"example": "2026-01-02T22:31:01Z"},
     )
 
 

@@ -22,10 +22,13 @@ from app.services.action_registry import (
     validate_params,
 )
 
-# Les 5 actions core du registre canonique (arbitrage STORY-160.1).
+# Les actions core du registre canonique (arbitrage STORY-160.1 ;
+# STORY-167 : + deployment_events.purge — rétention des événements de
+# déploiement comme tâche ordinaire, spec 17 § Maintenance).
 EXPECTED_ACTIONS = {
     "host.scan",
     "compute.docker.prune",
+    "deployment_events.purge",
     "stack.backup",
     "admin.backup",
     "notification.send",
@@ -39,7 +42,7 @@ class TestRegistryContent:
     """Contenu canonique du registre."""
 
     def test_registry_exposes_five_core_actions(self):
-        """AC 1 : les 5 actions core sont enregistrées — ni plus ni moins."""
+        """AC 1 : les actions core sont enregistrées — ni plus ni moins."""
         names = {definition.name for definition in list_actions()}
         assert names == EXPECTED_ACTIONS
 

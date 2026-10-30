@@ -51,6 +51,7 @@ from pydantic import BaseModel
 from ..core.exceptions import InvalidInputError
 from ..schemas.actions import (
     AdminBackupParams,
+    DeploymentEventsPurgeParams,
     DockerPruneParams,
     HostScanParams,
     NotificationSendParams,
@@ -103,6 +104,14 @@ _REGISTRY: Dict[str, ActionDefinition] = {
             "ou volumes orphelins ; liste windflow-plugin-* épargnée, "
             "dry_run par défaut (STORY-173)",
             params_schema=DockerPruneParams,
+            implemented=True,
+        ),
+        ActionDefinition(
+            name="deployment_events.purge",
+            description="Rétention des événements de déploiement — purge "
+            "des lignes deployment_events au-delà de la rétention "
+            "(spec 17 § Maintenance, STORY-167)",
+            params_schema=DeploymentEventsPurgeParams,
             implemented=True,
         ),
         ActionDefinition(
