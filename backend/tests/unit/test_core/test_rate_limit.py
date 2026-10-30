@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi_limiter.depends import RateLimiter
 
+from app.core import cache as cache_module
 from app.core import rate_limit
 from app.core.exceptions import RateLimitError
 from app.core.rate_limit import (
@@ -28,13 +29,18 @@ from app.core.rate_limit import (
 
 @pytest.fixture(autouse=True)
 def _reset_state():
-    """Isole chaque test : store mémoire vide + flags de warning réinitialisés."""
+    """Isole chaque test : store mémoire vide + flags de warning réinitialisés.
+
+    STORY-168 : le warning mémoire process-local est porté par le helper
+    partagé ``core.cache.emit_degraded_warning_once`` — le flag réinitialisé
+    est donc celui du module cache.
+    """
     _memory_limiter.reset()
-    rate_limit._memory_warning_emitted = False
+    cache_module._degraded_warning_emitted = False
     rate_limit._disabled_info_emitted = False
     yield
     _memory_limiter.reset()
-    rate_limit._memory_warning_emitted = False
+    cache_module._degraded_warning_emitted = False
     rate_limit._disabled_info_emitted = False
 
 
@@ -136,8 +142,13 @@ class TestConditionalRateLimiterV2:
         assert limiter.milliseconds == 60_000
 
     def test_no_repeated_warning_in_logs(self, caplog):
-        """AC 5 : 2 appels sans URL → warning mémoire émis une seule fois."""
-        with caplog.at_level(logging.WARNING, logger="windflow.rate_limit"):
+        """AC 5 : 2 appels sans URL → warning mémoire émis une seule fois.
+
+        STORY-168 : le warning émane du helper partagé ``windflow.cache``
+        (flag unique cache + rate limiter) — un seul record même après
+        appels croisés.
+        """
+        with caplog.at_level(logging.WARNING, logger="windflow.cache"):
             with patch.object(
                 rate_limit.settings, "rate_limit_enabled", True
             ), patch.object(rate_limit.settings, "rate_limit_storage_url", None):
@@ -148,7 +159,7 @@ class TestConditionalRateLimiterV2:
 
     def test_warning_mentions_process_local_limitation(self, caplog):
         """AC 2 : le warning mentionne process-local et workers."""
-        with caplog.at_level(logging.WARNING, logger="windflow.rate_limit"):
+        with caplog.at_level(logging.WARNING, logger="windflow.cache"):
             with patch.object(
                 rate_limit.settings, "rate_limit_enabled", True
             ), patch.object(rate_limit.settings, "rate_limit_storage_url", None):
@@ -156,6 +167,27 @@ class TestConditionalRateLimiterV2:
         message = caplog.records[-1].getMessage()
         assert "process-local" in message
         assert "workers" in message
+
+    @pytest.mark.asyncio
+    async def test_cross_consumer_warning_emitted_once(self, caplog):
+        """STORY-168 : appels croisés cache + limiter → un seul warning."""
+        from app.core.cache import get_cache, reset_cache
+
+        reset_cache()
+        with caplog.at_level(logging.WARNING, logger="windflow.cache"):
+            with patch.object(
+                rate_limit.settings, "rate_limit_enabled", True
+            ), patch.object(
+                rate_limit.settings, "rate_limit_storage_url", None
+            ), patch.object(
+                cache_module.settings, "cache_url", None
+            ):
+                await get_cache()
+                conditional_rate_limiter(5, 60)
+                conditional_rate_limiter(30, 60)
+        reset_cache()
+        warnings = [r for r in caplog.records if "process-local" in r.getMessage()]
+        assert len(warnings) == 1
 
     @pytest.mark.asyncio
     async def test_memory_limiter_returns_429_after_threshold(self):

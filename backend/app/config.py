@@ -354,6 +354,18 @@ class Settings(BaseSettings):
         "cache, e.g. redis://localhost:6379/1) — None = lightweight "
         "in-memory mode",
     )
+    # Borne du fallback mémoire du cache unifié (STORY-168, AC 4) :
+    # nombre maximum d'entrées conservées en mode léger — au-delà,
+    # purge des expirées puis éviction FIFO de la plus ancienne insertion
+    # (politique simple, consommation mémoire bornée).
+    # Env var : CACHE_MEMORY_MAX_ENTRIES.
+    cache_memory_max_entries: int = Field(
+        default=10_000,
+        gt=0,
+        description="Maximum number of entries kept by the in-memory cache "
+        "fallback (expired entries purged first, then FIFO eviction of the "
+        "oldest insertion)",
+    )
 
     # === Protocole WebSocket : heartbeat + acknowledgment (STORY-164.1) ===
     # Expiration des connexions muettes : le serveur ping périodiquement

@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from httpx import AsyncClient
 
+from app.core import cache as cache_module
 from app.core import rate_limit
 from app.core.exceptions import RateLimitError
 from app.core.rate_limit import _memory_limiter, conditional_rate_limiter
@@ -20,15 +21,19 @@ from app.core.rate_limit import _memory_limiter, conditional_rate_limiter
 
 @pytest.fixture(autouse=True)
 def _memory_mode():
-    """Force le mode mémoire (enabled sans URL) et isole le store."""
+    """Force le mode mémoire (enabled sans URL) et isole le store.
+
+    STORY-168 : le warning mémoire est porté par le flag partagé du module
+    cache (helper ``emit_degraded_warning_once``).
+    """
     _memory_limiter.reset()
-    rate_limit._memory_warning_emitted = False
+    cache_module._degraded_warning_emitted = False
     with patch.object(rate_limit.settings, "rate_limit_enabled", True), patch.object(
         rate_limit.settings, "rate_limit_storage_url", None
     ):
         yield
     _memory_limiter.reset()
-    rate_limit._memory_warning_emitted = False
+    cache_module._degraded_warning_emitted = False
 
 
 def _mock_request(host: str = "127.0.0.1", path: str = "/api/v1/auth/login"):

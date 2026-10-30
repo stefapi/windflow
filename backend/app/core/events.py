@@ -40,7 +40,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -440,8 +439,14 @@ EVENTS_CHANNEL = "windflow:events"
 
 
 def _safe_redis_url(url: str) -> str:
-    """Masque les credentials d'une URL Redis pour les logs (rules 40)."""
-    return re.sub(r"://[^@/]+@", "://***@", url)
+    """Masque les credentials d'une URL Redis pour les logs (rules 40).
+
+    Délègue au helper mutualisé ``core/cache.py`` (STORY-168 — une seule
+    implémentation du masquage entre bus et cache).
+    """
+    from .cache import _safe_redis_url as _impl
+
+    return _impl(url)
 
 
 class RedisPubSubEventBus(InMemoryEventBus):

@@ -4,6 +4,10 @@ Tests unitaires du service PluginRegistryService.
 Couvre : fetch avec cache TTL, validation Pydantic, recherche par nom,
 recherche textuelle, gestion d'erreurs (timeout, HTTP, JSON invalide),
 fallback sur cache expiré.
+
+STORY-168 : le cache TTL repose sur l'interface unifiée ``core/cache``
+(clé ``registry:index``) ; la copie locale last-known-good porte le
+fallback stale-while-error.
 """
 
 import asyncio
@@ -14,11 +18,24 @@ import aiohttp
 import pytest
 
 from app.config import Settings
+from app.core import cache as cache_module
+from app.core.cache import reset_cache
 from app.core.exceptions import WindFlowException
 from app.schemas.plugin_registry import RegistryIndex
 from app.services.plugin_registry_service import PluginRegistryService
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def _fresh_unified_cache():
+    """Cache unifié vierge (mode mémoire forcé) autour de chaque test."""
+    reset_cache()
+    with patch.object(cache_module.settings, "cache_url", None), patch.object(
+        cache_module.settings, "rate_limit_storage_url", None
+    ):
+        yield
+    reset_cache()
 
 
 @pytest.fixture()
@@ -142,7 +159,7 @@ class TestFetchIndex:
     async def test_fetch_index_caches_result(
         self, service: PluginRegistryService, valid_index_json: Dict[str, Any]
     ) -> None:
-        """Second appel utilise le cache (pas de second fetch)."""
+        """Second appel utilise le cache unifié (pas de second fetch)."""
         mock_response = _make_mock_session_response(json_data=valid_index_json)
         mock_session = _make_mock_session(get_return=mock_response)
 
@@ -153,9 +170,14 @@ class TestFetchIndex:
             index1 = await service.fetch_index()
             index2 = await service.fetch_index()
 
-        assert index1 is index2
+        assert index2.version == index1.version
+        assert index2.plugins == index1.plugins
         # Un seul appel HTTP car le second utilise le cache
         assert mock_session.get.call_count == 1
+        # L'entrée est présente dans le cache unifié sous registry:index
+        unified = cache_module._cache
+        assert unified is not None
+        assert "registry:index" in unified._store
 
     @pytest.mark.asyncio
     async def test_fetch_index_cache_expired(
@@ -231,8 +253,8 @@ class TestFetchIndex:
     async def test_fetch_index_fallback_on_error(
         self, service: PluginRegistryService, valid_index_json: Dict[str, Any]
     ) -> None:
-        """Fetch échoue → retourne cache expiré si disponible."""
-        # Premier appel réussi pour remplir le cache
+        """Fetch échoue → last-known-good servi (stale-while-error)."""
+        # Premier appel réussi pour remplir le cache + la copie locale
         mock_response_ok = _make_mock_session_response(json_data=valid_index_json)
         mock_session_ok = _make_mock_session(get_return=mock_response_ok)
 
@@ -242,10 +264,13 @@ class TestFetchIndex:
         ):
             index1 = await service.fetch_index()
 
-        # Invalider le cache (simuler expiration)
-        service._cache_timestamp = 0.0
+        # Simuler l'expiration de l'entrée du cache unifié (TTL écoulé)
+        unified = cache_module._cache
+        assert unified is not None
+        for key, (value, expires_at) in list(unified._store.items()):
+            unified._store[key] = (value, expires_at - 10_000)
 
-        # Second appel échoue → fallback sur cache
+        # Second appel échoue → fallback sur la copie locale
         mock_session_fail = _make_mock_session(
             get_side_effect=aiohttp.ClientError("Connection refused")
         )
@@ -256,7 +281,8 @@ class TestFetchIndex:
         ):
             index2 = await service.fetch_index()
 
-        assert index2 is index1
+        assert index2.version == index1.version
+        assert index2.plugins == index1.plugins
 
 
 # ── Tests list_plugins / get_plugin / search_plugins ────────────────────────
@@ -348,7 +374,7 @@ class TestListAndGetPlugins:
     async def test_invalidate_cache(
         self, service: PluginRegistryService, valid_index_json: Dict[str, Any]
     ) -> None:
-        """Invalidation force un nouveau fetch."""
+        """Invalidation force un nouveau fetch (cache unifié + copie locale)."""
         mock_response = _make_mock_session_response(json_data=valid_index_json)
         mock_session = _make_mock_session(get_return=mock_response)
 
@@ -358,8 +384,8 @@ class TestListAndGetPlugins:
         ):
             await service.fetch_index()
 
-        service._invalidate_cache()
-        assert service._cached_index is None
+        await service._invalidate_cache()
+        assert service._last_good_index is None
 
         with patch(
             "app.services.plugin_registry_service.aiohttp.ClientSession",
@@ -369,3 +395,26 @@ class TestListAndGetPlugins:
 
         # Deux appels car le cache a été invalidé
         assert mock_session.get.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_two_service_instances_share_unified_cache(
+        self, test_settings: Settings, valid_index_json: Dict[str, Any]
+    ) -> None:
+        """STORY-168 : deux instances partagent l'index via le cache unifié."""
+        service_a = PluginRegistryService(test_settings)
+        service_b = PluginRegistryService(test_settings)
+
+        mock_response = _make_mock_session_response(json_data=valid_index_json)
+        mock_session = _make_mock_session(get_return=mock_response)
+
+        with patch(
+            "app.services.plugin_registry_service.aiohttp.ClientSession",
+            return_value=mock_session,
+        ):
+            index_a = await service_a.fetch_index()
+            index_b = await service_b.fetch_index()
+
+        # Un seul appel HTTP : B est servi par le cache partagé (process-local)
+        assert mock_session.get.call_count == 1
+        assert index_b.version == index_a.version
+        assert index_b.plugins == index_a.plugins

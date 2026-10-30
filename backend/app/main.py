@@ -520,6 +520,12 @@ async def lifespan(app: FastAPI):
     await shutdown_event_bus()
     logger.info("✓ Event bus shut down")
 
+    # Close unified cache client (STORY-168 — fermeture idempotente du
+    # client Redis du cache unifié RBAC/registry/LLM ; no-op en mémoire).
+    from .core.cache import shutdown_cache
+
+    await shutdown_cache()
+
     # Cancel scheduler engine task (STORY-160.2 — les exécutions en cours
     # sont annulées proprement et tracées failed dans l'ExecutionStore) ;
     # désabonnement des triggers événement (STORY-160.3) avant l'arrêt

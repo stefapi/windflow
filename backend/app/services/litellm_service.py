@@ -4,13 +4,27 @@ Service LiteLLM pour l'intelligence artificielle multi-provider.
 Supporte OpenAI, Claude (Anthropic), et Ollama local.
 Fournit des fonctionnalités d'optimisation, génération de configurations,
 et diagnostic d'erreurs assisté par IA.
+
+STORY-168 : le cache des réponses repose sur l'interface unifiée
+``core/cache.get_cache()`` — clé ``llm:{sha256(provider:prompt)}``
+(**hash** : jamais de prompt en clair dans la clé, règles 40), TTL
+borné ``LLM_CACHE_TTL`` (300 s) et éviction/purge du préfixe ``llm:``
+(le dict non borné d'origine était une fuite mémoire potentielle).
 """
 
+import hashlib
 import logging
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from ..core.cache import get_cache
+
 logger = logging.getLogger(__name__)
+
+#: Préfixe des clés de cache LLM (convention STORY-168).
+LLM_CACHE_PREFIX: str = "llm:"
+#: TTL du cache des réponses LLM en secondes (constante — YAGNI, pas de setting).
+LLM_CACHE_TTL: int = 300
 
 
 class LLMProvider(str, Enum):
@@ -55,9 +69,6 @@ class LiteLLMService:
         self.ollama_base_url = ollama_base_url
         self.default_provider = default_provider
         self.default_model = default_model
-
-        # Cache des réponses pour optimisation
-        self._cache: Dict[str, Any] = {}
 
         if not enabled:
             logger.info("LiteLLM service is disabled")
@@ -286,11 +297,30 @@ Provide specific, actionable suggestions."""
             L'intégration réelle avec litellm.completion() sera ajoutée
             quand la dépendance litellm sera installée.
         """
-        # Vérification du cache
-        cache_key = f"{provider}:{hash(prompt)}"
-        if cache_key in self._cache:
+        # Vérification du cache unifié (STORY-168) — clé hashée : le
+        # prompt ne figure JAMAIS en clair dans la clé (règles 40).
+        cache_key = self._cache_key(prompt, provider)
+        cache = await get_cache()
+        cached = await cache.get(cache_key)
+        if cached is not None:
             logger.debug(f"Cache hit for prompt with {provider}")
-            return self._cache[cache_key]
+            return dict(cached, cached=True)
+
+        response = await self._generate_llm_response(prompt, provider)
+
+        # Mise en cache (TTL borné — plus de fuite mémoire)
+        await cache.set(cache_key, response, ttl=LLM_CACHE_TTL)
+
+        return response
+
+    async def _generate_llm_response(
+        self, prompt: str, provider: LLMProvider
+    ) -> Dict[str, Any]:
+        """Produit la réponse du LLM (appel réel — simulation en attendant).
+
+        Séparée du chemin cache de ``_call_llm`` pour rester testable et
+        substituable (l'intégration litellm.completion() viendra ici).
+        """
 
         # TODO: Intégrer avec litellm quand disponible
         # import litellm
@@ -301,20 +331,28 @@ Provide specific, actionable suggestions."""
         #     max_tokens=2000
         # )
 
-        # Simulation pour l'instant
+        # Simulation pour l'instant. NB : le prompt ne figure jamais dans
+        # la réponse (donc ni dans la clé ni dans la valeur du cache —
+        # règles 40 / AC 4, l'ancien extrait ``prompt[:100]`` a été retiré).
         logger.info(f"Calling {provider} LLM (simulated)")
         response = {
-            "provider": provider,
+            "provider": provider.value,
             "model": self.default_model,
             "content": "Simulated LLM response - LiteLLM dependency not yet installed",
-            "prompt": prompt[:100] + "...",
             "cached": False,
         }
 
-        # Mise en cache
-        self._cache[cache_key] = response
-
         return response
+
+    @staticmethod
+    def _cache_key(prompt: str, provider: LLMProvider) -> str:
+        """Construit la clé de cache hashée pour un couple (prompt, provider).
+
+        ``llm:{sha256("{provider}:{prompt}")}`` — déterministe (hit stable)
+        sans exposer le prompt en clair dans la clé (règles 40).
+        """
+        digest = hashlib.sha256(f"{provider.value}:{prompt}".encode()).hexdigest()
+        return f"{LLM_CACHE_PREFIX}{digest}"
 
     def _get_model_name(self, provider: LLMProvider) -> str:
         """Retourne le nom du modèle pour le provider."""
@@ -337,9 +375,10 @@ Provide specific, actionable suggestions."""
             }
         ]
 
-    def clear_cache(self) -> None:
-        """Vide le cache des réponses LLM."""
-        self._cache.clear()
+    async def clear_cache(self) -> None:
+        """Vide le cache des réponses LLM (purge du préfixe, best-effort)."""
+        cache = await get_cache()
+        await cache.clear_prefix(LLM_CACHE_PREFIX)
         logger.info("LLM cache cleared")
 
     def get_available_providers(self) -> List[str]:

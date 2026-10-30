@@ -3,8 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
-- [ ] STORY-168 : Cache avec fallback mémoire — interface unique + TTL, Redis sinon mémoire locale (P2-8)
-- [ ] STORY-168 : Cache avec fallback mémoire — interface unique + TTL, Redis sinon mémoire locale (P2-8)
 - [ ] STORY-169 : Plugins — installation réelle — download, checksum SHA-256, extraction, compose up, rollback (P2-3, partie installation)
 - [ ] STORY-170 : Plugins — routes API dynamiques + gates pre-deploy (approve/deny, timeout, Trivy) (P2-3, partie extension)
 - [ ] STORY-171 : Unification de la validation des stacks + bornes numériques `min/max` (P2-6)
@@ -33,7 +31,7 @@ _(vide)_
 
 ## 🚧 REVIEW
 
-_(vide)_
+- [?] STORY-168 : Cache avec fallback mémoire — interface unique + TTL, Redis sinon mémoire locale (P2-8) (EPIC-013)
 
 ## ✅ DONE
 

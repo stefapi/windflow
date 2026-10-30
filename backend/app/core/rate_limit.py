@@ -11,6 +11,15 @@ Trois modes selon la configuration (plus aucune dégradation silencieuse) :
 
 La façade ``conditional_rate_limiter(times, seconds)`` garde une signature
 inchangée pour les ~110 call-sites existants.
+
+STORY-168 — mutualisation avec le cache unifié : l'infrastructure
+« dégradation mémoire + warning unique » est partagée avec
+``core/cache.py`` (``emit_degraded_warning_once``). Le compteur à fenêtre
+glissante ``MemoryRateLimiter`` reste distinct du kv-cache unifié
+(divergence assumée : le rate limiting exige un compteur par fenêtre,
+pas un get/set/delete TTLé) ; le chemin fastapi-limiter est strictement
+inchangé (décision ``rate_limit_enabled`` + ``rate_limit_storage_url``,
+non-régression STORY-102).
 """
 
 import logging
@@ -22,6 +31,7 @@ from fastapi import Request
 from fastapi_limiter.depends import RateLimiter
 
 from ..config import settings
+from .cache import emit_degraded_warning_once
 from .exceptions import RateLimitError
 
 logger = logging.getLogger("windflow.rate_limit")
@@ -119,23 +129,22 @@ class MemoryRateLimiter:
 # (cohérent avec le compteur global de fastapi-limiter en mode Redis).
 _memory_limiter = MemoryRateLimiter()
 
-# Flags « warning unique » (le module peut être consommé avant le lifespan,
-# les décorateurs s'exécutant à l'import des routers).
-_memory_warning_emitted: bool = False
+# Flag « info unique » du mode désactivé (le module peut être consommé avant
+# le lifespan, les décorateurs s'exécutant à l'import des routers). Le
+# warning du mode mémoire est porté par le helper partagé ``core/cache.py``
+# (STORY-168 — plus de double implémentation, un seul record même après
+# appels croisés cache + limiter).
 _disabled_info_emitted: bool = False
 
 
 def _emit_memory_warning_once() -> None:
-    """Émet une seule fois le warning du mode mémoire process-local."""
-    global _memory_warning_emitted
-    if _memory_warning_emitted:
-        return
-    _memory_warning_emitted = True
-    logger.warning(
-        "Rate limiting actif en mode mémoire process-local (RATE_LIMIT_STORAGE_URL "
-        "absent) — les compteurs ne sont PAS partagés entre workers ; définir "
-        "RATE_LIMIT_STORAGE_URL=redis://... pour un comptage distribué"
-    )
+    """Émet le warning mémoire process-local via le helper partagé (STORY-168).
+
+    Délègue à ``core.cache.emit_degraded_warning_once`` — flag unique pour
+    le cache unifié ET le rate limiter, quel que soit le consommateur qui
+    le déclenche en premier.
+    """
+    emit_degraded_warning_once()
 
 
 def _emit_disabled_info_once() -> None:
