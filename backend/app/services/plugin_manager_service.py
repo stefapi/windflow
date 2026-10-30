@@ -41,6 +41,7 @@ from ..schemas.plugin import (
 from ..schemas.plugin_manifest import PluginManifest, PluginType
 from ..schemas.plugin_registry import RegistryPluginEntry
 from .docker_executor import ComposeExecutor
+from .plugin_api_router_service import get_plugin_api_router_service
 from .plugin_dependency_service import PluginDependencyService
 from .plugin_lifecycle_service import PluginLifecycleService
 from .plugin_manifest_service import PluginManifestService
@@ -433,7 +434,7 @@ class PluginManagerService:
 
         # 3. Statut final (arbitrage n°2 — pas d'extension d'enum) :
         #    running pour service/hybrid (conteneur démarré), installed
-        #    pour extension (le chargement relève de STORY-170).
+        #    pour extension.
         plugin.status = (
             PluginStatus.RUNNING.value
             if manifest.type in (PluginType.SERVICE, PluginType.HYBRID)
@@ -441,6 +442,61 @@ class PluginManagerService:
         )
         await db.commit()
         await db.refresh(plugin)
+
+        # 3b. STORY-170.1 : montage des routes API dynamiques du plugin
+        #     (extension/hybrid avec ``extensions.api_module``) — c'est
+        #     le « laisser l'extension chargeable » de 169.3 qui se
+        #     boucle ici. Échec de chargement = 3e cas différé par
+        #     169.3 (AC 2) : démontage immédiat des routes partiellement
+        #     montées PUIS rollback complet DB/FS/conteneur, erreur
+        #     typée ``extension_load_failed`` cause+suggestion.
+        #     Hors process API (CLI, worker, tests service sans app
+        #     FastAPI), le montage est différé au chargement lifespan
+        #     du prochain démarrage (montage process-local, divergence
+        #     n°6 documentée) — l'install reste vert.
+        if self._settings.plugin_dynamic_routes_enabled and manifest.type in (
+            PluginType.EXTENSION,
+            PluginType.HYBRID,
+        ):
+            router_service = get_plugin_api_router_service()
+            try:
+                mounted_routes = router_service.mount_from_manifest(
+                    plugin.name, plugin.manifest_data or {}
+                )
+            except WindFlowException as exc:
+                router_service.unmount(plugin.name)  # best-effort, idempotent
+                residuals = await self._rollback_install(
+                    db,
+                    plugin=plugin,
+                    auto_installed=auto_installed,
+                    extracted_path=extracted_path,
+                    user_id=user_id,
+                )
+                raise self._installation_failed(exc, plugin, residuals) from exc
+            if mounted_routes:
+                logger.info(
+                    "plugin_routes_mounted_after_install",
+                    extra={
+                        "plugin_name": plugin.name,
+                        "route_count": mounted_routes,
+                    },
+                )
+
+        # 3b'. STORY-170.2 : enregistrement de la gate pre-deploy du
+        #      plugin (extension/hybrid avec ``deploy_hooks.pre_deploy``)
+        #      — branchement volet gates du pipeline install. Best-effort
+        #      : un handler introuvable est ignoré avec WARNING
+        #      (l'install reste verte — le redémarrage retentera via le
+        #      chargement lifespan).
+        if self._settings.plugin_gates_enabled and manifest.type in (
+            PluginType.EXTENSION,
+            PluginType.HYBRID,
+        ):
+            from .plugin_gate_service import get_plugin_gate_service
+
+            get_plugin_gate_service().load_gate_from_manifest(
+                plugin.name, plugin.manifest_data or {}
+            )
 
         # 4. Événements plugin.installed — contenu inchangé (bus +
         #    audit router), émis uniquement si hook ET compose ont réussi.
@@ -615,6 +671,41 @@ class PluginManagerService:
         await self._lifecycle_service.execute_lifecycle_transition(
             db, plugin, "uninstall", user_id
         )
+
+        # STORY-170.1 : démontage des routes API dynamiques AVANT la
+        # suppression DB (la route disparaît — AC 1). Best-effort : un
+        # échec ne fait pas échouer l'uninstall (WARNING — la ligne DB
+        # disparaît, le restart nettoie via le chargement lifespan) ;
+        # unmount est idempotent (no-op si les routes ne sont pas
+        # montées dans ce process).
+        try:
+            unmounted = get_plugin_api_router_service().unmount(plugin_name)
+            if unmounted:
+                logger.info(
+                    "plugin_routes_unmounted_on_uninstall",
+                    extra={"plugin_name": plugin_name, "route_count": unmounted},
+                )
+        except Exception as exc:  # pragma: no cover — défense en profondeur
+            logger.warning(
+                "plugin_routes_unmount_failed_on_uninstall",
+                extra={"plugin_name": plugin_name, "error": str(exc)},
+            )
+
+        # STORY-170.2 : retrait de la gate pre-deploy AVANT la
+        # suppression DB (le refus disparaît avec le plugin). Best-effort
+        # : un échec ne fait pas échouer l'uninstall (WARNING — la ligne
+        # DB disparaît, le restart nettoie via le chargement lifespan) ;
+        # unregister est idempotent (no-op si la gate n'est pas
+        # enregistrée dans ce process).
+        try:
+            from .plugin_gate_service import get_plugin_gate_service
+
+            get_plugin_gate_service().unregister(plugin_name)
+        except Exception as exc:  # pragma: no cover — défense en profondeur
+            logger.warning(
+                "plugin_gate_unregister_failed_on_uninstall",
+                extra={"plugin_name": plugin_name, "error": str(exc)},
+            )
 
         await db.delete(plugin)
         await db.commit()
@@ -1198,6 +1289,13 @@ class PluginManagerService:
             "compose_file_invalid": (
                 "corriger le champ compose_file du manifest (chemin relatif "
                 "au répertoire du plugin, sans '..')"
+            ),
+            # STORY-170.1 : échec de chargement de l'extension (3e cas
+            # différé par 169.3, AC 2).
+            "extension_load_failed": (
+                "vérifier que extensions.api_module du manifest désigne un "
+                "fichier .py valide exposant un 'router' créé via "
+                "plugin_router(name) sous /api/v1/plugins/{name}"
             ),
         }
         error_type = str(exc.details.get("error_type") or "")

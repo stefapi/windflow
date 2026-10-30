@@ -37,6 +37,9 @@ logger = logging.getLogger(__name__)
 # Clés autorisées dans le payload ``data`` (liste blanche — rules 40) :
 # identifiants et métriques uniquement, jamais de variables
 # d'environnement, configuration ni secret.
+# STORY-170.2 : ``code``/``plugin``/``reason`` portent la trace typée
+# des refus de gate pre-deploy (code GATE_* + nom de plugin + raison
+# lisible — la raison provient du SDK gate, jamais de secret).
 _ALLOWED_DATA_KEYS: frozenset[str] = frozenset(
     {
         "old_status",
@@ -46,6 +49,9 @@ _ALLOWED_DATA_KEYS: frozenset[str] = frozenset(
         "step",
         "host_id",
         "error",
+        "code",
+        "plugin",
+        "reason",
     }
 )
 

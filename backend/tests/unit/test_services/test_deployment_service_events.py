@@ -208,3 +208,167 @@ class TestUpdateStatusDoubleWrite:
         assert deployment_row is not None
         assert deployment_row.status == DeploymentStatus.PENDING
         assert await _events_of(db_session, deployment_id) == []
+
+
+# ── STORY-170.2 — event_data_extra (gate) + bus deployment.failed ──────────
+
+
+class TestUpdateStatusEventDataExtra:
+    """Paramètre ``event_data_extra`` : fusion dans le data de l'event."""
+
+    @pytest.mark.asyncio
+    async def test_extra_data_merged_in_event(self, db_session):
+        """Les clés gate sont fusionnées dans le data de l'event STORY-167."""
+        deployment = await _seed_deployment(db_session)
+        await DeploymentService.update_status(
+            db_session,
+            deployment.id,
+            DeploymentStatus.FAILED,
+            error_message="gate refused",
+            logs="[ERROR] Déploiement refusé par la gate du plugin plugin-a",
+            event_data_extra={
+                "code": "GATE_DENIED",
+                "plugin": "plugin-a",
+                "reason": "vulnerable image",
+            },
+        )
+        events = await _events_of(db_session, deployment.id)
+        data = events[-1].data or {}
+        assert data.get("code") == "GATE_DENIED"
+        assert data.get("plugin") == "plugin-a"
+        assert data.get("reason") == "vulnerable image"
+        assert data.get("new_status") == "failed"
+
+    @pytest.mark.asyncio
+    async def test_extra_data_none_keeps_default_payload(self, db_session):
+        """Sans event_data_extra : payload identique au comportement 167."""
+        deployment = await _seed_deployment(db_session)
+        await DeploymentService.update_status(
+            db_session, deployment.id, DeploymentStatus.FAILED, logs="[ERROR] x"
+        )
+        events = await _events_of(db_session, deployment.id)
+        data = events[-1].data or {}
+        assert "code" not in data and "plugin" not in data
+
+    @pytest.mark.asyncio
+    async def test_extra_data_sensitive_keys_filtered(self, db_session):
+        """La liste blanche du store filtre toute clé hors périmètre."""
+        deployment = await _seed_deployment(db_session)
+        await DeploymentService.update_status(
+            db_session,
+            deployment.id,
+            DeploymentStatus.FAILED,
+            logs="[ERROR] x",
+            event_data_extra={
+                "code": "GATE_DENIED",
+                "token": "should-not-persist",  # hors liste blanche
+                "variables": {"SECRET": "no"},  # hors liste blanche
+            },
+        )
+        events = await _events_of(db_session, deployment.id)
+        data = events[-1].data or {}
+        assert data.get("code") == "GATE_DENIED"
+        assert "token" not in data
+        assert "variables" not in data
+
+
+class TestUpdateStatusDeploymentFailedBus:
+    """Émission bus ``deployment.failed`` au passage FAILED (170.2 n°2)."""
+
+    @pytest.mark.asyncio
+    async def test_failed_transition_emits_deployment_failed(self, db_session):
+        """Passage FAILED → événement canonique deployment.failed émis."""
+        from unittest.mock import patch as _patch
+
+        from app.core.events import EventType
+
+        deployment = await _seed_deployment(
+            db_session, status=DeploymentStatus.DEPLOYING
+        )
+        emitted: list = []
+
+        class _Bus:
+            async def emit(self, event_type, payload):
+                emitted.append((event_type, payload))
+
+        manager = type("M", (), {})()
+        manager.event_bus = _Bus()
+
+        with _patch(
+            "app.services.deployment_events.get_deployment_events",
+            return_value=manager,
+        ):
+            await DeploymentService.update_status(
+                db_session,
+                deployment.id,
+                DeploymentStatus.FAILED,
+                error_message="boom",
+                event_data_extra={
+                    "code": "GATE_DENIED",
+                    "plugin": "plugin-a",
+                    "reason": "vulnerable image",
+                },
+            )
+
+        assert any(et == EventType.DEPLOYMENT_FAILED for et, _ in emitted)
+        payload = next(p for et, p in emitted if et == EventType.DEPLOYMENT_FAILED)
+        assert payload["deployment_id"] == str(deployment.id)
+        assert payload["code"] == "GATE_DENIED"
+        assert payload["plugin"] == "plugin-a"
+        # Aucun secret dans le payload (rules 40).
+        for forbidden in ("token", "password", "secret", "variables"):
+            assert forbidden not in payload
+
+    @pytest.mark.asyncio
+    async def test_running_transition_does_not_emit_deployment_failed(self, db_session):
+        """Le bus deployment.failed n'est émis QUE au passage FAILED."""
+        from unittest.mock import patch as _patch
+
+        from app.core.events import EventType
+
+        deployment = await _seed_deployment(db_session)
+        emitted: list = []
+
+        class _Bus:
+            async def emit(self, event_type, payload):
+                emitted.append((event_type, payload))
+
+        manager = type("M", (), {})()
+        manager.event_bus = _Bus()
+
+        with _patch(
+            "app.services.deployment_events.get_deployment_events",
+            return_value=manager,
+        ):
+            await DeploymentService.update_status(
+                db_session, deployment.id, DeploymentStatus.RUNNING
+            )
+
+        assert all(et != EventType.DEPLOYMENT_FAILED for et, _ in emitted)
+
+    @pytest.mark.asyncio
+    async def test_bus_emission_failure_never_breaks_update(self, db_session):
+        """Best-effort : un bus en erreur n'altère pas le passage FAILED."""
+        from unittest.mock import patch as _patch
+
+        deployment = await _seed_deployment(
+            db_session, status=DeploymentStatus.DEPLOYING
+        )
+
+        class _BrokenBus:
+            async def emit(self, event_type, payload):
+                raise RuntimeError("bus down")
+
+        manager = type("M", (), {})()
+        manager.event_bus = _BrokenBus()
+
+        with _patch(
+            "app.services.deployment_events.get_deployment_events",
+            return_value=manager,
+        ):
+            updated = await DeploymentService.update_status(
+                db_session, deployment.id, DeploymentStatus.FAILED, logs="[ERROR] x"
+            )
+
+        assert updated is not None
+        assert updated.status == DeploymentStatus.FAILED

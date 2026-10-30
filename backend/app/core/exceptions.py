@@ -388,6 +388,56 @@ class SSHHostKeyMismatchError(WindFlowException):
         )
 
 
+class GateDeniedError(WindFlowException):
+    """Levée par le pipeline quand une gate pre-deploy refuse (STORY-170.2).
+
+    Exception **interne pipeline** : elle est interceptée par le
+    ``except`` existant de ``deploy_stack_async``
+    (:mod:`app.tasks.background_tasks`) qui passe le déploiement en
+    ``FAILED`` via ``DeploymentService.update_status`` — les endpoints ne
+    l'exposent **jamais** en réponse HTTP (un refus de gate s'exprime
+    comme un échec de déploiement classique, spec 11 § Hooks de
+    déploiement). Aucun mapping HTTP dédié n'est donc nécessaire.
+
+    Le ``details`` structure la trace typée consommée par les lignes
+    ``deployment_events`` (STORY-167) et l'événement bus
+    ``deployment.failed`` (STORY-162) :
+
+    - ``error_type``: ``"gate_denied"`` (marqueur du volet) ;
+    - ``code``: ``"GATE_DENIED"`` (refus explicite) |
+      ``"GATE_TIMEOUT"`` (timeout, refus prudent) |
+      ``"gate_error"`` (handler en erreur, refus prudent — divergence
+      n°4) ;
+    - ``plugin``: nom du plugin dont la gate a refusé ;
+    - ``reason``: raison lisible (jamais de secret — rules 40).
+
+    Args:
+        plugin_name: Nom du plugin dont la gate a refusé.
+        code: ``GATE_DENIED`` | ``GATE_TIMEOUT`` | ``gate_error``.
+        reason: Raison lisible du refus (sans donnée sensible).
+    """
+
+    def __init__(
+        self,
+        plugin_name: str,
+        code: str = "GATE_DENIED",
+        reason: str = "",
+    ) -> None:
+        self.plugin_name = plugin_name
+        self.code = code
+        self.reason = reason
+        super().__init__(
+            f"Déploiement refusé par la gate du plugin {plugin_name} "
+            f"({code}) : {reason}",
+            details={
+                "error_type": "gate_denied",
+                "code": code,
+                "plugin": plugin_name,
+                "reason": reason,
+            },
+        )
+
+
 class InvalidEventTypeNameError(WindFlowException):
     """Levée quand un type d'événement hors ``EventType`` est passé au bus.
 
@@ -413,6 +463,7 @@ __all__ = [
     "AuthenticationError",
     "CommandExecutionError",
     "ConflictError",
+    "GateDeniedError",
     "InvalidApiKeyError",
     "InvalidEventTypeNameError",
     "InvalidInputError",

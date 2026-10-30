@@ -604,6 +604,28 @@ class Settings(BaseSettings):
             "désinstallation"
         ),
     )
+    # STORY-170.2 : gates pre-deploy (spec 11 § Hooks de déploiement) —
+    # timeout par défaut et flag d'activation du mécanisme.
+    plugin_gate_timeout_seconds: int = Field(
+        default=300,
+        ge=1,
+        le=3600,
+        description=(
+            "Timeout d'exécution par défaut de chaque gate pre-deploy en "
+            "secondes (spec 11 — surchargeable par manifest via "
+            "deploy_hooks.pre_deploy.timeout) ; au timeout, refus prudent "
+            "GATE_TIMEOUT sauf on_timeout: approve"
+        ),
+    )
+    plugin_gates_enabled: bool = Field(
+        default=True,
+        description=(
+            "Active les gates pre-deploy des plugins extension/hybrid "
+            "(STORY-170.2, spec 11 § Hooks de déploiement) — exécutées "
+            "après résolution d'images, avant création des containers ; "
+            "un refus s'exprime comme un échec de déploiement classique"
+        ),
+    )
 
     # Mode développement sans authentification
     # ⚠️ DANGER : Ne JAMAIS activer en production !

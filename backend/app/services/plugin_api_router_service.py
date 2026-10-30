@@ -86,6 +86,18 @@ class PluginApiRouterService:
         self._app = app
         logger.info("Plugin API router service initialized")
 
+    def reset(self) -> None:
+        """Réinitialise l'état du service (référence app + tracking).
+
+        Usage : isolation des tests (le singleton process-wide survit
+        aux tests) — démonte toutes les routes trackées puis oubli la
+        référence d'app. Le chargement lifespan du prochain démarrage
+        re-montera les plugins installés en base.
+        """
+        for plugin_name in list(self._mounted.keys()):
+            self.unmount(plugin_name)
+        self._app = None
+
     @property
     def mounted_plugins(self) -> List[str]:
         """Noms des plugins dont les routes sont actuellement montées."""
@@ -264,7 +276,10 @@ class PluginApiRouterService:
             raise WindFlowException(
                 f"Nom de plugin invalide pour le montage : {plugin_name!r} "
                 "(kebab-case attendu)",
-                details={"error_type": "invalid_plugin_name", "plugin_name": plugin_name},
+                details={
+                    "error_type": "invalid_plugin_name",
+                    "plugin_name": plugin_name,
+                },
             )
         expected_prefix = f"{PLUGINS_API_PREFIX}/{plugin_name}"
         if router.prefix != expected_prefix:
@@ -299,9 +314,7 @@ class PluginApiRouterService:
         )
 
         added = [
-            route
-            for route in self._app.router.routes
-            if id(route) not in snapshot_ids
+            route for route in self._app.router.routes if id(route) not in snapshot_ids
         ]
         self._mounted[plugin_name] = added
         self._invalidate_openapi()
@@ -332,9 +345,7 @@ class PluginApiRouterService:
         # Mutation en place (slice assignment) : la liste ``routes`` peut
         # être référencée ailleurs (ex. openapi generation en cours).
         self._app.router.routes[:] = [
-            route
-            for route in self._app.router.routes
-            if id(route) not in mounted_ids
+            route for route in self._app.router.routes if id(route) not in mounted_ids
         ]
         del self._mounted[plugin_name]
         self._invalidate_openapi()

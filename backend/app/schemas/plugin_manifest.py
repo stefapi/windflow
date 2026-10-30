@@ -6,9 +6,10 @@ Chaque plugin déclare ses métadonnées, dépendances, ressources et configurat
 via ce manifest standardisé.
 """
 
+import os
 import re
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -247,6 +248,99 @@ class PluginHook(BaseModel):
     on_uninstall: Optional[str] = Field(None, description="Script pré-désinstallation")
 
 
+# ── Deploy hooks / gates pre-deploy (STORY-170.2, spec 11) ──────────────────
+
+#: Nom de fonction python seul (partie après ``:``).
+_FUNCTION_NAME_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+class PluginDeployHookGate(BaseModel):
+    """Gate pre-deploy déclarée dans un manifest (STORY-170.2, spec 11).
+
+    Une gate est un hook **synchrone bloquant** exécuté après résolution
+    d'images, avant création des containers : elle retourne une décision
+    ``approve``/``deny`` (SDK :class:`~app.plugins.gates.GateDecision`).
+    Contrat distinct des hooks ``@on_event`` (asynchrones, non bloquants).
+
+    Comportements par défaut (spec 11 § Hooks de déploiement) :
+
+    - timeout → refus prudent ``GATE_TIMEOUT`` sauf ``on_timeout: approve`` ;
+    - handler en erreur → refus prudent (``gate_error``) ;
+    - aucune gate enregistrée → le déploiement suit son cours.
+    """
+
+    handler: str = Field(
+        ...,
+        description=(
+            "Handler de la gate au format 'module:fonction' — chemin "
+            "relatif .py sous le répertoire du plugin + fonction python "
+            "async (ex. 'gates.py:pre_deploy')"
+        ),
+    )
+    timeout: Optional[int] = Field(
+        None,
+        ge=1,
+        le=3600,
+        description=(
+            "Timeout d'exécution de la gate en secondes (1-3600) — "
+            "surcharge le défaut settings plugin_gate_timeout_seconds "
+            "(spec 11 : 300 s)"
+        ),
+    )
+    on_timeout: Literal["deny", "approve"] = Field(
+        default="deny",
+        description=(
+            "Comportement au timeout — 'deny' (défaut, refus prudent : on "
+            "ne déploie pas ce qu'on n'a pas pu évaluer) ou 'approve' "
+            "(déploiement autorisé malgré le timeout)"
+        ),
+    )
+
+    @field_validator("handler")
+    @classmethod
+    def validate_handler(cls, v: str) -> str:
+        """Valide le format ``module:fonction`` du handler de gate.
+
+        Refus (anti path-traversal, cohérent
+        ``_resolve_hooks_module_path``) : chemins absolus, segments ``..``,
+        absence de séparateur ``:``, nom de fonction python invalide.
+        """
+        v = v.strip()
+        if not v or ":" not in v:
+            raise ValueError(
+                "Le handler de gate doit être au format 'module:fonction' "
+                "(ex. 'gates.py:pre_deploy')"
+            )
+        module_part, _, function_part = v.rpartition(":")
+        if os.path.isabs(module_part) or module_part.startswith("/"):
+            raise ValueError(
+                "Chemin de module absolu interdit dans le handler de gate " f": {v}"
+            )
+        if ".." in module_part.split("/") or ".." in module_part.split(os.sep):
+            raise ValueError(f"Path traversal détecté dans le handler de gate : {v}")
+        if not module_part.endswith(".py"):
+            raise ValueError(
+                "Le module du handler de gate doit être un chemin relatif "
+                f"finissant par .py : {v}"
+            )
+        if not _FUNCTION_NAME_PATTERN.match(function_part):
+            raise ValueError(
+                f"Nom de fonction python invalide dans le handler de gate : {v}"
+            )
+        return v
+
+
+class PluginDeployHooks(BaseModel):
+    """Hooks de déploiement d'un plugin (gates pre-deploy, STORY-170.2)."""
+
+    model_config = {"extra": "ignore"}
+
+    pre_deploy: Optional[PluginDeployHookGate] = Field(
+        None,
+        description="Gate pre-deploy exécutée avant création des containers",
+    )
+
+
 class PluginAutoDetect(BaseModel):
     """Configuration de détection automatique de services existants."""
 
@@ -329,6 +423,14 @@ class PluginManifest(BaseModel):
 
     # Hooks
     hooks: Optional[PluginHook] = Field(None, description="Hooks du cycle de vie")
+
+    # Deploy hooks — gates pre-deploy (STORY-170.2, spec 11 § Hooks de
+    # déploiement). Les gates ne concernent que les types extension/hybrid ;
+    # pour un plugin service la déclaration est ignorée (warning au
+    # chargement — le manifest peut être partagé, pas un rejet).
+    deploy_hooks: Optional[PluginDeployHooks] = Field(
+        None, description="Hooks de déploiement (gates pre-deploy)"
+    )
 
     # Auto-détection
     auto_detect: Optional[PluginAutoDetect] = Field(

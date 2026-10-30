@@ -6,7 +6,7 @@ parsing YAML, et sécurité (path traversal, injection).
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 import pytest
 from pydantic import ValidationError
@@ -14,21 +14,18 @@ from pydantic import ValidationError
 from app.schemas.plugin_manifest import (
     Architecture,
     ConfigFieldType,
-    PluginAutoDetect,
     PluginCategory,
     PluginConfigField,
     PluginDependency,
     PluginDependencyRef,
-    PluginExtension,
-    PluginHook,
+    PluginDeployHookGate,
+    PluginDeployHooks,
     PluginManifest,
     PluginPort,
-    PluginResourceRequirements,
     PluginType,
     PortProtocol,
     parse_dependency_string,
 )
-
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -136,7 +133,10 @@ def valid_traefik_yaml() -> str:
     """Contenu YAML du manifest Traefik exemple."""
     traefik_path = (
         Path(__file__).parent.parent.parent.parent.parent
-        / "dev" / "plugin-examples" / "traefik" / "windflow-plugin.yml"
+        / "dev"
+        / "plugin-examples"
+        / "traefik"
+        / "windflow-plugin.yml"
     )
     if traefik_path.exists():
         return traefik_path.read_text(encoding="utf-8")
@@ -529,3 +529,132 @@ class TestPluginDependencyRef:
         ref = PluginDependencyRef(name="my-plugin")
         assert ref.name == "my-plugin"
         assert ref.version_constraint is None
+
+
+# ── Deploy hooks / gates pre-deploy (STORY-170.2) ───────────────────────────
+
+
+class TestPluginDeployHooks:
+    """Validation des schémas ``deploy_hooks.pre_deploy`` (STORY-170.2)."""
+
+    def test_valid_gate_declaration(self) -> None:
+        """Cas nominal : handler module:fonction + timeout + on_timeout."""
+        gate = PluginDeployHookGate(
+            handler="gates.py:pre_deploy",
+            timeout=120,
+            on_timeout="approve",
+        )
+        assert gate.handler == "gates.py:pre_deploy"
+        assert gate.timeout == 120
+        assert gate.on_timeout == "approve"
+
+    def test_defaults_timeout_none_and_deny(self) -> None:
+        """Valeurs par défaut : timeout settings, on_timeout=deny (prudent)."""
+        gate = PluginDeployHookGate(handler="gates.py:pre_deploy")
+        assert gate.timeout is None
+        assert gate.on_timeout == "deny"
+
+    def test_nested_path_handler_valid(self) -> None:
+        """Chemin relatif imbriqué accepté (sous-répertoire du plugin)."""
+        gate = PluginDeployHookGate(handler="hooks/gates.py:check")
+        assert gate.handler == "hooks/gates.py:check"
+
+    @pytest.mark.parametrize(
+        "bad_handler",
+        [
+            "/abs/path/gates.py:pre_deploy",  # chemin absolu
+            "../escape.py:pre_deploy",  # path traversal
+            "hooks/../escape.py:pre_deploy",  # traversal imbriqué
+            "gates.py",  # sans séparateur :
+            "gates.py:",  # fonction vide
+            "gates.py:1nvalid",  # nom de fonction python invalide
+            "gates.txt:pre_deploy",  # extension non .py
+            ":pre_deploy",  # module vide
+        ],
+    )
+    def test_invalid_handlers_rejected(self, bad_handler: str) -> None:
+        """Sécurité (anti path-traversal) : handlers invalides rejetés."""
+        with pytest.raises(ValidationError):
+            PluginDeployHookGate(handler=bad_handler)
+
+    def test_timeout_bounds_enforced(self) -> None:
+        """Timeout borné 1-3600 (borne le défaut settings)."""
+        with pytest.raises(ValidationError):
+            PluginDeployHookGate(handler="gates.py:pre_deploy", timeout=0)
+        with pytest.raises(ValidationError):
+            PluginDeployHookGate(handler="gates.py:pre_deploy", timeout=3601)
+        gate = PluginDeployHookGate(handler="gates.py:pre_deploy", timeout=3600)
+        assert gate.timeout == 3600
+
+    def test_on_timeout_enum(self) -> None:
+        """on_timeout : Literal["deny", "approve"] uniquement."""
+        with pytest.raises(ValidationError):
+            PluginDeployHookGate(handler="gates.py:pre_deploy", on_timeout="ignore")
+
+    def test_pre_deploy_optional(self) -> None:
+        """PluginDeployHooks sans pre_deploy valide (plugin sans gate)."""
+        hooks = PluginDeployHooks()
+        assert hooks.pre_deploy is None
+
+    def test_manifest_accepts_deploy_hooks(self) -> None:
+        """Le champ deploy_hooks est accepté sur le manifest complet."""
+        data = {
+            "name": "gate-plugin",
+            "version": "1.0.0",
+            "display_name": "Gate Plugin",
+            "description": "A gate plugin",
+            "category": "security",
+            "author": "Test",
+            "license": "MIT",
+            "type": "extension",
+            "architectures": ["linux/amd64"],
+            "extensions": {"api_module": "api.py"},
+            "deploy_hooks": {
+                "pre_deploy": {
+                    "handler": "gates.py:pre_deploy",
+                    "timeout": 60,
+                }
+            },
+        }
+        manifest = PluginManifest(**data)
+        assert manifest.deploy_hooks is not None
+        assert manifest.deploy_hooks.pre_deploy is not None
+        assert manifest.deploy_hooks.pre_deploy.handler == "gates.py:pre_deploy"
+        assert manifest.deploy_hooks.pre_deploy.on_timeout == "deny"
+
+    def test_manifest_default_deploy_hooks_none(self) -> None:
+        """Sans déclaration, deploy_hooks est None (dropped silencieux)."""
+        data = {
+            "name": "plain-plugin",
+            "version": "1.0.0",
+            "display_name": "Plain",
+            "description": "A plain plugin",
+            "category": "other",
+            "author": "Test",
+            "license": "MIT",
+            "type": "service",
+            "architectures": ["linux/amd64"],
+            "compose_file": "docker-compose.yml",
+        }
+        manifest = PluginManifest(**data)
+        assert manifest.deploy_hooks is None
+
+    def test_service_plugin_gate_not_rejected_at_schema_level(self) -> None:
+        """Validation croisée en tâche 5 (service → warning + ignorée,
+        pas un rejet — le manifest peut être partagé) : le schéma seul
+        accepte la déclaration sur un plugin service."""
+        data = {
+            "name": "service-plugin",
+            "version": "1.0.0",
+            "display_name": "Service",
+            "description": "A service plugin",
+            "category": "other",
+            "author": "Test",
+            "license": "MIT",
+            "type": "service",
+            "architectures": ["linux/amd64"],
+            "compose_file": "docker-compose.yml",
+            "deploy_hooks": {"pre_deploy": {"handler": "gates.py:pre_deploy"}},
+        }
+        manifest = PluginManifest(**data)
+        assert manifest.deploy_hooks is not None

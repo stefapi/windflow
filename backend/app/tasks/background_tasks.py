@@ -16,9 +16,115 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, List
+
+if TYPE_CHECKING:
+    from app.plugins.gates import DeployImage  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# STORY-170.2 — helpers gates pre-deploy (import sécurisé, sans secret)
+# ---------------------------------------------------------------------------
+
+
+def _parse_image_reference(reference: str) -> "DeployImage":
+    """Décompose une référence d'image en ``DeployImage`` (divergence n°1).
+
+    Le digest n'est alimenté que s'il est **explicitement fourni** dans
+    la référence (``nginx@sha256:…``) — le pipeline actuel ne résout pas
+    les digests (résolution complète : STORY-174).
+    """
+    from app.plugins.gates import DeployImage
+
+    name = reference
+    digest: str | None = None
+    if "@sha256:" in reference or "@sha512:" in reference:
+        name, _, digest = reference.partition("@")
+    tag: str | None = None
+    if ":" in name:
+        # Attention aux ports dans les registres (registry:5000/img) :
+        # le tag est la dernière partie après « : » sans slash.
+        head, sep, tail = name.rpartition(":")
+        if sep and "/" not in tail:
+            name = head
+            tag = tail
+    return DeployImage(name=name, tag=tag, digest=digest)
+
+
+def _extract_images_from_config(config: Dict[str, Any]) -> List["DeployImage"]:
+    """Extrait les images d'une configuration de déploiement finale.
+
+    - chemin docker : ``image`` du final_config ;
+    - chemin compose : ``services.*.image`` du compose final.
+
+    Payload sans secret (noms d'images uniquement — rules 40).
+    """
+    images: List[DeployImage] = []
+    if not isinstance(config, dict):
+        return images
+    docker_image = config.get("image")
+    if isinstance(docker_image, str) and docker_image:
+        images.append(_parse_image_reference(docker_image))
+    services = config.get("services")
+    if isinstance(services, dict):
+        for svc_cfg in services.values():
+            if not isinstance(svc_cfg, dict):
+                continue
+            svc_image = svc_cfg.get("image")
+            if isinstance(svc_image, str) and svc_image:
+                images.append(_parse_image_reference(svc_image))
+    return images
+
+
+async def _run_pre_deploy_gates(
+    deployment_id: str,
+    stack_name: str,
+    target_id: str,
+    images: List["DeployImage"],
+    user_id: str,
+) -> None:
+    """Exécute les gates pre-deploy ; lève ``GateDeniedError`` sur refus.
+
+    Story 170.2 (AC 1) : point d'insertion unique par chemin — appelé
+    après validation/compose généré, **avant** ``deploy_container`` /
+    ``deploy_compose`` (aucune création de container n'a eu lieu).
+
+    Comportements (spec 11) : aucune gate enregistrée → retour
+    immédiat (déploiement nominal inchangé) ; refus (deny/timeout/erreur)
+    → :class:`GateDeniedError` portant code/plugin/raison — interceptée
+    par le ``except`` existant qui passe le déploiement en ``FAILED``
+    (échec classique, tracé STORY-167 + bus STORY-162). Le flag
+    ``plugin_gates_enabled`` court-circuite l'exécution (tests/CLI).
+    """
+    from app.config import settings  # type: ignore[import-not-found]
+    from app.core.exceptions import GateDeniedError  # type: ignore[import-not-found]
+    from app.plugins.gates import DeployContext
+    from app.services.plugin_gate_service import (  # type: ignore[import-not-found]
+        get_plugin_gate_service,
+    )
+
+    if not settings.plugin_gates_enabled:
+        return
+
+    gate_service = get_plugin_gate_service()
+    if gate_service.registered_count == 0:
+        return  # aucune gate — le core ne bloque jamais par défaut
+
+    ctx = DeployContext(
+        deployment_id=deployment_id,
+        target={"id": target_id, "name": stack_name},
+        images=list(images),
+        trigger="manual",  # scheduler/webhook/batch : futures stories
+    )
+    outcome = await gate_service.run_gates(ctx)
+    if not outcome.approved:
+        raise GateDeniedError(
+            plugin_name=outcome.plugin_name or "unknown",
+            code=outcome.code or "GATE_DENIED",
+            reason=outcome.reason or "refus sans raison fournie",
+        )
 
 
 async def deploy_stack_async(
@@ -55,6 +161,7 @@ async def deploy_stack_async(
     """
     from sqlalchemy import select
 
+    from app.core.exceptions import GateDeniedError  # type: ignore[import-not-found]
     from app.database import AsyncSessionLocal  # type: ignore[import-not-found]
     from app.enums.target import TargetType  # type: ignore[import-not-found]
     from app.models.deployment import (  # type: ignore[import-not-found]
@@ -201,6 +308,17 @@ async def deploy_stack_async(
                 )
                 await emit_progress(45, "validated", TOTAL_STEPS_DOCKER)
 
+                # 3b'. STORY-170.2 : gates pre-deploy — après résolution
+                # d'images (final_config), AVANT création du container.
+                # Refus → GateDeniedError → except existant → FAILED.
+                await _run_pre_deploy_gates(
+                    deployment_id=deployment_id,
+                    stack_name=stack.name,
+                    target_id=target_id,
+                    images=_extract_images_from_config(final_config),
+                    user_id=user_id,
+                )
+
                 # 4. Déployer le container
                 container_name = deployment_name
                 await DeploymentService.update_status(
@@ -328,6 +446,16 @@ async def deploy_stack_async(
                 )
                 await emit_progress(65, "compose_generated", TOTAL_STEPS_COMPOSE)
 
+                # 4b'. STORY-170.2 : gates pre-deploy — après génération
+                # du compose (images finales), AVANT deploy_compose.
+                await _run_pre_deploy_gates(
+                    deployment_id=deployment_id,
+                    stack_name=stack.name,
+                    target_id=target_id,
+                    images=_extract_images_from_config(final_compose),
+                    user_id=user_id,
+                )
+
                 # 5. Déployer avec docker-compose
                 project_name = deployment_name
                 await DeploymentService.update_status(
@@ -375,6 +503,27 @@ async def deploy_stack_async(
     except Exception as e:
         logger.error(f"[FALLBACK-ASYNCIO] Déploiement {deployment_id} échoué: {e}")
 
+        # STORY-170.2 : refus de gate — l'exception typée porte
+        # code/plugin/raison ; le message de log et l'enrichissement de
+        # l'event STORY-167 (data ``code``/``plugin``/``reason``) sont
+        # alimentés depuis ``details`` (jamais de secret — rules 40).
+        # L'émission bus ``deployment.failed`` au passage FAILED est
+        # portée par ``update_status`` (divergence n°2 — STORY-162).
+        gate_extra: Dict[str, Any] | None = None
+        error_logs = f"[ERROR] Erreur lors du déploiement (asyncio fallback): {e}"
+        if isinstance(e, GateDeniedError):
+            details = getattr(e, "details", {}) or {}
+            gate_extra = {
+                "code": details.get("code", "GATE_DENIED"),
+                "plugin": details.get("plugin", "unknown"),
+                "reason": details.get("reason", ""),
+            }
+            error_logs = (
+                f"[ERROR] Déploiement refusé par la gate du plugin "
+                f"{gate_extra['plugin']} : {gate_extra['reason']} "
+                f"(code {gate_extra['code']})"
+            )
+
         # Mettre à jour le statut en FAILED
         async with AsyncSessionLocal() as db:
             await DeploymentService.update_status(
@@ -382,7 +531,8 @@ async def deploy_stack_async(
                 deployment_id,
                 DeploymentStatus.FAILED,
                 error_message=str(e),
-                logs=f"[ERROR] Erreur lors du déploiement (asyncio fallback): {str(e)}",
+                logs=error_logs,
+                event_data_extra=gate_extra,
             )
 
         # Re-raise l'exception

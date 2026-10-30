@@ -690,6 +690,7 @@ class DeploymentService:
         error_message: Optional[str] = None,
         logs: Optional[str] = None,
         user_id: Optional[str] = None,
+        event_data_extra: Optional[dict[str, Any]] = None,
     ) -> Optional[Deployment]:
         """
         Met à jour le statut d'un déploiement avec logs et erreurs optionnels.
@@ -702,6 +703,10 @@ class DeploymentService:
             error_message: Message d'erreur optionnel
             logs: Logs à ajouter (append)
             user_id: ID de l'utilisateur (pour événements WebSocket)
+            event_data_extra: Données additionnelles non sensibles fusionnées
+                dans le ``data`` de l'event STORY-167 (STORY-170.2 — ex.
+                ``code``/``plugin``/``reason`` d'un refus de gate ; la
+                liste blanche du store filtre toute clé sensible)
 
         Returns:
             Deployment mis à jour ou None si non trouvé
@@ -780,6 +785,16 @@ class DeploymentService:
             event_data["container_id"] = deployment.container_id
         if deployment.deploy_duration_seconds is not None:
             event_data["duration_seconds"] = deployment.deploy_duration_seconds
+        # STORY-170.2 : enrichissement typé du refus de gate (le store
+        # filtre via sa liste blanche — seules les clés non sensibles
+        # passent, rules 40).
+        if event_data_extra:
+            event_data.update(event_data_extra)
+        # STORY-170.2 : enrichissement typé du refus de gate (le store
+        # filtre via sa liste blanche — seules les clés non sensibles
+        # passent, rules 40).
+        if event_data_extra:
+            event_data.update(event_data_extra)
 
         await DeploymentEventStore().append_event(
             db,
@@ -844,6 +859,32 @@ class DeploymentService:
             )
         except Exception as e:
             logger.error(f"Erreur lors de l'émission de l'événement de statut: {e}")
+
+        # STORY-170.2 (divergence n°2 — comble le trou STORY-162) : au
+        # passage FAILED, émettre l'événement canonique
+        # ``deployment.failed`` — best-effort post-commit (n'altère
+        # jamais le statut), payload limité à IDs/noms/code (rules 40 —
+        # jamais de secrets) enrichi ``code``/``plugin``/``reason`` si le
+        # refus vient d'une gate (``event_data_extra``).
+        if status == DeploymentStatus.FAILED:
+            try:
+                from .deployment_events import get_deployment_events as _gde
+
+                failed_payload: dict[str, Any] = {
+                    "deployment_id": str(deployment_id),
+                    "name": deployment.name,
+                    "error_message": error_message,
+                }
+                if event_data_extra:
+                    failed_payload.update(event_data_extra)
+                await _gde().event_bus.emit(
+                    EventType.DEPLOYMENT_FAILED,
+                    failed_payload,
+                )
+            except Exception as e:
+                logger.error(
+                    f"Erreur lors de l'émission de l'événement deployment.failed: {e}"
+                )
 
         # STORY-162 (AC 3) : au succès d'un déploiement de stack, émettre
         # aussi l'événement canonique ``stack.deployed`` — best-effort

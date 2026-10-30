@@ -423,11 +423,17 @@ def _resolve_hooks_module_path(plugin_name: str, hooks_module: str) -> str:
 
     # Normaliser la notation dotted (hooks.main → hooks/main.py) —
     # uniquement si le chemin n'est pas déjà en notation fichier
-    # (sinon "main.py" deviendrait "main/py").
+    # (sinon "main.py" deviendrait "main/py"). Un nom SANS séparateur et
+    # TERMINANT par .py est déjà un fichier (api.py, main.py — usage
+    # réel des manifests STORY-170.1) : il ne doit pas passer par la
+    # conversion dotted (qui produirait "api/py.py").
     if "/" not in hooks_module and os.sep not in hooks_module:
-        normalized = hooks_module.replace(".", os.sep)
-        if not normalized.endswith(".py"):
-            normalized = normalized + ".py"
+        if hooks_module.endswith(".py"):
+            normalized = hooks_module
+        else:
+            normalized = hooks_module.replace(".", os.sep)
+            if not normalized.endswith(".py"):
+                normalized = normalized + ".py"
     else:
         normalized = hooks_module
         if not normalized.endswith(".py"):

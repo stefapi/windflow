@@ -154,6 +154,53 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("○ Plugin hooks disabled (PLUGIN_HOOKS_ENABLED=false)")
 
+    # Plugin dynamic API routes (STORY-170.1 — spec 11 § Extension de
+    # l'API) : monte les routes /api/v1/plugins/{name}/… des plugins
+    # extension/hybrid installés (extensions.api_module). Best-effort :
+    # un échec de plugin ne compromet jamais le startup (WARNING) ;
+    # montages process-local (divergence n°6 — single-worker, arbitrage
+    # F1), le démonstrateur hooks démo n'est pas étendu ici.
+    if settings.plugin_dynamic_routes_enabled:
+        try:
+            from .services.plugin_api_router_service import (
+                get_plugin_api_router_service,
+            )
+
+            plugin_router_service = get_plugin_api_router_service()
+            plugin_router_service.initialize(app)
+            mounted_routers = await plugin_router_service.load_installed_routers()
+            logger.info(
+                f"✓ Plugin dynamic routes enabled ({mounted_routers} "
+                "plugin router(s) mounted)"
+            )
+        except Exception as e:
+            logger.warning(f"✗ Plugin dynamic routes could not load: {e}")
+    else:
+        logger.info(
+            "○ Plugin dynamic routes disabled (PLUGIN_DYNAMIC_ROUTES_ENABLED=false)"
+        )
+
+    # Plugin pre-deploy gates (STORY-170.2 — spec 11 § Hooks de
+    # déploiement) : charge les gates deploy_hooks.pre_deploy des
+    # plugins extension/hybrid installés dans le registre process-local.
+    # Best-effort : un échec de plugin ne compromet jamais le startup
+    # (WARNING) ; registre process-local (divergence n°6 — single-worker,
+    # arbitrage F1), aucune gate chargée = déploiements inchangés (le
+    # core ne bloque jamais par défaut).
+    if settings.plugin_gates_enabled:
+        try:
+            from .services.plugin_gate_service import get_plugin_gate_service
+
+            gate_service = get_plugin_gate_service()
+            loaded_gates = await gate_service.load_installed_gates()
+            logger.info(
+                f"✓ Plugin gates enabled ({loaded_gates} plugin gate(s) loaded)"
+            )
+        except Exception as e:
+            logger.warning(f"✗ Plugin gates could not load: {e}")
+    else:
+        logger.info("○ Plugin gates disabled (PLUGIN_GATES_ENABLED=false)")
+
     # Initialize rate limiter — 3 états observables (STORY-102 / P0-3) :
     # Redis distribué, fallback mémoire process-local, ou désactivé.
     if settings.rate_limit_enabled and settings.rate_limit_storage_url:

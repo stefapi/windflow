@@ -3,9 +3,6 @@
 ## 📋 BACKLOG
 
 ### EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
-- [ ] STORY-170.2 : Plugins — gates pre-deploy : SDK, `PluginGateService` timeout/multi-gates et insertion pipeline avant création des containers (P2-3, partie extension — STORY-170 découpée)
-- [ ] STORY-170.3 : Plugins — plugin Trivy de référence : gate `never` réelle + bloquant simulé, matrice de critères et conventions (P2-3, partie extension — STORY-170 découpée — dépend de 170.2)
-- [ ] STORY-171 : Unification de la validation des stacks + bornes numériques `min/max` (P2-6)
 - [ ] STORY-172 : Observabilité Prometheus réelle — `/metrics`, métriques business, dashboards alimentés (P2-9)
 - [ ] STORY-173 : `/compute` élargi — `browse` paginé et `prune` protégé, rapprochement `/compute`↔`/docker` (P2-11 — F3)
 - [ ] STORY-174 : Socle `WorkloadAdapter` + adapter Docker + recreate sécurisé (P2-12 + P2-13 — F7)
@@ -24,7 +21,7 @@
 ## 🏗️ IN PROGRESS
 
 ### EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
-- [~] STORY-170.1 : Plugins — routes API dynamiques `/api/v1/plugins/{name}/…` : montage/démontage, RBAC core et OpenAPI (P2-3, partie extension — STORY-170 découpée)
+- [~] STORY-171 : Unification de la validation des stacks + bornes numériques `min/max` (P2-6)
 
 ## 🚫 BLOCKED
 
@@ -36,6 +33,9 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] STORY-170.1 : Plugins — routes API dynamiques `/api/v1/plugins/{name}/…` : montage/démontage, RBAC core et OpenAPI (P2-3, partie extension — STORY-170 découpée) (EPIC-013)
+- [x] STORY-170.2 : Plugins — gates pre-deploy : SDK, `PluginGateService` timeout/multi-gates et insertion pipeline avant création des containers (P2-3, partie extension — STORY-170 découpée) (EPIC-013)
+- [x] STORY-170.3 : Plugins — plugin Trivy de référence : gate `never` réelle + bloquant simulé, matrice de critères et conventions (P2-3, partie extension — STORY-170 découpée) (EPIC-013)
 - [x] STORY-169.4 : Plugins — CONFIGURE chiffré et durcissement transverse (P2-3, partie configuration — STORY-169 découpée) (EPIC-013) — livré (chiffrement au repos C12 des ``config_values`` password via SecretManager (helpers modèle « clé conservée, valeur chiffrée » pattern deployment.py, aucune migration, double lecture legacy) : install chiffre avant écriture, configure merge + round-trip masque ``********``/``***`` ignoré + legacy re-chiffrés à l'écriture ; injection compose ``_build_injection_env_vars`` valeurs RÉELLES déchiffrées en mémoire (jamais loggées) + erreur typée ``config_decryption_failed`` → rollback 169.3 ; hooks conservent le plan masqué ``***`` (stdout persisté) ; ``PluginResponse`` masque password + tout token Fernet (défense en profondeur) ; RL install (5, 60) spec 09, audit ``plugin.configured`` clés uniquement, arbitrage RBAC ``require_admin``=Admin+ documenté ; +24 tests (9 modèle + 9 manager + 6 API, test 169.3 mis à jour divergence n°4), couverture models/plugin **100 %**, schemas **99 %**, manager **95 %**, lifecycle **92 %** ; **2849 unit passed 0 failed**, black/isort/flake8 périmètre 0 erreur, bandit/mypy 0 nouvelle erreur (B104 + HookExecutionResult préexistants prouvés par stash))
 
 - [x] STORY-169.3 : Plugins — INSTALL réel : hooks lifecycle, `docker compose up` du service et rollback complet (P2-3, partie orchestration — STORY-169 découpée) (EPIC-013) — livré (manager orchestrateur du pipeline INSTALL réel : hook `on_install` PUIS `docker compose up -d` service/hybrid via `ComposeExecutor` (project `windflow-plugin-{name}`, env `PLUGIN_CONFIG_*` passwords masqués, sortie docker tronquée 500 c.), `_resolve_compose_file` sécurisé anti path-traversal (`compose_file_invalid`/`compose_file_missing` cause+suggestion), rollback complet ordonné (conteneur `remove_compose(remove_volumes=True)` idempotent même sur échec hook → `on_uninstall` best-effort → `rmtree` branche source uniquement → purge DB explicite `PluginHookLog`+plugin+dépendances auto-installées, résidus cumulés `rollback_residuals`), statuts arbitrés `running` service/hybrid / `installed` extension sans extension d'enum ni migration, journal `auto_installed` pour le rollback DB, erreur finale cause+suggestion par `error_type` avec `rollback_performed` ; +22 tests (20 manager + 2 API), couverture module **91 %** ; **2826 unit passed 0 failed**, flake8/isort/black/bandit/mypy périmètre 0 erreur ; divergence documentée : router plugins relance sans `details` → `error.details.error_type` non exposé en HTTP (piste story suivante), test adapté à l'enveloppe réelle)
