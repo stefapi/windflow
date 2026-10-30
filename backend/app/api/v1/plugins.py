@@ -208,15 +208,28 @@ async def install_plugin(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
-    _rate_limit=Depends(conditional_rate_limiter(10, 60)),
+    # STORY-169.4 (arbitrage n°3) : RL (5, 60) aligné spec 09 §789 —
+    # « /plugins/install : 5 requêtes/min » (l'installation reste une
+    # opération coûteuse : download + checksum + compose up).
+    _rate_limit=Depends(conditional_rate_limiter(5, 60)),
 ) -> PluginActionResponse:
     """Installe un nouveau plugin (asynchrone via BackgroundTasks).
 
-    ## Access Control (STORY-122.5)
+    ## Access Control (STORY-122.5 / STORY-169.4 arbitrage n°1)
 
     Nécessite le rôle global ``admin`` minimum (matrice spec 08 :
     « Installer/Désinstaller/Configurer un plugin » = Admin+ — remplace le
-    marqueur intérimaire ``require_superuser``).
+    marqueur intérimaire ``require_superuser``). L'AC 5 de STORY-169
+    mentionne « superadmin » : interprété comme **Admin+** (spec 08) —
+    ``require_admin`` couvre admin et super_admin (hiérarchie rbac.py),
+    divergence d'AC documentée (STORY-169.4).
+
+    ## Sécurité (STORY-169.4 / C12)
+
+    Les valeurs password de ``config_values`` sont chiffrées au repos
+    (SecretManager) et masquées dans les réponses ; l'injection au
+    conteneur compose se fait avec les valeurs réelles déchiffrées en
+    mémoire (jamais loggées).
     """
     # STORY-121.3 : organisation primaire de l'utilisateur
     primary_org = await UserOrganizationService.get_primary_organization_id(
@@ -332,6 +345,7 @@ async def update_plugin(
     },
 )
 async def configure_plugin(
+    request: Request,
     plugin_id: str,
     config_data: PluginConfigureRequest,
     db: AsyncSession = Depends(get_db),
@@ -340,10 +354,20 @@ async def configure_plugin(
 ) -> PluginResponse:
     """Configure un plugin existant.
 
-    ## Access Control (STORY-122.5)
+    ## Access Control (STORY-122.5 / STORY-169.4 arbitrage n°1)
 
-    Nécessite le rôle global ``admin`` minimum (matrice spec 08 — remplace
-    le marqueur intérimaire ``require_superuser``).
+    Nécessite le rôle global ``admin`` minimum (matrice spec 08 :
+    « Installer/Désinstaller/Configurer un plugin » = Admin+). L'AC 5 de
+    STORY-169 mentionne « superadmin » : interprété comme **Admin+**
+    (spec 08) — ``require_admin`` couvre admin et super_admin
+    (hiérarchie rbac.py), divergence d'AC documentée (STORY-169.4).
+
+    ## Sécurité (STORY-169.4 / C12)
+
+    Les valeurs password reçues sont chiffrées avant écriture en base
+    (SecretManager, clés conservées lisibles) ; renvoyer le masque
+    ``********`` d'une valeur existante conserve le secret stocké
+    (round-trip masque). La réponse masque les champs password.
     """
     logger.info(
         "configure_plugin_requested",
@@ -358,6 +382,18 @@ async def configure_plugin(
             plugin_id=plugin_id,
             config_data=config_data,
             user_id=current_user.id,
+        )
+        # STORY-169.4 (arbitrage n°7) : audit de la reconfiguration —
+        # details = noms des clés uniquement, JAMAIS de valeurs (rules 40 :
+        # modification de config critique).
+        await AuditService.log_from_request(
+            request,
+            "plugin.configured",
+            user=current_user,
+            organization_id=plugin.organization_id,
+            resource_type="plugin",
+            resource_id=str(plugin.id),
+            details={"keys": sorted(config_data.config_values.keys())},
         )
         return PluginResponse.model_validate(plugin)
     except WindFlowException as exc:

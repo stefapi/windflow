@@ -18,7 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import settings
 from ..core.events import EventType
 from ..core.exceptions import WindFlowException
-from ..models.plugin import Plugin, PluginStatus
+from ..models.plugin import (
+    Plugin,
+    PluginStatus,
+    decrypt_config_values_from_storage,
+)
 from ..models.plugin_hook_log import PluginHookLog
 from ..schemas.plugin_hook_log import HookExecutionResult
 
@@ -536,6 +540,51 @@ class PluginLifecycleService:
                 env_vars[env_key] = "***"
             else:
                 env_vars[env_key] = str(value)
+
+        return env_vars
+
+    @staticmethod
+    def _build_injection_env_vars(plugin: Plugin) -> Dict[str, str]:
+        """Construit les variables d'environnement d'injection au compose.
+
+        STORY-169.4 (divergence n°4) : contrairement à
+        ``_build_safe_env_vars`` (hooks — passwords masqués ``***`` car
+        les sorties des scripts sont persistées dans
+        ``PluginHookLog.stdout/stderr``), ce plan d'injection fournit les
+        valeurs RÉELLES déchiffrées en mémoire au conteneur
+        (``docker compose up``, spec 11 étape 4 « injecter la
+        configuration dans le container »). Les tokens Fernet de
+        ``config_values`` sont déchiffrés ici ; les valeurs legacy en
+        clair sont relues telles quelles (double lecture).
+
+        Sécurité (rules 40) : les valeurs déchiffrées vivent en mémoire
+        uniquement — ne JAMAIS les logger ni les écrire (deploy_compose
+        n'imprime pas l'env, l'erreur compose n'embarque que la sortie
+        docker tronquée).
+
+        Args:
+            plugin: Le plugin concerné (config_values possiblement
+                chiffrée).
+
+        Returns:
+            Dictionnaire des variables d'environnement avec valeurs
+            réelles (non masquées).
+
+        Raises:
+            SecretDecryptionError: Si un ciphertext de configuration est
+                illisible (mauvaise clé maîtresse ou donnée corrompue) —
+                remontée au manager qui la convertit en erreur typée
+                ``config_decryption_failed`` avant rollback.
+        """
+        env_vars: Dict[str, str] = {
+            "PLUGIN_NAME": plugin.name,
+            "PLUGIN_VERSION": plugin.version,
+            "PLUGIN_ID": plugin.id,
+        }
+
+        decrypted = decrypt_config_values_from_storage(plugin.config_values or {})
+        for key, value in decrypted.items():
+            env_vars[f"PLUGIN_CONFIG_{key.upper()}"] = str(value)
 
         return env_vars
 

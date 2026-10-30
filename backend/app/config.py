@@ -533,6 +533,26 @@ class Settings(BaseSettings):
         description="Timeout HTTP pour fetch l'index du registre en secondes",
     )
 
+    # === Plugin Package (STORY-169.1 — download sécurisé) ===
+    plugin_package_max_size_mb: int = Field(
+        default=200,
+        ge=1,
+        description=(
+            "Taille maximale en Mo d'un package plugin téléchargé — borne "
+            "le streaming download et la taille d'extraction autorisée "
+            "(défaut : 200 Mo, packages {name}-{version}.tar.gz spec 12)"
+        ),
+    )
+    plugin_package_download_timeout: int = Field(
+        default=60,
+        ge=1,
+        description=(
+            "Timeout total en secondes du téléchargement d'un package "
+            "plugin (cohérent avec plugin_registry_timeout=10 × marge "
+            "download volumineux)"
+        ),
+    )
+
     # === Plugins Hooks ===
     plugins_base_dir: str = Field(
         default="./data/plugins/",
@@ -558,6 +578,30 @@ class Settings(BaseSettings):
         description=(
             "Charge le plugin démonstrateur app/plugins/examples/ au startup "
             "(désactivé par défaut — aucun comportement ajouté en production)"
+        ),
+    )
+    # STORY-170.1 : feature flag du montage dynamique des routes API des
+    # plugins (spec 11 § Extension de l'API).
+    plugin_dynamic_routes_enabled: bool = Field(
+        default=True,
+        description=(
+            "Active le montage dynamique des routes API des plugins "
+            "extension/hybrid sous /api/v1/plugins/{name}/… (STORY-170.1, "
+            "spec 11 § Extension de l'API) — routes préfixées, protégées "
+            "JWT + RBAC core, documentées OpenAPI et démontées à la "
+            "désinstallation"
+        ),
+    )
+    # STORY-170.1 : feature flag du montage dynamique des routes API des
+    # plugins (spec 11 § Extension de l'API).
+    plugin_dynamic_routes_enabled: bool = Field(
+        default=True,
+        description=(
+            "Active le montage dynamique des routes API des plugins "
+            "extension/hybrid sous /api/v1/plugins/{name}/… (STORY-170.1, "
+            "spec 11 § Extension de l'API) — routes préfixées, protégées "
+            "JWT + RBAC core, documentées OpenAPI et démontées à la "
+            "désinstallation"
         ),
     )
 

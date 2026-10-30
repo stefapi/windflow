@@ -419,7 +419,6 @@ class TestPluginSecurity:
 
 # ── Manifest avec dépendances pour les tests ─────────────────────────────────
 
-
 MANIFEST_WITH_DEPENDENCIES = """
 name: plugin-with-deps
 version: 1.0.0
@@ -457,7 +456,6 @@ dependencies:
   conflicts:
     - test-plugin
 """
-
 
 # ── Tests install avec dépendances ───────────────────────────────────────────
 
@@ -655,3 +653,329 @@ extensions:
         """Plugin inexistant → 404."""
         response = await admin_client.get("/api/v1/plugins/nonexistent-id/dependencies")
         assert response.status_code == 404
+
+
+# ── Tests POST /plugins/install — pipeline réel (STORY-169.3) ───────────────
+
+
+class TestInstallPluginRealPipeline:
+    """Extension légère STORY-169.3 : le contrat 202 est préservé avec
+    le pipeline réel (manager mocké au niveau module — les 401/403/422/
+    409 existants restent inchangés)."""
+
+    @pytest.mark.asyncio
+    async def test_install_service_returns_202_with_running_status(
+        self, admin_client: AsyncClient, monkeypatch
+    ) -> None:
+        """Cas nominal : plugin service installé (manager mocké
+        retournant un plugin running) → 202, status "running", message
+        inchangé — le contrat 202 est préservé avec le pipeline réel."""
+        from unittest.mock import AsyncMock
+
+        fake_plugin = Plugin(
+            id="fake-plugin-id",
+            name="redis-service",
+            version="1.0.0",
+            display_name="Redis",
+            description="Redis service",
+            category="database",
+            type="service",
+            status="running",
+            manifest_data={"name": "redis-service"},
+            config_values={},
+            organization_id="org-id",
+            installed_by="user-id",
+        )
+        manager_mock = AsyncMock()
+        manager_mock.install_plugin = AsyncMock(return_value=fake_plugin)
+        monkeypatch.setattr("app.api.v1.plugins._plugin_service", manager_mock)
+        # Audit best-effort : patché pour ne pas dépendre de la table
+        # audit_logs dans ce test de contrat.
+        monkeypatch.setattr(
+            "app.api.v1.plugins.AuditService.log_from_request", AsyncMock()
+        )
+
+        response = await admin_client.post(
+            "/api/v1/plugins/install",
+            json={"source": "redis-service"},
+        )
+
+        assert response.status_code == 202
+        data = unwrap(response)
+        assert data["status"] == "running"
+        assert data["message"] == "Plugin 'redis-service' installé avec succès"
+        assert "id" in data
+
+    @pytest.mark.asyncio
+    async def test_install_failure_returns_error_envelope_with_cause(
+        self, admin_client: AsyncClient, monkeypatch
+    ) -> None:
+        """Manager lève WindFlowException(compose_up_failed,
+        rollback_performed) → enveloppe erreur spec 09 avec message
+        explicite (cause + suggestion).
+
+        Divergence documentée (STORY-169.3) : le router intercepte la
+        WindFlowException et la relance sans ``details`` —
+        ``error.details.error_type`` n'est donc pas exposé en HTTP sans
+        modification du router (hors périmètre, router inchangé) ; on
+        vérifie l'enveloppe existante + le message riche cause/suggestion.
+        """
+        from unittest.mock import AsyncMock
+
+        from app.core.exceptions import WindFlowException
+
+        manager_mock = AsyncMock()
+        manager_mock.install_plugin = AsyncMock(
+            side_effect=WindFlowException(
+                "Installation de 'redis-service' annulée — rollback effectué. "
+                "Cause : Échec du déploiement Docker Compose : pull access denied. "
+                "Suggestion : vérifier l'image et les ressources Docker.",
+                details={
+                    "error_type": "compose_up_failed",
+                    "plugin_name": "redis-service",
+                    "rollback_performed": True,
+                },
+            )
+        )
+        monkeypatch.setattr("app.api.v1.plugins._plugin_service", manager_mock)
+
+        response = await admin_client.post(
+            "/api/v1/plugins/install",
+            json={"source": "redis-service"},
+        )
+
+        assert response.status_code == 500
+        error = response.json()["error"]
+        assert error["code"] == "INTERNAL_ERROR"
+        assert "rollback effectué" in error["message"]
+        assert "Cause" in error["message"]
+        assert "Suggestion" in error["message"]
+
+
+# ── Tests STORY-169.4 : masquage at-rest + durcissement transverse ──────────
+
+
+class TestConfigureEncryptionAndHardening:
+    """STORY-169.4 : masquage réponses + at-rest + RL (5,60) + audit
+    configure sans valeurs + SSRF ré-verifié.
+
+    Non-régression RBAC (arbitrage n°1) : les 403 existants
+    (test_install_plugin_returns_403_for_non_superuser,
+    test_configure_plugin_returns_403_for_non_superuser) et le 401
+    restent verts — require_admin conservé (Admin+ spec 08, AC mère
+    « superadmin » interprété Admin+).
+    """
+
+    @pytest.fixture()
+    def _password_plugin(self, db_session, test_organization, test_superuser):
+        """Plugin chiffrable en base (password au manifest)."""
+        manifest = {
+            "name": "api-crypto-plugin",
+            "version": "1.0.0",
+            "display_name": "API Crypto",
+            "description": "Plugin with password config",
+            "category": "other",
+            "type": "extension",
+            "config": [
+                {"key": "api_key", "label": "API Key", "type": "password"},
+                {"key": "host", "label": "Host", "type": "string"},
+            ],
+        }
+        plugin = Plugin(
+            name="api-crypto-plugin",
+            version="1.0.0",
+            display_name="API Crypto",
+            description="Plugin with password config",
+            category="other",
+            type="extension",
+            status=PluginStatus.INSTALLED.value,
+            manifest_data=manifest,
+            config_values={},
+            organization_id=test_organization.id,
+            installed_by=test_superuser.id,
+        )
+        return plugin
+
+    @pytest.mark.asyncio
+    async def test_configure_response_masks_password_and_db_is_encrypted(
+        self,
+        admin_client: AsyncClient,
+        db_session,
+        _password_plugin,
+    ) -> None:
+        """AC 1 : PUT configure avec password → 200, réponse masquée
+        ******** ; oracle at-rest : SELECT brut → token gAAAA ≠ clair."""
+        import json as _json
+
+        from sqlalchemy import text as _text
+
+        db_session.add(_password_plugin)
+        await db_session.commit()
+        await db_session.refresh(_password_plugin)
+
+        response = await admin_client.put(
+            f"/api/v1/plugins/{_password_plugin.id}/configure",
+            json={"config_values": {"api_key": "top-secret", "host": "db.local"}},
+        )
+
+        assert response.status_code == 200
+        data = unwrap(response)
+        assert data["config_values"]["api_key"] == "********"
+        assert data["config_values"]["host"] == "db.local"
+
+        result = await db_session.execute(
+            _text("SELECT config_values FROM plugins WHERE id = :pid"),
+            {"pid": _password_plugin.id},
+        )
+        raw = result.scalar_one()
+        stored = _json.loads(raw) if isinstance(raw, str) else raw
+        assert isinstance(stored["api_key"], str)
+        assert stored["api_key"].startswith("gAAAA")
+        assert stored["api_key"] != "top-secret"
+        assert stored["host"] == "db.local"
+
+    @pytest.mark.asyncio
+    async def test_get_plugin_never_exposes_fernet_token(
+        self,
+        admin_client: AsyncClient,
+        db_session,
+        _password_plugin,
+    ) -> None:
+        """Défense en profondeur (T5) : GET détail — aucune valeur de
+        config_values ne commence par gAAAA ; response.text ne contient
+        ni le secret ni le token."""
+        from app.core.secret_manager import get_secret_manager
+
+        token = get_secret_manager().encrypt("hidden-secret")
+        _password_plugin.config_values = {"api_key": token, "host": "h"}
+        db_session.add(_password_plugin)
+        await db_session.commit()
+        await db_session.refresh(_password_plugin)
+
+        response = await admin_client.get(f"/api/v1/plugins/{_password_plugin.id}")
+
+        assert response.status_code == 200
+        data = unwrap(response)
+        values = [v for v in data["config_values"].values() if isinstance(v, str)]
+        assert all(not v.startswith("gAAAA") for v in values)
+        assert "hidden-secret" not in response.text
+        assert token not in response.text
+
+    @pytest.mark.asyncio
+    async def test_configure_returns_422_on_invalid_body(
+        self, admin_client: AsyncClient, db_session, _password_plugin
+    ) -> None:
+        """Validation : body sans config_values → 422 (matrice verbe PUT)."""
+        db_session.add(_password_plugin)
+        await db_session.commit()
+
+        response = await admin_client.put(
+            f"/api/v1/plugins/{_password_plugin.id}/configure",
+            json={},
+        )
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_install_returns_429_after_5_requests_in_window(
+        self, admin_client: AsyncClient, monkeypatch
+    ) -> None:
+        """Durcissement (AC 3, spec 09 §789) : 6e POST /plugins/install
+        dans la fenêtre → 429 avec Retry-After: 60 (RL (5, 60)).
+
+        Note d'implémentation : la fabrique ``conditional_rate_limiter``
+        fige le mode à l'import du router — avec le ``.env`` de dev local
+        (``RATE_LIMIT_ENABLED=false``) la dépendance en place est un
+        no-op et le 429 end-to-end ne peut jamais se déclencher. Le test
+        override donc la dépendance ``_rate_limit`` de la route par un
+        vrai limiteur mémoire (5, 60) fraîchement construit
+        (settings patchés enabled, sans URL) — le chemin HTTP 429 est
+        ainsi exercé de façon déterministe quel que soit l'environnement.
+        """
+        from app.core.rate_limit import conditional_rate_limiter
+        from app.main import app
+
+        # Dépendance _rate_limit réellement câblée sur la route install.
+        route = next(
+            r
+            for r in app.routes
+            if getattr(r, "path", None) == "/api/v1/plugins/install"
+        )
+        dep_call = next(
+            d.call for d in route.dependant.dependencies if d.name == "_rate_limit"
+        )
+
+        # Fabriquer un limiteur mémoire effectif : patch des settings du
+        # module rate_limit uniquement, restauré par monkeypatch.
+        monkeypatch.setattr("app.core.rate_limit.settings.rate_limit_enabled", True)
+        monkeypatch.setattr("app.core.rate_limit.settings.rate_limit_storage_url", None)
+        fresh_limiter = conditional_rate_limiter(5, 60)
+        app.dependency_overrides[dep_call] = fresh_limiter
+        try:
+            statuses = []
+            for _ in range(6):
+                response = await admin_client.post(
+                    "/api/v1/plugins/install",
+                    json={"manifest_yaml": VALID_MANIFEST_YAML},
+                )
+                statuses.append(response.status_code)
+
+            assert 429 not in statuses[:5]  # les 5 premiers passent
+            assert statuses[5] == 429
+            assert response.headers.get("Retry-After") == "60"
+        finally:
+            app.dependency_overrides.pop(dep_call, None)
+
+    @pytest.mark.asyncio
+    async def test_install_rejects_non_https_source_end_to_end(
+        self, admin_client: AsyncClient, monkeypatch
+    ) -> None:
+        """SSRF (AC 3, ré-verifié 169.1) : source http:// → jamais 202,
+        download_and_extract jamais appelé (spy)."""
+        from unittest.mock import AsyncMock
+
+        download_spy = AsyncMock()
+        monkeypatch.setattr(
+            "app.services.plugin_manager_service.PluginPackageService"
+            ".download_and_extract",
+            download_spy,
+        )
+
+        response = await admin_client.post(
+            "/api/v1/plugins/install",
+            json={"source": "http://registry.evil/x.tar.gz"},
+        )
+
+        assert response.status_code != 202
+        download_spy.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_configure_is_audited_without_values(
+        self, admin_client: AsyncClient, db_session, _password_plugin, monkeypatch
+    ) -> None:
+        """Audit (AC 2/arbitrage n°7) : plugin.configured journalisé avec
+        noms de clés uniquement — aucune valeur de config dans l'appel."""
+        from unittest.mock import AsyncMock
+
+        db_session.add(_password_plugin)
+        await db_session.commit()
+        await db_session.refresh(_password_plugin)
+
+        audit_spy = AsyncMock()
+        monkeypatch.setattr(
+            "app.api.v1.plugins.AuditService.log_from_request", audit_spy
+        )
+
+        response = await admin_client.put(
+            f"/api/v1/plugins/{_password_plugin.id}/configure",
+            json={"config_values": {"api_key": "audit-secret"}},
+        )
+
+        assert response.status_code == 200
+        audit_spy.assert_awaited_once()
+        call = audit_spy.await_args
+        assert call.args[1] == "plugin.configured"
+        details = call.kwargs.get("details") or {}
+        assert details.get("keys") == ["api_key"]
+        dumped = str(call.args) + str(call.kwargs)
+        assert "audit-secret" not in dumped

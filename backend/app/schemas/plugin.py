@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from ..core.secret_manager import SecretManager
 from .plugin_manifest import ConfigFieldType
 
 # ── Regex patterns ──────────────────────────────────────────────────────────
@@ -34,7 +35,9 @@ class PluginInstallRequest(BaseModel):
     source: Optional[str] = Field(
         None,
         description="URL ou identifiant registre du plugin",
-        json_schema_extra={"example": "https://registry.windflow.io/plugins/traefik/1.0.0"},
+        json_schema_extra={
+            "example": "https://registry.windflow.io/plugins/traefik/1.0.0"
+        },
     )
     manifest_yaml: Optional[str] = Field(
         None,
@@ -97,11 +100,19 @@ class PluginUpdateRequest(BaseModel):
 
 
 class PluginConfigureRequest(BaseModel):
-    """Schema pour la configuration d'un plugin."""
+    """Schema pour la configuration d'un plugin.
+
+    Les valeurs des champs ``password`` sont chiffrées au repos
+    (STORY-169.4) ; renvoyer le masque ``********`` d'une valeur
+    existante conserve le secret stocké (round-trip masque).
+    """
 
     config_values: Dict[str, Any] = Field(
         ...,
-        description="Valeurs de configuration à appliquer",
+        description=(
+            "Valeurs de configuration à appliquer (valeurs password "
+            "chiffrées au repos, masquées dans les réponses)"
+        ),
         json_schema_extra={"example": {"port": 9090, "api_key": "secret"}},
     )
 
@@ -141,41 +152,55 @@ class PluginResponse(PluginSummaryResponse):
     Les champs de type password sont masqués dans config_values.
     """
 
-    manifest_data: Dict[str, Any] = Field(
-        ..., description="Manifest validé complet"
-    )
+    manifest_data: Dict[str, Any] = Field(..., description="Manifest validé complet")
     config_values: Dict[str, Any] = Field(
         default_factory=dict,
-        description="Valeurs de configuration (champs password masqués)",
+        description=(
+            "Valeurs de configuration (champs password chiffrés au repos, "
+            "masqués dans les réponses)"
+        ),
     )
     installed_by: Optional[str] = Field(
         None, description="ID de l'utilisateur ayant installé le plugin"
     )
-    organization_id: str = Field(
-        ..., description="ID de l'organisation propriétaire"
-    )
+    organization_id: str = Field(..., description="ID de l'organisation propriétaire")
 
     @model_validator(mode="after")
     def mask_password_fields(self) -> "PluginResponse":
-        """Masque les valeurs des champs de type password dans config_values."""
-        if not self.config_values or not self.manifest_data:
+        """Masque les valeurs sensibles de ``config_values``.
+
+        Deux plans complémentaires :
+
+        1. champs déclarés ``password`` au manifest → masque ``********``
+           (l'UI revoie ce masque au configure, ignoré par le round-trip
+           masque STORY-169.4 arbitrage n°5) ;
+        2. défense en profondeur (STORY-169.4) : TOUTE valeur qui
+           ressemble à un token Fernet (préfixe ``gAAAA``) est masquée,
+           même sans déclaration password au manifest — un ciphertext ne
+           doit jamais apparaître dans une réponse API.
+        """
+        if not self.config_values:
             return self
 
-        config_fields = self.manifest_data.get("config", [])
         password_keys: set[str] = set()
+        if self.manifest_data:
+            config_fields = self.manifest_data.get("config", [])
+            for field_def in config_fields:
+                if (
+                    isinstance(field_def, dict)
+                    and field_def.get("type") == ConfigFieldType.PASSWORD.value
+                ):
+                    key = field_def.get("key")
+                    if key:
+                        password_keys.add(key)
 
-        for field_def in config_fields:
-            if isinstance(field_def, dict) and field_def.get("type") == ConfigFieldType.PASSWORD.value:
-                key = field_def.get("key")
-                if key:
-                    password_keys.add(key)
-
-        if password_keys:
-            masked = dict(self.config_values)
-            for key in password_keys:
-                if key in masked:
-                    masked[key] = "********"
-            self.config_values = masked
+        masked = dict(self.config_values)
+        for key, value in masked.items():
+            if key in password_keys or (
+                isinstance(value, str) and SecretManager.is_encrypted(value)
+            ):
+                masked[key] = "********"
+        self.config_values = masked
 
         return self
 
@@ -213,9 +238,7 @@ class PluginDependencyRefResponse(BaseModel):
     version_constraint: Optional[str] = Field(
         None, description="Contrainte de version (ex: >=1.0.0)"
     )
-    installed: bool = Field(
-        False, description="Si la dépendance est installée"
-    )
+    installed: bool = Field(False, description="Si la dépendance est installée")
     installed_version: Optional[str] = Field(
         None, description="Version installée (si installée)"
     )
@@ -245,9 +268,7 @@ class PluginDependencyTreeResponse(BaseModel):
     optional: List[PluginDependencyRefResponse] = Field(
         default_factory=list, description="Dépendances optionnelles"
     )
-    conflicts: List[str] = Field(
-        default_factory=list, description="Plugins en conflit"
-    )
+    conflicts: List[str] = Field(default_factory=list, description="Plugins en conflit")
     dependents: List[str] = Field(
         default_factory=list, description="Plugins qui dépendent de celui-ci"
     )

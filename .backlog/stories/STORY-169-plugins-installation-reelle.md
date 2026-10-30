@@ -1,8 +1,17 @@
-# STORY-169 : Plugins — installation réelle — téléchargement du package, vérification checksum SHA-256, extraction, `docker compose up` du service et rollback sur échec (P2-3, partie installation — axes B5, C12)
+# STORY-169 : [ABANDONED] Plugins — installation réelle — téléchargement du package, vérification checksum SHA-256, extraction, `docker compose up` du service et rollback sur échec (P2-3, partie installation — axes B5, C12)
 
-**Statut :** TODO
+**Statut :** ABANDONED
 **Epic Parent :** EPIC-013 — P2 : Conformité fonctionnelle (remédiation backend)
 **Item plan :** P2-3 partie installation (axes B5, C12, rapports §10/§7) — ampleur **XL** (prévoir sous-découpe possible, plage réservée STORY-175-199)
+
+> **Note de clôture — découpe `split-story` (2026-10-30, mode proactif)** : cette story a été **découpée à l'issue de la phase d'analyse** (`analyse-story`), qui a conclu à une **complexité excessive** (ampleur XL confirmée : le pipeline spec 11 traverse **4 modules faiblement couplés** — package/download, validation, compose+rollback, chiffrement config — et dépasse largement le seuil de ~8 tâches majeures ; verdict §Sous-stories ci-dessous). Conformément au pipeline (règles 01 §5.1, étape 2b), elle est refermée `ABANDONED` selon le pattern STORY-160/164/166 (Règle d'Or : fichier conservé pour l'historique) et **remplacée sans perte d'information** par 4 sous-stories autonomes :
+>
+> - [STORY-169.1](STORY-169.1-plugins-package-download-checksum-extraction.md) — Package : download sécurisé **HTTPS** (validation SSRF), **checksum SHA-256 obligatoire** (rejet sur écart, source `RegistryPluginEntry`), extraction tar.gz **anti path-traversal/symlink/bombe** vers `plugins_base_dir/{name}/` + settings nouveaux (`plugin_package_max_size_mb`, `plugin_package_download_timeout`) (couvre l'**AC 1, partie DOWNLOAD** ; divergences n°8/9)
+> - [STORY-169.2](STORY-169.2-plugins-validation-manifest-arch-ressources.md) — **VALIDATE complet** : manifest (service existant à consommer), architecture locale, ressources (**arbitrage psutil absent** : `shutil.disk_usage`/`/proc/meminfo`/skip-warning), dépendances + conflits (déjà en place — nothing to redo), **version WindFlow minimale** (évaluation à écrire) ; rejet **sans résidu filesystem** (couvre l'**AC 1, partie VALIDATE** ; divergence n°6)
+> - [STORY-169.3](STORY-169.3-plugins-install-compose-hooks-rollback.md) — **INSTALL réel + rollback** : orchestration du pipeline dans `PluginManagerService`, hook `on_install` (lifecycle existant), **`docker compose up -d`** service/hybrid via `ComposeExecutor` (project/network/volumes conventionnés `windflow-plugin-{name}*`), statut `running` + événement `plugin.installed`/audit existants, **rollback complet DB + filesystem + conteneur** à chaque étage (messages explicites **cause + suggestion**), arbitrage statuts intermédiaires (couvre les **AC 2 et AC 3** ; divergences n°3/5/7)
+> - [STORY-169.4](STORY-169.4-plugins-configure-chiffrement-durcissement.md) — **CONFIGURE chiffré + durcissement transverse (C12)** : `config_values` chiffrées au repos (SecretManager STORY-103) pour type `password`/`encrypted`, déchiffrement **en mémoire** à l'injection compose, masquage réponses couvert par tests, **alignement RL (5, 60)** (spec 09), **arbitrage RBAC** (recommandation : conserver `require_admin`), tests de sécurité transverses (couvre les **AC 4 et AC 5** ; divergences n°1/2/4)
+>
+> Le contexte technique, les 9 divergences/arbitrages, les dépendances vérifiées et les jalons de tests documentés ci-dessous ont été **intégralement répartis** dans ces sous-stories — **se reporter à elles pour le détail d'implémentation** (tâches ordonnées via `analyse-story` puis exécution `treat-story`). Ordre recommandé : **169.1 → 169.2 → 169.3, avec 169.4 parallélisable avec 169.3** (intégration finale à l'étage CONFIGURE avec l'orchestration posée en 169.3).
 
 ## Description
 
@@ -12,7 +21,37 @@ En tant qu'administrateur WindFlow, je veux que l'installation d'un plugin effec
 
 ## Contexte technique
 
-*(à remplir par analyse-story)*
+> Rédigé par `analyse-story` (2026-10-30) — exploration code + specs, sans implémentation.
+
+### Patterns existants à réutiliser (socle sain confirmé)
+
+- **Registre** : [`plugin_registry_service.py`](../../backend/app/services/plugin_registry_service.py:33) — fetch index + cache unifié STORY-168 (clé `registry:index`, stale-while-error) ; [`plugin_registry.py`](../../backend/app/schemas/plugin_registry.py:32) : `RegistryPluginEntry` expose déjà `download_url` (**validé HTTPS-only**) et `checksum_sha256` (**validé hex 64**) → source de vérité du checksum pour l'installation depuis `source` (URL/identifiant registre).
+- **Validation manifest** : [`plugin_manifest_service.py`](../../backend/app/services/plugin_manifest_service.py:21) (`yaml.safe_load`, erreurs typées `validation`/`yaml_syntax`/`value`) + [`plugin_manifest.py`](../../backend/app/schemas/plugin_manifest.py:262) : kebab-case anti path-traversal, semver, `compose_file` obligatoire si type service/hybrid, `windflow_version` au format contrainte — la validation de structure existe déjà intégralement.
+- **Dépendances** : [`plugin_dependency_service.py`](../../backend/app/services/plugin_dependency_service.py) — `check_install_dependencies` + `resolve_transitive_dependencies` déjà appelés dans `install_plugin` (conflits + version mismatches couverts) ; l'étape VALIDATE dépendances est donc **déjà en place**, il manque arch/ressources/version WindFlow.
+- **Hooks lifecycle** : [`plugin_lifecycle_service.py`](../../backend/app/services/plugin_lifecycle_service.py:40) — `execute_lifecycle_transition` (timeout 30 s, anti path-traversal `_resolve_script_path`, `PluginHookLog` persisté, passwords masqués `***` dans l'env des scripts) branché sur install/uninstall/configure — **à conserver tel quel**, le pipeline doit juste l'appeler au bon étage.
+- **Compose** : [`ComposeExecutor`](../../backend/app/services/docker_executor.py:786) fournit déjà `deploy_compose` (up -d, timeout 300 s), `get_compose_status`, `stop_compose`, `remove_compose(remove_volumes)` ; [`DockerComposeService`](../../backend/app/services/docker_compose_service.py:21) ajoute la substitution de variables (TemplateRenderer Jinja2, `generate_password`/`generate_secret`) et `generate_compose_file` — **aucune réécriture Docker nécessaire**, y compris pour le rollback (`stop_compose`/`remove_compose`).
+- **Chiffrement (STORY-103 fusionné)** : [`secret_manager.py`](../../backend/app/core/secret_manager.py:40) (AES-256/Fernet, `is_encrypted()` détecte le préfixe `gAAAA`) — patterns d'usage directement transposables à `config_values` : [`host.py`](../../backend/app/models/host.py:82) (dict JSON chiffré + double lecture legacy), [`ssh_key.py`](../../backend/app/models/ssh_key.py:124), [`deployment.py`](../../backend/app/models/deployment.py:70) (chiffré au repos, déchiffré en mémoire).
+- **Audit (STORY-125.2 fusionné)** : [`plugins.py`](../../backend/app/api/v1/plugins.py:243) appelle déjà `AuditService.log_from_request("plugin.installed", ...)` après install succès et `"plugin.removed"` (org capturée avant suppression) — **AC 4 audit déjà satisfait**, à préserver lors du re-routage vers le vrai pipeline.
+- **Bus (STORY-162 DONE)** : `_publish_to_bus` best-effort émet déjà `plugin.installed`/`plugin.removed`/`plugin.configured`/`plugin.error` — **AC 2 événement déjà satisfait** côté émission.
+- **Endpoint** : [`POST /api/v1/plugins/install`](../../backend/app/api/v1/plugins.py:205) (202, `require_admin`, RL `conditional_rate_limiter(10, 60)`, `BackgroundTasks` injecté mais non utilisé — pipeline synchrone) ; `PluginInstallRequest` supporte déjà `source` mais la branche lève [`source_not_supported`](../../backend/app/services/plugin_manager_service.py:148) : **c'est la porte d'entrée naturelle du pipeline réel** (install `source` → download ; install `manifest_yaml` → chemin local sans package, à documenter).
+- **Settings** : `plugins_base_dir` (`./data/plugins/`, cible d'extraction spec § Stockage), `plugin_registry_url/timeout/cache_ttl` existants dans [`config.py`](../../backend/app/config.py:522) ; il manque taille max package + timeout download (à ajouter).
+- **Modèle** : [`plugin.py`](../../backend/app/models/plugin.py:21) — `PluginStatus` (installed/installing/running/stopped/updating/error), `config_values` JSON en clair (C12), `manifest_data` JSON, colonne statut `String(20)` → **extension d'enum rétrocompatible sans migration** (`downloading`/`validating` tiennent en 20 chars).
+
+### Divergences / points d'attention détectés (à arbitrer dans les sous-stories)
+
+1. **RBAC** : AC 5 écrit « superadmin » ; code actuel = `require_admin` (matrice spec 08 : « Installer un plugin » = Admin+) et [`test_plugins.py`](../../backend/tests/unit/test_api/test_plugins.py:199) sécurise déjà 403 non-admin. → Recommandation : **conserver `require_admin`** (conforme spec 08) et documenter la divergence d'AC.
+2. **Rate limit** : spec 09 §789 = 5/min ; code = `(10, 60)`. → À aligner sur `(5, 60)`.
+3. **Statuts pipeline** : la statechart spec 11 (Downloading/Validating/Installing/Configuring/Starting) dépasse l'enum actuel. Options : étendre l'enum (sans migration, colonne String) ou réutiliser `INSTALLING` seul. Arbitrage en sous-story orchestration.
+4. **Masquage hooks vs injection compose** : `_build_safe_env_vars` masque les passwords (`***`) — correct pour scripts/logs, mais l'étage CONFIGURE devra injecter les **valeurs réelles déchiffrées en mémoire** via `env_vars` de `deploy_compose` (jamais loggées) ; le masquage `********` de [`PluginResponse`](../../backend/app/schemas/plugin.py:158) est déjà en place côté réponses.
+5. **Unicité globale du nom** : `plugins.name unique=True` alors que le modèle est multi-tenant (`organization_id`) — deux orgs ne peuvent pas installer le même plugin ; comportement existant, à documenter (ne pas modifier dans cette story).
+6. **Vérification ressources** : `psutil` **absent** des dépendances → utiliser `shutil.disk_usage` + `/proc/meminfo` (ou `docker info`), ou skip avec warning si indisponible. Arbitrage en sous-story VALIDATE.
+7. **Rollback DB** : `install_plugin` commit à plusieurs reprises (dépendances auto-installées puis plugin) → le pipeline devra journaliser ce qui a été créé par la transaction pour pouvoir tout supprimer (plugin + dépendances auto-installées) en cas d'échec hook/compose.
+8. **Extraction sécurisée** : `tarfile` stdlib — protection obligatoire path-traversal (membres `..`/absolus) + symlinks + bombe (limite taille/nombre de membres) ; nouveau code donc nouvelle surface — couverture tests de sécurité requise.
+9. **SSRF download** : le schéma est déjà contraint HTTPS côté registre, mais le downloader doit revalider (pas de redirection vers IP privée, host contrôlé) — OWASP SSRF.
+
+### Architecture
+
+API-first respecté (endpoint existant, `PluginActionResponse` 202 inchangé — le contrat API n'est pas modifié, seul le comportement backend devient réel). Modular monolith : nouveau service `PluginPackageService` (download/checksum/extraction, un service = une classe) + `PluginManagerService` étendu en orchestrateur du pipeline 1-5 ; router `plugins.py` inchangé (un router = un domaine).
 
 Éléments existants à réutiliser / contraintes :
 - **Socle sain** (garde-fou §2.G) : le registre plugins (lecture, cache TTL via STORY-168 — [`plugin_registry_service.py:23`](../../backend/app/services/plugin_registry_service.py:23)) et la validation de manifest ([`plugin_manifest_service.py:21`](../../backend/app/services/plugin_manifest_service.py:21)) sont des bases saines à conserver ;
@@ -46,18 +85,40 @@ En tant qu'administrateur WindFlow, je veux que l'installation d'un plugin effec
 - **STORY-103** (SecretManager — chiffrement `plugin_configs`, dépendance explicite du plan P2-3).
 - Idéalement après **STORY-125** (audit branché — risque §7.3) ; interagit avec **STORY-163** (hooks événements au chargement), **STORY-170** (routes dynamiques, partie extension du pipeline), **STORY-162** (événements `plugin.*`), **STORY-168** (cache registry) et **STORY-173** (volumes `windflow-plugin-*` épargnés par le prune).
 
+**Statuts vérifiés par l'analyse (2026-10-30)** :
+
+- **STORY-103** : ✅ fusionné — [`secret_manager.py`](../../backend/app/core/secret_manager.py:40) opérationnel (hosts/ssh_keys/deployments l'utilisent déjà) → dépendance satisfaite.
+- **STORY-125** : ✅ fusionné — `AuditService.log_from_request` déjà branché sur install/uninstall ([`plugins.py:243`](../../backend/app/api/v1/plugins.py:243)) → la condition « audit branché avant » du risque §7.3 est remplie.
+- **STORY-162** : ✅ DONE — `_publish_to_bus` émet déjà les événements `plugin.*`.
+- **STORY-163** : ✅ DONE — `plugin_hooks_service` + settings `plugin_hooks_enabled`/timeout en place.
+- **STORY-168** : le registry service consomme déjà le cache unifié (`core/cache`, clé `registry:index`) — pas de dépendance bloquante.
+- **STORY-170** : dépend **de la présente story** (partie extension du pipeline — chargement `api_module`/`hooks_module`) → explicitement hors périmètre 169, le pipeline s'arrête à « laisser l'extension chargeable ».
+- **STORY-173** : convention documentaire uniquement (volumes `windflow-plugin-{name}-data` épargnés par prune — aucun code ici).
+- **Services externes** : Docker Engine (compose CLI via `ComposeExecutor`), réseau sortant HTTPS vers `plugin_registry_url`. Aucun Redis/Vault requis.
+- **Migrations DB** : **aucune requise a priori** — statuts en `String(20)` (extension d'enum rétrocompatible), `config_values` JSON conserve des tokens Fernet comme `host.credentials`. Hypothèse à reconfirmer par sous-story si installation d'un historique d'installation persistant est arbitré.
+
 ## Sous-stories
 
-*(section réservée — story XL : `analyse-story` devra évaluer une découpe, ex. download+validation+extraction / compose+hooks+rollback ; plage réservée STORY-175-199)*
+> **Verdict `analyse-story` (2026-10-30) : complexité XL confirmée → découpe recommandée** (pattern proactif STORY-160/164/166). Le pipeline spec 11 traverse 4 modules faiblement couplés (package/download, validation, compose+rollback, chiffrement config) et dépasse largement le seuil de ~8 tâches majeures ; les tâches détaillées ne sont **pas** rédigées dans cette story (voir sections réservées ci-dessous) et devront l'être dans chaque sous-story après exécution de `split-story`.
+
+**Découpe exécutée — STORY-169.1 → 169.4** (suffixes, pattern 160/164/166 — fichiers créés dans `.backlog/stories/` le 2026-10-30 ; l'alternative « plage réservée STORY-175-199 » n'a pas été retenue au profit des suffixes, convention en vigueur depuis STORY-131/160) :
+
+- **STORY-169.1 — Package plugins : download sécurisé + checksum SHA-256 + extraction** : nouveau service `PluginPackageService` (validation SSRF : HTTPS obligatoire, host contrôlé, pas de redirection vers IP privée ; téléchargement streaming borné ; **checksum obligatoire, rejet sur écart** ; extraction tar.gz anti path-traversal/symlink/bombe vers `plugins_base_dir/{name}/`) + settings nouveaux (`plugin_package_max_size_mb`, `plugin_package_download_timeout`) + tests sécurité dédiés. Couvre AC 1 (partie DOWNLOAD).
+- **STORY-169.2 — VALIDATE complet** : architecture locale (platform module), ressources (sans psutil — `shutil.disk_usage`/`/proc/meminfo` ou skip warning, arbitrage), dépendances (existant — nothing to redo), conflits, `windflow_version` minimale (parsing contrainte déjà validé, évaluation à écrire) ; **rejet sans résidu filesystem** (nettoyage extraction si échec ultérieur). Couvre AC 1 (partie VALIDATE).
+- **STORY-169.3 — INSTALL réel : compose up + hooks + rollback complet** : orchestration du pipeline dans `PluginManagerService` (source registre → 169.1 → 169.2 → `docker compose up -d` service/hybrid via `ComposeExecutor`, project `windflow-plugin-{name}`, network/volumes conventionnés → hook `on_install` (lifecycle existant) → statut `running` + événement `plugin.installed`/audit existants) ; **rollback DB + filesystem + conteneur** sur échec à chaque étage (message explicite cause + suggestion) ; statuts intermédiaires (arbitrage enum). Couvre AC 2 + AC 3.
+- **STORY-169.4 — CONFIGURE chiffré + durcissement transverse (C12)** : `config_values` chiffrées au repos (SecretManager) pour type `password`/`encrypted`, déchiffrement en mémoire à l'injection compose, masquage réponses existant à couvrir par tests, alignement RL 5/min (spec 09) + arbitrage RBAC admin/superadmin (recommandation : `require_admin`), tests sécurité transverses. Couvre AC 4 + AC 5.
+
+**Ordre interne** : 169.1 → 169.2 → 169.3 → 169.4 (169.4 spécifiable en parallèle de 169.3 ; 169.2 dépend de 169.1 pour l'extraction testable).
 
 ## État d'avancement technique
 
-*(à remplir par analyse-story)*
+- 2026-10-30 (`analyse-story`) : exploration terminée — `## Contexte technique` et `## Dépendances` renseignés (statuts des dépendances vérifiés dans le code) ; **complexité XL confirmée → découpe recommandée en STORY-169.1→.4** (voir « Sous-stories ») ; les sections « Tâches d'implémentation détaillées » et « Tests à écrire » sont volontairement laissées en attente de la découpe (protocole : pas de tâches sur une story à découper). Statut inchangé (`TODO`), kanban inchangé, aucun fichier de code modifié.
+- 2026-10-30 (`split-story`, mode proactif) : **découpe exécutée** conformément au verdict — création de STORY-169.1 (download/checksum/extraction), 169.2 (VALIDATE), 169.3 (INSTALL+rollback), 169.4 (CONFIGURE chiffré+durcissement) ; AC et contexte technique **intégralement répartis** (AC1 → .1+.2 ; AC2/3 → .3 ; AC4/5 → .4), divergences réparties (n°8/9 → .1 ; n°6 → .2 ; n°3/5/7 → .3 ; n°1/2/4 → .4) ; story refermée `ABANDONED` (Règle d'Or : fichier conservé) ; epic EPIC-013 et kanban synchronisés ; aucun fichier de code modifié — le suivi se fait dans les sous-stories.
 
 ## Tâches d'implémentation détaillées
 
-*(à remplir par analyse-story)*
+> ⚠️ **Non rédigées ici — story XL à découper** (protocole `analyse-story` : au-delà de ~8 tâches majeures traversant plusieurs modules indépendants, déléguer à `split-story` au lieu de continuer). Les tâches détaillées seront rédigées dans **STORY-169.1 → 169.4** après exécution de `split-story` (voir « Sous-stories » pour le périmètre de chacune).
 
 ## Tests à écrire
 
-*(à remplir par analyse-story)*
+> ⚠️ À rédiger **par sous-story** après découpe (protocole ci-dessus). Rappel des obligations à répartir (rules 35/40) : couverture ≥ 80 % des modules touchés ; cas sécurité obligatoires 401/403/404/409/422 selon verbes ; checksum invalide → rejet ; URLs download validées (SSRF) ; secrets jamais en clair en base/logs/réponses ; hooks et `ComposeExecutor` mockés dans les tests unitaires. Localisation : `backend/tests/unit/test_services/test_plugin_package_service.py` (nouveau), `test_plugin_manager_service.py` et `test_api/test_plugins.py` (existants, à étendre).
