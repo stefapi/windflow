@@ -11,8 +11,12 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.helper.template_renderer import TemplateRenderer  # type: ignore[import-not-found]
-from app.services.docker_executor import DockerExecutor  # type: ignore[import-not-found]
+from app.helper.template_renderer import (
+    TemplateRenderer,  # type: ignore[import-not-found]
+)
+from app.services.docker_executor import (
+    DockerExecutor,  # type: ignore[import-not-found]
+)
 
 logger = logging.getLogger(__name__)
 
@@ -262,6 +266,23 @@ class DockerService:
         except Exception as e:
             logger.error(f"Erreur récupération statut: {e}")
             return False, {"error": str(e)}
+
+    async def start_container(self, container_name: str) -> Tuple[bool, str]:
+        """
+        Démarre un container Docker.
+
+        Args:
+            container_name: Nom ou ID du container
+
+        Returns:
+            Tuple[bool, str]: (Succès, Message)
+        """
+        try:
+            return await self.executor.start_container(container_name)
+        except Exception as e:
+            error_msg = f"Erreur lors du démarrage: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
 
     async def stop_container(
         self, container_name: str, timeout: int = 10

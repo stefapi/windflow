@@ -319,7 +319,11 @@ async def deploy_stack_async(
                     user_id=user_id,
                 )
 
-                # 4. Déployer le container
+                # 4. Déployer le container — STORY-174.1 : le chemin de
+                # déploiement passe par l'AppAdapter (enveloppement du
+                # DockerService existant — mêmes effets, AC 2). Les gates
+                # pre-deploy (170.2) ont déjà été exécutées ci-dessus,
+                # avant toute création de container (position spec 11).
                 container_name = deployment_name
                 await DeploymentService.update_status(
                     db,
@@ -329,7 +333,14 @@ async def deploy_stack_async(
                 )
                 await emit_progress(75, "deploying", TOTAL_STEPS_DOCKER)
 
-                success, output = await docker_service.deploy_container(
+                from app.services.workloads import get_app_adapter
+
+                container_adapter = get_app_adapter(
+                    "docker_container",
+                    container_id=container_name,
+                    service=docker_service,
+                )
+                success, output = await container_adapter.deploy(
                     final_config, container_name
                 )
 
@@ -456,7 +467,10 @@ async def deploy_stack_async(
                     user_id=user_id,
                 )
 
-                # 5. Déployer avec docker-compose
+                # 5. Déployer avec docker-compose — STORY-174.1 : chemin
+                # par l'AppAdapter (enveloppement du DockerComposeService
+                # existant — mêmes effets, AC 2). Gates déjà exécutées
+                # ci-dessus (après génération du compose, avant création).
                 project_name = deployment_name
                 await DeploymentService.update_status(
                     db,
@@ -466,7 +480,15 @@ async def deploy_stack_async(
                 )
                 await emit_progress(75, "deploying", TOTAL_STEPS_COMPOSE)
 
-                success, output = await compose_service.deploy_compose(
+                from app.services.workloads import get_app_adapter
+
+                compose_adapter = get_app_adapter(
+                    "docker_compose",
+                    project_name=project_name,
+                    compose_service=compose_service,
+                    compose_file=compose_file,
+                )
+                success, output = await compose_adapter.deploy(
                     compose_file, project_name
                 )
 

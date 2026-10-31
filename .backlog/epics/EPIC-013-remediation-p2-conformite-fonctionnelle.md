@@ -1,6 +1,6 @@
 # EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
 
-**Statut :** IN_PROGRESS
+**Statut :** DONE
 **Priorité :** Moyenne
 
 ## Vision
@@ -94,10 +94,11 @@ Chaque item P2 du plan de remédiation est couvert par une story de la plage STO
 - [x] STORY-171 : Unification de la validation des stacks + bornes numériques `min/max` (P2-6)
 - [x] STORY-172 : Observabilité Prometheus réelle — `/metrics`, métriques business, dashboards alimentés (P2-9)
 - [x] STORY-173 : `/compute` élargi — `browse` paginé et `prune` protégé, rapprochement `/compute`↔`/docker` (P2-11 — F3)
-- [ ] STORY-174 : Socle `WorkloadAdapter` + adapter Docker + recreate sécurisé (P2-12 + P2-13 — F7)
+- [x] STORY-174 : Socle `WorkloadAdapter` + adapter Docker + recreate sécurisé (P2-12 + P2-13 — F7)
 
 ## Notes de conception
 
+- ✅ **STORY-174 DONE (2026-10-31, via découpe 174.1/174.2)** — socle `WorkloadAdapter` + recreate sécurisé livrés : contrat spec 02 (`WorkloadFamily`, ABC + `AppAdapter`, 7 schémas) dans `services/workloads/` avec `DockerContainerAdapter`/`ComposeStackAdapter` **enveloppant** les exécuteurs existants (zéro duplication, AC 1) ; chemin de déploiement `deploy_stack_async` passe par la factory `get_app_adapter` sur les deux branches — **gates 170.2 et jalons 163 inchangés** (test dédié gates-avant-création, AC 2) ; recreate sécurisé complet (AC 3/4) : capture avant pull, renommage `-old`, rebase par valeur, rollback automatique, secrets `***` masqués à l'aperçu et résolus côté backend uniquement — ancien recreate destructif supprimé, audit `container.recreated` branché ; AC 5 : « mise à jour en attente » **différé noté** (structure inexistante — check-updates Roadmap Phase 5, note posée spec 02 § Sémantique de mise à jour). Validation : +76 tests story (48 workloads/bascule + 28 recreate), modules workloads **100 % couverts**, mypy/flake8/bandit 0 erreur fichiers story, **3218 unit passed** (unique échec `/api/v1/metrics` préexistant résidu STORY-172, hors périmètre — à traiter en reprise). **Avec 174, les 15 stories P2 sont DONE → l'epic passe DONE** (statut dérivé : toutes stories DONE/ABANDONED).
 - ✅ **STORY-173 DONE (2026-10-31)** — `/compute` élargi livré (P2-11, axes D1/F3 + C9 tests) : router compute 2→7 routes (`browse` aplatissement paginé/filtrable de l'inventaire existant via `_collect_inventory` factorisé — zéro appel Docker nouveau ; sous-surface volumes liste/détail/browse avec conteneur éphémère durci image épinglée `busybox:1.37`/montage ro/`network_mode=none`/exec args-liste sans shell/anti-traversal/nettoyage garanti finally ; `POST /prune` réservé superadmin + confirmation explicite 400 + dry-run + audit `compute.prune` sans noms complets ni force) ; socle 160.3 étendu **compat ascendante** (`PruneResult` +`pruned_names`/`spared_names`/`failed_names`/`failed_count` à défauts, tolérance d'échec par item — la file n'est jamais interrompue, `prune_stopped_containers` avec stacks managées arrêtées épargnées et `remove_volumes=False`, `DockerPruneParams` +`containers`) ; rapprochement `/compute`↔`/docker` documenté dans `COMPUTE-DOCKER-MAPPING.md` + renvoi spec 09 (décision : aucune suppression d'endpoint Docker, convergence future par dépréciation modèle 166) ; garde-fou routes compute=7/docker=35 ; validation : +49 tests (API sécurité 401/403×3/400/422/404, sémantique protégée, contrats enveloppe), couverture zone compute 91-96 % (≥80 % AC 5), **3143 unit passed** — unique échec `/api/v1/metrics` **préexistant prouvé HEAD** (résidu STORY-172 : route sonde sans auth absente de `PUBLIC_PATHS`, à corriger hors 173), lint/mypy/bandit 0 nouvelle erreur. STORY-174 reste TODO → l'epic reste **IN_PROGRESS** (statut dérivé inchangé).
 - **Plage de numéros réservée** : STORY-160 à STORY-199 (seules 160-174 sont affectées ; 175-199 disponibles pour sous-découpes — ex. STORY-166/169 XL et STORY-162/164/170/174 L — et pour la matérialisation éventuelle de P2-15, cf. traçabilité ci-dessus).
 - ✂️ **STORY-160 découpée (2026-10-21)** : `split-story` proactif post-analyse (complexité XL — 4 domaines peu couplés) → **STORY-160.1** (modèle spec 17 + registre d'actions + API `/schedules` v2), **STORY-160.2** (moteur runtime asyncio), **STORY-160.3** (actions core + triggers événement), suffixes `.1/.2/.3` pattern STORY-131 ; la mère est `ABANDONED` ([STORY-160](../stories/STORY-160-moteur-scheduler-asyncio.md)) et le critère de done « P2-1 (STORY-160/161) » se vérifie désormais sur 160.1→160.3 + 161.
@@ -128,7 +129,7 @@ Chaque item P2 du plan de remédiation est couvert par une story de la plage STO
 
 ## Critères de succès (Definition of Done)
 
-- [ ] Les 15 stories P2 sont DONE avec leurs critères de done vérifiables validés (tests passants).
+- [x] Les 15 stories P2 sont DONE avec leurs critères de done vérifiables validés (tests passants).
 - [ ] Le scheduler exécute réellement les tâches planifiées (cron + événement) avec verrous, fuseaux IANA et reprise après redémarrage ; exécutions persistées et purgeables.
 - [ ] La nomenclature d'événements spec est respectée par tous les émetteurs, avec table de correspondance documentée et consommateurs plugins actifs.
 - [ ] L'installation d'un plugin effectue download + checksum + hooks + compose avec rollback vérifié ; routes dynamiques OpenAPI et gates pre-deploy opérationnelles.

@@ -1,6 +1,6 @@
 # STORY-174 : Socle `WorkloadAdapter` + `DockerWorkloadAdapter` — abstraction encapsulant les services Docker existants et recreate sécurisé (rebase, rollback, masquage `***`) (P2-12 + P2-13 — axes D3, F7, C10)
 
-**Statut :** TODO
+**Statut :** DONE
 **Epic Parent :** EPIC-013 — P2 : Conformité fonctionnelle (remédiation backend)
 **Item plan :** P2-12 (axes D3, F7, arbitrage — rapports §5) + P2-13 (axe C10, rapport §5) — ampleur **L**
 
@@ -12,7 +12,8 @@ En tant que développeur backend WindFlow, je veux introduire l'abstraction **`W
 
 ## Contexte technique
 
-*(à remplir par analyse-story)*
+> Analyse du 2026-10-31 (`analyse-story`) : verdict **COMPLEXE** (~10 tâches / ~13 fichiers / backend / 5 AC) → découpe proactive en 2 sous-stories (voir `## Sous-stories`). Constats d'exploration reportés intégralement dans chaque sous-story : recreate destructif actuel (`docker_client_service.py` l.689-852 : stop→remove→create sans rollback, pull avalé en warning), primitives Engine présentes (`rename_container` l.976, `inspect_image` l.1292, connect/disconnect network l.1751/1781), types spec 02 inexistants (grep 0), « mise à jour en attente » absente du code (AC 5 → différé check-updates Roadmap Phase 5), chemin de déploiement `deploy_stack_async` + gates 170.2 à préserver.
+
 
 Éléments existants à réutiliser / contraintes :
 - **Arbitrage F7 (tranché)** : interface + adapter Docker **maintenant** — l'adapter **enveloppe** les exécuteurs existants sans réécriture ; les adapters K8s/Helm/Swarm **suivent la Roadmap** (arbitrage D4 : organisation modules limitée à ce que D3 introduit — pas de big-bang des ~36 services) ;
@@ -27,11 +28,16 @@ En tant que développeur backend WindFlow, je veux introduire l'abstraction **`W
 
 ## Critères d'acceptation (AC)
 
-- [ ] AC 1 : L'interface `WorkloadAdapter` (+ `AppAdapter`) est définie conformément au contrat spec 02 (identité, métriques/santé, ContextualActions, Mode Infra) dans `services/workloads/` ; `DockerContainerAdapter` et `ComposeStackAdapter` l'implémentent en **enveloppant** les exécuteurs existants (`DockerExecutor`/`ComposeExecutor`/services actuels) — vérifié par revue : pas de duplication de logique Docker, les services existants restent la couche d'exécution.
-- [ ] AC 2 : **Le chemin de déploiement existant passe par l'adapter** — test de non-régression complet des déploiements : déploiement de stack, démarrage/arrêt/redémarrage, logs, suppression… via l'adapter produisent les mêmes effets qu'avant (les tests existants du module Docker restent verts).
-- [ ] AC 3 : **Recreate sécurisé complet** : capture de l'ancienne image **avant** le pull ; étapes arrêt→renommage `-old`→déconnexion réseaux→création→reconnexion→démarrage→suppression de l'ancien ; **rebase par valeur** vérifié par tests : env/label identique à l'ancienne image → suit la nouvelle ; modifié → conservé ; ajouté → conservé ; `command:` utilisateur survit.
-- [ ] AC 4 : **Rollback sur échec** : un échec simulé à une étape (pull, création, démarrage) → retour à l'état antérieur (ancien container renommé restauré, réseaux reconnectés avec leurs réglages, redémarré si besoin) — testé ; **secrets masqués** : l'aperçu d'inspection masque `*_PASSWORD`/`*_TOKEN`/`*_KEY` en `***`, le backend résout les placeholders `***` en relisant les valeurs réelles avant recréation — test : recreate avec un env secret inchangé → la valeur réelle est préservée sans jamais apparaître en clair dans l'aperçu.
-- [ ] AC 5 : Une recréation réussie efface la « mise à jour en attente » éventuelle (si la structure existe — sinon différé noté) ; couverture ≥ 80 % sur les modules touchés ; build + lint + tests passent.
+- [x] AC 1 : L'interface `WorkloadAdapter` (+ `AppAdapter`) est définie conformément au contrat spec 02 (identité, métriques/santé, ContextualActions, Mode Infra) dans `services/workloads/` ; `DockerContainerAdapter` et `ComposeStackAdapter` l'implémentent en **enveloppant** les exécuteurs existants (`DockerExecutor`/`ComposeExecutor`/services actuels) — vérifié par revue : pas de duplication de logique Docker, les services existants restent la couche d'exécution.
+- [x] AC 2 : **Le chemin de déploiement existant passe par l'adapter** — test de non-régression complet des déploiements : déploiement de stack, démarrage/arrêt/redémarrage, logs, suppression… via l'adapter produisent les mêmes effets qu'avant (les tests existants du module Docker restent verts).
+- [x] AC 3 : **Recreate sécurisé complet** : capture de l'ancienne image **avant** le pull ; étapes arrêt→renommage `-old`→déconnexion réseaux→création→reconnexion→démarrage→suppression de l'ancien ; **rebase par valeur** vérifié par tests : env/label identique à l'ancienne image → suit la nouvelle ; modifié → conservé ; ajouté → conservé ; `command:` utilisateur survit.
+- [x] AC 4 : **Rollback sur échec** : un échec simulé à une étape (pull, création, démarrage) → retour à l'état antérieur (ancien container renommé restauré, réseaux reconnectés avec leurs réglages, redémarré si besoin) — testé ; **secrets masqués** : l'aperçu d'inspection masque `*_PASSWORD`/`*_TOKEN`/`*_KEY` en `***`, le backend résout les placeholders `***` en relisant les valeurs réelles avant recréation — test : recreate avec un env secret inchangé → la valeur réelle est préservée sans jamais apparaître en clair dans l'aperçu.
+- [x] AC 5 : Une recréation réussie efface la « mise à jour en attente » éventuelle (si la structure existe — sinon différé noté) ; couverture ≥ 80 % sur les modules touchés ; build + lint + tests passent.
+
+## Sous-stories
+
+- [x] STORY-174.1 : Socle `WorkloadAdapter` + adapters Docker (enveloppement) et bascule du chemin de déploiement — Couvre AC 1, AC 2
+- [x] STORY-174.2 : Recreate sécurisé — rebase par valeur, rollback automatique, secrets masqués `***` — Couvre AC 3, AC 4, AC 5
 
 ## Références spécification
 
@@ -49,18 +55,20 @@ En tant que développeur backend WindFlow, je veux introduire l'abstraction **`W
 - **Aucune dépendance marquée par le plan** (P2-12 « dépend de : — » ; P2-13 dépend de P0-4 pour le masquage cohérent des secrets — STORY-103 recommandé).
 - Prépare **P3-2** (CircuitBreaker câblé sur appels Docker distants — EPIC-014, dépend explicitement de P2-12) ; interagit avec **STORY-170** (gate sur le chemin de recreate) et **STORY-173** (browse/prune réutilisent les mêmes services encapsulés).
 
-## Sous-stories
-
-*(section réservée — story L : découpe possible interface+wrappers / recreate sécurisé ; plage réservée STORY-175-199)*
-
 ## État d'avancement technique
 
-*(à remplir par analyse-story)*
+> ⚠️ L'avancement technique est désormais suivi dans les sous-stories individuelles.
+
+**Progression :** 2/2 sous-stories terminées
+- [x] STORY-174.1 : Socle `WorkloadAdapter` + adapters Docker et bascule du chemin de déploiement
+- [x] STORY-174.2 : Recreate sécurisé (rebase, rollback, secrets `***`)
 
 ## Tâches d'implémentation détaillées
 
-*(à remplir par analyse-story)*
+> ⚠️ Cette story a été découpée en sous-stories avant implémentation (complexité détectée par analyse-story : ~10 tâches / ~13 fichiers — seuils >5 tâches, >6 fichiers).
+> Toutes les tâches ont été redistribuées dans les sous-stories listées ci-dessus.
+> Consulter chaque sous-story pour les tâches détaillées.
 
 ## Tests à écrire
 
-*(à remplir par analyse-story)*
+> ⚠️ Les tests sont désormais définis dans les sous-stories individuelles.

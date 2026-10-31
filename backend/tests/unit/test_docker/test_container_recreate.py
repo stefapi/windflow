@@ -142,7 +142,7 @@ def mock_docker_client():
         new_detail = await client.get_container(new_id)
         return new_id, new_detail
 
-    client.recreate_container = AsyncMock(side_effect=_recreate_container)
+    client.recreate_container_secure = AsyncMock(side_effect=_recreate_container)
 
     return client
 
@@ -369,13 +369,15 @@ async def test_recreate_response_contains_ids(app, mock_docker_client):
 
 
 @pytest.mark.asyncio
-async def test_recreate_container_not_found(app, mock_docker_client):
+async def test_recreate_container_secure_not_found(app, mock_docker_client):
     """Container inexistant → 404 (AC 7)."""
-    mock_docker_client.recreate_container.side_effect = aiohttp.ClientResponseError(
-        MagicMock(),
-        (),
-        status=404,
-        message="Not Found",
+    mock_docker_client.recreate_container_secure.side_effect = (
+        aiohttp.ClientResponseError(
+            MagicMock(),
+            (),
+            status=404,
+            message="Not Found",
+        )
     )
 
     transport = ASGITransport(app=app, raise_app_exceptions=False)
@@ -393,7 +395,9 @@ async def test_recreate_container_not_found(app, mock_docker_client):
 @pytest.mark.asyncio
 async def test_recreate_stop_fails(app, mock_docker_client):
     """Erreur générale → 500."""
-    mock_docker_client.recreate_container.side_effect = RuntimeError("Stop failed")
+    mock_docker_client.recreate_container_secure.side_effect = RuntimeError(
+        "Stop failed"
+    )
 
     transport = ASGITransport(app=app, raise_app_exceptions=False)
 
@@ -410,7 +414,7 @@ async def test_recreate_stop_fails(app, mock_docker_client):
 @pytest.mark.asyncio
 async def test_recreate_remove_succeeds_create_fails(app, mock_docker_client):
     """Chemin critique : remove OK mais create échoue → 500 avec détail (AC 8)."""
-    mock_docker_client.recreate_container.side_effect = RuntimeError(
+    mock_docker_client.recreate_container_secure.side_effect = RuntimeError(
         "Container abc123def456 was removed but the new container "
         "could not be created: image not found"
     )
@@ -432,7 +436,7 @@ async def test_recreate_remove_succeeds_create_fails(app, mock_docker_client):
 @pytest.mark.asyncio
 async def test_recreate_remove_succeeds_start_fails(app, mock_docker_client):
     """Chemin critique : remove + create OK mais start échoue → 500."""
-    mock_docker_client.recreate_container.side_effect = RuntimeError(
+    mock_docker_client.recreate_container_secure.side_effect = RuntimeError(
         "Container abc123def456 was removed, new container new123new456 "
         "was created but could not be started: port already in use"
     )
@@ -503,3 +507,59 @@ async def test_recreate_schema_validation_invalid_type(app, mock_docker_client):
             )
 
     assert response.status_code == 422
+
+
+# =============================================================================
+# STORY-174.2 — recreate sécurisé : audit + aperçu masqué (règles 40)
+# =============================================================================
+
+
+class TestRecreateSecureAuditAndMasking:
+    """Endpoint sécurisé : audité sur succès, aperçu détail masque les secrets."""
+
+    async def test_recreate_audited(self, app, mock_docker_client):
+        """Succès → AuditService.log_from_request('container.recreated')."""
+        from unittest.mock import patch as _patch
+
+        with _patch(
+            "app.api.v1.docker.AuditService.log_from_request", new=AsyncMock()
+        ) as mock_audit, _patch(
+            "app.api.v1.docker.get_docker_client", return_value=mock_docker_client
+        ):
+            transport = ASGITransport(app=app, raise_app_exceptions=False)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                resp = await ac.post(
+                    "/api/v1/docker/containers/abc123def456/recreate",
+                    json={"image": "nginx:1.28", "pull_image": True},
+                )
+        assert resp.status_code == 200, resp.text
+        mock_audit.assert_awaited_once()
+        args, kwargs = mock_audit.await_args
+        assert args[1] == "container.recreated"
+        details = kwargs["details"]
+        # ids/image uniquement — jamais d'env/labels (rules 40)
+        assert set(details.keys()) == {
+            "old_container_id",
+            "image",
+            "pull_image",
+            "rolled_back",
+        }
+
+    async def test_container_detail_masks_secrets(self, app, mock_docker_client):
+        """GET détail : POSTGRES_PASSWORD servi `***`, jamais en clair."""
+        mock_docker_client.get_container = AsyncMock(
+            return_value=_make_container_detail(
+                env=["TZ=UTC", "POSTGRES_PASSWORD=s3cr3t"]
+            )
+        )
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
+        with patch(
+            "app.api.v1.docker.get_docker_client", return_value=mock_docker_client
+        ):
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                resp = await ac.get("/api/v1/docker/containers/abc123def456")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        env = body.get("config", {}).get("env", []) or []
+        assert "POSTGRES_PASSWORD=***" in env
+        assert not any("s3cr3t" in str(v) for v in env)

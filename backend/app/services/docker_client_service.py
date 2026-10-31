@@ -7,11 +7,14 @@ Toutes les opérations sont asynchrones et n'ont pas de dépendance externe.
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, AsyncIterator, Callable, Optional
+from typing import Any, AsyncIterator, Callable, List, Optional
 
 import aiohttp
+
+from ..core.exceptions import WindFlowException
 
 logger = logging.getLogger(__name__)
 
@@ -318,6 +321,142 @@ PRUNE_MAX_ITEMS = 500
 def is_protected_resource(name: str) -> bool:
     """Retourne ``True`` si la ressource est protégée (``windflow-plugin-*``)."""
     return name.startswith(PROTECTED_RESOURCE_PREFIX)
+
+
+# =============================================================================
+# Recreate sécurisé — helpers purs (STORY-174.2, spec 02 § Sémantique de mise
+# à jour : rebase par valeur + secrets masqués `***`)
+# =============================================================================
+
+# Clé d'env/label d'aspect secret — masquée `***` dans les aperçus
+# (spec 02 l.255, rules 40 : jamais de valeur réelle hors du backend).
+SECRET_ENV_PATTERN = re.compile(r".*(PASSWORD|TOKEN|KEY|SECRET)$", re.IGNORECASE)
+
+# Placeholder renvoyé au formulaire pour une valeur inchangée.
+MASKED_VALUE = "***"
+
+
+def _split_image_ref(ref: str) -> tuple:
+    """Sépare ``image:tag`` pour ``pull_image(name, tag)`` (tag défaut latest)."""
+    if ":" in ref and not ref.rstrip("/").split("/")[-1].startswith(":"):
+        name, _, tag = ref.rpartition(":")
+        # exclut les ports de registry (host:5000/img)
+        if "/" not in tag:
+            return name, tag
+    return ref, "latest"
+
+
+def mask_secret_env(values: List[str]) -> List[str]:
+    """Masque en ``***`` les valeurs d'env dont la **clé** est sensible.
+
+    S'applique aux aperçus d'inspection servis au client (spec 02 —
+    l'utilisateur édite sans jamais réimporter les secrets). La clé
+    matche si elle SE TERMINE par PASSWORD/TOKEN/KEY/SECRET
+    (insensible à la casse) — ex. ``POSTGRES_PASSWORD``, ``API_TOKEN``,
+    ``SSH_KEY``, ``CLIENT_SECRET``.
+    """
+    masked: List[str] = []
+    for entry in values:
+        key, sep, _value = entry.partition("=")
+        if sep and SECRET_ENV_PATTERN.match(key):
+            masked.append(f"{key}={MASKED_VALUE}")
+        else:
+            masked.append(entry)
+    return masked
+
+
+def resolve_masked_env(submitted: List[str], real: List[str]) -> List[str]:
+    """Résout les placeholders ``***`` depuis les valeurs réelles du container.
+
+    Le formulaire renvoie ``***`` pour les valeurs inchangées : avant la
+    recréation, chaque placeholder est remplacé par la valeur réelle lue
+    sur le container **courant** (jamais depuis la requête client — un
+    attaquant ne peut pas injecter de valeur via le placeholder). Une
+    clé soumise absente du réel est conservée telle quelle (ajout).
+    """
+    real_map = {e.partition("=")[0]: e for e in real if "=" in e}
+    resolved: List[str] = []
+    for entry in submitted:
+        key, sep, value = entry.partition("=")
+        if sep and value == MASKED_VALUE and key in real_map:
+            resolved.append(real_map[key])
+        else:
+            resolved.append(entry)
+    return resolved
+
+
+def rebase_by_value(
+    current: List[str],
+    old_image: List[str],
+    new_image: List[str],
+) -> List[str]:
+    """Rebase par valeur des variables d'env (spec 02 § mise à jour l.245-253).
+
+    Règles (tableau spec 02) pour chaque clé de ``current`` :
+
+    - valeur **identique** à celle de l'ancienne image → l'utilisateur
+      ne l'a pas touchée → prend la valeur de la **nouvelle** image
+      (et disparaît si la nouvelle image ne la définit plus) ;
+    - valeur **différente** → choix explicite → **conservée** ;
+    - **absente** de l'ancienne image → ajout utilisateur → **conservée**.
+    """
+    old_map = {e.partition("=")[0]: e.partition("=")[2] for e in old_image if "=" in e}
+    new_map = {e.partition("=")[0]: e.partition("=")[2] for e in new_image if "=" in e}
+
+    rebased: List[str] = []
+    for entry in current:
+        key, sep, value = entry.partition("=")
+        if not sep:
+            rebased.append(entry)
+            continue
+        if key not in old_map:
+            rebased.append(entry)  # ajout utilisateur → conservé
+        elif old_map[key] == value:
+            # identique à l'ancienne image → suit la nouvelle
+            if key in new_map:
+                rebased.append(f"{key}={new_map[key]}")
+            # absente de la nouvelle image → supprimée (« suit la nouvelle »)
+        else:
+            rebased.append(entry)  # modifiée → conservée
+    return rebased
+
+
+def rebase_labels_by_value(
+    current: dict,
+    old_image: dict,
+    new_image: dict,
+) -> dict:
+    """Rebase par valeur des labels — mêmes règles que :func:`rebase_by_value`."""
+    rebased: dict = {}
+    for key, value in current.items():
+        if key not in old_image:
+            rebased[key] = value  # ajout utilisateur
+        elif str(old_image[key]) == str(value):
+            if key in new_image:  # suit la nouvelle image
+                rebased[key] = new_image[key]
+        else:
+            rebased[key] = value  # modifiée → conservée
+    return rebased
+
+
+def rebase_command(
+    current_cmd: Optional[List[str]],
+    old_image_cmd: Optional[List[str]],
+    new_image_cmd: Optional[List[str]],
+) -> Optional[List[str]]:
+    """Rebase de ``Cmd`` : la commande « cuite » suit l'image, la commande
+    utilisateur survit (spec 02 l.253).
+
+    - ``current`` identique à l'ancienne image → prend le ``Cmd`` de la
+      nouvelle image (None si elle n'en définit plus) ;
+    - ``current`` différent (command: utilisateur) → **conservé** ;
+    - ``current`` None → Cmd de la nouvelle image.
+    """
+    if current_cmd is None:
+        return list(new_image_cmd) if new_image_cmd else None
+    if list(current_cmd) == list(old_image_cmd or []):
+        return list(new_image_cmd) if new_image_cmd else None
+    return list(current_cmd)
 
 
 @dataclass
@@ -686,170 +825,319 @@ class DockerClientService:
         data = await response.json()
         return data.get("Id", "")
 
-    async def recreate_container(
+    async def recreate_container_secure(
         self,
         container_id: str,
         image: Optional[str] = None,
         pull_image: bool = False,
-        env: Optional[list[str]] = None,
-        labels: Optional[dict[str, str]] = None,
-        port_bindings: Optional[dict[str, Any]] = None,
-        mounts: Optional[list[dict[str, Any]]] = None,
+        env: Optional[List[str]] = None,
+        labels: Optional[dict] = None,
+        port_bindings: Optional[dict] = None,
+        mounts: Optional[List[dict]] = None,
         privileged: Optional[bool] = None,
         readonly_rootfs: Optional[bool] = None,
-        cap_add: Optional[list[str]] = None,
-        cap_drop: Optional[list[str]] = None,
+        cap_add: Optional[List[str]] = None,
+        cap_drop: Optional[List[str]] = None,
         stop_timeout: int = 10,
     ) -> tuple[str, "ContainerDetail"]:
-        """
-        Recrée un container avec une nouvelle configuration.
+        """Recrée un container — **recreate sécurisé** (STORY-174.2, spec 02).
 
-        Orchestration complète : inspect → merge → pull optionnel → stop → remove → create → start.
-        Si la suppression réussit mais la création ou le démarrage échouent, l'erreur
-        est irrécupérable (le container original est perdu).
+        Orchestration 6 étapes (spec 02 § Sémantique de mise à jour) :
+
+        1. **capture** de l'inspection container + de l'ancienne image
+           (**avant** tout pull — après un pull l'ancien tag peut être
+           détagué) ;
+        2. pull de la nouvelle image si demandé — un échec de pull lève
+           (l'ancien container est intact, jamais de pull avalé) ;
+        3. arrêt (si running), **renommage** ``<nom>-old``, déconnexion
+           des réseaux additionnels (libère nom + IP statiques) ;
+        4. création du nouveau container : passthrough de l'inspection,
+           image remplacée, **rebase par valeur** env/labels/cmd + les
+           placeholders secrets ``***`` résolus depuis le container
+           courant ; reconnexion des réseaux (Aliases/IPAMConfig
+           restaurés) ; démarrage si l'ancien tournait ;
+        5. suppression de l'ancien container (``force=False``,
+           volumes préservés) ;
+        6. **rollback automatique** sur échec de création/démarrage :
+           le nouveau est retiré, l'ancien renommé restauré, réseaux
+           reconnectés, redémarré si besoin — ``WindFlowException`` au
+           retour (``recreate_failed_rolled_back`` ou
+           ``recreate_rollback_incomplete`` si le rollback échoue aussi).
+
+        Les valeurs d'env ne sont **jamais loggées** (rules 40).
 
         Args:
-            container_id: ID du container à recréer
-            image: Nouvelle image Docker. None = conserver l'image actuelle.
-            pull_image: Puller l'image avant recréation.
-            env: Variables d'environnement. None = conserver les actuelles.
-            labels: Labels. None = conserver les actuels.
-            port_bindings: Bindings de ports. None = conserver les actuels.
-            mounts: Points de montage. None = conserver les actuels.
-            privileged: Mode privilégié. None = conserver l'actuel.
-            readonly_rootfs: Rootfs readonly. None = conserver l'actuel.
-            cap_add: Capabilities à ajouter. None = conserver les actuelles.
-            cap_drop: Capabilities à retirer. None = conserver les actuelles.
-            stop_timeout: Timeout d'arrêt en secondes (défaut 10).
+            container_id: Container à recréer (ID ou nom).
+            image: Nouvelle image (None = conserver l'actuelle).
+            pull_image: Tirer la nouvelle image avant recréation.
+            env: Env de remplacement (``None`` = rebase de l'actuel ;
+                les valeurs ``***`` sont résolues depuis le container).
+            labels: Labels de remplacement (None = rebase).
+            stop_timeout: Timeout d'arrêt (secondes).
 
         Returns:
-            Tuple (new_container_id, ContainerDetail du nouveau container).
+            ``(new_id, ContainerDetail)`` du nouveau container.
 
         Raises:
-            Exception: Si le container n'existe pas, ou si la recréation échoue
-                après suppression (chemin critique).
+            WindFlowException: Container introuvable, pull échoué,
+                ou recréation échouée (rollback opéré).
         """
-        # 1. Inspect le container existant
+        # ── Étape 1 : capture AVANT pull ──────────────────────────
         detail = await self.get_container(container_id)
-
-        # 2. Merge config : None = conserver la valeur existante
-        merged_image = image if image is not None else detail.config.get("Image", "")
-        merged_env = env if env is not None else detail.config.get("Env") or []
-        merged_labels = (
-            labels if labels is not None else detail.config.get("Labels") or {}
-        )
-        merged_port_bindings = (
-            port_bindings
-            if port_bindings is not None
-            else detail.host_config.get("PortBindings")
-        )
-        if mounts is not None:
-            merged_mounts = mounts
-        else:
-            # Transformer le format Docker (PascalCase) en format abstrait (lowercase)
-            # car create_container() attend des clés lowercase
-            merged_mounts = (
-                [
-                    {
-                        "type": m.get("Type", "bind"),
-                        "source": m.get("Source", ""),
-                        "destination": m.get("Destination", ""),
-                        "mode": m.get("Mode", "rw"),
-                    }
-                    for m in detail.mounts
-                ]
-                if detail.mounts
-                else None
-            )
-        merged_privileged = (
-            privileged
-            if privileged is not None
-            else detail.host_config.get("Privileged", False)
-        )
-        merged_readonly_rootfs = (
-            readonly_rootfs
-            if readonly_rootfs is not None
-            else detail.host_config.get("ReadonlyRootfs")
-        )
-        merged_cap_add = (
-            cap_add if cap_add is not None else detail.host_config.get("CapAdd")
-        )
-        merged_cap_drop = (
-            cap_drop if cap_drop is not None else detail.host_config.get("CapDrop")
-        )
-
-        # Conserver les paramètres non-overridable
-        merged_network_mode = detail.host_config.get("NetworkMode", "bridge")
-        merged_restart_policy = detail.host_config.get("RestartPolicy", {})
-        merged_restart_policy_name = (
-            merged_restart_policy.get("Name", "no")
-            if isinstance(merged_restart_policy, dict)
-            else "no"
-        )
-        merged_command = detail.config.get("Cmd")
-
-        # Conserver le nom du container (sans le / initial)
         container_name = detail.name.lstrip("/")
-
-        # 3. Pull optionnel de l'image
-        if pull_image and merged_image:
-            try:
-                await self.pull_image(merged_image)
-            except Exception as e:
-                logger.warning(f"Pull image failed for {merged_image}: {e}")
-
-        # 4. Stopper le container
+        old_image_ref = detail.config.get("Image", "")
         try:
-            await self.stop_container(container_id, timeout=stop_timeout)
+            old_image_info = await self.inspect_image(old_image_ref)
         except Exception:
-            pass  # Le container peut déjà être arrêté
+            old_image_info = {}  # image absente localement : rebase dégradé
+        old_image_env = old_image_info.get("Config", {}).get("Env") or []
+        old_image_labels = old_image_info.get("Config", {}).get("Labels") or {}
+        old_image_cmd = old_image_info.get("Config", {}).get("Cmd")
 
-        # 5. Supprimer le container (VOLUMES PRÉSERVÉS !)
-        await self.remove_container(container_id, force=True, remove_volumes=False)
+        was_running = bool(detail.state.get("Running"))
 
-        # 6-7. Chemin critique : create + start
+        # ── Étape 2 : pull (échec → exception, ancien intact) ──────
+        new_image_ref = image if image is not None else old_image_ref
+        if pull_image and new_image_ref:
+            try:
+                await self.pull_image(*_split_image_ref(new_image_ref))
+            except Exception as exc:
+                raise WindFlowException(
+                    f"Pull de {new_image_ref} échoué — recreate annulé, "
+                    f"le container original est intact : {exc}"
+                ) from exc
         try:
+            new_image_info = await self.inspect_image(new_image_ref)
+        except Exception:
+            new_image_info = {}
+        new_image_env = new_image_info.get("Config", {}).get("Env") or []
+        new_image_labels = new_image_info.get("Config", {}).get("Labels") or {}
+        new_image_cmd = new_image_info.get("Config", {}).get("Cmd")
+
+        # ── Rebase + résolution des secrets `***` ─────────────────
+        current_env = detail.config.get("Env") or []
+        current_labels = detail.config.get("Labels") or {}
+        current_cmd = detail.config.get("Cmd")
+
+        effective_env = (
+            resolve_masked_env(env, current_env) if env is not None else current_env
+        )
+        rebased_env = rebase_by_value(effective_env, old_image_env, new_image_env)
+        effective_labels = labels if labels is not None else current_labels
+        rebased_labels = rebase_labels_by_value(
+            effective_labels, old_image_labels, new_image_labels
+        )
+        rebased_cmd = rebase_command(current_cmd, old_image_cmd, new_image_cmd)
+
+        # ── Capture des réseaux additionnels (avant déconnexion) ──
+        networks = detail.network_settings.get("Networks", {}) or {}
+        primary_network = detail.host_config.get("NetworkMode", "bridge")
+        extra_networks: List[dict] = []
+        for net_name, net_cfg in networks.items():
+            if net_name == primary_network:
+                continue
+            extra_networks.append(
+                {
+                    "name": net_name,
+                    "aliases": net_cfg.get("Aliases") or [],
+                    "ipv4": (net_cfg.get("IPAMConfig") or {}).get("IPv4Address"),
+                }
+            )
+
+        # ── Étape 3 : arrêt + renommage -old + déconnexion ────────
+        if was_running:
+            try:
+                await self.stop_container(container_id, timeout=stop_timeout)
+            except Exception:
+                pass  # déjà arrêté
+        old_name = f"{container_name}-old"
+        await self.rename_container(container_id, old_name)
+        for net in extra_networks:
+            try:
+                await self.disconnect_container_from_network(net["name"], container_id)
+            except Exception as exc:
+                logger.warning(
+                    "recreate_secure: déconnexion %s/%s impossible (%s) — continu",
+                    container_id[:12],
+                    net["name"],
+                    exc,
+                )
+
+        # ── Étapes 4-6 : create → start → cleanup, avec rollback ──
+        new_id: Optional[str] = None
+        try:
+            merged_mounts = (
+                mounts
+                if mounts is not None
+                else (
+                    [
+                        {
+                            "type": m.get("Type", "bind"),
+                            "source": m.get("Source", ""),
+                            "destination": m.get("Destination", ""),
+                            "mode": m.get("Mode", "rw"),
+                        }
+                        for m in (detail.mounts or [])
+                    ]
+                    or None
+                )
+            )
             new_id = await self.create_container(
                 name=container_name,
-                image=merged_image,
-                command=merged_command,
-                env=merged_env,
-                labels=merged_labels,
-                restart_policy=merged_restart_policy_name,
-                network_mode=merged_network_mode,
-                privileged=merged_privileged,
+                image=new_image_ref,
+                command=rebased_cmd,
+                env=rebased_env,
+                labels=rebased_labels,
+                restart_policy=(
+                    detail.host_config.get("RestartPolicy", {}).get("Name", "no")
+                    if isinstance(detail.host_config.get("RestartPolicy"), dict)
+                    else "no"
+                ),
+                network_mode=primary_network,
+                privileged=(
+                    privileged
+                    if privileged is not None
+                    else detail.host_config.get("Privileged", False)
+                ),
                 mounts=merged_mounts,
-                cap_add=merged_cap_add,
-                cap_drop=merged_cap_drop,
-                readonly_rootfs=merged_readonly_rootfs,
-                port_bindings=merged_port_bindings,
+                cap_add=(
+                    cap_add if cap_add is not None else detail.host_config.get("CapAdd")
+                ),
+                cap_drop=(
+                    cap_drop
+                    if cap_drop is not None
+                    else detail.host_config.get("CapDrop")
+                ),
+                readonly_rootfs=(
+                    readonly_rootfs
+                    if readonly_rootfs is not None
+                    else detail.host_config.get("ReadonlyRootfs")
+                ),
+                port_bindings=(
+                    port_bindings
+                    if port_bindings is not None
+                    else detail.host_config.get("PortBindings")
+                ),
             )
-        except Exception as create_exc:
-            logger.critical(
-                f"CRITICAL: Container {container_id} removed but new creation failed. "
-                f"Error: {create_exc}"
-            )
-            raise RuntimeError(
-                f"Container {container_id} was removed but the new container "
-                f"could not be created: {create_exc}"
-            ) from create_exc
+            for net in extra_networks:
+                connect_kwargs: dict = {}
+                if net["aliases"]:
+                    connect_kwargs["aliases"] = net["aliases"]
+                if net["ipv4"]:
+                    connect_kwargs["ipv4_address"] = net["ipv4"]
+                try:
+                    await self.connect_container_to_network(
+                        net["name"], new_id, **connect_kwargs
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "recreate_secure: reconnexion %s→%s impossible (%s)",
+                        container_name,
+                        net["name"],
+                        exc,
+                    )
+            if was_running:
+                await self.start_container(new_id)
 
-        try:
-            await self.start_container(new_id)
-        except Exception as start_exc:
-            logger.critical(
-                f"CRITICAL: Container {container_id} removed, new container {new_id} "
-                f"created but failed to start. Error: {start_exc}"
+            # Étape 5 : succès — suppression de l'ancien (volumes gardés)
+            await self.remove_container(container_id, force=False, remove_volumes=False)
+        except Exception as exc:
+            rollback_ok = await self._rollback_recreate(
+                new_id=new_id,
+                old_container_id=container_id,
+                old_name=old_name,
+                original_name=container_name,
+                extra_networks=extra_networks,
+                was_running=was_running,
             )
-            raise RuntimeError(
-                f"Container {container_id} was removed, new container {new_id} "
-                f"was created but could not be started: {start_exc}"
-            ) from start_exc
+            if rollback_ok:
+                raise WindFlowException(
+                    f"recreate_failed_rolled_back : la recréation de "
+                    f"{container_name} a échoué ({exc}) — l'ancien container "
+                    "a été restauré"
+                ) from exc
+            raise WindFlowException(
+                f"recreate_rollback_incomplete : la recréation de "
+                f"{container_name} a échoué ({exc}) ET le rollback n'a pas "
+                "pu compléter — intervention manuelle requise"
+            ) from exc
 
-        # 8. Récupérer le détail du nouveau container
         new_detail = await self.get_container(new_id)
-
+        logger.info(
+            "recreate_secure : %s recréé en %s (image %s, %d réseaux "
+            "additionnels reconnectés)",
+            container_name,
+            new_id[:12],
+            new_image_ref,
+            len(extra_networks),
+        )
         return new_id, new_detail
+
+    async def _rollback_recreate(
+        self,
+        new_id: Optional[str],
+        old_container_id: str,
+        old_name: str,
+        original_name: str,
+        extra_networks: List[dict],
+        was_running: bool,
+    ) -> bool:
+        """Rollback best-effort du recreate sécurisé (étape 6 — spec 02).
+
+        Retourne ``True`` si le rollback a completé (ancien restauré),
+        ``False`` s'il a lui-même échoué partiellement.
+        """
+        rollback_failed = False
+        if new_id:
+            try:
+                await self.remove_container(new_id, force=True, remove_volumes=False)
+            except Exception as exc:
+                logger.critical(
+                    "recreate_secure rollback : nouveau container %s non "
+                    "retirable (%s)",
+                    new_id[:12],
+                    exc,
+                )
+                rollback_failed = True
+        try:
+            await self.rename_container(old_container_id, original_name)
+        except Exception as exc:
+            logger.critical(
+                "recreate_secure rollback : renommage %s→%s impossible (%s)",
+                old_name,
+                original_name,
+                exc,
+            )
+            rollback_failed = True
+        for net in extra_networks:
+            try:
+                connect_kwargs: dict = {}
+                if net["aliases"]:
+                    connect_kwargs["aliases"] = net["aliases"]
+                if net["ipv4"]:
+                    connect_kwargs["ipv4_address"] = net["ipv4"]
+                await self.connect_container_to_network(
+                    net["name"], old_container_id, **connect_kwargs
+                )
+            except Exception as exc:
+                logger.critical(
+                    "recreate_secure rollback : reconnexion %s→%s impossible (%s)",
+                    original_name,
+                    net["name"],
+                    exc,
+                )
+                rollback_failed = True
+        if was_running:
+            try:
+                await self.start_container(old_container_id)
+            except Exception as exc:
+                logger.critical(
+                    "recreate_secure rollback : redémarrage de %s impossible (%s)",
+                    original_name,
+                    exc,
+                )
+                rollback_failed = True
+        return not rollback_failed
 
     async def start_container(self, container_id: str) -> None:
         """

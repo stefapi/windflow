@@ -72,7 +72,7 @@ from ...schemas.docker import (
 )
 from ...schemas.stack import StackCreate
 from ...services.audit_service import AuditService
-from ...services.docker_client_service import get_docker_client
+from ...services.docker_client_service import get_docker_client, mask_secret_env
 from ...services.stack_service import StackService
 from ...services.user_organization_service import UserOrganizationService
 
@@ -228,6 +228,13 @@ async def get_container(
     try:
         container = await client.get_container(container_id)
 
+        # STORY-174.2 : aperçu masqué — les valeurs d'env dont la clé est
+        # d'aspect secret (PASSWORD/TOKEN/KEY/SECRET) sont servies `***`;
+        # le recreate résout les placeholders depuis le container réel.
+        masked_config = dict(container.config or {})
+        if masked_config.get("Env"):
+            masked_config["Env"] = mask_secret_env(masked_config["Env"])
+
         return ContainerDetailResponse(
             id=container.id,
             name=container.name,
@@ -236,7 +243,7 @@ async def get_container(
             args=container.args,
             state=ContainerStateInfo.from_docker_dict(container.state),
             image=container.image,
-            config=ContainerConfigInfo.from_docker_dict(container.config),
+            config=ContainerConfigInfo.from_docker_dict(masked_config),
             host_config=ContainerHostConfigInfo.from_docker_dict(container.host_config),
             network_settings=ContainerNetworkSettingsInfo.from_docker_dict(
                 container.network_settings
@@ -819,7 +826,10 @@ async def recreate_container(
 
     client = await get_docker_client()
     try:
-        new_id, new_detail = await client.recreate_container(
+        # STORY-174.2 : recreate sécurisé (capture avant pull, renommage
+        # -old, rebase par valeur, rollback automatique, secrets `***`
+        # résolus côté backend).
+        new_id, new_detail = await client.recreate_container_secure(
             container_id=container_id,
             image=recreate_data.image,
             pull_image=recreate_data.pull_image,
@@ -832,6 +842,22 @@ async def recreate_container(
             cap_add=recreate_data.cap_add,
             cap_drop=recreate_data.cap_drop,
             stop_timeout=recreate_data.stop_timeout,
+        )
+
+        # STORY-125.2 : action destructrice auditée (comptages/ids
+        # uniquement — jamais d'env/labels dans les details, rules 40).
+        await AuditService.log_from_request(
+            request,
+            "container.recreated",
+            user=current_user,
+            resource_type="container",
+            resource_id=str(new_id)[:12],
+            details={
+                "old_container_id": str(container_id)[:12],
+                "image": recreate_data.image,
+                "pull_image": recreate_data.pull_image,
+                "rolled_back": False,
+            },
         )
 
         container_response = ContainerDetailResponse(

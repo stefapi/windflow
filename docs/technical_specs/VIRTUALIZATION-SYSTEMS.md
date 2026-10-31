@@ -570,11 +570,14 @@ Au-delà du scan, le pilotage réellement implémenté se limite à Docker :
 | [`compute_service.py`](../../backend/app/services/compute_service.py) | agrégation de la vue Compute (classification par labels, objets domaine) |
 | [`adoption_service.py`](../../backend/app/services/adoption_service.py) | adoption d'objets découverts (création Stack+Deployment, labelisation) |
 
-**Écart explicite avec la cible** : aucun adapter `WorkloadAdapter`/`MachineAdapter`/
-`HostAdapter`/`ClusterAdapter` n'existe encore dans le dépôt ; les services Docker ci-dessus en
-tiennent lieu pour la famille Apps Docker. La migration vers les adapters (et l'ajout des
-familles Machines/Hosts/Clusters) est une évolution de code tracée pour la
-[Roadmap](../Roadmap.md), hors périmètre de ce document.
+**Écart avec la cible** : depuis **STORY-174.1** (2026-10-31), le socle
+`WorkloadAdapter`/`AppAdapter` existe ([`services/workloads/`](../../backend/app/services/workloads/)
+— voir son [README](../../backend/app/services/workloads/README.md)) avec deux
+adapters Docker (`DockerContainerAdapter`, `ComposeStackAdapter`) qui
+**enveloppent** les services ci-dessus (couche d'exécution inchangée) ; le chemin
+de déploiement passe par l'adapter. Les adapters `MachineAdapter`/`HostAdapter`/
+`ClusterAdapter` et K8s/Helm/Swarm restent Roadmap (arbitrage F7) ; le recreate
+sécurisé (rebase/rollback/secrets) est porté par STORY-174.2.
 
 ### 6.4 API
 

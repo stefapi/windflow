@@ -256,6 +256,8 @@ Même logique pour `Cmd`/`Entrypoint` : la commande « cuite » par l'ancienne i
 
 **Effet sur les mises à jour en attente.** Une recréation réussie efface la « mise à jour en attente » du container (chapitre [03-modele-compute.md](03-modele-compute.md)) ; la mise à jour groupée multi-Apps et son flux de progression WebSocket sont spécifiées au chapitre [09-api.md](09-api.md).
 
+> **Note d'implémentation (STORY-174.2)** : la structure « mise à jour en attente » dépend de check-updates (comparaison de digest sans pull — renvoi Roadmap Phase 5, cf. chapitre 09 § Images) ; l'effacement à la recréation réussie sera branché lorsque cette structure existera.
+
 ### Sémantique du verbe Sauvegarder
 
 Le verbe **Sauvegarder** est **universel et indépendant du backend** : la sémantique décrite ici s'applique identiquement que les snapshots soient produits par le plugin Restic ou le plugin Borg (chapitre [12-marketplace.md](12-marketplace.md)). Le backend est un détail d'implémentation ; les invariants de sûreté, la taxonomie d'erreurs et le cloisonnement sont portés par le core.
