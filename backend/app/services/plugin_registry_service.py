@@ -22,6 +22,10 @@ from pydantic import ValidationError
 from ..config import Settings
 from ..core.cache import get_cache
 from ..core.exceptions import WindFlowException
+from ..core.resilience import (
+    get_circuit_breaker_registry,
+    is_circuit_breaker_enabled,
+)
 from ..schemas.plugin_registry import RegistryIndex, RegistryPluginEntry
 
 logger = logging.getLogger(__name__)
@@ -64,12 +68,30 @@ class PluginRegistryService:
     async def _fetch_index_http(self) -> dict:
         """Effectue le fetch HTTP de l'index brut (timeout configuré).
 
+        STORY-251 : sous circuit breaker ``plugin_registry``. Un échec
+        (HTTP != 200, timeout, réseau) alimente le circuit ; circuit
+        ouvert → :class:`CircuitBreakerOpenError` levée **sans requête
+        HTTP**, interceptée par le fallback stale-while-error de
+        :meth:`fetch_index` (comportement STORY-168 préservé).
+
         Returns:
             Données JSON brutes de l'index.
 
         Raises:
-            WindFlowException: erreur HTTP (statut != 200) ou timeout.
+            WindFlowException: erreur HTTP (statut != 200), timeout ou
+                circuit ouvert (CircuitBreakerOpenError, sous-classe).
         """
+        if not is_circuit_breaker_enabled():
+            return await self._fetch_index_http_unguarded()
+
+        circuit = get_circuit_breaker_registry().get_or_create("plugin_registry")
+        return await circuit.call(
+            self._fetch_index_http_unguarded,
+            failure_filter=lambda exc: isinstance(exc, WindFlowException),
+        )
+
+    async def _fetch_index_http_unguarded(self) -> dict:
+        """Fetch HTTP brut (sans circuit breaker — cible du garde)."""
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(

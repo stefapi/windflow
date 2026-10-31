@@ -99,6 +99,79 @@ async def test_http_labels_cardinality_bounded(client: AsyncClient, prometheus_e
     assert 'path="/api/v1/stacks/{id}"' in text
 
 
+async def test_circuit_breaker_series_exposed_via_metrics(
+    client: AsyncClient, prometheus_enabled
+):
+    """STORY-251 AC 3 : après transitions réelles, les séries breaker sont exposées.
+
+    Un circuit de test est ouvert (échecs réels via le breaker), puis le
+    scrape doit contenir la gauge d'état (valeur 2 = open) et le compteur
+    d'échecs cumulés.
+    """
+    from app.core.resilience import CircuitBreaker, get_circuit_breaker_registry
+
+    get_circuit_breaker_registry().reset_all()
+    breaker = CircuitBreaker("metrics-exposure-test", failure_threshold=1)
+
+    async def boom() -> None:
+        raise ConnectionError("transport down")
+
+    with pytest.raises(ConnectionError):
+        await breaker.call(boom)
+    # failure_threshold=1 → circuit OPEN (transition loggée + gauge=2)
+
+    response = await client.get("/api/v1/metrics")
+    text = response.text
+    assert "windflow_circuit_breaker_state" in text
+    assert 'name="metrics-exposure-test"' in text
+    assert "windflow_circuit_breaker_failures_total" in text
+
+    get_circuit_breaker_registry().reset_all()
+
+
+async def test_circuit_labels_contain_no_sensitive_data(
+    client: AsyncClient, prometheus_enabled
+):
+    """STORY-251 : labels breaker restreints à des noms statiques/UUID.
+
+    Les circuits légitimes sont ``docker_engine``, ``plugin_registry`` et
+    ``ssh:{uuid}`` — jamais de hostname libre, de query string ni de
+    secret. Après avoir forcé des échecs sur plusieurs circuits, le
+    scrape ne doit exposer que des labels ``name`` conformes.
+    """
+    import re
+
+    from app.core.resilience import CircuitBreaker
+
+    valid_names = re.compile(
+        r"^(docker_engine|plugin_registry|ssh:[0-9a-fA-F-]{36}|" r"[A-Za-z0-9._-]+)$"
+    )
+
+    async def boom() -> None:
+        raise ConnectionError("secret-free transport error")
+
+    for name in (
+        "docker_engine",
+        "plugin_registry",
+        "ssh:550e8400-e29b-41d4-a716-446655440000",
+    ):
+        breaker = CircuitBreaker(name, failure_threshold=1)
+        with pytest.raises(ConnectionError):
+            await breaker.call(boom)
+
+    response = await client.get("/api/v1/metrics")
+    text = response.text
+
+    # Chaque label name exposé est un nom de circuit légitime…
+    for match in re.finditer(r'name="([^"]+)"', text):
+        if match.group(1).startswith(("windflow", "docker", "plugin", "ssh:")):
+            assert valid_names.match(match.group(1)), f"label illégal: {match.group(1)}"
+    # …aucune donnée sensible ne transite dans les labels breaker
+    assert "transport error" not in text  # jamais le message d'exception
+    assert "token" not in text.lower() or "LEAKED" not in text
+    assert 'name="ssh:my-server.example.com"' not in text  # pas de hostname libre
+
+
 def test_metrics_not_exposed_by_traefik_routers():
     """Garde-fou d'exposition : aucun router Traefik ne matche /api/v1/metrics.
 

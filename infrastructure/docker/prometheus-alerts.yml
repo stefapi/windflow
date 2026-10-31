@@ -119,6 +119,27 @@ groups:
           summary: "Critical disk space"
           description: "Available disk space is below 5% (current: {{ $value }}%)."
 
+      # Résilience — Circuit Breakers (STORY-251)
+      # 0=closed, 1=half_open, 2=open : un circuit OPEN plus d'une
+      # minute signifie une dépendance externe coupée (démon Docker,
+      # registre plugins, hôte SSH) — les appels sont rejetés sans
+      # tentative réseau.
+      - alert: WindflowCircuitBreakerOpen
+        expr: windflow_circuit_breaker_state == 2
+        for: 1m
+        labels:
+          severity: warning
+          component: resilience
+        annotations:
+          summary: "Circuit breaker ouvert ({{ $labels.name }})"
+          description: >-
+            Le circuit breaker '{{ $labels.name }}' est OPEN depuis plus
+            d'une minute : la dépendance est considérée indisponible et
+            les appels sont rejetés immédiatement (échecs cumulés :
+            voir windflow_circuit_breaker_failures_total{name="{{ $labels.name }}"}).
+            Vérifier la dépendance puis attendre le passage en demi-ouvert
+            (circuit_breaker_timeout, 60 s par défaut).
+
   - name: windflow_deployment_alerts
     interval: 30s
     rules:

@@ -12,6 +12,18 @@ from app.services.workloads import DockerContainerAdapter, get_app_adapter
 from app.services.workloads.docker_container import _DOCKER_CONTAINER_ACTIONS
 
 
+@pytest.fixture(autouse=True)
+def _reset_circuit_registry():
+    """STORY-251 : isolation globale — le registre des circuits est vidé
+    avant chaque test du fichier (les tests existants 174.1 exécutent de
+    vrais verbes via le circuit docker_engine)."""
+    from app.core.resilience import get_circuit_breaker_registry
+
+    get_circuit_breaker_registry().reset_all()
+    yield
+    get_circuit_breaker_registry().reset_all()
+
+
 def _service_mock():
     svc = MagicMock()
     svc.start_container = AsyncMock(return_value=(True, "ok"))
@@ -114,6 +126,107 @@ class TestDelegation:
         logs = await adapter.stream_logs(tail=42)
         assert logs == "log line"
         svc.get_container_logs.assert_awaited_once_with("cid", 42)
+
+
+class TestCircuitBreakerWiring:
+    """STORY-251 : le circuit ``docker_engine`` protège les verbes réseau.
+
+    Sémantique d'échec : tuple ``(False, msg)`` ou exception transport.
+    Seuils des settings (défaut 5) ramenés à 2 pour les tests via
+    monkeypatch ; registre réinitialisé avant chaque test (R2).
+    """
+
+    @pytest.fixture(autouse=True)
+    def _isolate_circuit(self, monkeypatch):
+        from app.config import settings as app_settings
+        from app.core.resilience import get_circuit_breaker_registry
+
+        get_circuit_breaker_registry().reset_all()
+        monkeypatch.setattr(app_settings, "circuit_breaker_enabled", True)
+        monkeypatch.setattr(app_settings, "circuit_breaker_failure_threshold", 2)
+        yield
+        get_circuit_breaker_registry().reset_all()
+
+    def _circuit(self):
+        from app.core.resilience import get_circuit_breaker_registry
+
+        return get_circuit_breaker_registry().get_or_create("docker_engine")
+
+    async def test_docker_failures_open_circuit_after_threshold(self):
+        """AC 1 : (False, msg) × failure_threshold → circuit OPEN → rejet."""
+        from app.core.exceptions import CircuitBreakerOpenError
+
+        svc = _service_mock()
+        svc.stop_container = AsyncMock(return_value=(False, "docker down"))
+        adapter = DockerContainerAdapter("cid", service=svc, client=_client_mock())
+
+        # 2 échecs (threshold=2) : WindFlowException levée par l'adapter,
+        # chaque tuple (False, msg) compte un échec côté circuit.
+        for _ in range(2):
+            with pytest.raises(WindFlowException):
+                await adapter.stop()
+        assert self._circuit().state.value == "open"
+
+        # 3e appel : circuit ouvert → rejet typé, sans appel au service
+        with pytest.raises(CircuitBreakerOpenError):
+            await adapter.stop()
+
+    async def test_open_circuit_skips_service_call(self):
+        """AC 1 : circuit ouvert → lève sans nouvel appel au mock."""
+        from app.core.exceptions import CircuitBreakerOpenError
+
+        svc = _service_mock()
+        svc.stop_container = AsyncMock(return_value=(False, "down"))
+        adapter = DockerContainerAdapter("cid", service=svc, client=_client_mock())
+
+        with pytest.raises(WindFlowException):
+            await adapter.stop()
+        with pytest.raises(WindFlowException):
+            await adapter.stop()  # threshold=2 atteint → OPEN
+        assert svc.stop_container.await_count == 2
+
+        with pytest.raises(CircuitBreakerOpenError):
+            await adapter.stop()
+        assert svc.stop_container.await_count == 2  # aucun nouvel appel réseau
+
+    async def test_docker_success_keeps_circuit_closed(self):
+        """Verbe réussi → circuit CLOSED, compteur d'échecs à 0."""
+        svc = _service_mock()
+        adapter = DockerContainerAdapter("cid", service=svc, client=_client_mock())
+        await adapter.start()
+        circuit = self._circuit()
+        assert circuit.state.value == "closed"
+        assert circuit.failure_count == 0
+
+    async def test_circuit_breaker_disabled_pass_through(self, monkeypatch):
+        """Settings off → pass-through : N échecs n'ouvrent jamais le circuit."""
+        from app.config import settings as app_settings
+
+        monkeypatch.setattr(app_settings, "circuit_breaker_enabled", False)
+        svc = _service_mock()
+        svc.stop_container = AsyncMock(return_value=(False, "down"))
+        adapter = DockerContainerAdapter("cid", service=svc, client=_client_mock())
+
+        for _ in range(7):  # bien au-delà du threshold
+            with pytest.raises(WindFlowException):
+                await adapter.stop()
+        # Comportement 174.1 inchangé : le service est bien appelé chaque fois
+        assert svc.stop_container.await_count == 7
+        from app.core.resilience import get_circuit_breaker_registry
+
+        assert "docker_engine" not in get_circuit_breaker_registry().get_all_states()
+
+    async def test_existing_delegation_tests_still_pass(self):
+        """Non-régression : l'enveloppement ne change pas la délégation."""
+        svc = _service_mock()
+        adapter = DockerContainerAdapter("cid", service=svc, client=_client_mock())
+        await adapter.start()
+        await adapter.stop()
+        await adapter.restart()
+        svc.start_container.assert_awaited_once_with("cid")
+        svc.stop_container.assert_awaited_once_with("cid")
+        svc.restart_container.assert_awaited_once_with("cid")
+        assert self._circuit().state.value == "closed"
 
 
 class TestInspection:

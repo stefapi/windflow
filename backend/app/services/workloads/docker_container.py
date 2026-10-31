@@ -9,10 +9,16 @@ d'exécution — l'adapter traduit le contrat spec 02.
 
 Le point d'extension ``update()`` délègue au recreate du client Docker ;
 il est rebranché sur le recreate **sécurisé** par la STORY-174.2.
+
+STORY-251 : les verbes réseau sont protégés par le circuit breaker
+``docker_engine`` (helper :meth:`_guarded`). Sémantique d'échec :
+exception transport **ou** tuple ``(False, msg)`` retourné par la
+couche d'exécution (les services Docker ne lèvent pas). ``False`` par
+les settings → pass-through intégral.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ...enums.workload import WorkloadFamily
 from ...schemas.workloads import (
@@ -25,6 +31,7 @@ from ...schemas.workloads import (
 )
 from ..docker_client_service import DockerClientService
 from ..docker_service import DockerService
+from ._circuit_guard import guarded_docker_call
 from .base import ActionNotImplementedError, AppAdapter
 
 logger = logging.getLogger(__name__)
@@ -88,6 +95,18 @@ class DockerContainerAdapter(AppAdapter):
 
     def _owns_client(self) -> bool:
         return self._client is None
+
+    # ─── Résilience (STORY-251) ───────────────────────────────
+    async def _guarded(
+        self, func: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Any:
+        """Exécute ``func`` sous le circuit breaker ``docker_engine``.
+
+        Délègue à :func:`~app.services.workloads._circuit_guard.
+        guarded_docker_call` (sémantique tuple ``(bool, msg)``,
+        pass-through settings off, rejet rapide circuit ouvert).
+        """
+        return await guarded_docker_call(func, *args, **kwargs)
 
     # ─── Métriques et santé ──────────────────────────────────
     async def get_metrics(self) -> WorkloadMetrics:
@@ -210,21 +229,23 @@ class DockerContainerAdapter(AppAdapter):
 
     # ─── Verbes universels ───────────────────────────────────
     async def start(self) -> None:
-        ok, msg = await self._service.start_container(self.container_id)
+        ok, msg = await self._guarded(self._service.start_container, self.container_id)
         if not ok:
             from ...core.exceptions import WindFlowException
 
             raise WindFlowException(f"start {self.container_id} échoué: {msg}")
 
     async def stop(self) -> None:
-        ok, msg = await self._service.stop_container(self.container_id)
+        ok, msg = await self._guarded(self._service.stop_container, self.container_id)
         if not ok:
             from ...core.exceptions import WindFlowException
 
             raise WindFlowException(f"stop {self.container_id} échoué: {msg}")
 
     async def restart(self) -> None:
-        ok, msg = await self._service.restart_container(self.container_id)
+        ok, msg = await self._guarded(
+            self._service.restart_container, self.container_id
+        )
         if not ok:
             from ...core.exceptions import WindFlowException
 
@@ -241,7 +262,9 @@ class DockerContainerAdapter(AppAdapter):
         try:
             # STORY-174.2 : recreate sécurisé (rebase par valeur,
             # rollback automatique, secrets `***` résolus).
-            new_id, _new_detail = await client.recreate_container_secure(
+            # STORY-251 : sous circuit breaker (échec transport compté).
+            new_id, _new_detail = await self._guarded(
+                client.recreate_container_secure,
                 self.container_id,
                 image=(config or {}).get("image"),
                 pull_image=bool((config or {}).get("pull_image", False)),
@@ -261,7 +284,9 @@ class DockerContainerAdapter(AppAdapter):
         Délègue à ``DockerService.deploy_container`` (substitution et
         validation déjà faites en amont par l'appelant historique).
         """
-        return await self._service.deploy_container(config, container_name)
+        return await self._guarded(
+            self._service.deploy_container, config, container_name
+        )
 
     async def backup(self) -> Any:
         raise ActionNotImplementedError(
@@ -274,7 +299,9 @@ class DockerContainerAdapter(AppAdapter):
         )
 
     async def stream_logs(self, tail: int = 100) -> str:
-        ok, logs = await self._service.get_container_logs(self.container_id, tail)
+        ok, logs = await self._guarded(
+            self._service.get_container_logs, self.container_id, tail
+        )
         if not ok:
             from ...core.exceptions import WindFlowException
 

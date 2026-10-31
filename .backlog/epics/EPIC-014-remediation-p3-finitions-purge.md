@@ -42,7 +42,7 @@ Chaque item P3 du plan de remédiation devient une story — le découpage final
 ## Liste des Stories liées
 
 - [x] STORY-250 : Purge du code mort et résidus + dépréciation `/auth/me` — permissions legacy, croniter conditionnel, abstractions, stub workflows, litellm orphelin, print debug, HealthCheck, `/auth/me` déprécié (P3-1 + P3-3)
-- [ ] STORY-251 : CircuitBreaker — câbler sur les appels externes ou supprimer le module (P3-2)
+- [x] STORY-251 : CircuitBreaker — câbler sur les appels externes ou supprimer le module (P3-2)
 - [ ] STORY-252 : Corrections consolidées des spécifications — arbitrages F1-F6 appliqués aux specs (P3-4)
 - [ ] STORY-253 : Mise à jour documentaire post-remédiation — `backend_status.md`, rules `.roo`, CHANGELOG (P3-5)
 - [ ] STORY-254 : Revue finale de conformité — audit specs ↔ code et tableau de conformité final (clôture du plan)

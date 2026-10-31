@@ -52,6 +52,8 @@ normalisés UUID → `{id}`, numérique → `{n}` — cardinalité bornée).
 | Déploiements | `windflow_deployments_active` (Gauge) | — |
 | Scheduler | `windflow_scheduler_executions_total` (Counter) | `status` ∈ `success` \| `failed` \| `skipped` |
 | Scheduler | `windflow_scheduler_execution_duration_seconds` (Histogram) | — |
+| Résilience | `windflow_circuit_breaker_state` (Gauge — STORY-251) | `name` : 0=closed, 1=half_open, 2=open |
+| Résilience | `windflow_circuit_breaker_failures_total` (Counter — STORY-251) | `name` (échecs cumulés comptés par le circuit) |
 | WebSocket | `windflow_websocket_*` (14 séries : connexions, messages, broadcasts, plugins, auth, abonnements, erreurs) | cf. `app/websocket/metrics.py` |
 
 Correspondance historique (dashboards/alertes corrigés en conséquence) :
@@ -80,9 +82,37 @@ Points d'instrumentation (décision D2 — à la source, pas via le bus) :
   `plugin.py`, `ack_registry.py` (dégradation `ack_timeout` mesurée — série
   `windflow_websocket_errors_total{error_type="ack_timeout"}`),
   `event_bridge.py`.
+- **Circuit breakers (STORY-251)** : `core/resilience.py` — chaque échec
+  compté incrémente `windflow_circuit_breaker_failures_total{name}` ; chaque
+  transition d'état (closed→open, open→half_open, half_open→closed) met à
+  jour la gauge `windflow_circuit_breaker_state{name}` **et** loggue un
+  enregistrement structuré (`extra` : `circuit`, `old_state`, `new_state`,
+  `correlation_id` via contextvar STORY-251 D8). Circuits : `docker_engine`
+  (verbes réseau des WorkloadAdapters), `plugin_registry` (fetch HTTP du
+  registre — le fallback stale-while-error sert toujours `_last_good_index`
+  après échec), `ssh:{host_id}` (UUID d'hôte stable — seuls les échecs
+  transport exit 124/255 comptent, jamais les exit codes métier).
+  Seuils configurés : `WINDFLOW_CIRCUIT_BREAKER_*` (`env.example`).
+  Alerte : `WindflowCircuitBreakerOpen` (`state == 2` pendant 1 m,
+  severity warning).
 
 Tous les helpers sont **best-effort** (try/except) : une métrique en échec ne
 casse jamais un déploiement, une exécution scheduler ou un broadcast.
+
+**Vérification des séries breaker** (STORY-251) :
+
+```bash
+# État des circuits (0=closed, 1=half_open, 2=open) + échecs cumulés
+curl -s http://localhost:8000/api/v1/metrics | grep windflow_circuit_breaker
+# attendu : une ligne state par circuit déjà utilisé (les gauges n'apparaissent
+# qu'après la première transition ou le premier échec compté) ;
+# docker_engine apparaît dès le premier verbe réseau d'un adapter.
+```
+
+Réinitialisation : l'état des circuits est en mémoire process (un circuit
+ouvert se referme de lui-même après `timeout` s + succès en demi-ouvert ;
+redémarrer l'API réinitialise tous les circuits — chaque worker uvicorn
+possède ses propres circuits, modular monolith, cf. README workloads).
 
 ## 3. Procédure de démo reproductible (AC 4)
 

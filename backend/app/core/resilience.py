@@ -3,17 +3,28 @@ Patterns de résilience pour WindFlow.
 
 Implémente Circuit Breaker et Retry Policies pour la robustesse du système.
 
-STORY-250.1 : les classes HealthCheck/HealthCheckRegistry (orphelines,
-redondantes avec le health-check des hosts) ont été purgées — le sort du
-CircuitBreaker restant est arbitré par STORY-251.
+STORY-251 : le :class:`CircuitBreaker` est **câblé** sur les appels
+externes (démon Docker via les WorkloadAdapters ``docker_engine``,
+registre de plugins ``plugin_registry``, exécutions SSH ``ssh:{host_id}``)
+à travers le :class:`CircuitBreakerRegistry` — seuils configurés via
+les settings ``circuit_breaker_*``. Le retry des déploiements reste
+porté par ``DeploymentOrchestrator`` : le breaker coupe sans re-tenir
+(aucune duplication, plan §2.G).
+
+Le décorateur générique :func:`retry` / :class:`RetryPolicy` est
+conservé tel quel (utilitaire non câblé).
 """
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, Optional
+
+from ..config import settings
+from .exceptions import CircuitBreakerOpenError
+from .metrics import record_circuit_failure, record_circuit_state
 
 logger = logging.getLogger(__name__)
 
@@ -26,21 +37,56 @@ class CircuitState(str, Enum):
     HALF_OPEN = "half_open"  # Test de récupération
 
 
-class HealthStatus(str, Enum):
-    """Statuts de santé des composants."""
-
-    HEALTHY = "healthy"
-    DEGRADED = "degraded"
-    UNHEALTHY = "unhealthy"
-    UNKNOWN = "unknown"
+#: Valeur exposée par la Gauge ``windflow_circuit_breaker_state`` :
+#: 0 = closed, 1 = half_open, 2 = open (sémantique STORY-251 D7).
+_STATE_METRIC_VALUES: Dict[CircuitState, int] = {
+    CircuitState.CLOSED: 0,
+    CircuitState.HALF_OPEN: 1,
+    CircuitState.OPEN: 2,
+}
 
 
 class CircuitBreaker:
     """
     Implémentation du pattern Circuit Breaker.
 
-    Protège le système contre les défaillances en cascade en
-    coupant temporairement les appels à un service défaillant.
+    Protège le système contre les défaillances en cascade en coupant
+    temporairement les appels à un service défaillant (spec 04
+    § Résilience et fiabilité).
+
+    Cycle de vie :
+
+    - CLOSED : comptage des échecs consécutifs ;
+    - OPEN après ``failure_threshold`` échecs — les appels suivants
+      sont rejetés **immédiatement, sans tentative réseau**
+      (:class:`~app.core.exceptions.CircuitBreakerOpenError`) ;
+    - HALF_OPEN après ``timeout`` secondes — une sonde est autorisée ;
+    - CLOSED après ``success_threshold`` succès consécutifs en
+      half-open (retour OPEN au premier échec).
+
+    Concurrence (STORY-251 R1) : les transitions d'état et les
+    compteurs sont protégés par un :class:`asyncio.Lock`. Le verrou
+    couvre chaque section critique (admission, report de succès ou
+    d'échec) mais **pas** l'exécution de la fonction protégée — le
+    breaker ne sérialise pas les appels réseau concurrents.
+
+    Sécurité (rules 40) : les logs ne portent jamais le message d'une
+    exception — uniquement ``type(exc).__name__`` (les commandes/stderr
+    peuvent contenir du contexte sensible).
+
+    Args:
+        name: Nom du circuit — sert de label Prometheus ; nom statique
+            (``docker_engine``, ``plugin_registry``) ou ``ssh:{host_id}``
+            (UUID), jamais de hostname libre (cardinalité bornée, rules 45).
+        failure_threshold: Nombre d'échecs consécutifs avant ouverture.
+        success_threshold: Nombre de succès en half-open avant fermeture.
+        timeout: Durée d'ouverture (secondes) avant qu'une sonde
+            half-open soit autorisée.
+        half_open_timeout: Réservé (conservé pour compatibilité avec
+            le socle historique) — la sonde half-open est autorisée
+            dès ``timeout`` écoulé.
+        clock: Horloge injectable (tests : transition half-open sans
+            sleep réel) ; défaut UTC aware.
     """
 
     def __init__(
@@ -48,124 +94,180 @@ class CircuitBreaker:
         name: str,
         failure_threshold: int = 5,
         success_threshold: int = 2,
-        timeout: int = 60,
-        half_open_timeout: int = 30,
-    ):
-        """
-        Initialise le Circuit Breaker.
-
-        Args:
-            name: Nom du circuit (pour logging)
-            failure_threshold: Nombre d'échecs avant ouverture
-            success_threshold: Nombre de succès pour fermer en half-open
-            timeout: Durée d'ouverture en secondes
-            half_open_timeout: Durée en half-open avant nouvelle tentative
-        """
+        timeout: float = 60,
+        half_open_timeout: float = 30,
+        clock: Optional[Callable[[], datetime]] = None,
+    ) -> None:
         self.name = name
         self.failure_threshold = failure_threshold
         self.success_threshold = success_threshold
         self.timeout = timeout
         self.half_open_timeout = half_open_timeout
+        self._clock: Callable[[], datetime] = clock or (
+            lambda: datetime.now(timezone.utc)
+        )
 
         self.state = CircuitState.CLOSED
         self.failure_count = 0
         self.success_count = 0
         self.last_failure_time: Optional[datetime] = None
-        self.last_state_change: datetime = datetime.utcnow()
+        self.last_state_change: datetime = self._clock()
+        self._lock = asyncio.Lock()
+
+    # ─── Transitions internes (appelées sous lock) ────────────
+
+    def _set_state(self, new_state: CircuitState) -> None:
+        """Change l'état si nécessaire (log + métrique sur transition)."""
+        old = self.state
+        if old is new_state:
+            return
+        self.state = new_state
+        self.last_state_change = self._clock()
+        self._notify_transition(old, new_state)
+
+    def _notify_transition(self, old: CircuitState, new: CircuitState) -> None:
+        """Log structuré + métrique d'une transition (AC 3).
+
+        Le correlation_id vient du contextvar (STORY-251 D8) quand il
+        est disponible — ``None`` hors requête HTTP (exécutions
+        scheduler, hypothèse H3). Import paresseux : ``core/`` reste
+        framework-agnostic (rules 55).
+        """
+        correlation_id: Optional[str] = None
+        try:
+            from ..middleware.correlation import get_correlation_id
+
+            correlation_id = get_correlation_id()
+        except Exception:  # pragma: no cover — best-effort, jamais bloquant
+            correlation_id = None
+        # Message générique : aucun détail interne (rules 40)
+        logger.warning(
+            "Circuit breaker state transition",
+            extra={
+                "circuit": self.name,
+                "old_state": old.value,
+                "new_state": new.value,
+                "correlation_id": correlation_id,
+            },
+        )
+        record_circuit_state(self.name, _STATE_METRIC_VALUES[new])
 
     def _should_attempt_call(self) -> bool:
-        """Détermine si un appel peut être tenté."""
+        """Détermine si un appel peut être tenté (appelé sous lock)."""
         if self.state == CircuitState.CLOSED:
             return True
 
         if self.state == CircuitState.OPEN:
-            # Vérifier si le timeout est écoulé
-            if self.last_failure_time:
-                elapsed = (datetime.utcnow() - self.last_failure_time).total_seconds()
+            # Vérifier si le timeout est écoulé → sonde half-open
+            if self.last_failure_time is not None:
+                elapsed = (self._clock() - self.last_failure_time).total_seconds()
                 if elapsed >= self.timeout:
-                    logger.info(f"Circuit {self.name}: Transitioning to HALF_OPEN")
-                    self.state = CircuitState.HALF_OPEN
+                    self._set_state(CircuitState.HALF_OPEN)
                     self.success_count = 0
-                    self.last_state_change = datetime.utcnow()
                     return True
             return False
 
-        # HALF_OPEN: permettre des tentatives limitées
+        # HALF_OPEN : sonde autorisée
         return True
 
     def _on_success(self) -> None:
-        """Gère un appel réussi."""
+        """Gère un appel réussi (appelé sous lock)."""
         if self.state == CircuitState.HALF_OPEN:
             self.success_count += 1
             if self.success_count >= self.success_threshold:
-                logger.info(f"Circuit {self.name}: Transitioning to CLOSED")
-                self.state = CircuitState.CLOSED
+                self._set_state(CircuitState.CLOSED)
                 self.failure_count = 0
                 self.success_count = 0
-                self.last_state_change = datetime.utcnow()
         elif self.state == CircuitState.CLOSED:
-            # Reset failure count on success
+            # Un succès réinitialise la série d'échecs consécutifs
             self.failure_count = 0
 
     def _on_failure(self) -> None:
-        """Gère un appel échoué."""
+        """Gère un appel échoué (appelé sous lock)."""
         self.failure_count += 1
-        self.last_failure_time = datetime.utcnow()
+        self.last_failure_time = self._clock()
+        record_circuit_failure(self.name)
 
         if self.state == CircuitState.CLOSED:
             if self.failure_count >= self.failure_threshold:
-                logger.warning(
-                    f"Circuit {self.name}: Opening due to {self.failure_count} failures"
-                )
-                self.state = CircuitState.OPEN
-                self.last_state_change = datetime.utcnow()
-
+                self._set_state(CircuitState.OPEN)
         elif self.state == CircuitState.HALF_OPEN:
-            logger.warning(
-                f"Circuit {self.name}: Reopening due to failure in HALF_OPEN"
-            )
-            self.state = CircuitState.OPEN
-            self.last_state_change = datetime.utcnow()
+            # Un seul échec en half-open → réouverture
+            self._set_state(CircuitState.OPEN)
 
-    async def call(self, func: Callable, *args, **kwargs) -> Any:
+    # ─── API asynchrone ────────────────────────────────────────
+
+    async def call(
+        self,
+        func: Callable,
+        *args: Any,
+        failure_filter: Optional[Callable[[BaseException], bool]] = None,
+        **kwargs: Any,
+    ) -> Any:
         """
         Exécute une fonction protégée par le circuit breaker.
 
         Args:
-            func: Fonction à exécuter
-            *args: Arguments positionnels
-            **kwargs: Arguments nommés
+            func: Fonction à exécuter (sync ou async).
+            *args: Arguments positionnels.
+            failure_filter: Prédicat optionnel — une exception ne
+                compte comme échec que si le filtre l'accepte (ex. SSH :
+                exit 124/255 = transport uniquement, risque H4) ; une
+                exception filtrée est re-levée **sans** comptage.
+            **kwargs: Arguments nommés.
 
         Returns:
-            Résultat de la fonction
+            Résultat de la fonction.
 
         Raises:
-            RuntimeError: Si le circuit est ouvert
-            Exception: Exception originale de la fonction
+            CircuitBreakerOpenError: Circuit ouvert — rejet immédiat,
+                ``func`` n'est jamais appelée.
+            Exception: Exception originale de la fonction (re-levée).
         """
-        if not self._should_attempt_call():
-            if self.last_failure_time is None:
-                raise RuntimeError(
-                    f"Circuit breaker {self.name} is OPEN. Service unavailable."
-                )
-            raise RuntimeError(
-                f"Circuit breaker {self.name} is OPEN. "
-                f"Service unavailable until {self.last_failure_time + timedelta(seconds=self.timeout)}"
-            )
+        async with self._lock:
+            if not self._should_attempt_call():
+                raise CircuitBreakerOpenError(self.name)
 
         try:
             if asyncio.iscoroutinefunction(func):
                 result = await func(*args, **kwargs)
             else:
                 result = func(*args, **kwargs)
-
-            self._on_success()
-            return result
-
-        except Exception as e:
-            self._on_failure()
-            logger.error(f"Circuit {self.name}: Call failed - {e}")
+        except asyncio.CancelledError:
+            # Annulation ≠ défaillance de la dépendance : jamais comptée
             raise
+        except BaseException as exc:
+            counts_as_failure = failure_filter is None or failure_filter(exc)
+            if counts_as_failure:
+                async with self._lock:
+                    self._on_failure()
+            # Jamais le message brut en log — type uniquement (rules 40)
+            logger.warning(
+                "Circuit %s: échec de l'appel protégé — %s (compté=%s)",
+                self.name,
+                type(exc).__name__,
+                counts_as_failure,
+            )
+            raise
+
+        async with self._lock:
+            self._on_success()
+        return result
+
+    async def report_success(self) -> None:
+        """Reporte un succès externe (résultat tuple ``(True, msg)``).
+
+        Les couches d'exécution Docker retournent des tuples
+        ``(bool, msg)`` au lieu de lever : les WorkloadAdapters
+        rapportent le booléen via cette API publique (STORY-251 D4).
+        """
+        async with self._lock:
+            self._on_success()
+
+    async def report_failure(self) -> None:
+        """Reporte un échec externe (résultat tuple ``(False, msg)``)."""
+        async with self._lock:
+            self._on_failure()
 
     def get_state(self) -> Dict[str, Any]:
         """Retourne l'état actuel du circuit."""
@@ -206,6 +308,68 @@ def circuit_breaker(name: str, failure_threshold: int = 5, timeout: int = 60):
         return wrapper
 
     return decorator
+
+
+class CircuitBreakerRegistry:
+    """Registre de circuits nommés (STORY-251 — décision D1).
+
+    ``get_or_create`` est idempotent : le premier appel construit le
+    circuit avec les seuils des settings ``circuit_breaker_*`` (lus une
+    fois, à la création), les appels suivants retournent la même
+    instance — l'état est partagé par nom dans le process.
+
+    Noms de circuits (cardinalité bornée, rules 45) :
+
+    - ``docker_engine`` — démon Docker (unique/local aujourd'hui,
+      hypothèse H1 ; découpage par cible = Roadmap multi-hôtes) ;
+    - ``plugin_registry`` — fetch HTTP du registre officiel ;
+    - ``ssh:{host_id}`` — exécutions distantes, UUID d'hôte stable
+      (jamais de hostname libre en label de métrique).
+    """
+
+    def __init__(self) -> None:
+        self._circuits: Dict[str, CircuitBreaker] = {}
+
+    def get_or_create(self, name: str) -> CircuitBreaker:
+        """Retourne le circuit nommé (créé avec les settings au besoin)."""
+        circuit = self._circuits.get(name)
+        if circuit is None:
+            circuit = CircuitBreaker(
+                name,
+                failure_threshold=settings.circuit_breaker_failure_threshold,
+                success_threshold=settings.circuit_breaker_success_threshold,
+                timeout=settings.circuit_breaker_timeout,
+                half_open_timeout=settings.circuit_breaker_half_open_timeout,
+            )
+            self._circuits[name] = circuit
+        return circuit
+
+    def get_all_states(self) -> Dict[str, Dict[str, Any]]:
+        """États de tous les circuits enregistrés."""
+        return {name: circuit.get_state() for name, circuit in self._circuits.items()}
+
+    def reset_all(self) -> None:
+        """Oublie tous les circuits (isolation des tests — risque R2)."""
+        self._circuits.clear()
+
+
+#: Instance module-level (décision D1) — singleton du process.
+_registry = CircuitBreakerRegistry()
+
+
+def get_circuit_breaker_registry() -> CircuitBreakerRegistry:
+    """Accesseur du registre global des circuits (STORY-251)."""
+    return _registry
+
+
+def is_circuit_breaker_enabled() -> bool:
+    """Le câblage breaker est-il actif ?
+
+    ``circuit_breaker_enabled=False`` → pass-through intégral : les
+    points de câblage (adapters, SSH, registre) appellent directement
+    la couche d'exécution, zéro instrumentation (STORY-251 D4).
+    """
+    return settings.circuit_breaker_enabled
 
 
 class RetryPolicy:

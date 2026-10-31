@@ -418,3 +418,118 @@ class TestListAndGetPlugins:
         assert mock_session.get.call_count == 1
         assert index_b.version == index_a.version
         assert index_b.plugins == index_a.plugins
+
+
+# ── Tests circuit breaker plugin_registry (STORY-251) ───────────────────────
+
+
+class TestPluginRegistryCircuitBreaker:
+    """Circuit ``plugin_registry`` sur le fetch HTTP — fallback conservé."""
+
+    @pytest.fixture(autouse=True)
+    def _isolate_circuit(self, monkeypatch):
+        from app.config import settings as app_settings
+        from app.core.resilience import get_circuit_breaker_registry
+
+        get_circuit_breaker_registry().reset_all()
+        monkeypatch.setattr(app_settings, "circuit_breaker_enabled", True)
+        monkeypatch.setattr(app_settings, "circuit_breaker_failure_threshold", 2)
+        yield
+        get_circuit_breaker_registry().reset_all()
+
+    def _circuit(self):
+        from app.core.resilience import get_circuit_breaker_registry
+
+        return get_circuit_breaker_registry().get_or_create("plugin_registry")
+
+    @pytest.mark.asyncio
+    async def test_registry_fetch_failure_counts(
+        self, service: PluginRegistryService
+    ) -> None:
+        """HTTP 500 → WindFlowException registry_unavailable → échec compté."""
+        mock_response = _make_mock_session_response(status=500)
+        mock_session = _make_mock_session(get_return=mock_response)
+
+        with patch(
+            "app.services.plugin_registry_service.aiohttp.ClientSession",
+            return_value=mock_session,
+        ):
+            with pytest.raises(WindFlowException):
+                await service.fetch_index()
+
+        assert self._circuit().failure_count == 1
+
+    @pytest.mark.asyncio
+    async def test_stale_while_error_still_served_with_open_circuit(
+        self,
+        service: PluginRegistryService,
+        valid_index_json: Dict[str, Any],
+    ) -> None:
+        """Circuit ouvert + _last_good_index → index servi, AUCUN appel HTTP.
+
+        Comportement STORY-168 préservé : le fallback stale-while-error
+        intercepte le rejet CircuitBreakerOpenError.
+        """
+        # 1) Un premier fetch réussi alimente _last_good_index
+        mock_ok = _make_mock_session_response(json_data=valid_index_json)
+        session_ok = _make_mock_session(get_return=mock_ok)
+        with patch(
+            "app.services.plugin_registry_service.aiohttp.ClientSession",
+            return_value=session_ok,
+        ):
+            good_index = await service.fetch_index()
+        assert service._last_good_index is not None
+
+        # 2) On expire l'entrée du cache unifié puis on ouvre le circuit
+        #    directement (état forcé — via fetch_index, le fallback
+        #    stale-while-error servirait l'index sans laisser le circuit
+        #    atteindre son threshold, comportement STORY-168 préservé).
+        unified_cache = await cache_module.get_cache()
+        await unified_cache.delete("registry:index")
+
+        circuit = self._circuit()
+        circuit.state = type(circuit.state)("open")
+        circuit.last_failure_time = circuit._clock()
+        assert circuit.state.value == "open"
+        # L'entrée du cache est absente (seul _last_good_index reste)
+        assert await unified_cache.get("registry:index") is None
+
+        # 3) Circuit ouvert + fallback → index servi SANS nouvel appel HTTP
+        mock_ko = _make_mock_session_response(status=500)
+        session_ko = _make_mock_session(get_return=mock_ko)
+        with patch(
+            "app.services.plugin_registry_service.aiohttp.ClientSession",
+            return_value=session_ko,
+        ):
+            index = await service.fetch_index()
+        assert index.version == good_index.version
+        assert session_ko.get.call_count == 0  # zéro requête émise
+
+    @pytest.mark.asyncio
+    async def test_open_circuit_no_last_good_raises_cleanly(
+        self, service: PluginRegistryService
+    ) -> None:
+        """Circuit ouvert sans fallback → exception typée (WindFlowException)."""
+        from app.core.exceptions import CircuitBreakerOpenError
+
+        assert service._last_good_index is None  # aucun fallback disponible
+
+        # Circuit ouvert (état forcé — voir test précédent pour la raison)
+        circuit = self._circuit()
+        circuit.state = type(circuit.state)("open")
+        circuit.last_failure_time = circuit._clock()
+
+        mock_ko = _make_mock_session_response(status=500)
+        session_ko = _make_mock_session(get_return=mock_ko)
+        with patch(
+            "app.services.plugin_registry_service.aiohttp.ClientSession",
+            return_value=session_ko,
+        ):
+            # Rejet immédiat typé — CircuitBreakerOpenError est une
+            # WindFlowException (rules 30), interceptable par les appelants.
+            with pytest.raises(WindFlowException) as exc_info:
+                await service.fetch_index()
+        assert isinstance(exc_info.value, CircuitBreakerOpenError)
+        assert exc_info.value.details["error_type"] == "circuit_open"
+        # Rejet AVANT toute requête HTTP (échec rapide)
+        assert session_ko.get.call_count == 0

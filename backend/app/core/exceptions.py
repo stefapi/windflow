@@ -219,6 +219,39 @@ class ServiceUnavailableError(APIError):
     error_code = "SERVICE_UNAVAILABLE"
 
 
+class CircuitBreakerOpenError(ServiceUnavailableError):
+    """Levée par un circuit breaker ouvert — 503 (STORY-251).
+
+    Le circuit (:class:`~app.core.resilience.CircuitBreaker`) a tranché
+    après ``failure_threshold`` échecs consécutifs : l'appel est rejeté
+    **immédiatement, sans tentative réseau** (protection anti-cascade,
+    spec 04 § Résilience et fiabilité). Semantique 503 : la dépendance
+    (démon Docker, registre plugins, hôte SSH) est considérée
+    indisponible jusqu'au passage en demi-ouvert après
+    ``circuit_breaker_timeout`` secondes.
+
+    Exception **interne résilience** : côté déploiements elle est
+    interceptée par le ``except`` existant de ``deploy_stack_async``
+    (statut ``FAILED`` propre) ; côté endpoints elle remonte en 503
+    enveloppé via le handler global — message générique, jamais de
+    détail interne (rules 40). ``details`` structure le marqueur
+    ``error_type="circuit_open"`` consommé par les logs/événements,
+    avec le nom du circuit (nom statique ou ``ssh:{host_id}`` — jamais
+    de hostname libre).
+
+    Args:
+        circuit_name: Nom du circuit ouvert (label de métrique).
+    """
+
+    def __init__(self, circuit_name: str) -> None:
+        self.circuit_name = circuit_name
+        super().__init__(
+            f"Circuit breaker '{circuit_name}' ouvert — "
+            "dépendance indisponible, nouvelle tentative rejetée sans appel",
+            details={"error_type": "circuit_open", "circuit": circuit_name},
+        )
+
+
 class CommandExecutionError(WindFlowException):
     """Levée lorsqu'une commande système échoue (local ou distant).
 

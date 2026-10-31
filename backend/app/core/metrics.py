@@ -12,10 +12,12 @@ Déploiements               ``windflow_deployments_total`` (Counter)       ``res
 Déploiements               ``windflow_deployment_duration_seconds`` (Histogram)     —
 Déploiements               ``windflow_deployments_active`` (Gauge)        —
 Scheduler                  ``windflow_scheduler_executions_total`` (Counter)       ``status`` ∈ ``success`` | ``failed`` | ``skipped``
-Scheduler                  ``windflow_scheduler_execution_duration_seconds`` (Histogram)  —
-WebSocket                  ``windflow_websocket_*`` (14 séries)           inchangées (définies dans
-                                                                          :mod:`app.websocket.metrics`)
-=========================  =============  ===========================================
+ Scheduler                  ``windflow_scheduler_execution_duration_seconds`` (Histogram)  —
+ Résilience                 ``windflow_circuit_breaker_state`` (Gauge)      ``name`` (0=closed, 1=half_open, 2=open)
+ Résilience                 ``windflow_circuit_breaker_failures_total`` (Counter)     ``name``
+ WebSocket                  ``windflow_websocket_*`` (14 séries)           inchangées (définies dans
+                                                                           :mod:`app.websocket.metrics`)
+ =========================  =============  ===========================================
 
 Pourquoi instrumenter **à la source** et non via un consommateur du bus
 d'événements (décision D2) : le bus STORY-162 dispatche in-memory **et**
@@ -95,6 +97,22 @@ SCHEDULER_DURATION = Histogram(
     "windflow_scheduler_execution_duration_seconds",
     "Durée d'exécution des tâches planifiées (secondes)",
     buckets=(0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 15.0, 60.0, 300.0, 600.0),
+)
+
+# ============================================================================
+# SÉRIES RÉSILIENCE — CIRCUIT BREAKERS (STORY-251)
+# ============================================================================
+
+CIRCUIT_BREAKER_STATE = Gauge(
+    "windflow_circuit_breaker_state",
+    "État d'un circuit breaker (0=closed, 1=half_open, 2=open)",
+    ["name"],
+)
+
+CIRCUIT_BREAKER_FAILURES = Counter(
+    "windflow_circuit_breaker_failures_total",
+    "Nombre total d'échecs comptés par un circuit breaker",
+    ["name"],
 )
 
 # ============================================================================
@@ -226,6 +244,39 @@ def record_deployment_transition(
             old_status,
             new_status,
         )
+
+
+def record_circuit_state(name: str, state_value: int) -> None:
+    """Enregistre l'état d'un circuit breaker (STORY-251).
+
+    Args:
+        name: Nom du circuit — noms statiques (``docker_engine``,
+            ``plugin_registry``) ou ``ssh:{host_id}`` (UUID d'hôte
+            stable). **Jamais** de hostname libre ni de query string :
+            cardinalité bornée, aucune donnée sensible en label
+            (rules 40/45).
+        state_value: ``0`` = closed, ``1`` = half_open, ``2`` = open.
+    """
+    try:
+        CIRCUIT_BREAKER_STATE.labels(name=name).set(state_value)
+    except Exception:  # best-effort : jamais casser un appel protégé
+        logger.exception(
+            "Métrique circuit breaker impossible (métrique ignorée): state=%s",
+            state_value,
+        )
+
+
+def record_circuit_failure(name: str) -> None:
+    """Incrémente le compteur d'échecs d'un circuit breaker (STORY-251).
+
+    Args:
+        name: Nom du circuit (mêmes règles de cardinalité que
+            :func:`record_circuit_state`).
+    """
+    try:
+        CIRCUIT_BREAKER_FAILURES.labels(name=name).inc()
+    except Exception:  # best-effort : jamais casser un appel protégé
+        logger.exception("Métrique circuit breaker impossible (métrique ignorée)")
 
 
 def record_scheduler_execution(status: str, duration: Optional[float] = None) -> None:

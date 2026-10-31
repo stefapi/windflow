@@ -287,12 +287,17 @@ class HostScannerService:
                 host=host,
             )
             async with asyncssh.connect(**ssh_kwargs) as connection:
+                # STORY-251 : circuits ssh:{host_id} — UUID stable de la
+                # cible persistée (jamais de hostname libre en label).
                 sudo_executor = SSHCommandExecutor(
                     connection,
                     sudo_user=sudo_user,
                     sudo_password=sudo_password,
+                    circuit_name=f"ssh:{host.id}",
                 )
-                plain_executor = SSHCommandExecutor(connection)
+                plain_executor = SSHCommandExecutor(
+                    connection, circuit_name=f"ssh:{host.id}"
+                )
 
                 # 1) Scan des capacités (avec sudo si configuré)
                 scan_result = await self._run_scan(sudo_executor, host=host.host)

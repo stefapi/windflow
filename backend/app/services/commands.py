@@ -4,19 +4,28 @@ Exécuteurs de commandes pour le scan de cibles (local et distant).
 Fournit un protocole commun (:class:`CommandExecutor`) et deux implémentations :
 - :class:`LocalCommandExecutor` pour les commandes locales via subprocess
 - :class:`SSHCommandExecutor` pour les commandes distantes via asyncssh
+
+STORY-251 : ``SSHCommandExecutor`` accepte un ``circuit_name`` optionnel
+(circuit ``ssh:{host_id}``). Seuls les échecs **transport** comptent
+(exit 124 timeout / 255 SSH) — un script qui échoue n'ouvre jamais le
+circuit (risque H4). Sans le paramètre, comportement historique
+STORY-131.3 inchangé.
 """
 
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Optional, Protocol
 
 import asyncssh
 from asyncssh import ConnectionLost
 
 from ..core.exceptions import CommandExecutionError
-
+from ..core.resilience import (
+    get_circuit_breaker_registry,
+    is_circuit_breaker_enabled,
+)
 
 # ─── Résultat de commande ─────────────────────────────────────
 
@@ -76,9 +85,7 @@ def _build_sudo_prefix(sudo_user: str) -> str:
 class LocalCommandExecutor:
     """Exécute des commandes sur la machine locale via subprocess."""
 
-    def __init__(
-        self, sudo_user: str | None = None, sudo_password: str | None = None
-    ):
+    def __init__(self, sudo_user: str | None = None, sudo_password: str | None = None):
         self._sudo_user = sudo_user
         self._sudo_password = sudo_password
 
@@ -98,7 +105,11 @@ class LocalCommandExecutor:
         Raises:
             CommandExecutionError: En cas de timeout ou d'échec (si ``require_success``).
         """
-        wrapped = _build_sudo_prefix(self._sudo_user) + " " + command if self._sudo_user else command
+        wrapped = (
+            _build_sudo_prefix(self._sudo_user) + " " + command
+            if self._sudo_user
+            else command
+        )
         process = await self._launch_process(wrapped)
         stdout_bytes, stderr_bytes = await self._communicate(process, command, timeout)
         result = self._build_result(process, stdout_bytes, stderr_bytes)
@@ -154,7 +165,9 @@ class LocalCommandExecutor:
             ) from exc
 
     @staticmethod
-    def _build_result(process, stdout_bytes: bytes, stderr_bytes: bytes) -> CommandResult:
+    def _build_result(
+        process, stdout_bytes: bytes, stderr_bytes: bytes
+    ) -> CommandResult:
         """Construit le CommandResult à partir des sorties du processus."""
         stdout = stdout_bytes.decode("utf-8", errors="ignore")
         stderr = stderr_bytes.decode("utf-8", errors="ignore")
@@ -164,18 +177,42 @@ class LocalCommandExecutor:
 # ─── Exécuteur SSH ────────────────────────────────────────────
 
 
+#: Exit codes d'une défaillance **transport** SSH (STORY-251 D5) :
+#: 124 = timeout, 255 = échec SSH (connexion perdue, auth, réseau).
+#: Les autres codes sont des échecs **métier** du script exécuté — ils
+#: ne comptent jamais comme panne de la connexion (risque H4).
+_SSH_TRANSPORT_EXIT_CODES = frozenset({124, 255})
+
+
+def _is_ssh_transport_error(exc: BaseException) -> bool:
+    """Une exception est-elle une défaillance transport SSH (124/255) ?"""
+    return isinstance(exc, CommandExecutionError) and (
+        exc.exit_status in _SSH_TRANSPORT_EXIT_CODES
+    )
+
+
 class SSHCommandExecutor:
-    """Exécute des commandes sur un hôte distant via asyncssh."""
+    """Exécute des commandes sur un hôte distant via asyncssh.
+
+    STORY-251 : si ``circuit_name`` est fourni (ex. ``ssh:{host_id}``)
+    et que les circuit breakers sont activés, chaque exécution passe
+    par le circuit nommé — seuls les échecs transport (exit 124/255)
+    comptent ; circuit ouvert → rejet immédiat sans invoquer
+    ``conn.run``. Sans le paramètre : comportement historique
+    STORY-131.3 strictement inchangé.
+    """
 
     def __init__(
         self,
         connection: asyncssh.SSHClientConnection,
         sudo_user: str | None = None,
         sudo_password: str | None = None,
+        circuit_name: Optional[str] = None,
     ):
         self._connection = connection
         self._sudo_user = sudo_user
         self._sudo_password = sudo_password
+        self._circuit_name = circuit_name
 
     async def run(
         self, command: str, timeout: int = 30, require_success: bool = False
@@ -193,10 +230,20 @@ class SSHCommandExecutor:
         Raises:
             CommandExecutionError: En cas de timeout, erreur SSH ou d'échec.
         """
-        wrapped = _build_sudo_prefix(self._sudo_user) + " " + command if self._sudo_user else command
-        input_payload = f"{self._sudo_password}\n" if (self._sudo_user and self._sudo_password) else None
+        wrapped = (
+            _build_sudo_prefix(self._sudo_user) + " " + command
+            if self._sudo_user
+            else command
+        )
+        input_payload = (
+            f"{self._sudo_password}\n"
+            if (self._sudo_user and self._sudo_password)
+            else None
+        )
 
-        completed = await self._execute_remote(wrapped, command, input_payload, timeout)
+        completed = await self._run_with_circuit(
+            wrapped, command, input_payload, timeout
+        )
         result = CommandResult(
             completed.exit_status, completed.stdout or "", completed.stderr or ""
         )
@@ -205,7 +252,34 @@ class SSHCommandExecutor:
             raise CommandExecutionError(command, result.exit_status, result.stderr)
         return result
 
-    async def _execute_remote(self, wrapped_command, original_command, input_payload, timeout):
+    async def _run_with_circuit(
+        self, wrapped_command, original_command, input_payload, timeout
+    ):
+        """Exécute la commande distante, protégée par le circuit SSH.
+
+        Sans ``circuit_name`` ou breakers désactivés : pass-through
+        direct (contrat STORY-131.3 inchangé). Circuit ouvert → rejet
+        avant tout ``conn.run``. ``failure_filter`` limité au transport
+        (exit 124/255) — un exit code métier est re-levé sans compter
+        comme panne de l'hôte (risque H4).
+        """
+        if self._circuit_name is None or not is_circuit_breaker_enabled():
+            return await self._execute_remote(
+                wrapped_command, original_command, input_payload, timeout
+            )
+        circuit = get_circuit_breaker_registry().get_or_create(self._circuit_name)
+        return await circuit.call(
+            self._execute_remote,
+            wrapped_command,
+            original_command,
+            input_payload,
+            timeout,
+            failure_filter=_is_ssh_transport_error,
+        )
+
+    async def _execute_remote(
+        self, wrapped_command, original_command, input_payload, timeout
+    ):
         """Exécute la commande via SSH avec gestion des erreurs.
 
         Args:

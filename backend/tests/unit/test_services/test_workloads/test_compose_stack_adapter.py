@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -9,6 +10,16 @@ import pytest
 from app.core.exceptions import WindFlowException
 from app.enums.workload import WorkloadFamily
 from app.services.workloads import ComposeStackAdapter, get_app_adapter
+
+
+@pytest.fixture(autouse=True)
+def _reset_circuit_registry():
+    """STORY-251 : isolation — registre des circuits vidé autour de chaque test."""
+    from app.core.resilience import get_circuit_breaker_registry
+
+    get_circuit_breaker_registry().reset_all()
+    yield
+    get_circuit_breaker_registry().reset_all()
 
 
 def _compose_service_mock():
@@ -168,3 +179,44 @@ class TestFactory:
     def test_factory_resolves_compose(self):
         adapter = get_app_adapter("docker_compose", project_name="p")
         assert isinstance(adapter, ComposeStackAdapter)
+
+
+class TestCircuitBreakerWiring:
+    """STORY-251 : verbes réseau Compose sous circuit ``docker_engine``."""
+
+    @pytest.fixture(autouse=True)
+    def _low_threshold(self, monkeypatch):
+        from app.config import settings as app_settings
+
+        monkeypatch.setattr(app_settings, "circuit_breaker_enabled", True)
+        monkeypatch.setattr(app_settings, "circuit_breaker_failure_threshold", 2)
+        yield
+
+    def _circuit(self):
+        from app.core.resilience import get_circuit_breaker_registry
+
+        return get_circuit_breaker_registry().get_or_create("docker_engine")
+
+    async def test_compose_deploy_failure_counts(self, tmp_path):
+        """(False, msg) au deploy → échec compté sur docker_engine."""
+        compose = tmp_path / "docker-compose.yml"
+        compose.write_text("services: {}\n")
+        svc = _compose_service_mock()
+        svc.deploy_compose = AsyncMock(return_value=(False, "docker down"))
+        adapter = ComposeStackAdapter(
+            "myproj", compose_service=svc, compose_file=compose
+        )
+
+        ok, _msg = await adapter.deploy()
+        assert ok is False
+        assert self._circuit().failure_count == 1
+
+    async def test_compose_stop_guarded(self):
+        """stop sous garde : succès compte, circuit fermé."""
+        svc = _compose_service_mock()
+        adapter = ComposeStackAdapter("myproj", compose_service=svc)
+        await adapter.stop()
+        circuit = self._circuit()
+        assert circuit.state.value == "closed"
+        assert circuit.failure_count == 0
+        svc.stop_compose.assert_awaited_once_with("myproj")

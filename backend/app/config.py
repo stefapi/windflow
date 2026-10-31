@@ -463,6 +463,55 @@ class Settings(BaseSettings):
         default=True, description="Enable correlation ID tracking"
     )
 
+    # === Résilience (Circuit Breaker) ===
+    # STORY-251 : seuils des circuits (docker_engine, plugin_registry,
+    # ssh:{host_id}) — câblés via CircuitBreakerRegistry (core/resilience).
+    # Alias WINDFLOW_* : nommage documenté dans env.example (pattern
+    # admin_email/SUPERADMIN_EMAIL l.486).
+    circuit_breaker_enabled: bool = Field(
+        default=True,
+        description="Enable circuit breakers on external calls "
+        "(Docker engine, plugin registry, SSH). False = full pass-through.",
+        validation_alias=AliasChoices(
+            "circuit_breaker_enabled", "WINDFLOW_CIRCUIT_BREAKER_ENABLED"
+        ),
+    )
+    circuit_breaker_failure_threshold: int = Field(
+        default=5,
+        ge=1,
+        description="Consecutive failures before a circuit opens",
+        validation_alias=AliasChoices(
+            "circuit_breaker_failure_threshold",
+            "WINDFLOW_CIRCUIT_BREAKER_FAILURE_THRESHOLD",
+        ),
+    )
+    circuit_breaker_success_threshold: int = Field(
+        default=2,
+        ge=1,
+        description="Consecutive successes in half-open before a circuit closes",
+        validation_alias=AliasChoices(
+            "circuit_breaker_success_threshold",
+            "WINDFLOW_CIRCUIT_BREAKER_SUCCESS_THRESHOLD",
+        ),
+    )
+    circuit_breaker_timeout: float = Field(
+        default=60.0,
+        gt=0,
+        description="Seconds an open circuit waits before allowing a probe (half-open)",
+        validation_alias=AliasChoices(
+            "circuit_breaker_timeout", "WINDFLOW_CIRCUIT_BREAKER_TIMEOUT"
+        ),
+    )
+    circuit_breaker_half_open_timeout: float = Field(
+        default=30.0,
+        gt=0,
+        description="Seconds in half-open state before re-evaluating",
+        validation_alias=AliasChoices(
+            "circuit_breaker_half_open_timeout",
+            "WINDFLOW_CIRCUIT_BREAKER_HALF_OPEN_TIMEOUT",
+        ),
+    )
+
     # LiteLLM (optionnel - désactivé par défaut)
     litellm_enabled: bool = False
     openai_api_key: Optional[str] = None

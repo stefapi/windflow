@@ -56,4 +56,31 @@ rebranché sur le **recreate sécurisé** (capture avant pull, renommage
 (renvoi F8 initiative backup / surfaces existantes) — terminaison
 franche, jamais de succès silencieux.
 
+## Résilience — circuit breaker `docker_engine` (STORY-251)
+
+Les verbes réseau des deux adapters (`start`/`stop`/`restart`/`update`/
+`deploy`/`stream_logs`) passent par le garde partagé
+[`_circuit_guard.py`](_circuit_guard.py) (méthode `_guarded`) qui
+enveloppe chaque appel dans le circuit **`docker_engine`** :
+
+- **Sémantique d'échec** : exception transport **ou tuple `(False, msg)`**
+  — les couches d'exécution Docker (`DockerService`,
+  `DockerComposeService`) retournent des tuples au lieu de lever ; le
+  garde convertit le tuple en échec compté puis le restitue à
+  l'identique (contrat STORY-174.1 inchangé côté appelants).
+- **Circuit ouvert** → `CircuitBreakerOpenError` (503) levée sans
+  appeler la couche d'exécution — les déploiements passent `FAILED` par
+  le `except` existant de `deploy_stack_async`, aucun retry dupliqué
+  (le backoff reste porté par `DeploymentOrchestrator`).
+- **Pass-through** : `WINDFLOW_CIRCUIT_BREAKER_ENABLED=false` → appel
+  direct, zéro instrumentation (comportement pré-STORY-251).
+- **Observabilité** : `windflow_circuit_breaker_state{name="docker_engine"}`
+  (0=closed/1=half_open/2=open) + `_failures_total` dans `/api/v1/metrics`,
+  alerte `WindflowCircuitBreakerOpen` (cf. MONITORING-RUNBOOK).
+- **État en mémoire process** : chaque worker uvicorn possède ses
+  circuits (acceptable modular monolith ; un redémarrage réinitialise).
+  Circuit unique aujourd'hui : le démon Docker est local (H1) — le
+  découpage par cible (`docker:{host_id}`) suivra la Roadmap
+  multi-hôtes.
+
 > Annotation de la spec 02 : coordonnée avec P3-4/STORY-252 si non fusionnée.

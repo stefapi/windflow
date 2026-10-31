@@ -3,11 +3,15 @@
 Enveloppe :class:`~app.services.docker_compose_service.DockerComposeService`
 et :class:`~app.services.docker_executor.ComposeExecutor` sans duplication
 — ces couches restent la couche d'exécution (AC 1).
+
+STORY-251 : les verbes réseau Compose sont protégés par le circuit
+breaker ``docker_engine`` (même garde partagé que
+``DockerContainerAdapter`, :mod:`._circuit_guard`).
 """
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ...enums.workload import WorkloadFamily
 from ...schemas.workloads import (
@@ -19,6 +23,7 @@ from ...schemas.workloads import (
     WorkloadMetrics,
 )
 from ..docker_compose_service import DockerComposeService
+from ._circuit_guard import guarded_docker_call
 from .base import ActionNotImplementedError, AppAdapter
 
 logger = logging.getLogger(__name__)
@@ -71,6 +76,13 @@ class ComposeStackAdapter(AppAdapter):
         # Fichier compose connu (rendu du déploiement) — optionnel pour
         # une stack adoptée non redéployée.
         self._compose_file = compose_file
+
+    # ─── Résilience (STORY-251) ───────────────────────────────
+    async def _guarded(
+        self, func: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Any:
+        """Exécute ``func`` sous le circuit breaker ``docker_engine``."""
+        return await guarded_docker_call(func, *args, **kwargs)
 
     # ─── Identité ─────────────────────────────────────────────
     def family(self) -> WorkloadFamily:
@@ -191,7 +203,9 @@ class ComposeStackAdapter(AppAdapter):
             raise WindFlowException(f"start compose {self.project_name} échoué: {msg}")
 
     async def stop(self) -> None:
-        ok, msg = await self._compose_service.stop_compose(self.project_name)
+        ok, msg = await self._guarded(
+            self._compose_service.stop_compose, self.project_name
+        )
         if not ok:
             from ...core.exceptions import WindFlowException
 
@@ -210,18 +224,33 @@ class ComposeStackAdapter(AppAdapter):
             raise WindFlowException(f"update compose {self.project_name} échoué: {msg}")
         return msg
 
+    async def _deploy_unguarded(
+        self,
+        compose_file: Optional[Path] = None,
+        project_name: Optional[str] = None,
+        env_vars: Optional[Dict[str, str]] = None,
+    ) -> Tuple[bool, str]:
+        """Déploiement brut (sans breaker) — cible du garde ``deploy``."""
+        target_file = compose_file or self._compose_file
+        if target_file is None:
+            return False, "fichier compose inconnu pour ce projet"
+        return await self._compose_service.deploy_compose(
+            target_file, project_name or self.project_name, env_vars
+        )
+
     async def deploy(
         self,
         compose_file: Optional[Path] = None,
         project_name: Optional[str] = None,
         env_vars: Optional[Dict[str, str]] = None,
     ) -> Tuple[bool, str]:
-        """Déploiement/up du projet (chemin background_tasks — AC 2)."""
-        target_file = compose_file or self._compose_file
-        if target_file is None:
-            return False, "fichier compose inconnu pour ce projet"
-        return await self._compose_service.deploy_compose(
-            target_file, project_name or self.project_name, env_vars
+        """Déploiement/up du projet (chemin background_tasks — AC 2).
+
+        STORY-251 : sous circuit breaker ``docker_engine`` (tuple
+        ``(False, msg)`` = échec compté).
+        """
+        return await self._guarded(
+            self._deploy_unguarded, compose_file, project_name, env_vars
         )
 
     async def backup(self) -> Any:
@@ -235,8 +264,8 @@ class ComposeStackAdapter(AppAdapter):
         )
 
     async def stream_logs(self, tail: int = 100) -> str:
-        ok, logs = await self._compose_service.get_compose_logs(
-            self.project_name, tail=tail
+        ok, logs = await self._guarded(
+            self._compose_service.get_compose_logs, self.project_name, tail
         )
         if not ok:
             from ...core.exceptions import WindFlowException

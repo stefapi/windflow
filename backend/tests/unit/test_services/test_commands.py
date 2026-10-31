@@ -109,6 +109,101 @@ class TestSSHCommandExecutorUnchanged:
         assert exc_info.value.exit_status == 255
 
 
+class TestSSHCircuitBreaker:
+    """STORY-251 : circuit ``ssh:{host_id}`` — transport uniquement (H4).
+
+    Le paramètre ``circuit_name`` est optionnel : sans lui, comportement
+    131.3 strictement inchangé. Seuls les exit 124 (timeout) et 255
+    (échec SSH) comptent comme panne de l'hôte.
+    """
+
+    CIRCUIT = "ssh:11111111-2222-3333-4444-555555555555"
+
+    @pytest.fixture(autouse=True)
+    def _isolate(self, monkeypatch):
+        from app.config import settings as app_settings
+        from app.core.resilience import get_circuit_breaker_registry
+
+        get_circuit_breaker_registry().reset_all()
+        monkeypatch.setattr(app_settings, "circuit_breaker_enabled", True)
+        monkeypatch.setattr(app_settings, "circuit_breaker_failure_threshold", 2)
+        yield
+        get_circuit_breaker_registry().reset_all()
+
+    def _circuit(self):
+        from app.core.resilience import get_circuit_breaker_registry
+
+        return get_circuit_breaker_registry().get_or_create(self.CIRCUIT)
+
+    def _conn_transport_failure(self, exit_status: int) -> MagicMock:
+        """Connexion dont run échoue en échec transport (124 ou 255)."""
+        conn = MagicMock()
+        conn.run = AsyncMock(
+            side_effect=CommandExecutionError("cmd", exit_status, "transport")
+        )
+        return conn
+
+    async def test_ssh_transport_error_counts_failure(self):
+        """exit_status=255 → échec compté."""
+        executor = SSHCommandExecutor(
+            self._conn_transport_failure(255), circuit_name=self.CIRCUIT
+        )
+        with pytest.raises(CommandExecutionError):
+            await executor.run("cmd")
+        assert self._circuit().failure_count == 1
+
+    async def test_ssh_timeout_counts_failure(self):
+        """exit_status=124 → échec compté."""
+        executor = SSHCommandExecutor(
+            self._conn_transport_failure(124), circuit_name=self.CIRCUIT
+        )
+        with pytest.raises(CommandExecutionError):
+            await executor.run("cmd")
+        assert self._circuit().failure_count == 1
+
+    async def test_ssh_business_exit_code_does_not_count(self):
+        """H4 : exit 1 métier (require_success) → re-raise sans comptage."""
+        conn = _make_conn()
+        conn.run.return_value.exit_status = 1
+        conn.run.return_value.stderr = "script failed"
+        executor = SSHCommandExecutor(conn, circuit_name=self.CIRCUIT)
+        with pytest.raises(CommandExecutionError) as exc_info:
+            await executor.run("failing-script", require_success=True)
+        assert exc_info.value.exit_status == 1
+        # Un script qui échoue n'ouvre JAMAIS le circuit
+        assert self._circuit().failure_count == 0
+        assert self._circuit().state.value == "closed"
+
+    async def test_open_ssh_circuit_rejects_before_run(self):
+        """Circuit ouvert → CircuitBreakerOpenError, conn.run jamais appelé."""
+        from app.core.exceptions import CircuitBreakerOpenError
+
+        conn = self._conn_transport_failure(255)
+        executor = SSHCommandExecutor(conn, circuit_name=self.CIRCUIT)
+        for _ in range(2):  # threshold=2 → OPEN
+            with pytest.raises(CommandExecutionError):
+                await executor.run("cmd")
+        assert self._circuit().state.value == "open"
+        assert conn.run.await_count == 2
+
+        with pytest.raises(CircuitBreakerOpenError):
+            await executor.run("cmd")
+        assert conn.run.await_count == 2  # aucune tentative réseau supplémentaire
+
+    async def test_ssh_executor_without_circuit_name_unchanged(self):
+        """Non-régression 131.3 : sans circuit_name, aucun breaker."""
+        conn = self._conn_transport_failure(255)
+        executor = SSHCommandExecutor(conn)  # signature historique
+        for _ in range(3):  # au-delà du threshold global
+            with pytest.raises(CommandExecutionError):
+                await executor.run("cmd")
+        from app.core.resilience import get_circuit_breaker_registry
+
+        # Aucun circuit créé, aucun rejet : comportement historique
+        assert self.CIRCUIT not in get_circuit_breaker_registry().get_all_states()
+        assert conn.run.await_count == 3
+
+
 class TestScannerDelegatesToHelper:
     """R2 — le scanner délègue ses kwargs au helper TOFU (STORY-131.3)."""
 

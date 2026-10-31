@@ -364,6 +364,7 @@ async def discover_target(
         discovery_request=discovery_request,
         is_localhost=is_localhost,
         session=session,
+        host_id=created_host.id,  # STORY-251 : circuit ssh:{host_id}
     )
 
     await HostService.apply_scan_result(
@@ -387,6 +388,7 @@ async def _detect_access_profile(
     discovery_request: TargetDiscoveryRequest,
     is_localhost: bool,
     session: AsyncSession | None = None,
+    host_id: str | None = None,
 ) -> dict[str, Any] | None:
     """Détecte le profil d'accès pendant la découverte.
 
@@ -422,7 +424,13 @@ async def _detect_access_profile(
             )
 
             async with asyncssh.connect(**ssh_kwargs_detect) as conn:
-                ssh_exec = SSHCommandExecutor(conn)
+                # STORY-251 : circuit ssh:{host_id} si la cible est
+                # persistée (UUID stable), sinon sans circuit (ad hoc —
+                # jamais de hostname libre en label de métrique).
+                ssh_exec = SSHCommandExecutor(
+                    conn,
+                    circuit_name=f"ssh:{host_id}" if host_id else None,
+                )
                 access_profile = await scanner.detect_access_profile(  # type: ignore[attr-defined]
                     executor=ssh_exec,
                     ssh_user=discovery_request.username,

@@ -152,3 +152,31 @@ class TestRecordHelpers:
             _value("windflow_scheduler_execution_duration_seconds_count") - before_count
             == 1.0
         )
+
+
+class TestCircuitBreakerSeries:
+    """Séries résilience STORY-251 — nommage et helpers best-effort."""
+
+    def test_circuit_series_use_windflow_prefix(self):
+        """Audit nommage : préfixe windflow_ + présence des 2 composants breaker."""
+        registered = {metric.name for metric in REGISTRY.collect()}
+        for component in (
+            "windflow_circuit_breaker_state",
+            "windflow_circuit_breaker_failures",
+        ):
+            assert component in registered, f"série absente du REGISTRY: {component}"
+            assert component.startswith("windflow_")
+
+    def test_record_circuit_state_and_failure_deltas(self):
+        """Helpers best-effort : gauge positionnée, compteur incrémenté."""
+        name = "docker_engine"
+        metrics.record_circuit_state(name, 2)  # OPEN
+        assert _value("windflow_circuit_breaker_state", {"name": name}) == 2.0
+
+        before = _value("windflow_circuit_breaker_failures_total", {"name": name})
+        metrics.record_circuit_failure(name)
+        metrics.record_circuit_failure(name)
+        assert (
+            _value("windflow_circuit_breaker_failures_total", {"name": name}) - before
+            == 2.0
+        )

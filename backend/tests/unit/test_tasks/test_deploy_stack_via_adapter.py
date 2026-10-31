@@ -218,3 +218,106 @@ class TestDeployViaAdapter:
                     configuration={},
                 )
         docker_service.deploy_container.assert_not_awaited()
+
+
+class TestOpenCircuitFailsDeployment:
+    """STORY-251 : circuit docker_engine ouvert → déploiement FAILED propre."""
+
+    @pytest.fixture(autouse=True)
+    def _isolate_circuit(self, monkeypatch):
+        from app.config import settings as app_settings
+        from app.core.resilience import get_circuit_breaker_registry
+
+        get_circuit_breaker_registry().reset_all()
+        monkeypatch.setattr(app_settings, "circuit_breaker_enabled", True)
+        yield
+        get_circuit_breaker_registry().reset_all()
+
+    def _open_docker_circuit(self):
+        """Ouvre le circuit docker_engine sans toucher au réseau."""
+        from app.core.resilience import get_circuit_breaker_registry
+
+        circuit = get_circuit_breaker_registry().get_or_create("docker_engine")
+        circuit.state = circuit.state.__class__("open")
+        circuit.last_failure_time = circuit._clock()
+        return circuit
+
+    async def test_open_circuit_fails_deployment_cleanly(self, monkeypatch):
+        """Circuit ouvert → WindFlowException (503), AUCUN appel deploy."""
+        from app.core.exceptions import CircuitBreakerOpenError, WindFlowException
+
+        docker_service = _docker_service_mock()
+        db = _FakeDB(_deployment(), _stack("docker"))
+        db_ctx_factory = _session_factory(db)
+
+        monkeypatch.setattr("app.database.AsyncSessionLocal", db_ctx_factory)
+        monkeypatch.setattr(
+            "app.services.deployment_events.get_deployment_events", _progress_events
+        )
+        monkeypatch.setattr(bt, "_run_pre_deploy_gates", AsyncMock())
+        update_status = AsyncMock()
+        monkeypatch.setattr(
+            "app.services.deployment_service.DeploymentService.update_status",
+            update_status,
+        )
+
+        self._open_docker_circuit()
+
+        with pytest.raises(WindFlowException) as exc_info:
+            with patch(
+                "app.services.docker_service.DockerService",
+                return_value=docker_service,
+            ):
+                await bt.deploy_stack_async(
+                    deployment_id="dep-1",
+                    stack_id="stack-1",
+                    target_id="t",
+                    user_id="u",
+                    configuration={},
+                )
+        # Rejet typé, message propre (chemin except existant → FAILED)
+        assert isinstance(exc_info.value, CircuitBreakerOpenError)
+        assert "docker_engine" in exc_info.value.message
+        docker_service.deploy_container.assert_not_awaited()
+
+    async def test_gates_and_milestones_unchanged(self, monkeypatch):
+        """Non-régression AC 5 : gates avant création + jalons WS inchangés."""
+        order = []
+        docker_service = _docker_service_mock()
+        docker_service.deploy_container = AsyncMock(
+            side_effect=lambda *a, **k: order.append("deploy") or (True, "cid")
+        )
+
+        async def gates(**kwargs):
+            order.append("gates")
+
+        db = _FakeDB(_deployment(), _stack("docker"))
+        db_ctx_factory = _session_factory(db)
+
+        progress = SimpleNamespace(emit_progress_update=AsyncMock())
+
+        monkeypatch.setattr("app.database.AsyncSessionLocal", db_ctx_factory)
+        monkeypatch.setattr(
+            "app.services.deployment_events.get_deployment_events",
+            lambda *a, **k: progress,
+        )
+        monkeypatch.setattr(bt, "_run_pre_deploy_gates", gates)
+        monkeypatch.setattr(
+            "app.services.deployment_service.DeploymentService.update_status",
+            AsyncMock(),
+        )
+
+        with patch(
+            "app.services.docker_service.DockerService", return_value=docker_service
+        ):
+            result = await bt.deploy_stack_async(
+                deployment_id="dep-1",
+                stack_id="stack-1",
+                target_id="t",
+                user_id="u",
+                configuration={},
+            )
+        # Gates AVANT deploy ; jalons émis ; succès via l'adapter sous breaker
+        assert order == ["gates", "deploy"]
+        assert progress.emit_progress_update.await_count > 0
+        assert result["status"] == "success"
