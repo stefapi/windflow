@@ -703,6 +703,14 @@ format). See schemas `APIResponse`, `PaginatedResponse`, `ErrorResponse`,
         },
         {"name": "websocket", "description": "Real-time WebSocket connections"},
         {
+            "name": "compute",
+            "description": (
+                "Compute surface (Infra mode — spec 09): stats, global view, "
+                "flat paginated browse, volumes (list/detail/content browse), "
+                "and protected prune (superadmin + confirm + dry-run + audit)"
+            ),
+        },
+        {
             "name": "metrics",
             "description": (
                 "Prometheus exposition (STORY-172) — internal scrape "

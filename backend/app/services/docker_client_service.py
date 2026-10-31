@@ -7,7 +7,7 @@ Toutes les opérations sont asynchrones et n'ont pas de dépendance externe.
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, AsyncIterator, Callable, Optional
 
@@ -325,7 +325,8 @@ class PruneResult:
     """Résultat borné et typé d'un prune protégé (STORY-160.3/STORY-173).
 
     Attributes:
-        resource: Ressource prunée — ``images`` | ``volumes``.
+        resource: Ressource prunée — ``images`` | ``volumes`` |
+            ``containers`` (STORY-173).
         dry_run: ``True`` si simple estimation (aucun appel suppressif).
         pruned_count: En dry-run : nombre de candidates estimées ; en
             exécution réelle : nombre d'éléments effectivement supprimés.
@@ -333,6 +334,14 @@ class PruneResult:
             (somme des tailles) ; ``0`` pour les volumes (la taille n'est
             pas exposée par le listage, limite documentée).
         spared_count: Nombre de ressources ``windflow-plugin-*`` épargnées.
+        pruned_names: Noms des ressources supprimées (ou candidates en
+            dry-run) — STORY-173, champs à défauts (compat ascendante
+            STORY-160.3 : les consommateurs existants restent valides).
+        spared_names: Noms des ressources protégées épargnées.
+        failed_names: Noms des ressources dont la suppression unitaire a
+            échoué — **la file n'est jamais interrompue** (un volume devenu
+            utilisé entre la liste et la suppression est passé, AC 2).
+        failed_count: Nombre d'échecs (miroir de ``len(failed_names)``).
     """
 
     resource: str
@@ -340,6 +349,10 @@ class PruneResult:
     pruned_count: int
     space_reclaimed_bytes: int
     spared_count: int
+    pruned_names: list[str] = field(default_factory=list)
+    spared_names: list[str] = field(default_factory=list)
+    failed_names: list[str] = field(default_factory=list)
+    failed_count: int = 0
 
 
 # =============================================================================
@@ -1430,10 +1443,15 @@ class DockerClientService:
     ) -> PruneResult:
         """Prune des images Docker non utilisées, protégé ``windflow-plugin-*``.
 
-        Candidates : images ``dangling`` (non taguées) retournées par le
+        Sémantique protégée spec 09 § Images / § Prune (STORY-173) :
+        candidates = images ``dangling`` (non taguées) retournées par le
         filtre de l'API Engine. La liste protégée est épargnée **par
         construction** : toute image portant un tag ``windflow-plugin-*``
         n'est jamais candidate, même dangling.
+
+        La suppression est **unitaire** : un échec (409/500 du démon)
+        n'interrompt jamais la file — l'image est passée en échec et la
+        suite est traitée (STORY-173, AC 2).
 
         Args:
             dry_run: ``True`` (défaut) : estimation via listage, **aucun
@@ -1442,34 +1460,57 @@ class DockerClientService:
             force: Force la suppression (n'affecte pas la liste protégée).
 
         Returns:
-            Résultat borné et typé (comptages, espace) — jamais de
-            payload brut du démon.
+            Résultat borné et typé (comptages, noms, échecs, espace) —
+            jamais de payload brut du démon.
         """
         images = await self.list_images(all=False, filters={"dangling": ["true"]})
         candidates = [
             img for img in images[:PRUNE_MAX_ITEMS] if not self._image_is_protected(img)
         ]
-        spared = sum(1 for img in images if self._image_is_protected(img))
+        spared_imgs = [img for img in images if self._image_is_protected(img)]
+        spared_names = [tag for img in spared_imgs for tag in (img.repo_tags or [])][
+            :PRUNE_MAX_ITEMS
+        ]
         if dry_run:
             return PruneResult(
                 resource="images",
                 dry_run=True,
                 pruned_count=len(candidates),
                 space_reclaimed_bytes=sum(img.size for img in candidates),
-                spared_count=spared,
+                spared_count=len(spared_imgs),
+                pruned_names=[img.id for img in candidates],
+                spared_names=spared_names,
+                failed_names=[],
+                failed_count=0,
             )
         pruned = 0
         reclaimed = 0
+        pruned_names: list[str] = []
+        failed_names: list[str] = []
         for img in candidates:
-            await self.remove_image(img.id, force=force, no_prune=True)
+            try:
+                await self.remove_image(img.id, force=force, no_prune=True)
+            except Exception as exc:  # échec isolé : la file continue (AC 2)
+                logger.warning(
+                    "prune_images : image %s non supprimée (%s) — file continuée",
+                    img.id,
+                    exc,
+                )
+                failed_names.append(img.id)
+                continue
             pruned += 1
             reclaimed += img.size
+            pruned_names.append(img.id)
         return PruneResult(
             resource="images",
             dry_run=False,
             pruned_count=pruned,
             space_reclaimed_bytes=reclaimed,
-            spared_count=spared,
+            spared_count=len(spared_imgs),
+            pruned_names=pruned_names,
+            spared_names=spared_names,
+            failed_names=failed_names,
+            failed_count=len(failed_names),
         )
 
     async def prune_volumes(
@@ -1477,11 +1518,18 @@ class DockerClientService:
     ) -> PruneResult:
         """Prune des volumes orphelins, protégé ``windflow-plugin-*``.
 
-        Candidates : volumes non utilisés par aucun conteneur (la carte
-        des montages est construite via ``list_containers`` — le filtre
-        ``dangling`` de l'endpoint volumes n'apparaît qu'à partir de
-        l'API Engine 1.42, non garanti ici). La liste protégée est
-        épargnée **par construction** (préfixe de nom).
+        Sémantique protégée spec 09 § Prune des volumes (STORY-173) :
+
+        - **inutilisé = sans aucun utilisateur, y compris un container
+          arrêté** — la carte des montages est construite via
+          ``list_containers(all=True)`` (le filtre ``dangling`` de
+          l'endpoint volumes n'apparaît qu'à partir de l'API Engine 1.42,
+          non garanti ici) ;
+        - la liste protégée ``windflow-plugin-*`` est épargnée **par
+          construction** (préfixe de nom) ;
+        - la suppression est **unitaire, sans force** — un volume devenu
+          utilisé entre la liste et la suppression échoue et est
+          **passé** (409 du démon), la file n'est jamais interrompue.
 
         Args:
             dry_run: ``True`` (défaut) : estimation via listage, **aucun
@@ -1492,7 +1540,7 @@ class DockerClientService:
         Returns:
             Résultat borné et typé ; ``space_reclaimed_bytes=0`` — la
             taille d'un volume n'est pas exposée par le listage (limite
-            documentée, estimation laissée à STORY-173).
+            documentée de l'API Docker, **aucune valeur fabriquée**).
         """
         volumes = await self.list_volumes()
         in_use = await self._volume_names_in_use()
@@ -1501,23 +1549,126 @@ class DockerClientService:
             for v in volumes[:PRUNE_MAX_ITEMS]
             if not is_protected_resource(v.name) and v.name not in in_use
         ]
-        spared = sum(1 for v in volumes if is_protected_resource(v.name))
+        spared_names = [
+            v.name
+            for v in volumes
+            if is_protected_resource(v.name)  # épargnés par construction
+        ][:PRUNE_MAX_ITEMS]
         if dry_run:
             return PruneResult(
                 resource="volumes",
                 dry_run=True,
                 pruned_count=len(candidates),
                 space_reclaimed_bytes=0,
-                spared_count=spared,
+                spared_count=len(spared_names),
+                pruned_names=[v.name for v in candidates],
+                spared_names=spared_names,
+                failed_names=[],
+                failed_count=0,
             )
+        pruned_names: list[str] = []
+        failed_names: list[str] = []
         for v in candidates:
-            await self.remove_volume(v.name, force=force)
+            try:
+                await self.remove_volume(v.name, force=force)
+            except Exception as exc:  # échec isolé : la file continue (AC 2)
+                logger.warning(
+                    "prune_volumes : volume %s non supprimé (%s) — file continuée",
+                    v.name,
+                    exc,
+                )
+                failed_names.append(v.name)
+                continue
+            pruned_names.append(v.name)
         return PruneResult(
             resource="volumes",
             dry_run=False,
-            pruned_count=len(candidates),
+            pruned_count=len(pruned_names),
             space_reclaimed_bytes=0,
-            spared_count=spared,
+            spared_count=len(spared_names),
+            pruned_names=pruned_names,
+            spared_names=spared_names,
+            failed_names=failed_names,
+            failed_count=len(failed_names),
+        )
+
+    async def prune_stopped_containers(
+        self, *, dry_run: bool = True, force: bool = False
+    ) -> PruneResult:
+        """Prune des containers stoppés non managés, protégé plugins (STORY-173).
+
+        Sémantique (spec 09 § Prune + décision D6) :
+
+        - candidates = containers avec ``state != "running"`` **sans label
+          ``windflow.managed=true``** — une stack WindFlow arrêtée n'est
+          pas du déchet (décision propre à WindFlow) ;
+        - les ressources ``windflow-plugin-*`` sont épargnées (nom ou
+          label ``com.docker.compose.project`` — services plugins) ;
+        - suppression **unitaire** ``force=False`` par défaut et **jamais
+          ``remove_volumes=True``** (les volumes associés ne sont jamais
+          emportés par un prune de containers) ;
+        - un échec isolé n'interrompt pas la file.
+
+        Args:
+            dry_run: ``True`` (défaut) : estimation via listage, **aucun
+                appel suppressif** ; ``False`` : suppression effective.
+            force: Force la suppression des containers récalcitrants
+                (n'affecte ni la liste protégée ni les volumes).
+
+        Returns:
+            Résultat borné et typé ; ``space_reclaimed_bytes=0`` (taille
+            non exposée par le listage — aucune valeur fabriquée).
+        """
+        containers = await self.list_containers(all=True)
+        candidates = [
+            c
+            for c in containers[:PRUNE_MAX_ITEMS]
+            if c.state != "running"
+            and c.labels.get("windflow.managed") != "true"
+            and not self._container_is_protected(c)
+        ]
+        spared_names = [
+            c.name
+            for c in containers
+            if c.state != "running" and self._container_is_protected(c)
+        ][:PRUNE_MAX_ITEMS]
+        if dry_run:
+            return PruneResult(
+                resource="containers",
+                dry_run=True,
+                pruned_count=len(candidates),
+                space_reclaimed_bytes=0,
+                spared_count=len(spared_names),
+                pruned_names=[c.name for c in candidates],
+                spared_names=spared_names,
+                failed_names=[],
+                failed_count=0,
+            )
+        pruned_names: list[str] = []
+        failed_names: list[str] = []
+        for c in candidates:
+            try:
+                await self.remove_container(c.id, force=force, remove_volumes=False)
+            except Exception as exc:  # échec isolé : la file continue
+                logger.warning(
+                    "prune_stopped_containers : container %s non supprimé (%s) "
+                    "— file continuée",
+                    c.name,
+                    exc,
+                )
+                failed_names.append(c.name)
+                continue
+            pruned_names.append(c.name)
+        return PruneResult(
+            resource="containers",
+            dry_run=False,
+            pruned_count=len(pruned_names),
+            space_reclaimed_bytes=0,
+            spared_count=len(spared_names),
+            pruned_names=pruned_names,
+            spared_names=spared_names,
+            failed_names=failed_names,
+            failed_count=len(failed_names),
         )
 
     @staticmethod
@@ -1525,8 +1676,26 @@ class DockerClientService:
         """Une image est protégée si un de ses tags porte le préfixe plugin."""
         return any(PROTECTED_RESOURCE_PREFIX in tag for tag in (image.repo_tags or []))
 
+    @staticmethod
+    def _container_is_protected(container: ContainerInfo) -> bool:
+        """Un container est protégé si son nom ou son projet compose est plugin.
+
+        Les services plugins tournent sous le projet compose
+        ``windflow-plugin-{name}`` (STORY-169.3) — le nom du container
+        (préfixe compose) ou le label ``com.docker.compose.project``
+        porte le préfixe protégé.
+        """
+        if is_protected_resource(container.name):
+            return True
+        project = container.labels.get("com.docker.compose.project", "")
+        return is_protected_resource(project)
+
     async def _volume_names_in_use(self) -> set[str]:
-        """Ensemble des noms de volumes montés par au moins un conteneur."""
+        """Ensemble des noms de volumes montés par au moins un conteneur.
+
+        ``all=True`` : un volume monté par un container **arrêté** est
+        bien « utilisé » (sémantique spec 09 § Prune — STORY-173).
+        """
         containers = await self.list_containers(all=True)
         names: set[str] = set()
         for container in containers:

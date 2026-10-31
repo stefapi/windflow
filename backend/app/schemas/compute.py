@@ -9,7 +9,7 @@ Ces schémas représentent la vue agrégée des ressources compute :
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # =============================================================================
 # Primitives — Services et containers
@@ -204,7 +204,7 @@ class TargetGroup(BaseModel):
     )
     metrics: TargetMetrics = Field(
         default_factory=TargetMetrics,  # type: ignore[arg-type]
-        description="Métriques agrégées de cette target"
+        description="Métriques agrégées de cette target",
     )
 
 
@@ -255,4 +255,230 @@ class ComputeStatsResponse(BaseModel):
     )
     targets_count: int = Field(
         ..., description="Nombre de targets enregistrées dans WindFlow"
+    )
+
+
+# =============================================================================
+# Browse — inventaire aplati paginé (STORY-173)
+# =============================================================================
+
+
+class ComputeBrowseItem(BaseModel):
+    """
+    Item aplati de l'inventaire compute (GET /compute/browse — STORY-173).
+
+    Aplatissement uniforme des trois sections de la vue globale : chaque
+    service d'une stack managée, chaque objet découvert et chaque container
+    standalone devient un item du même type, filtrable et paginé.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": "app_nextcloud",
+                "name": "nextcloud",
+                "kind": "managed_service",
+                "status": "running",
+                "target_id": "local",
+                "target_name": "Local Docker",
+                "image": "nextcloud:29",
+                "technology": "compose",
+                "stack_id": "0e9d5f8a-1b2c-4d3e-9f8a-7c6b5a4f3e2d",
+            }
+        }
+    )
+
+    id: str = Field(..., description="Identifiant de l'item (container/projet)")
+    name: str = Field(..., description="Nom lisible de l'item")
+    kind: Literal["managed_service", "discovered", "standalone"] = Field(
+        ...,
+        description=(
+            "managed_service = container d'une stack WindFlow, "
+            "discovered = projet Compose externe, "
+            "standalone = container individuel"
+        ),
+    )
+    status: str = Field(..., description="État (running, exited, partial…)")
+    target_id: str = Field(..., description="ID du host hébergeant l'item")
+    target_name: str = Field(..., description="Nom du host hébergeant l'item")
+    image: Optional[str] = Field(
+        None, description="Image Docker (si applicable — absent pour un projet)"
+    )
+    technology: Optional[str] = Field(None, description="Technologie (compose, helm…)")
+    stack_id: Optional[str] = Field(
+        None, description="ID de la stack WindFlow (items managés uniquement)"
+    )
+
+
+# =============================================================================
+# Volumes — sous-surface compute (STORY-173)
+# =============================================================================
+
+
+class ComputeVolumeResponse(BaseModel):
+    """
+    Volume Docker vu par la surface compute (GET /compute/volumes).
+
+    Miroir du schéma ``VolumeResponse`` du router docker (mêmes champs) ;
+    ``size`` volontairement absente — la taille d'un volume n'est pas
+    exposée par le listage de l'API Engine (aucune valeur fabriquée).
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "windflow_nextcloud_data",
+                "driver": "local",
+                "mountpoint": "/var/lib/docker/volumes/windflow_nextcloud_data",
+                "created_at": "2026-10-31T12:00:00Z",
+                "labels": {"com.docker.compose.project": "nextcloud"},
+                "scope": "local",
+            }
+        }
+    )
+
+    name: str = Field(..., description="Nom du volume")
+    driver: str = Field("local", description="Driver de stockage")
+    mountpoint: str = Field(..., description="Point de montage")
+    created_at: str = Field(..., description="Date de création (ISO)")
+    labels: dict[str, str] = Field(default_factory=dict, description="Labels du volume")
+    scope: str = Field("local", description="Scope (local/centered)")
+
+
+class VolumeBrowseEntry(BaseModel):
+    """
+    Entrée du contenu d'un volume (GET /compute/volumes/{name}/browse).
+
+    Produit par un listing ``ls -1p`` en conteneur éphémère read-only
+    (STORY-173) : le suffixe ``/`` de la sortie ``ls -1p`` marque les
+    dossiers.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"name": "data", "is_dir": True, "path": "data"}}
+    )
+
+    name: str = Field(..., description="Nom de l'entrée (fichier ou dossier)")
+    is_dir: bool = Field(
+        ..., description="True si l'entrée est un dossier (suffixe / de ls -1p)"
+    )
+    path: str = Field(
+        ...,
+        description=(
+            "Chemin relatif de l'entrée au sein du volume "
+            "(préfixé du sous-chemin demandé le cas échéant)"
+        ),
+    )
+
+
+# =============================================================================
+# Prune Docker protégé (STORY-173)
+# =============================================================================
+
+
+class ComputePruneRequest(BaseModel):
+    """
+    Requête de prune Docker protégé (POST /compute/prune — STORY-173).
+
+    Sémantique sécurisée : ``dry_run`` par défaut (aucune suppression), et
+    exécution réelle **seulement** si ``confirm=true`` — sans confirmation
+    et sans dry-run explicite, l'endpoint répond 400 avec un message
+    actionnable. ``extra="forbid"`` : tout champ inconnu est rejeté (422).
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "example": {"resource": "volumes", "dry_run": True, "confirm": False}
+        },
+    )
+
+    resource: Literal["images", "volumes", "containers"] = Field(
+        ...,
+        description=(
+            "Ressource à nettoyer : images non utilisées (dangling), "
+            "volumes orphelins, containers stoppés non managés WindFlow"
+        ),
+    )
+    dry_run: bool = Field(
+        default=False,
+        description=(
+            "Simulation : liste ce qui serait supprimé sans aucun appel "
+            "suppressif (toujours autorisé, même sans confirm)"
+        ),
+    )
+    confirm: bool = Field(
+        default=False,
+        description=(
+            "Confirmation explicite requise pour une exécution réelle "
+            "(sans confirm=true ni dry_run=true → 400)"
+        ),
+    )
+    force: bool = Field(
+        default=False,
+        description=(
+            "Contourner les confirmations de l'API Docker (n'affecte "
+            "pas la liste protégée windflow-plugin-*)"
+        ),
+    )
+
+
+class PruneItemFailure(BaseModel):
+    """Échec de suppression d'un item du prune (file non interrompue)."""
+
+    name: str = Field(..., description="Nom/ID de la ressource en échec")
+    error: str = Field(..., description="Motif de l'échec (message borné)")
+
+
+class ComputePruneResponse(BaseModel):
+    """
+    Rapport de prune protégé (POST /compute/prune — STORY-173).
+
+    Liste explicite des supprimés / épargnés (protégés ``windflow-plugin-*``)
+    / échecs — un échec d'item n'interrompt jamais la file.
+
+    ``space_reclaimed_bytes`` : exact pour les images (somme des tailles) ;
+    **toujours 0 pour les volumes** — l'API Docker n'expose pas la taille
+    d'un volume dans le listage (aucune valeur fabriquée).
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "resource": "volumes",
+                "dry_run": True,
+                "pruned": ["data-orphan"],
+                "spared": ["windflow-plugin-trivy-cache"],
+                "failed": [],
+                "pruned_count": 1,
+                "spared_count": 1,
+                "failed_count": 0,
+                "space_reclaimed_bytes": 0,
+            }
+        }
+    )
+
+    resource: str = Field(..., description="Ressource prunée")
+    dry_run: bool = Field(..., description="True si simulation (rien de supprimé)")
+    pruned: list[str] = Field(
+        default_factory=list,
+        description="Noms des ressources supprimées (ou candidates en dry-run)",
+    )
+    spared: list[str] = Field(
+        default_factory=list,
+        description="Noms des ressources protégées windflow-plugin-* épargnées",
+    )
+    failed: list[PruneItemFailure] = Field(
+        default_factory=list,
+        description="Échecs unitaires (la file continue après un échec)",
+    )
+    pruned_count: int = Field(..., description="Nombre d'éléments supprimés")
+    spared_count: int = Field(..., description="Nombre d'éléments épargnés")
+    failed_count: int = Field(..., description="Nombre d'échecs")
+    space_reclaimed_bytes: int = Field(
+        ...,
+        description=(
+            "Espace récupéré en octets — 0 pour les volumes (taille non "
+            "exposée par l'API Docker, aucune valeur fabriquée)"
+        ),
     )

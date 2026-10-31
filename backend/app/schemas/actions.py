@@ -63,10 +63,10 @@ class DockerPruneParams(ActionParams):
     défaut — un prune planifié ne détruit rien sans action explicite.
     """
 
-    resource: Literal["images", "volumes"] = Field(
+    resource: Literal["images", "volumes", "containers"] = Field(
         ...,
         description="Ressource Docker à nettoyer (images non utilisées / "
-        "volumes orphelins)",
+        "volumes orphelins / containers stoppés non managés — STORY-173)",
     )
     dry_run: bool = Field(
         default=True,

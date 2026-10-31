@@ -177,12 +177,13 @@ async def compute_docker_prune(params: dict[str, Any]) -> dict[str, Any]:
       épargnées par construction côté wrappers ;
     - **audit systématique** de l'exécution réelle (qui/quoi/quand via
       la définition — acteur système) ;
-    - résultat typé borné (comptages, espace) — jamais de payload brut.
+    - résultat typé borné (comptages, échecs, espace) — jamais de
+      payload brut.
 
     Args:
         params: Paramètres validés (``DockerPruneParams.model_dump()``)
-            — ``resource`` (``images``|``volumes``), ``dry_run`` (défaut
-            ``True``), ``force`` (défaut ``False``).
+            — ``resource`` (``images``|``volumes``|``containers``),
+            ``dry_run`` (défaut ``True``), ``force`` (défaut ``False``).
 
     Returns:
         Le résumé :func:`PruneResult` sérialisé en dict.
@@ -197,6 +198,8 @@ async def compute_docker_prune(params: dict[str, Any]) -> dict[str, Any]:
     try:
         if resource == "images":
             result = await client.prune_images(dry_run=dry_run, force=force)
+        elif resource == "containers":
+            result = await client.prune_stopped_containers(dry_run=dry_run, force=force)
         else:
             result = await client.prune_volumes(dry_run=dry_run, force=force)
     finally:
@@ -205,11 +208,12 @@ async def compute_docker_prune(params: dict[str, Any]) -> dict[str, Any]:
         await _audit_prune(result)
     logger.info(
         "compute.docker.prune : resource=%s dry_run=%s pruned=%d "
-        "spared=%d reclaimed=%d bytes",
+        "spared=%d failed=%d reclaimed=%d bytes",
         result.resource,
         result.dry_run,
         result.pruned_count,
         result.spared_count,
+        result.failed_count,
         result.space_reclaimed_bytes,
     )
     return {
@@ -218,6 +222,7 @@ async def compute_docker_prune(params: dict[str, Any]) -> dict[str, Any]:
         "pruned_count": result.pruned_count,
         "space_reclaimed_bytes": result.space_reclaimed_bytes,
         "spared_count": result.spared_count,
+        "failed_count": result.failed_count,
     }
 
 
@@ -237,6 +242,7 @@ async def _audit_prune(result: PruneResult) -> None:
             "pruned_count": result.pruned_count,
             "space_reclaimed_bytes": result.space_reclaimed_bytes,
             "spared_count": result.spared_count,
+            "failed_count": result.failed_count,
             "protected_prefix": "windflow-plugin-*",
         },
     )

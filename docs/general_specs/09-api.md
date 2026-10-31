@@ -436,6 +436,15 @@ DELETE /{id}                   # Supprimer un snapshot
 
 ### Volumes — `/api/v1/compute/volumes/`
 
+> **Implémentation & rapprochement `/compute` ↔ `/docker` (STORY-173)** :
+> la table de correspondance exhaustive route à route entre la surface
+> historique `/docker` et la surface canonique `/compute` (statut par
+> paire, côté canonique, période de convergence, décision « aucune
+> suppression d'endpoint Docker », différés Phase 5) est maintenue dans
+> [COMPUTE-DOCKER-MAPPING.md](../technical_specs/COMPUTE-DOCKER-MAPPING.md).
+> La consolidation rédactionnelle des specs reste coordonnée avec
+> STORY-252 (P3-4).
+
 ```
 GET    /                       # Lister les volumes (filtre: host_id)
 GET    /{id}                   # Détails d'un volume

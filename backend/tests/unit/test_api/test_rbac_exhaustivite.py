@@ -82,7 +82,8 @@ EXPECTED_ROUTE_COUNTS: dict[str, int] = {
     "schedules": 10,
     "admin": 16,
     "docker": 35,
-    "compute": 2,
+    # STORY-173 : +5 routes (browse, volumes×3, prune) — 2 → 7.
+    "compute": 7,
     "discovery": 2,
     "plugins": 9,
     "plugin_registry": 2,

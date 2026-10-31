@@ -22,6 +22,7 @@ Sécurité (rules 40) : ``_jwt_mode`` — le ``.env`` racine porte
 ferait échouer les 401 attendus.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -383,7 +384,11 @@ class TestDockerRouterContract:
 
 
 class TestComputeRouterContract:
-    """compute : GET /compute/stats (mocké) → data ; 401 sans token."""
+    """compute : GET /compute/stats (mocké) → data ; 401 sans token.
+
+    STORY-173 : contrats enveloppe des nouvelles routes browse / volumes
+    / prune (dry-run superadmin).
+    """
 
     async def test_compute_stats_enveloped(self, client: AsyncClient, test_user: User):
         """Stats compute (service mocké) → 200 data + message."""
@@ -417,6 +422,92 @@ class TestComputeRouterContract:
         response = await client.get("/api/v1/compute/stats")
         assert response.status_code == 401, response.text
         assert_error_envelope(response.json(), "INVALID_OR_EXPIRED_TOKEN")
+
+    async def test_compute_browse_enveloped(self, client: AsyncClient, test_user: User):
+        """STORY-173 : browse → 200 {data: liste, pagination{}} (pas
+        ré-enveloppé — anti double-enveloppe STORY-128)."""
+        from app.schemas.common import PaginatedResponse
+
+        fake = PaginatedResponse.model_validate(
+            {
+                "data": [{"id": "app_web", "kind": "managed_service"}],
+                "pagination": {"page": 1, "per_page": 20, "total": 1, "pages": 1},
+            }
+        )
+        with patch(
+            "app.api.v1.compute.compute_service.get_compute_browse",
+            new=AsyncMock(return_value=fake),
+        ):
+            response = await client.get(
+                "/api/v1/compute/browse", headers=_bearer(test_user)
+            )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert isinstance(body["data"], list)
+        pagination = body.get("pagination")
+        assert isinstance(pagination, dict)
+        for key in ("page", "per_page", "total", "pages"):
+            assert key in pagination
+
+    async def test_compute_volumes_enveloped(
+        self, client: AsyncClient, test_user: User
+    ):
+        """STORY-173 : GET /compute/volumes (client mocké) → contrat paginé."""
+        from datetime import datetime, timezone
+
+        fake_volume = SimpleNamespace(
+            name="data-a",
+            driver="local",
+            mountpoint="/var/lib/docker/volumes/data-a",
+            created_at=datetime(2026, 10, 31, 12, 0, tzinfo=timezone.utc),
+            labels={},
+            scope="local",
+        )
+        docker = AsyncMock()
+        docker.list_volumes.return_value = [fake_volume]
+        docker.close = AsyncMock()
+        with patch("app.api.v1.compute.DockerClientService", return_value=docker):
+            response = await client.get(
+                "/api/v1/compute/volumes", headers=_bearer(test_user)
+            )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert isinstance(body["data"], list) and len(body["data"]) == 1
+        assert isinstance(body.get("pagination"), dict)
+
+    async def test_compute_prune_dry_run_contract(
+        self, client: AsyncClient, test_superuser: User
+    ):
+        """STORY-173 : superadmin + dry_run → enveloppe data = rapport complet."""
+        from app.services.docker_client_service import PruneResult
+
+        docker = AsyncMock()
+        docker.prune_volumes.return_value = PruneResult(
+            resource="volumes",
+            dry_run=True,
+            pruned_count=1,
+            space_reclaimed_bytes=0,
+            spared_count=1,
+            pruned_names=["data-orphan"],
+            spared_names=["windflow-plugin-trivy-cache"],
+            failed_names=[],
+            failed_count=0,
+        )
+        docker.close = AsyncMock()
+        with patch("app.api.v1.compute.DockerClientService", return_value=docker):
+            response = await client.post(
+                "/api/v1/compute/prune",
+                json={"resource": "volumes", "dry_run": True},
+                headers=_bearer(test_superuser),
+            )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert_success_envelope(body)
+        report = body["data"]
+        assert report["resource"] == "volumes"
+        assert report["dry_run"] is True
+        assert report["pruned"] == ["data-orphan"]
+        assert report["space_reclaimed_bytes"] == 0
 
 
 # ============================================================================

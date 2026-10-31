@@ -32,8 +32,10 @@ from app.core.exceptions import NotFoundError, WindFlowException
 from app.services.action_registry import get_action
 from app.services.docker_client_service import (
     PROTECTED_RESOURCE_PREFIX,
+    ContainerInfo,
     DockerClientService,
     ImageInfo,
+    PruneResult,
     VolumeInfo,
 )
 from app.services.scheduler_actions import (
@@ -122,7 +124,12 @@ def fake_db(monkeypatch: pytest.MonkeyPatch):
 
 
 class _FakePruneClient:
-    """Client Docker factice — wrappers prune instrumentés, écho des args."""
+    """Client Docker factice — wrappers prune instrumentés, écho des args.
+
+    STORY-173 : les résultats portent désormais les champs étendus du
+    socle (``pruned_names``/``spared_names``/``failed_names``/
+    ``failed_count`` — compat ascendante D5).
+    """
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, bool, bool]] = []
@@ -136,6 +143,10 @@ class _FakePruneClient:
             pruned_count=2,
             space_reclaimed_bytes=1024,
             spared_count=1,
+            pruned_names=["abc123", "def456"],
+            spared_names=["windflow-plugin-grafana:latest"],
+            failed_names=[],
+            failed_count=0,
         )
 
     async def prune_volumes(self, *, dry_run: bool, force: bool):
@@ -146,6 +157,24 @@ class _FakePruneClient:
             pruned_count=1,
             space_reclaimed_bytes=0,
             spared_count=1,
+            pruned_names=["data-orphan"],
+            spared_names=["windflow-plugin-redis"],
+            failed_names=[],
+            failed_count=0,
+        )
+
+    async def prune_stopped_containers(self, *, dry_run: bool, force: bool):
+        self.calls.append(("containers", dry_run, force))
+        return SimpleNamespace(
+            resource="containers",
+            dry_run=dry_run,
+            pruned_count=1,
+            space_reclaimed_bytes=0,
+            spared_count=0,
+            pruned_names=["legacy-cron"],
+            spared_names=[],
+            failed_names=[],
+            failed_count=0,
         )
 
     async def close(self):
@@ -359,6 +388,171 @@ async def test_prune_volumes_wrapper_spares_protected_and_in_use(monkeypatch):
     remove.assert_awaited_once_with("data-orphan", force=False)
     assert result.pruned_count == 1
     assert result.spared_count == 1
+
+
+def _container(
+    cid: str,
+    name: str,
+    state: str,
+    labels: dict[str, str] | None = None,
+) -> ContainerInfo:
+    """ContainerInfo factice pour les tests prune containers."""
+    return ContainerInfo(
+        id=cid,
+        name=name,
+        image="nginx:latest",
+        image_id="sha256:abc",
+        command="nginx",
+        created=datetime(2026, 10, 21, 12, 0, 0),
+        state=state,
+        status="Up" if state == "running" else "Exited (0)",
+        ports=[],
+        labels=labels or {},
+        networks=[],
+        mounts=[],
+        restart_count=0,
+    )
+
+
+# ===========================================================================
+# Socle prune étendu STORY-173 — échecs isolés, noms, containers (AC 2)
+# ===========================================================================
+
+
+async def test_prune_volumes_failure_isolated_and_reported(monkeypatch):
+    """remove_volume lève sur le 2ᵉ → 1ᵉʳ supprimé, 2ᵉ en échec, 3ᵉ traité."""
+    svc = DockerClientService()
+    volumes = [_volume("v1"), _volume("v2"), _volume("v3")]
+    monkeypatch.setattr(svc, "list_volumes", AsyncMock(return_value=volumes))
+    monkeypatch.setattr(svc, "list_containers", AsyncMock(return_value=[]))
+
+    remove = AsyncMock(side_effect=[None, RuntimeError("409 volume in use"), None])
+    monkeypatch.setattr(svc, "remove_volume", remove)
+
+    result = await svc.prune_volumes(dry_run=False)
+
+    assert remove.await_count == 3  # la file a continué jusqu'au bout
+    assert result.pruned_names == ["v1", "v3"]
+    assert result.failed_names == ["v2"]
+    assert result.failed_count == 1
+    assert result.pruned_count == 2
+
+
+async def test_prune_spared_protected_names_collected(monkeypatch):
+    """Les volumes windflow-plugin-* apparaissent dans spared_names."""
+    svc = DockerClientService()
+    volumes = [
+        _volume("data-orphan"),
+        _volume(f"{PROTECTED_RESOURCE_PREFIX}trivy-cache"),
+        _volume(f"{PROTECTED_RESOURCE_PREFIX}redis"),
+    ]
+    monkeypatch.setattr(svc, "list_volumes", AsyncMock(return_value=volumes))
+    monkeypatch.setattr(svc, "list_containers", AsyncMock(return_value=[]))
+    remove = AsyncMock()
+    monkeypatch.setattr(svc, "remove_volume", remove)
+
+    result = await svc.prune_volumes(dry_run=False)
+
+    removed = [call.args[0] for call in remove.await_args_list]
+    assert removed == ["data-orphan"]  # jamais candidats
+    assert result.spared_names == [
+        f"{PROTECTED_RESOURCE_PREFIX}trivy-cache",
+        f"{PROTECTED_RESOURCE_PREFIX}redis",
+    ]
+    assert result.spared_count == 2
+
+
+async def test_prune_stopped_containers_candidates_semantics(monkeypatch):
+    """Candidats = state != running SANS windflow.managed=true ; plugins épargnés."""
+    svc = DockerClientService()
+    containers = [
+        # éligible : arrêté, non managé
+        _container("c1", "legacy-cron", "exited"),
+        # NON éligible : arrêté mais stack WindFlow managée
+        _container("c2", "windflow-app-web", "exited", {"windflow.managed": "true"}),
+        # NON éligible : running
+        _container("c3", "still-running", "running"),
+        # NON éligible : protégé plugin (nom compose préfixé)
+        _container(
+            "c4",
+            "windflow-plugin-trivy-scanner",
+            "exited",
+            {"com.docker.compose.project": "windflow-plugin-trivy"},
+        ),
+    ]
+    monkeypatch.setattr(svc, "list_containers", AsyncMock(return_value=containers))
+    remove = AsyncMock()
+    monkeypatch.setattr(svc, "remove_container", remove)
+
+    result = await svc.prune_stopped_containers(dry_run=False)
+
+    remove.assert_awaited_once_with("c1", force=False, remove_volumes=False)
+    assert result.pruned_names == ["legacy-cron"]
+    assert result.spared_names == ["windflow-plugin-trivy-scanner"]
+    assert result.space_reclaimed_bytes == 0  # aucune valeur fabriquée
+
+
+async def test_prune_stopped_containers_dry_run_never_deletes(monkeypatch):
+    """Dry-run : aucune suppression, candidats listés dans pruned_names."""
+    svc = DockerClientService()
+    containers = [_container("c1", "legacy-cron", "exited")]
+    monkeypatch.setattr(svc, "list_containers", AsyncMock(return_value=containers))
+    remove = AsyncMock()
+    monkeypatch.setattr(svc, "remove_container", remove)
+
+    result = await svc.prune_stopped_containers(dry_run=True)
+
+    remove.assert_not_awaited()
+    assert result.dry_run is True
+    assert result.pruned_names == ["legacy-cron"]
+
+
+async def test_prune_volume_used_by_stopped_container_not_eligible(monkeypatch):
+    """Volume monté par un container ARRÊTÉ → pas candidat (all=True)."""
+    svc = DockerClientService()
+    volumes = [_volume("data-used-stopped"), _volume("data-orphan")]
+    monkeypatch.setattr(svc, "list_volumes", AsyncMock(return_value=volumes))
+    stopped_container = SimpleNamespace(
+        mounts=[{"Type": "volume", "Name": "data-used-stopped", "Source": "/x"}]
+    )
+    monkeypatch.setattr(
+        svc, "list_containers", AsyncMock(return_value=[stopped_container])
+    )
+    remove = AsyncMock()
+    monkeypatch.setattr(svc, "remove_volume", remove)
+
+    result = await svc.prune_volumes(dry_run=False)
+
+    remove.assert_awaited_once_with("data-orphan", force=False)
+    assert result.pruned_names == ["data-orphan"]
+
+
+async def test_prune_result_backward_compatible():
+    """PruneResult reste constructible avec les seuls champs 160.3 (D5)."""
+    result = PruneResult(
+        resource="volumes",
+        dry_run=True,
+        pruned_count=3,
+        space_reclaimed_bytes=0,
+        spared_count=1,
+    )
+    assert result.pruned_names == []  # défauts
+    assert result.spared_names == []
+    assert result.failed_names == []
+    assert result.failed_count == 0
+
+
+async def test_scheduler_dispatch_containers(fake_prune_client, audit_log_mock):
+    """compute_docker_prune resource=containers → wrapper containers + failed_count."""
+    result = await compute_docker_prune({"resource": "containers", "dry_run": False})
+
+    client = fake_prune_client.client
+    assert client.calls == [("containers", False, False)]
+    assert result["resource"] == "containers"
+    assert result["failed_count"] == 0  # nouveau champ du dict retourné
+    audit_log_mock.assert_awaited_once()  # exécution réelle auditée
+    kwargs = audit_log_mock.await_args.kwargs
+    assert kwargs["details"]["failed_count"] == 0
 
 
 # ===========================================================================
