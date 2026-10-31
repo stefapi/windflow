@@ -1,6 +1,6 @@
 # STORY-168 : Cache avec fallback mémoire — interface unique get/set/delete + TTL, Redis si configuré sinon mémoire locale, utilisée par rate limiter, plugin registry et caches divers (P2-8 — axes C7, E4)
 
-**Statut :** REVIEW
+**Statut :** DONE
 **Epic Parent :** EPIC-013 — P2 : Conformité fonctionnelle (remédiation backend)
 **Item plan :** P2-8 (axes C7, E4, rapports §6) — ampleur **M**
 
@@ -210,3 +210,4 @@ Périmètre **backend uniquement** (infrastructure interne — aucun frontend/CL
 - Suite complète : `poetry run pytest tests/unit tests/integration --ignore=tests/integration/test_secret_encryption.py` → **2954 passed, 1 skipped, 3 failed préexistants (prouvés sur HEAD)**.
 - Couverture périmètre : `core/cache.py` **93 %**, `core/rate_limit.py` **100 %**, `plugin_registry_service.py` **94 %**, `litellm_service.py` **97 %** (AC 5 ≥ 80 % respecté).
 - Lint : `isort` + `black` + `flake8` + `bandit` sur le périmètre → **0 erreur** ; `mypy` → **0 erreur sur les fichiers du périmètre** (6 erreurs transitives préexistantes prouvées sur HEAD).
+- Finalisation (2026-10-31, `finalise-story`) : re-validation ciblée → **111 passed** (5 fichiers unitaires — l'écart vs 104 à la clôture provient des tests ajoutés par les stories 169/170 sur `test_plugin_registry_service.py`), **8 passed** intégration Redis (`test_cache_redis.py`), **14 passed** non-régression (`test_dev_mode.py` + `test_rate_limiting.py`), couverture re-mesurée : cache **93 %** / rate_limit **100 %** / registry **94 %** / litellm **97 %** — DoD OK, story clôturée DONE.

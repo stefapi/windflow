@@ -28,10 +28,11 @@ _(vide)_
 
 ## 🚧 REVIEW
 
-- [?] STORY-168 : Cache avec fallback mémoire — interface unique + TTL, Redis sinon mémoire locale (P2-8) (EPIC-013)
+_(vide)_
 
 ## ✅ DONE
 
+- [x] STORY-168 : Cache avec fallback mémoire — interface unique + TTL, Redis sinon mémoire locale (P2-8) (EPIC-013) — livré (interface unique `get_cache()` dans `core/cache.py` : `MemoryCache` bornée (`cache_memory_max_entries`, purge expirées puis FIFO) / `RedisCache` (JSON round-trip, fallback mémoire par opération, warning « un épisode dégradé = un warning ») subclassant l'ABC `CacheManager` (E4 concrétisé) ; factory singleton `cache_url` prioritaire sur `rate_limit_storage_url` + `shutdown_cache()` au lifespan ; consommateurs migrés : rate limiter mutualisé sur les helpers partagés (fastapi-limiter inchangé), plugin registry (clé `registry:index`, TTL 300 s, stale-while-error conservé), cache LLM borné (clé `llm:{sha256}`, prompt jamais en clair, TTL 300 s) ; compatibilité STORY-122.1 préservée (aliases `MemoryRoleCache`/`RedisRoleCache`/`get_role_cache`, ~30 fichiers de tests intouchés) ; validation finale : 111 unitaires ciblés + 8 intégration Redis réel + 14 non-régression passed, couverture cache 93 % / rate_limit 100 % / registry 94 % / litellm 97 %)
 - [x] STORY-171 : Unification de la validation des stacks + bornes numériques `min/max` (P2-6) (EPIC-013) — livré (moteur de validation unique : `StackLoaderService` allégé consomme le schéma Pydantic strict `StackDefinition` — même verdict seed/import admin, `postgresql.yaml` et `baserow.yaml` valides par les deux chemins ; macros brutes conservées à l'import (rendu à la volée inchangé), `target_type`/`target_parameters` sur `StackCreate`/`StackUpdate` ; bornes `minimum`/`maximum` servies au formulaire et appliquées frontend (`el-input-number` + règles de validation, `min`/`max` ne plus lus — grep 0) ; 68 tests backend + 27 tests frontend créés, 3055 unit backend + 1052 frontend passed, lint/mypy/typecheck 0 erreur, couverture modules touchés 84-97 % ; corrections documentaires reportées STORY-253)
 - [x] STORY-170.1 : Plugins — routes API dynamiques `/api/v1/plugins/{name}/…` : montage/démontage, RBAC core et OpenAPI (P2-3, partie extension — STORY-170 découpée) (EPIC-013)
 - [x] STORY-170.2 : Plugins — gates pre-deploy : SDK, `PluginGateService` timeout/multi-gates et insertion pipeline avant création des containers (P2-3, partie extension — STORY-170 découpée) (EPIC-013)
