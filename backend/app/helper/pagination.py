@@ -12,7 +12,7 @@ Fournit le socle commun partagé par **tous** les endpoints de liste :
   (Docker daemon, registry YAML filesystem…) — ``total = len(liste)``.
 
 Fonctions pures, type hints complets (rules 30) — pattern fichier :
-``helper/permissions.py``.
+``helper/compute_helpers.py``.
 
 Décisions d'analyse (STORY-128, « Décisions tranchées ») :
 

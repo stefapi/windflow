@@ -399,7 +399,6 @@ NO_TOKEN_SAMPLES: list[tuple[str, str]] = [
     ("GET", "/api/v1/compute/stats"),
     ("GET", "/api/v1/discovery/composition/demo@local/adoption-data"),
     ("GET", "/api/v1/stats/dashboard"),
-    ("GET", "/api/v1/workflows/"),
 ]
 
 

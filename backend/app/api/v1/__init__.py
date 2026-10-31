@@ -26,7 +26,6 @@ from .system import router as system_router
 from .targets_legacy import router as targets_alias_router
 from .users import router as users_router
 from .websockets import router as websockets_router
-from .workflows import router as workflows_router
 
 # Router principal v1
 api_router = APIRouter(prefix="/api/v1")
@@ -49,7 +48,6 @@ api_router.include_router(stacks_router, prefix="/stacks", tags=["stacks"])
 api_router.include_router(
     deployments_router, prefix="/deployments", tags=["deployments"]
 )
-api_router.include_router(workflows_router, prefix="/workflows", tags=["workflows"])
 api_router.include_router(websockets_router, prefix="/ws", tags=["websockets"])
 api_router.include_router(stats_router, tags=["statistics"])
 api_router.include_router(import_export_router, tags=["import-export"])

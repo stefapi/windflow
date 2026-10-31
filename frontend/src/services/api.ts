@@ -96,7 +96,7 @@ export const authApi = {
 
   register: (data: UserCreate) => http.post<User>('/auth/register', data),
 
-  getCurrentUser: () => http.get<User>('/auth/me'),
+  getCurrentUser: () => http.get<User>('/users/me'), // STORY-250.2 : /auth/me déprécié
 
   logout: () => http.post('/auth/logout'),
 }

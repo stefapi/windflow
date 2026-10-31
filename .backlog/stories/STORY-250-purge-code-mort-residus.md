@@ -1,6 +1,6 @@
 # STORY-250 : Purge du code mort et résidus + dépréciation `/auth/me` (P3-1 + P3-3)
 
-**Statut :** TODO
+**Statut :** DONE
 **Epic Parent :** EPIC-014 — P3 : Finitions & purge (remédiation backend)
 **Item plan :** P3-1 (axes E1, E3, E4, E6, E7, E8, E2 partiel) + P3-3 (axe E9) — ampleur **M** (fusion de deux items S du plan)
 
@@ -12,7 +12,8 @@ En tant que développeur WindFlow, je veux purger le code mort et les résidus i
 
 ## Contexte technique
 
-*(à remplir par analyse-story)*
+> Analyse du 2026-10-31 (`analyse-story`) : verdict **COMPLEXE** (~9 tâches / ~14 fichiers / backend+frontend+CLI / 5 AC) → découpe proactive en 2 sous-stories (voir `## Sous-stories`). Constats d'exploration reportés dans chaque sous-story. Points clés : **E3 croniter CONSERVÉ** (consommé par `schemas/scheduled_task.py` — STORY-160) ; **E4** `CacheManager` conservé (core/cache.py — STORY-168), `DatabaseManager` orphelin à purger ; **E7 litellm CONSERVÉ** (décision du plan « purger » rédigée avant STORY-168 — le service a été ressuscité par 168 : cache unifié + tests dédiés 97 % ; non exposé par API, traçabilité plugin IA Roadmap Phase 5) ; **E9** : `/auth/me` a des **consommateurs actifs** frontend (`api.ts:99`) + CLI (`client.py:268`) → la sous-story 250.2 inclut leur migration vers `/users/me` (Sunset crédible).
+
 
 Décisions « purger OU ressusciter » déjà tranchées par le plan §2.E — **à reprendre et argumenter item par item dans les notes d'implémentation** :
 
@@ -35,11 +36,16 @@ Contraintes et gardes-fous :
 
 ## Critères d'acceptation (AC)
 
-- [ ] AC 1 : `grep`/import-check sur le dépôt → **aucun symbole orphelin** : les fichiers/membres supprimés (E1, E6, E7, E8, `HealthCheck`, `DatabaseManager` si non consommé) n'ont plus aucune référence (imports, tests, docs générées) ; OpenAPI ne référence plus `/workflows` ; CI et tests verts.
-- [ ] AC 2 : Chaque décision purger/ressusciter est **argumentée par item** (tableau E1/E3/E4/E6/E7/E8/E2/E9) dans les notes d'implémentation — y compris le statut conditionnel de `croniter.py` selon ce que STORY-160 a livré (conservé comme dépendance du scheduler, ou supprimé).
-- [ ] AC 3 : `/auth/me` répond toujours 200 (compatibilité) avec les headers `Deprecation: true` et `Sunset: <date>` + note OpenAPI `deprecated: true` indiquant le remplacement par `/users/me` et le retrait planifié ; `/users/me` est inchangé et demeure l'endpoint contractuel.
-- [ ] AC 4 : Aucune régression des points forts §2.G ; les tests existants passent ; les tests référençant les éléments purgés sont nettoyés.
-- [ ] AC 5 : Build + lint + tests passent (`make lint`, `make backend-test`).
+- [x] AC 1 : `grep`/import-check sur le dépôt → **aucun symbole orphelin** : les fichiers/membres supprimés (E1, E6, E7, E8, `HealthCheck`, `DatabaseManager` si non consommé) n'ont plus aucune référence (imports, tests, docs générées) ; OpenAPI ne référence plus `/workflows` ; CI et tests verts.
+- [x] AC 2 : Chaque décision purger/ressusciter est **argumentée par item** (tableau E1/E3/E4/E6/E7/E8/E2/E9) dans les notes d'implémentation — y compris le statut conditionnel de `croniter.py` selon ce que STORY-160 a livré (conservé comme dépendance du scheduler, ou supprimé).
+- [x] AC 3 : `/auth/me` répond toujours 200 (compatibilité) avec les headers `Deprecation: true` et `Sunset: <date>` + note OpenAPI `deprecated: true` indiquant le remplacement par `/users/me` et le retrait planifié ; `/users/me` est inchangé et demeure l'endpoint contractuel.
+- [x] AC 4 : Aucune régression des points forts §2.G ; les tests existants passent ; les tests référençant les éléments purgés sont nettoyés.
+- [x] AC 5 : Build + lint + tests passent (`make lint`, `make backend-test`).
+
+## Sous-stories
+
+- [x] STORY-250.1 : Purge du code mort backend — permissions legacy, HealthCheck, DatabaseManager, stub workflows, print debug (statuts conditionnels E3/E7 vérifiés) — Couvre AC 1, AC 2, AC 4, AC 5
+- [x] STORY-250.2 : Dépréciation `/auth/me` (headers `Deprecation`/`Sunset` + OpenAPI) et migration des consommateurs frontend/CLI vers `/users/me` — Couvre AC 3, AC 4, AC 5
 
 ## Références spécification
 
@@ -58,12 +64,18 @@ Contraintes et gardes-fous :
 
 ## État d'avancement technique
 
-*(à remplir par analyse-story)*
+> ⚠️ L'avancement technique est désormais suivi dans les sous-stories individuelles.
+
+**Progression :** 2/2 sous-stories terminées
+- [x] STORY-250.1 : Purge du code mort backend (E1/E2/E4/E6/E8 + statuts E3/E7)
+- [x] STORY-250.2 : Dépréciation `/auth/me` + migration frontend/CLI
 
 ## Tâches d'implémentation détaillées
 
-*(à remplir par analyse-story)*
+> ⚠️ Cette story a été découpée en sous-stories avant implémentation (complexité détectée par analyse-story : ~9 tâches / ~14 fichiers / triple-stack backend+frontend+CLI).
+> Toutes les tâches ont été redistribuées dans les sous-stories listées ci-dessus.
+> Consulter chaque sous-story pour les tâches détaillées.
 
 ## Tests à écrire
 
-*(à remplir par analyse-story)*
+> ⚠️ Les tests sont désormais définis dans les sous-stories individuelles.

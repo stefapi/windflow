@@ -20,8 +20,13 @@ ExpandedExpression = list[Union[int, Literal["*", "l"]]]
 
 def is_32bit() -> bool:
     """
-    Detect if Python is running in 32-bit mode.
-    Returns True if running on 32-bit Python, False for 64-bit.
+
+    > **Statut P3-1 (STORY-250.1) : conservé.** Consommé par
+    ``schemas/scheduled_task.py`` (validation des expressions cron → 422,
+    STORY-160.1) et le moteur scheduler runtime (STORY-160.2). Dépendance
+    croisée documentée : ne pas supprimer.
+        Detect if Python is running in 32-bit mode.
+        Returns True if running on 32-bit Python, False for 64-bit.
     """
     # Method 1: Check pointer size
     bits = struct.calcsize("P") * 8

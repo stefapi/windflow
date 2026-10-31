@@ -9,8 +9,6 @@ Enterprise-grade API with:
 - Performance monitoring
 """
 
-print("=== LOADING backend.app.main MODULE ===", flush=True)
-
 import asyncio
 import logging
 from contextlib import asynccontextmanager

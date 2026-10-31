@@ -1,8 +1,8 @@
 """Tests RBAC des routers transverses (STORY-122.5, AC 2).
 
-Couvre compute, discovery, stats, import_export, workflows :
+Couvre compute, discovery, stats, import_export :
 - **viewer** : 200 GET ``/compute/stats``, ``/compute/global``,
-  ``/stats/dashboard``, ``/workflows/``, ``/discovery/.../adoption-data`` ;
+  ``/stats/dashboard``, ``/discovery/.../adoption-data`` ;
 - **discovery POST /adopt** : viewer 403 / admin 200 (création stack —
   matrice Admin+, aligné STORY-122.3) ;
 - **import_export** : GET export viewer 200 ; POST import operator 403 /
@@ -167,18 +167,6 @@ class TestViewerReads:
         assert response.status_code == 200, response.text
         assert unwrap(response)["total_targets"] == 0
 
-    async def test_viewer_200_workflows(
-        self, client: AsyncClient, db_session: AsyncSession
-    ):
-        """Lecture : GET /workflows/ avec viewer → 200 (stub vide)."""
-        user, _org = await _create_user_with_role(
-            db_session, "msc-view-wf", Role.VIEWER
-        )
-
-        response = await client.get("/api/v1/workflows/", headers=_auth_headers(user))
-        assert response.status_code == 200, response.text
-        assert unwrap(response) == []
-
     async def test_viewer_403_adopt(
         self, client: AsyncClient, db_session: AsyncSession
     ):
@@ -309,7 +297,6 @@ class TestNoToken:
         """401 sur un échantillon lecture/écriture des routers transverses."""
         compute_resp = await client.get("/api/v1/compute/stats")
         stats_resp = await client.get("/api/v1/stats/dashboard")
-        workflows_resp = await client.get("/api/v1/workflows/")
         adopt_resp = await client.post("/api/v1/discovery/adopt", json=ADOPT_PAYLOAD)
         import_resp = await client.post(
             "/api/v1/stacks/import",
@@ -318,6 +305,5 @@ class TestNoToken:
 
         assert compute_resp.status_code == 401
         assert stats_resp.status_code == 401
-        assert workflows_resp.status_code == 401
         assert adopt_resp.status_code == 401
         assert import_resp.status_code == 401

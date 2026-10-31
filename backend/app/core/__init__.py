@@ -2,6 +2,6 @@
 Core abstractions et utilitaires pour WindFlow Backend.
 """
 
-from .abstractions import CacheManager, DatabaseManager
+from .abstractions import CacheManager
 
-__all__ = ["DatabaseManager", "CacheManager"]
+__all__ = ["CacheManager"]

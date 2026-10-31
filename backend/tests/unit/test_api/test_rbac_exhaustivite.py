@@ -73,7 +73,8 @@ EXPECTED_ROUTE_COUNTS: dict[str, int] = {
     "stacks": 15,
     # STORY-167 : +1 route events (GET /deployments/{id}/events).
     "deployments": 9,
-    "workflows": 1,
+    # STORY-250.1 : router workflows supprimé (stub trompeur — arbitrage
+    # plugins n8n, backend_status §3.16).
     "websockets": 8,
     "stats": 2,
     "import_export": 2,

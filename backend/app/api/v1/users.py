@@ -229,6 +229,10 @@ async def list_users(
     description="""
 Get the profile of the currently authenticated user.
 
+> **Endpoint contractuel** (STORY-250.2) : l'équivalent `GET /auth/me`
+est **déprécié** (headers `Deprecation`/`Sunset`, retrait planifié) —
+migrer vers cette route.
+
 ## Use Cases
 - Display user info in UI
 - Verify user roles and permissions

@@ -4,7 +4,7 @@ Routes d'authentification JWT.
 
 import logging
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -867,12 +867,30 @@ async def register(
     )
 
 
+# STORY-250.2 (P3-3/E9) : date de retrait planifiée de `/auth/me`
+# (RFC 8594, format ISO YYYY-MM-DD). La suppression effective sera un
+# choix explicite post-Sunset (garde-fou §2.G — jamais silencieuse).
+AUTH_ME_SUNSET = "2027-05-31"
+
+
 @router.get(
     "/me",
     response_model=UserResponse,
     status_code=status.HTTP_200_OK,
-    summary="Get current user profile",
+    summary="[Deprecated] Get current user profile — use GET /users/me",
+    deprecated=True,
     description="""
+**⚠️ DEPRECATED (STORY-250.2)** — remplacé par **`GET /users/me`**
+(convention REST : la ressource utilisateur vit sous `/users`).
+Les deux endpoints sont strictement équivalents ; celui-ci répond
+encore 200 pour compatibilité et porte les headers
+`Deprecation: true` + `Sunset: {sunset}`.
+
+**Retrait planifié : 2027-05-31** — migrez les consommateurs vers
+`GET /users/me`.
+
+---
+
 Get the profile information of the currently authenticated user.
 
 ## Process
@@ -968,10 +986,18 @@ Get the profile information of the currently authenticated user.
 )
 async def get_current_user_profile(
     request: Request,
+    response: Response,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
 ):
-    """Get the profile information of the currently authenticated user."""
+    """Profil de l'utilisateur courant — **déprécié** au profit de /users/me.
+
+    STORY-250.2 (P3-3/E9) : conserve 200 pour compatibilité ; porte les
+    headers de dépréciation RFC (`Deprecation: true`, `Sunset` — constante
+    module ``AUTH_ME_SUNSET``). `/users/me` est l'endpoint contractuel.
+    """
+    response.headers["Deprecation"] = "true"
+    response.headers["Sunset"] = AUTH_ME_SUNSET
     # STORY-121.3 : organization_id = org primaire (association)
     return await _user_response(session, current_user)
 

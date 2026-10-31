@@ -234,31 +234,6 @@ class TestDeploymentsRouterContract:
 
 
 # ============================================================================
-# 7. workflows (stub)
-# ============================================================================
-
-
-class TestWorkflowsRouterContract:
-    """workflows : stub GET /workflows → data == [] ; 401 sans token."""
-
-    async def test_list_workflows_stub_enveloped(
-        self, client: AsyncClient, test_user: User
-    ):
-        """Stub workflows → 200 data == [] (garde-fou : endpoint vivant)."""
-        response = await client.get("/api/v1/workflows/", headers=_bearer(test_user))
-        assert response.status_code == 200, response.text
-        body = response.json()
-        assert_success_envelope(body)
-        assert body["data"] == []
-
-    async def test_workflows_401_enveloped(self, client: AsyncClient):
-        """Sans token → 401 enveloppé."""
-        response = await client.get("/api/v1/workflows/")
-        assert response.status_code == 401, response.text
-        assert_error_envelope(response.json(), "INVALID_OR_EXPIRED_TOKEN")
-
-
-# ============================================================================
 # 8. stats
 # ============================================================================
 

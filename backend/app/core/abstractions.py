@@ -1,53 +1,13 @@
 """
-Abstractions pour la gestion de base de données et cache.
+Abstractions du core — cache (STORY-250.1).
 
-Architecture modulaire permettant le support de SQLite (défaut) ou PostgreSQL,
-et cache optionnel avec Redis.
+``CacheManager`` est le seul contrat vivant : consommé par
+``core/cache.py`` (MemoryCache/RedisCache — STORY-168).
+``DatabaseManager`` (non consommé) a été purgé par STORY-250.1.
 """
 
 from abc import ABC, abstractmethod
-from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Optional
-
-
-class DatabaseManager(ABC):
-    """
-    Interface abstraite pour la gestion de base de données.
-
-    Permet de supporter différents backends (SQLite, PostgreSQL)
-    avec la même interface.
-    """
-
-    @abstractmethod
-    async def connect(self) -> None:
-        """Établit la connexion à la base de données."""
-
-    @abstractmethod
-    async def disconnect(self) -> None:
-        """Ferme la connexion à la base de données."""
-
-    @abstractmethod
-    async def run_migrations(self) -> None:
-        """Applique les migrations du schéma de base de données."""
-
-    @abstractmethod
-    @asynccontextmanager  # type: ignore[arg-type,misc]
-    async def session(self) -> AsyncIterator[Any]:
-        """
-        Context manager pour une session de base de données.
-
-        Yields:
-            AsyncSession: Session SQLAlchemy async
-        """
-
-    @abstractmethod
-    async def health_check(self) -> bool:
-        """
-        Vérifie l'état de santé de la connexion.
-
-        Returns:
-            bool: True si la connexion est saine
-        """
+from typing import Any, Optional
 
 
 class CacheManager(ABC):

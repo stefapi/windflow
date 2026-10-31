@@ -1,4 +1,10 @@
 """
+
+> **Statut P3-1 (STORY-250.1) : conservé** — la décision initiale du plan
+(« purger du core », rédigée avant la P2) est renversée par les faits :
+STORY-168 a intégré ce service au cache unifié (clé ``llm:{sha256}``,
+tests dédiés). Le service n'est **pas exposé par API** à date — son
+exposition relève du plugin IA (spec 18, Roadmap Phase 5).
 Service LiteLLM pour l'intelligence artificielle multi-provider.
 
 Supporte OpenAI, Claude (Anthropic), et Ollama local.

@@ -96,7 +96,7 @@ class TestLogin:
             refresh_token="refresh-456",
             expires_in=3600,
         )
-        # /auth/me interrogé pour les infos utilisateur (payload déplié)
+        # /users/me interrogé pour les infos utilisateur (payload déplié)
         isolated_client.session.set_user_info.assert_called_once_with(me_payload)
 
 

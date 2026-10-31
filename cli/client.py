@@ -265,7 +265,7 @@ class APIClient:
             )
 
             # Récupérer et stocker les infos utilisateur
-            user_info = self.get("/auth/me")
+            user_info = self.get("/users/me")  # STORY-250.2 : /auth/me déprécié
             self.session.set_user_info(user_info)
 
         return result

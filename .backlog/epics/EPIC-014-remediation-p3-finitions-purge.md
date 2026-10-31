@@ -1,6 +1,6 @@
 # EPIC-014 : P3 — Finitions & purge (remédiation backend)
 
-**Statut :** TODO
+**Statut :** IN_PROGRESS
 **Priorité :** Basse
 
 ## Vision
@@ -41,7 +41,7 @@ Chaque item P3 du plan de remédiation devient une story — le découpage final
 
 ## Liste des Stories liées
 
-- [ ] STORY-250 : Purge du code mort et résidus + dépréciation `/auth/me` — permissions legacy, croniter conditionnel, abstractions, stub workflows, litellm orphelin, print debug, HealthCheck, `/auth/me` déprécié (P3-1 + P3-3)
+- [x] STORY-250 : Purge du code mort et résidus + dépréciation `/auth/me` — permissions legacy, croniter conditionnel, abstractions, stub workflows, litellm orphelin, print debug, HealthCheck, `/auth/me` déprécié (P3-1 + P3-3)
 - [ ] STORY-251 : CircuitBreaker — câbler sur les appels externes ou supprimer le module (P3-2)
 - [ ] STORY-252 : Corrections consolidées des spécifications — arbitrages F1-F6 appliqués aux specs (P3-4)
 - [ ] STORY-253 : Mise à jour documentaire post-remédiation — `backend_status.md`, rules `.roo`, CHANGELOG (P3-5)
@@ -49,6 +49,7 @@ Chaque item P3 du plan de remédiation devient une story — le découpage final
 
 ## Notes de conception
 
+- ✅ **STORY-250 DONE (2026-10-31, via découpe proactive 250.1/250.2 — complexité triple-stack backend+frontend+CLI détectée à l'analyse)** : purge E1/E2/E4/E6/E8 exécutée (écran de contrôle grep 0 référence, OpenAPI sans `/workflows`) ; **décisions conditionnelles tranchées par les faits post-P2** : E3 croniter **conservé** (consommé par scheduler STORY-160) et E7 litellm **conservé** (ressuscité par STORY-168 — cache unifié + tests ; la décision du plan « purger » était antérieure ; non exposé par API, traçabilité plugin IA Phase 5 pour STORY-254) ; E9 `/auth/me` **déprécié** (headers `Deprecation`/`Sunset: 2027-05-31` + OpenAPI `deprecated`, consommateurs frontend+CLI migrés vers `/users/me`). Validation : 3216 unit passed (unique échec `/api/v1/metrics` **préexistant** résidu STORY-172 — à corriger en reprise), CLI 17 passed, frontend type-check 0 erreur, lint/mypy 0 erreur fichiers touchés ; préexistant consigné : `cli/utils.py` F401 (STORY-253). 4 stories restent ouvertes (251-254) → l'epic passe **IN_PROGRESS**.
 - **Plage de numéros réservée** : STORY-250 à STORY-269 (seules 250-254 sont affectées ; 255-269 disponibles pour d'éventuelles sous-découpes). La plage 210-249 a été écartée car déjà réservée par EPIC-002 (STORY-201 à 246).
 - Source principale : [`docs/backend_remediation_plan.md`](../../docs/backend_remediation_plan.md) §4 « Vague P3 », axes E1-E9, F1/F2/F5 (docs), P3-5.
 - Décisions « purger OU ressusciter » déjà tranchées dans le plan §2.E : E1 purger, E2 ressusciter partiellement (CircuitBreaker câblé, HealthCheck purgé), E3 ressusciter via scheduler (sinon purger), E4 `CacheManager` ressuscité en P2 / `DatabaseManager` purger si non consommé, E6/E7/E8 purger, E9 déprécier.
