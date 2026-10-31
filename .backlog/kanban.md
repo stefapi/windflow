@@ -20,8 +20,7 @@
 
 ## 🏗️ IN PROGRESS
 
-### EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
-- [~] STORY-171 : Unification de la validation des stacks + bornes numériques `min/max` (P2-6)
+_(vide)_
 
 ## 🚫 BLOCKED
 
@@ -33,6 +32,7 @@ _(vide)_
 
 ## ✅ DONE
 
+- [x] STORY-171 : Unification de la validation des stacks + bornes numériques `min/max` (P2-6) (EPIC-013) — livré (moteur de validation unique : `StackLoaderService` allégé consomme le schéma Pydantic strict `StackDefinition` — même verdict seed/import admin, `postgresql.yaml` et `baserow.yaml` valides par les deux chemins ; macros brutes conservées à l'import (rendu à la volée inchangé), `target_type`/`target_parameters` sur `StackCreate`/`StackUpdate` ; bornes `minimum`/`maximum` servies au formulaire et appliquées frontend (`el-input-number` + règles de validation, `min`/`max` ne plus lus — grep 0) ; 68 tests backend + 27 tests frontend créés, 3055 unit backend + 1052 frontend passed, lint/mypy/typecheck 0 erreur, couverture modules touchés 84-97 % ; corrections documentaires reportées STORY-253)
 - [x] STORY-170.1 : Plugins — routes API dynamiques `/api/v1/plugins/{name}/…` : montage/démontage, RBAC core et OpenAPI (P2-3, partie extension — STORY-170 découpée) (EPIC-013)
 - [x] STORY-170.2 : Plugins — gates pre-deploy : SDK, `PluginGateService` timeout/multi-gates et insertion pipeline avant création des containers (P2-3, partie extension — STORY-170 découpée) (EPIC-013)
 - [x] STORY-170.3 : Plugins — plugin Trivy de référence : gate `never` réelle + bloquant simulé, matrice de critères et conventions (P2-3, partie extension — STORY-170 découpée) (EPIC-013)

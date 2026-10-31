@@ -15,12 +15,12 @@ export interface VariableDefinition {
   visible?: boolean
   enum?: string[] | number[]
   enum_labels?: Record<string, string>
-  min?: number
-  max?: number
+  minimum?: number
+  maximum?: number
   pattern?: string
   has_macro?: boolean
   macro_template?: string
-  variables?: Record<string, VariableDefinition>  // Sous-variables pour les groupes
+  variables?: Record<string, VariableDefinition> // Sous-variables pour les groupes
 }
 
 export interface FormField {
@@ -32,23 +32,21 @@ export interface FormField {
   visible: boolean
   enum?: string[] | number[]
   enum_labels?: Record<string, string>
-  min?: number
-  max?: number
+  minimum?: number
+  maximum?: number
   pattern?: string
   default?: any
   validationRules: ValidationRule[]
   has_macro?: boolean
   macro_template?: string
-  groupLabel?: string  // Label du groupe parent (pour l'affichage)
-  isGroupHeader?: boolean  // Indique si c'est un header de groupe
+  groupLabel?: string // Label du groupe parent (pour l'affichage)
+  isGroupHeader?: boolean // Indique si c'est un header de groupe
 }
 
 export interface ValidationRule {
   required?: boolean
   message?: string
   trigger?: string | string[]
-  min?: number
-  max?: number
   pattern?: RegExp
   validator?: (rule: any, value: any, callback: any) => void
 }
@@ -76,7 +74,7 @@ function getValidationRules(variable: VariableDefinition): ValidationRule[] {
     rules.push({
       required: true,
       message: `${variable.label} est requis`,
-      trigger: ['blur', 'change']
+      trigger: ['blur', 'change'],
     })
   }
 
@@ -98,33 +96,33 @@ function getValidationRules(variable: VariableDefinition): ValidationRule[] {
 
           callback()
         },
-        trigger: ['blur', 'change']
+        trigger: ['blur', 'change'],
       })
     }
 
-    if (variable.min !== undefined) {
+    if (variable.minimum !== undefined) {
       rules.push({
         validator: (_rule: any, value: any, callback: any) => {
-          if (value !== undefined && value !== null && value < variable.min!) {
-            callback(new Error(`${variable.label} doit être >= ${variable.min}`))
+          if (value !== undefined && value !== null && value < variable.minimum!) {
+            callback(new Error(`${variable.label} doit être >= ${variable.minimum}`))
           } else {
             callback()
           }
         },
-        trigger: 'blur'
+        trigger: 'blur',
       })
     }
 
-    if (variable.max !== undefined) {
+    if (variable.maximum !== undefined) {
       rules.push({
         validator: (_rule: any, value: any, callback: any) => {
-          if (value !== undefined && value !== null && value > variable.max!) {
-            callback(new Error(`${variable.label} doit être <= ${variable.max}`))
+          if (value !== undefined && value !== null && value > variable.maximum!) {
+            callback(new Error(`${variable.label} doit être <= ${variable.maximum}`))
           } else {
             callback()
           }
         },
-        trigger: 'blur'
+        trigger: 'blur',
       })
     }
   }
@@ -153,7 +151,7 @@ function getValidationRules(variable: VariableDefinition): ValidationRule[] {
           callback(new Error(`Configuration invalide du champ ${variable.label}`))
         }
       },
-      trigger: 'blur'
+      trigger: 'blur',
     })
   }
 
@@ -214,7 +212,7 @@ export function useDynamicForm(variables: Record<string, VariableDefinition>) {
    */
   const initializeDefaults = () => {
     // Réinitialiser le formulaire
-    Object.keys(formData).forEach(key => {
+    Object.keys(formData).forEach((key) => {
       delete formData[key]
     })
 
@@ -230,11 +228,7 @@ export function useDynamicForm(variables: Record<string, VariableDefinition>) {
    * @param groupLabel - Label du groupe parent (pour l'affichage)
    * @returns Liste des champs générés
    */
-  const generateGroupFields = (
-    variables: Record<string, VariableDefinition>,
-    prefix: string = '',
-    groupLabel?: string
-  ): FormField[] => {
+  const generateGroupFields = (variables: Record<string, VariableDefinition>, prefix: string = '', groupLabel?: string): FormField[] => {
     const result: FormField[] = []
 
     for (const [key, variable] of Object.entries(variables)) {
@@ -253,7 +247,7 @@ export function useDynamicForm(variables: Record<string, VariableDefinition>) {
           required: false,
           visible: true,
           validationRules: [],
-          isGroupHeader: true
+          isGroupHeader: true,
         })
 
         // Récursion pour les sous-champs du groupe
@@ -269,14 +263,14 @@ export function useDynamicForm(variables: Record<string, VariableDefinition>) {
           visible: variable.visible ?? true,
           enum: variable.enum,
           enum_labels: variable.enum_labels,
-          min: variable.min,
-          max: variable.max,
+          minimum: variable.minimum,
+          maximum: variable.maximum,
           pattern: variable.pattern,
           default: variable.default,
           validationRules: getValidationRules(variable),
           has_macro: variable.has_macro || false,
           macro_template: variable.macro_template,
-          groupLabel
+          groupLabel,
         })
       }
     }
@@ -319,7 +313,7 @@ export function useDynamicForm(variables: Record<string, VariableDefinition>) {
 
     return {
       valid: errors.length === 0,
-      errors
+      errors,
     }
   }
 
@@ -359,6 +353,6 @@ export function useDynamicForm(variables: Record<string, VariableDefinition>) {
     getFieldRules,
     validateRequired,
     getChanges,
-    getAllValues
+    getAllValues,
   }
 }

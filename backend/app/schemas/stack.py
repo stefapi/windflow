@@ -228,6 +228,24 @@ class StackCreate(StackBase):
         description="ID de l'organisation",
         json_schema_extra={"example": "org-001"},
     )
+    target_type: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description=(
+            "Type de déploiement supporté (docker, docker_compose, docker_swarm, "
+            "kubernetes, vm, physical) — défaut du modèle ``docker`` si absent "
+            "(STORY-171 : parité seed/import)"
+        ),
+        json_schema_extra={"example": "docker_compose"},
+    )
+    target_parameters: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Paramètres spécifiques à la target (ex: volumes à supprimer) — "
+            "STORY-171 : parité seed/import"
+        ),
+        json_schema_extra={"example": {"volumes_to_remove": ["data-volume"]}},
+    )
     origin: WorkloadOrigin = Field(
         default=WorkloadOrigin.MANAGED,
         description=(
@@ -360,6 +378,24 @@ class StackUpdate(BaseModel):
             "hors de l'organisation de la stack)"
         ),
         json_schema_extra={"example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"},
+    )
+    target_type: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description=(
+            "Nouveau type de déploiement (docker, docker_compose, docker_swarm, "
+            "kubernetes, vm, physical) — STORY-171 : parité seed/import "
+            "(propagation force_update)"
+        ),
+        json_schema_extra={"example": "docker_compose"},
+    )
+    target_parameters: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Nouveaux paramètres spécifiques à la target — STORY-171 : "
+            "parité seed/import (propagation force_update)"
+        ),
+        json_schema_extra={"example": {"volumes_to_remove": ["data-volume"]}},
     )
 
 

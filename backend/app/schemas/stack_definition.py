@@ -7,7 +7,7 @@ Validation stricte de la structure des fichiers stacks_definitions/*.yaml
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, ValidationError, validator
 
 
 class VariableType(str, Enum):
@@ -147,9 +147,10 @@ class StackDefinitionMetadata(BaseModel):
             "physical",
         }
         if v not in valid_types:
+            # STORY-171 (rules 40) : la valeur d'input n'est pas reprise dans
+            # le message — les erreurs servies/journalisées ne l'exposent pas.
             raise ValueError(
-                f"target_type invalide: {v}. "
-                f"Valeurs valides: {', '.join(valid_types)}"
+                "target_type invalide. " f"Valeurs valides: {', '.join(valid_types)}"
             )
         return v
 
@@ -179,3 +180,64 @@ class StackDefinition(BaseModel):
 
 # Résoudre la référence forward pour la récursivité
 StackDefinitionVariable.model_rebuild()
+
+
+def convert_variables_to_db_format(
+    variables: Optional[Dict[str, StackDefinitionVariable]],
+) -> Dict[str, Any]:
+    """
+    Convertit les variables Pydantic en format dict pour la DB (STORY-171).
+
+    Fonction **partagée** entre le seed (``StackDefinitionsLoader``) et
+    l'import admin (``StackLoaderService``) : les deux chemins écrivent
+    exactement le même format de variables — dump ``model_dump(mode="json",
+    exclude_none=True)`` conservant la hiérarchie des groupes (récursif),
+    ``visible``, ``enum_labels``, ``has_macro``/``macro_template`` et les
+    bornes ``minimum``/``maximum``.
+
+    Args:
+        variables: Dictionnaire de StackDefinitionVariable (peut être None)
+
+    Returns:
+        Dictionnaire JSON-serializable pour la base de données
+    """
+    if not variables:
+        return {}
+
+    db_variables: Dict[str, Any] = {}
+    for var_name, var_def in variables.items():
+        # mode='json' force la sérialisation des Enums en string
+        var_dict = var_def.model_dump(mode="json", exclude_none=True)
+
+        # Pour les groupes, s'assurer que les sous-variables sont sérialisées
+        if var_def.type == "group" and var_def.variables:
+            var_dict["variables"] = convert_variables_to_db_format(var_def.variables)
+
+        db_variables[var_name] = var_dict
+
+    return db_variables
+
+
+def format_validation_errors(exc: ValidationError) -> List[str]:
+    """
+    Formate une ValidationError Pydantic en liste de messages lisibles (STORY-171).
+
+    Une entrée par erreur : ``"{'.'.join(loc)}: {msg}"`` — localise le champ
+    fautif (ex. ``variables.host_port.type: Input should be 'string', ...``).
+
+    La clé ``input`` (valeur testée par le validateur) est volontairement
+    **exclue** : les messages servis à l'API ou journalisés ne doivent pas
+    contenir la valeur d'entrée (rules 40 — exposition de données).
+
+    Args:
+        exc: ValidationError Pydantic levée par le moteur ``StackDefinition``
+
+    Returns:
+        Liste de messages formatés (une entrée par erreur de validation)
+    """
+    formatted: List[str] = []
+    for error in exc.errors():
+        loc = ".".join(str(item) for item in error.get("loc", ()))
+        msg = str(error.get("msg", ""))
+        formatted.append(f"{loc}: {msg}" if loc else msg)
+    return formatted

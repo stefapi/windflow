@@ -88,8 +88,8 @@
     >
       <el-input-number
         v-model="localValue"
-        :min="field.min"
-        :max="field.max"
+        :min="field.minimum"
+        :max="field.maximum"
         :precision="isIntegerField ? 0 : 2"
         :placeholder="`Entrer ${field.label}`"
         style="width: 100%"
@@ -179,12 +179,12 @@ const isIntegerField = computed(() => {
   if (props.field.type === 'integer') return true
 
   // Heuristique: certains stacks peuvent déclarer `number` alors que la valeur
-  // attendue est un entier (defaults/min/max entiers).
+  // attendue est un entier (default/minimum/maximum entiers).
   if (props.field.type !== 'number') return false
 
   const defaultIsInteger = Number.isInteger(props.field.default)
-  const minIsInteger = props.field.min === undefined || Number.isInteger(props.field.min)
-  const maxIsInteger = props.field.max === undefined || Number.isInteger(props.field.max)
+  const minIsInteger = props.field.minimum === undefined || Number.isInteger(props.field.minimum)
+  const maxIsInteger = props.field.maximum === undefined || Number.isInteger(props.field.maximum)
 
   return defaultIsInteger && minIsInteger && maxIsInteger
 })
@@ -192,7 +192,7 @@ const isIntegerField = computed(() => {
 // Valeur locale avec v-model bidirectionnel
 const localValue = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: (value) => emit('update:modelValue', value),
 })
 
 /**

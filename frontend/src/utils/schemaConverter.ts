@@ -11,8 +11,8 @@ interface SimpleVariable {
   description?: string
   default?: any
   required?: boolean
-  min?: number
-  max?: number
+  minimum?: number
+  maximum?: number
   min_length?: number
   max_length?: number
   options?: string[]
@@ -75,7 +75,7 @@ export function convertToJsonSchema(simpleConfig: SimpleConfig): ConvertedSchema
   Object.entries(simpleConfig).forEach(([key, variable]) => {
     // Construire la propriété JSON Schema
     const property: any = {
-      title: variable.label
+      title: variable.label,
     }
 
     if (variable.description) {
@@ -106,33 +106,29 @@ export function convertToJsonSchema(simpleConfig: SimpleConfig): ConvertedSchema
 
       case 'integer':
         property.type = 'integer'
-        if (variable.min !== undefined) {
-          property.minimum = variable.min
+        if (variable.minimum !== undefined) {
+          property.minimum = variable.minimum
         }
-        if (variable.max !== undefined) {
-          property.maximum = variable.max
+        if (variable.maximum !== undefined) {
+          property.maximum = variable.maximum
         }
         if (variable.default !== undefined) {
           // Convertir explicitement en number pour éviter les erreurs de type avec ElInputNumber
-          property.default = typeof variable.default === 'string'
-            ? parseInt(variable.default, 10)
-            : Number(variable.default)
+          property.default = typeof variable.default === 'string' ? parseInt(variable.default, 10) : Number(variable.default)
         }
         break
 
       case 'number':
         property.type = 'number'
-        if (variable.min !== undefined) {
-          property.minimum = variable.min
+        if (variable.minimum !== undefined) {
+          property.minimum = variable.minimum
         }
-        if (variable.max !== undefined) {
-          property.maximum = variable.max
+        if (variable.maximum !== undefined) {
+          property.maximum = variable.maximum
         }
         if (variable.default !== undefined) {
           // Convertir explicitement en number pour éviter les erreurs de type avec ElInputNumber
-          property.default = typeof variable.default === 'string'
-            ? parseFloat(variable.default)
-            : Number(variable.default)
+          property.default = typeof variable.default === 'string' ? parseFloat(variable.default) : Number(variable.default)
         }
         break
 
@@ -162,7 +158,7 @@ export function convertToJsonSchema(simpleConfig: SimpleConfig): ConvertedSchema
     // Construire l'UI Schema element
     const control: any = {
       type: 'Control',
-      scope: `#/properties/${key}`
+      scope: `#/properties/${key}`,
     }
 
     // Options UI spécifiques
@@ -177,7 +173,7 @@ export function convertToJsonSchema(simpleConfig: SimpleConfig): ConvertedSchema
       options.showUnfocusedDescription = true
     }
 
-    if (variable.type === 'number' && variable.min !== undefined && variable.max !== undefined) {
+    if (variable.type === 'number' && variable.minimum !== undefined && variable.maximum !== undefined) {
       options.slider = true
     }
 
@@ -197,15 +193,15 @@ export function convertToJsonSchema(simpleConfig: SimpleConfig): ConvertedSchema
     schema: {
       type: 'object',
       properties,
-      ...(required.length > 0 && { required })
+      ...(required.length > 0 && { required }),
     },
     uischema: {
       type: 'VerticalLayout',
-      elements: uiElements
+      elements: uiElements,
     },
     metadata: {
-      generateableFields
-    }
+      generateableFields,
+    },
   }
 }
 
@@ -234,15 +230,12 @@ export function extractDefaults(schema: JsonSchema): Record<string, any> {
  * @param schema - Schema JSON
  * @returns True si valide, sinon liste des erreurs
  */
-export function validateAgainstSchema(
-  data: Record<string, any>,
-  schema: JsonSchema
-): { valid: boolean; errors: string[] } {
+export function validateAgainstSchema(data: Record<string, any>, schema: JsonSchema): { valid: boolean; errors: string[] } {
   const errors: string[] = []
 
   // Vérifier les champs requis
   if (schema.required) {
-    schema.required.forEach(field => {
+    schema.required.forEach((field) => {
       if (data[field] === undefined || data[field] === null || data[field] === '') {
         errors.push(`Le champ '${field}' est requis`)
       }
@@ -296,6 +289,6 @@ export function validateAgainstSchema(
 
   return {
     valid: errors.length === 0,
-    errors
+    errors,
   }
 }

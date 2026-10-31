@@ -4,16 +4,21 @@ Service métier pour gestion des stacks Docker Compose.
 Implémente le pattern Repository avec SQLAlchemy 2.0 async.
 """
 
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Optional
 
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.stack import Stack
 from ..schemas.stack import StackCreate, StackUpdate
+from ..schemas.stack_definition import format_validation_errors
 from .stack_loader_service import StackLoaderService
+
+logger = logging.getLogger(__name__)
 
 
 class StackService:
@@ -237,9 +242,9 @@ class StackService:
             FileNotFoundError: Si le fichier n'existe pas
             ValueError: Si la définition est invalide
         """
-        # Charger et parser le YAML
-        data = StackLoaderService.load_from_yaml(yaml_path)
-        stack_create = StackLoaderService.to_stack_create(data, organization_id)
+        # STORY-171 : charger + valider via le moteur unique
+        definition = StackLoaderService.load_definition(yaml_path)
+        stack_create = StackLoaderService.to_stack_create(definition, organization_id)
 
         # Créer le stack
         return await StackService.create(db, stack_create)
@@ -263,9 +268,9 @@ class StackService:
         Returns:
             tuple[Stack, bool]: (Stack créé/mis à jour, True si créé, False si mis à jour)
         """
-        # Charger le YAML
-        data = StackLoaderService.load_from_yaml(yaml_path)
-        stack_create = StackLoaderService.to_stack_create(data, organization_id)
+        # STORY-171 : charger + valider via le moteur unique
+        definition = StackLoaderService.load_definition(yaml_path)
+        stack_create = StackLoaderService.to_stack_create(definition, organization_id)
 
         # Vérifier si le stack existe déjà
         existing = await StackService.get_by_name(
@@ -274,7 +279,8 @@ class StackService:
 
         if existing:
             if force_update:
-                # Mettre à jour le stack existant
+                # Mettre à jour le stack existant — STORY-171 : propagation
+                # de target_type/target_parameters (StackUpdate étendu, Tâche 1)
                 stack_update = StackUpdate(  # type: ignore[call-arg]
                     description=stack_create.description,
                     template=stack_create.template,
@@ -283,6 +289,8 @@ class StackService:
                     category=stack_create.category,
                     tags=stack_create.tags,
                     is_public=stack_create.is_public,
+                    target_type=stack_create.target_type,
+                    target_parameters=stack_create.target_parameters,
                 )
                 updated_stack = await StackService.update(db, existing.id, stack_update)
                 return updated_stack, False  # type: ignore[return-value]
@@ -330,7 +338,8 @@ class StackService:
 
                 if existing:
                     if force_update:
-                        # Mettre à jour
+                        # Mettre à jour — STORY-171 : propagation
+                        # target_type/target_parameters (StackUpdate étendu)
                         stack_update = StackUpdate(  # type: ignore[call-arg]
                             description=stack_create.description,
                             template=stack_create.template,
@@ -339,21 +348,28 @@ class StackService:
                             category=stack_create.category,
                             tags=stack_create.tags,
                             is_public=stack_create.is_public,
+                            target_type=stack_create.target_type,
+                            target_parameters=stack_create.target_parameters,
                         )
                         await StackService.update(db, existing.id, stack_update)
                         stats["updated"] += 1
-                        print(f"  ↻ Mis à jour: {stack_create.name}")
+                        logger.info("↻ Mis à jour: %s", stack_create.name)
                     else:
                         stats["skipped"] += 1
-                        print(f"  ⊝ Ignoré (déjà existant): {stack_create.name}")
+                        logger.info("⊝ Ignoré (déjà existant): %s", stack_create.name)
                 else:
                     # Créer
                     await StackService.create(db, stack_create)
                     stats["created"] += 1
-                    print(f"  ✓ Créé: {stack_create.name}")
+                    logger.info("✓ Créé: %s", stack_create.name)
 
+            except ValidationError as e:
+                # STORY-171 : erreurs Pydantic détaillées sans valeur d'input
+                details = "; ".join(format_validation_errors(e))
+                stats["errors"].append({"stack": stack_create.name, "error": details})
+                logger.warning("✗ Validation pour %s: %s", stack_create.name, details)
             except Exception as e:
                 stats["errors"].append({"stack": stack_create.name, "error": str(e)})
-                print(f"  ✗ Erreur pour {stack_create.name}: {e}")
+                logger.warning("✗ Erreur pour %s: %s", stack_create.name, e)
 
         return stats

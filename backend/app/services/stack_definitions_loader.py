@@ -14,7 +14,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.stack import Stack
-from ..schemas.stack_definition import StackDefinition, StackDefinitionVariable
+from ..schemas.stack_definition import (
+    StackDefinition,
+    StackDefinitionVariable,
+    convert_variables_to_db_format,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -262,8 +266,11 @@ class StackDefinitionsLoader:
         """
         Convertit les variables Pydantic en format dict pour la DB.
 
-        Pour les variables de type 'group', conserve la structure hiérarchique
-        pour l'affichage dans l'UI.
+        Délègue à la fonction partagée ``convert_variables_to_db_format``
+        (STORY-171 — moteur unique) : le seed et l'import admin écrivent
+        exactement le même format de variables. Pour les variables de type
+        'group', la structure hiérarchique est conservée pour l'affichage
+        dans l'UI (comportement inchangé).
 
         Args:
             variables: Dictionnaire de StackDefinitionVariable
@@ -271,24 +278,7 @@ class StackDefinitionsLoader:
         Returns:
             Dictionnaire JSON-serializable pour la base de données
         """
-        if not variables:
-            return {}
-
-        db_variables = {}
-        for var_name, var_def in variables.items():
-            # Utiliser mode='json' pour forcer la sérialisation des Enums en string
-            var_dict = var_def.model_dump(mode="json", exclude_none=True)
-
-            # Pour les groupes, s'assurer que les sous-variables sont bien sérialisées
-            if var_def.type == "group" and var_def.variables:
-                # Récursion pour les sous-variables
-                var_dict["variables"] = self._convert_variables_to_db_format(
-                    var_def.variables
-                )
-
-            db_variables[var_name] = var_dict
-
-        return db_variables
+        return convert_variables_to_db_format(variables)
 
     def _is_version_newer(self, version1: str, version2: str) -> bool:
         """

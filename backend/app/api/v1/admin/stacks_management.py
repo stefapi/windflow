@@ -8,8 +8,9 @@ Remplace les scripts seed_stacks.py et check_stacks.py.
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import yaml
 from fastapi import APIRouter, Body, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,10 +26,87 @@ from ....models.organization import Organization
 from ....models.stack import Stack
 from ....schemas.common import PaginatedResponse
 from ....schemas.stack import StackCreate, StackResponse
+from ....schemas.stack_definition import format_validation_errors
 from ....services.stack_loader_service import StackLoaderService
 from ....services.stack_service import StackService
 
 router = APIRouter()
+
+
+def _inspect_yaml_definition(yaml_file: Path) -> StackDefinitionInfo:
+    """
+    Évalue un fichier YAML de stack via le moteur unique (STORY-171).
+
+    ``StackLoaderService.load_definition`` → schéma Pydantic strict (même
+    verdict que le seed) ; en cas d'échec, ``is_valid=False`` avec
+    ``validation_errors`` détaillées (chemin du champ + message, **sans la
+    valeur d'input** — rules 40) et métadonnées brutes au mieux-effort.
+
+    Args:
+        yaml_file: Chemin vers le fichier YAML
+
+    Returns:
+        StackDefinitionInfo avec le verdict du moteur unique
+    """
+    # Métadonnées brutes au mieux-effort (remplissage inventaire si invalide)
+    raw_meta: Dict[str, Any] = {}
+    try:
+        with open(yaml_file, "r", encoding="utf-8") as f:
+            raw = yaml.safe_load(f)
+        if isinstance(raw, dict):
+            raw_meta = raw.get("metadata", {}) or {}
+            raw_variables = raw.get("variables", {}) or {}
+        else:
+            raw_variables = {}
+    except Exception:
+        raw_variables = {}
+
+    try:
+        definition = StackLoaderService.load_definition(yaml_file)
+        return StackDefinitionInfo(
+            filename=yaml_file.name,
+            name=definition.metadata.name,
+            version=definition.metadata.version,
+            category=definition.metadata.category,
+            description=definition.metadata.description,
+            is_public=definition.metadata.is_public,
+            tags=definition.metadata.tags,
+            variables_count=len(definition.variables),
+            is_valid=True,
+            validation_errors=None,
+        )
+    except ValidationError as e:
+        # Erreurs Pydantic détaillées, clé input exclue (rules 40)
+        return StackDefinitionInfo(
+            filename=yaml_file.name,
+            name=str(raw_meta.get("name", "N/A")),
+            version=str(raw_meta.get("version", "N/A")),
+            category=str(raw_meta.get("category", "N/A")),
+            description=str(raw_meta.get("description", "")),
+            is_public=bool(raw_meta.get("is_public", False)),
+            tags=list(raw_meta.get("tags", [])),
+            variables_count=(
+                len(raw_variables) if isinstance(raw_variables, dict) else 0
+            ),
+            is_valid=False,
+            validation_errors=format_validation_errors(e),
+        )
+    except Exception as e:
+        # YAML mal formé, fichier vide, etc. → invalide sans 500
+        return StackDefinitionInfo(
+            filename=yaml_file.name,
+            name=str(raw_meta.get("name", "N/A")),
+            version=str(raw_meta.get("version", "N/A")),
+            category=str(raw_meta.get("category", "N/A")),
+            description=str(raw_meta.get("description", "")),
+            is_public=bool(raw_meta.get("is_public", False)),
+            tags=list(raw_meta.get("tags", [])),
+            variables_count=(
+                len(raw_variables) if isinstance(raw_variables, dict) else 0
+            ),
+            is_valid=False,
+            validation_errors=[str(e)],
+        )
 
 
 # ============================================================================
@@ -147,55 +225,12 @@ async def list_stack_definitions(
         if yaml_file.name.startswith("_"):
             continue
 
-        try:
-            data = StackLoaderService.load_from_yaml(yaml_file)
-            metadata = data.get("metadata", {})
-
-            # Valider la définition
-            is_valid = True
-            validation_errors = []
-            try:
-                StackLoaderService.validate_stack_definition(data)
-            except Exception as e:
-                is_valid = False
-                validation_errors.append(str(e))
-
-            definitions.append(
-                StackDefinitionInfo(
-                    filename=yaml_file.name,
-                    name=metadata.get("name", "N/A"),
-                    version=metadata.get("version", "N/A"),
-                    category=metadata.get("category", "N/A"),
-                    description=metadata.get("description", ""),
-                    is_public=metadata.get("is_public", False),
-                    tags=metadata.get("tags", []),
-                    variables_count=len(data.get("variables", {})),
-                    is_valid=is_valid,
-                    validation_errors=validation_errors if validation_errors else None,
-                )
-            )
-
-        except Exception as e:
-            definitions.append(
-                StackDefinitionInfo(
-                    filename=yaml_file.name,
-                    name="ERROR",
-                    version="N/A",
-                    category="N/A",
-                    description="",
-                    is_public=False,
-                    tags=[],
-                    variables_count=0,
-                    is_valid=False,
-                    validation_errors=[str(e)],
-                )
-            )
+        # STORY-171 : verdict par le moteur unique (même validation que le seed)
+        definitions.append(_inspect_yaml_definition(yaml_file))
 
     # STORY-128 : tri stable par filename puis slicing mémoire
     definitions.sort(key=lambda d: d.filename)
-    return paginate_sequence(
-        [d.model_dump() for d in definitions], page, per_page
-    )
+    return paginate_sequence([d.model_dump() for d in definitions], page, per_page)
 
 
 @router.post("/validate")
@@ -226,12 +261,14 @@ async def validate_stack_definitions(
         if yaml_file.name.startswith("_"):
             continue
 
-        try:
-            data = StackLoaderService.load_from_yaml(yaml_file)
-            StackLoaderService.validate_stack_definition(data)
+        # STORY-171 : verdict par le moteur unique (même validation que le
+        # seed) — erreurs détaillées sans valeur d'input (rules 40)
+        info = _inspect_yaml_definition(yaml_file)
+        if info.is_valid:
             valid_count += 1
-        except Exception as e:
-            errors.append({"file": yaml_file.name, "error": str(e)})
+        else:
+            error_detail = "; ".join(info.validation_errors or [])
+            errors.append({"file": yaml_file.name, "error": error_detail})
 
     return {
         "total_files": len(yaml_files),
@@ -389,11 +426,7 @@ async def list_imported_stacks(
         query = query.where(and_(*filters))
         count_query = count_query.where(and_(*filters))
 
-    query = (
-        query.order_by(Stack.name)
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-    )
+    query = query.order_by(Stack.name).offset((page - 1) * per_page).limit(per_page)
 
     result = await db.execute(query)
     stacks = result.scalars().all()
@@ -439,9 +472,8 @@ async def get_sync_status(
                 continue
 
             try:
-                data = StackLoaderService.load_from_yaml(yaml_file)
-                metadata = data.get("metadata", {})
-                yaml_stacks[metadata.get("name")] = metadata.get("version")
+                definition = StackLoaderService.load_definition(yaml_file)
+                yaml_stacks[definition.metadata.name] = definition.metadata.version
             except Exception:
                 continue
 
@@ -1016,15 +1048,15 @@ async def get_stacks_health(
             if yaml_file.name.startswith("_"):
                 continue
 
-            try:
-                data = StackLoaderService.load_from_yaml(yaml_file)
-                StackLoaderService.validate_stack_definition(data)
-            except Exception as e:
+            # STORY-171 : verdict par le moteur unique (même validation que
+            # le seed) — erreurs détaillées sans valeur d'input (rules 40)
+            info = _inspect_yaml_definition(yaml_file)
+            if not info.is_valid:
                 issues.append(
                     {
                         "type": "validation_error",
                         "file": yaml_file.name,
-                        "message": str(e),
+                        "message": "; ".join(info.validation_errors or []),
                     }
                 )
 
@@ -1038,8 +1070,8 @@ async def get_stacks_health(
             if yaml_file.name.startswith("_"):
                 continue
             try:
-                data = StackLoaderService.load_from_yaml(yaml_file)
-                yaml_stack_names.add(data.get("metadata", {}).get("name"))
+                definition = StackLoaderService.load_definition(yaml_file)
+                yaml_stack_names.add(definition.metadata.name)
             except Exception:
                 pass
 
