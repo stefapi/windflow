@@ -86,7 +86,9 @@ Extrait réel — [`docker-compose.extensions.yml`](../../docker-compose.extensi
       - "${POSTGRES_PORT:-5432}:5432"
 ```
 
-Chaque brique a son volume dédié (`postgres_data`, `redis_data`, `vault_data`, `keycloak_db_data`, `prometheus_data`, `grafana_data`) ; les briques ne dépendent pas les unes des autres, sauf `sso` qui embarque sa propre base (`windflow-keycloak-db`, indépendante du profil `database`). Les configurations montées vivent sous `infrastructure/docker/` (`prometheus.yml`, `prometheus-rules/`, `grafana/dashboards/`, `grafana/provisioning/`, `vault-config/`, `init-scripts/`).
+Chaque brique a son volume dédié (`postgres_data`, `redis_data`, `vault_data`, `keycloak_db_data`, `prometheus_data`, `grafana_data`) ; les briques ne dépendent pas les unes des autres, sauf `sso` qui embarque sa propre base (`windflow-keycloak-db`, indépendante du profil `database`). Les configurations montées vivent sous `infrastructure/docker/` (`prometheus.yml`, `prometheus-alerts.yml` (monté directement en `/etc/prometheus/rules/alerts.yml` — STORY-172), `grafana/dashboards/`, `grafana/provisioning/`, `vault-config/`, `init-scripts/`).
+
+**Brique monitoring (STORY-172 — instrumentation réelle)** : l'API expose `GET /api/v1/metrics` (sans authentification, exemption sondes spec 09 — scrape interne Docker uniquement, jamais routé Internet par Traefik) au format texte Prometheus. Le flag `prometheus_enabled` gouverne l'exposition et l'instrumentation HTTP : désactivé → **404**. Séries préfixées `windflow_` (HTTP, déploiements ok/ko, scheduler, WebSocket) — contrat complet et procédure de vérification dans [`MONITORING-RUNBOOK.md`](MONITORING-RUNBOOK.md).
 
 ⚠️ **Non implémenté / divergent** : il n'existe **aucun** profil compose `logging` (ELK), `ai`, `kubernetes` ni `swarm` dans le dépôt — ces briques citées par d'anciens documents n'ont jamais été livrées (arbitrage general_specs : pas de self-hosting K8s de WindFlow, ch. 04 ; IA = plugins `ollama`/`litellm`, ch. 18).
 

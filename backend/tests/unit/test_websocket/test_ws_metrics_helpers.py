@@ -176,10 +176,13 @@ class TestRecordBroadcast:
 
         metrics.record_broadcast("deployment", duration=0.042, client_count=7)
 
-        assert (
-            _counter_value(f"{duration_name}_sum", type_labels) - before_duration
-            == 0.042
-        )
+        # STORY-172 : le câblage applicatif écrit désormais de vraies durées
+        # dans le même histogramme global (tests broadcasting précédents) —
+        # l'égalité flottante stricte sur le delta ``_sum`` devient fragile
+        # (somme accumulée), tolérance ``approx`` sur le delta lui-même.
+        assert _counter_value(
+            f"{duration_name}_sum", type_labels
+        ) - before_duration == pytest.approx(0.042)
         assert _delta(f"{duration_name}_count", type_labels, before_count) == 1.0
         assert _counter_value(f"{clients_name}_sum", type_labels) - before_clients == 7
 
@@ -221,7 +224,9 @@ class TestRecordEventsAndPlugins:
             "audit_logger", "NOTIFICATION_USER", duration=0.25
         )
 
-        assert _counter_value(f"{name}_sum", labels) - before_sum == 0.25
+        # STORY-172 : même durcissement que le broadcast — le câblage applicatif
+        # observe de vraies durées dans ce même histogramme global.
+        assert _counter_value(f"{name}_sum", labels) - before_sum == pytest.approx(0.25)
         assert _delta(f"{name}_count", labels, before_count) == 1.0
 
     def test_record_error(self):

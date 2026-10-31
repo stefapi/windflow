@@ -32,6 +32,10 @@ from typing import Optional
 
 from ..config import settings
 
+# STORY-172 (E5/D1) : mesure de la dégradation ack_timeout promise par
+# STORY-164.1 (best-effort — ne lève jamais).
+from .metrics import record_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -129,6 +133,12 @@ class AckRegistry:
             for message_id in expired_ids:
                 entry = self._entries.pop(message_id)
                 purged += 1
+                # STORY-172 : la dégradation ack_timeout promise par
+                # STORY-164.1 est désormais mesurée (best-effort — le helper
+                # ne lève jamais, la purge ne doit pas échouer pour une
+                # métrique). Série :
+                # windflow_websocket_errors_total{error_type="ack_timeout"}.
+                record_error("ack_timeout")
                 logger.warning(
                     "Critical WebSocket message unacknowledged beyond TTL — dropped",
                     extra={

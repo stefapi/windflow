@@ -74,7 +74,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "windflow_deployments_total",
+          "expr": "sum(windflow_deployments_total)",
           "interval": "",
           "legendFormat": "Total Deployments",
           "refId": "A"
@@ -196,7 +196,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "windflow_deployments_success_total",
+          "expr": "windflow_deployments_total{result=\"success\"}",
           "interval": "",
           "legendFormat": "Successful Deployments",
           "refId": "A"
@@ -257,7 +257,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "windflow_deployments_failed_total",
+          "expr": "windflow_deployments_total{result=\"failed\"}",
           "interval": "",
           "legendFormat": "Failed Deployments",
           "refId": "A"
@@ -553,7 +553,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "increase(windflow_deployments_success_total[1h])",
+          "expr": "increase(windflow_deployments_total{result=\"success\"}[1h])",
           "interval": "",
           "legendFormat": "Success",
           "refId": "A"
@@ -563,7 +563,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "increase(windflow_deployments_failed_total[1h])",
+          "expr": "increase(windflow_deployments_total{result=\"failed\"}[1h])",
           "interval": "",
           "legendFormat": "Failed",
           "refId": "B"

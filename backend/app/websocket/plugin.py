@@ -16,6 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.user import User
 from ..schemas.websocket_events import WebSocketEventType
 
+# STORY-172 (E5/D1) : métriques d'exécution des plugins et de dispatch
+# (best-effort — jamais casser un dispatch pour une métrique).
+from .metrics import record_event_dispatch, record_plugin_execution
+
 
 @dataclass
 class PluginContext:
@@ -346,8 +350,17 @@ class WebSocketPluginManager:
         import asyncio
 
         async def handle_with_plugin(plugin: WebSocketPlugin):
+            import time
+
+            started = time.monotonic()
             try:
                 await plugin.handle_event(event, data, context)
+                # STORY-172 : durée d'exécution réelle par plugin/événement.
+                record_plugin_execution(
+                    plugin.name,
+                    str(getattr(event, "value", event)),
+                    time.monotonic() - started,
+                )
             except Exception as e:
                 context.logger.error(
                     f"Error in plugin '{plugin.name}' handling event '{event}': {e}",
@@ -380,21 +393,32 @@ class WebSocketPluginManager:
             context.logger.debug(f"No handler for message type: {message_type}")
             return None
 
-        # Execute first handler that returns a response
+        # STORY-172 : dispatch de message client tracé (succès/erreur) —
+        # instrumentation additive, même comportement de fond.
+        try:
+            # Execute first handler that returns a response
+            for handler in handlers:
+                try:
+                    response = await handler.handle_message(message, context)
+                    if response:
+                        record_event_dispatch(str(message_type), True)
+                        return response
+                except Exception as e:
+                    context.logger.error(
+                        f"Error in handler '{handler.name}' for message type "
+                        f"'{message_type}': {e}",
+                        exc_info=True,
+                    )
+                    record_event_dispatch(str(message_type), False)
+                    return {"type": "error", "message": f"Handler error: {str(e)}"}
 
-        for handler in handlers:
-            try:
-                response = await handler.handle_message(message, context)
-                if response:
-                    return response
-            except Exception as e:
-                context.logger.error(
-                    f"Error in handler '{handler.name}' for message type '{message_type}': {e}",
-                    exc_info=True,
-                )
-                return {"type": "error", "message": f"Handler error: {str(e)}"}
-
-        return None
+            record_event_dispatch(str(message_type), True)
+            return None
+        except Exception:
+            # Défense en profondeur : une erreur non prévue hors handler
+            # reste tracée avant le re-raise (le caller gère la fermeture).
+            record_event_dispatch(str(message_type), False)
+            raise
 
     async def cleanup_all(self, context: PluginContext) -> None:
         """Clean up all registered plugins and handlers."""

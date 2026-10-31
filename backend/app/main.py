@@ -702,6 +702,14 @@ format). See schemas `APIResponse`, `PaginatedResponse`, `ErrorResponse`,
             ),
         },
         {"name": "websocket", "description": "Real-time WebSocket connections"},
+        {
+            "name": "metrics",
+            "description": (
+                "Prometheus exposition (STORY-172) — internal scrape "
+                "endpoint, no authentication (spec 09 probe exemption); "
+                "404 when prometheus_enabled=false"
+            ),
+        },
     ],
     swagger_ui_parameters={
         "syntaxHighlight.theme": "monokai",

@@ -28,6 +28,9 @@ from ..config import settings
 from ..core.events import CANONICAL_EVENT_NAMES, Event, EventType, event_bus
 from ..schemas.websocket_events import WebSocketEventType
 
+# STORY-172 (E5/D1) : forwards bus → WS tracés (best-effort).
+from .metrics import record_event_dispatch
+
 logger = logging.getLogger(__name__)
 
 
@@ -111,6 +114,8 @@ async def websocket_event_handler(event: Event) -> None:
         for key in targets:
             await broadcast_to_event_subscribers(key, message)
 
+        # STORY-172 : forward réussi tracé (best-effort).
+        record_event_dispatch(event.event_type.value, True)
         logger.info("[Event Bridge] event forwarded to broadcast layer")
 
     except Exception as e:

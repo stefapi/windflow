@@ -39,6 +39,9 @@ asyncpg = "^0.30.0"
 # dateutil.relativedelta/dateutil.tz — dépendance directe explicite
 # (déjà résolue transitiivement en 2.9.0.post0, déclarée pour la fiabilité).
 python-dateutil = "^2.9.0"
+# STORY-172 : requise en top-level par app/websocket/metrics.py (import
+# prometheus_client) + generate_latest/REGISTRY pour l'endpoint /api/v1/metrics.
+prometheus-client = "^0.21"
 
 [tool.poetry.group.dev]
 optional = true

@@ -56,6 +56,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from ..config import Settings
 from ..core.events import Event, EventType, publish_event
 from ..core.exceptions import WindFlowException
+from ..core.metrics import record_scheduler_execution
 from ..helper.croniter import CroniterBadCronError, croniter
 from ..models.scheduled_task import ScheduledTask
 from .action_registry import get_action, validate_params
@@ -269,6 +270,11 @@ class SchedulerEngine:
                 "overlap : l'exécution précédente est toujours en cours "
                 "(déclenchement manuel)",
             )
+            # STORY-172 : exécutions par statut (métrique best-effort).
+            try:
+                record_scheduler_execution("skipped")
+            except Exception:  # pragma: no cover — défense en profondeur
+                logger.exception("Métrique scheduler impossible (ignorée)")
             logger.info(
                 "Scheduler engine : run manuel de %s skipped — chevauchement",
                 task_id,
@@ -319,6 +325,11 @@ class SchedulerEngine:
             await self._apply_error_policy(snapshot, error)
             await self._record_run(snapshot.task_id, "failed", error)
             self._note_failure(snapshot)
+            # STORY-172 : compteur d'exécution échouée (best-effort).
+            try:
+                record_scheduler_execution("failed")
+            except Exception:  # pragma: no cover — défense en profondeur
+                logger.exception("Métrique scheduler impossible (ignorée)")
             logger.warning(
                 "Scheduler engine : exécution manuelle échouée task=%s "
                 "action=%s policy=%s erreur=%r",
@@ -332,6 +343,12 @@ class SchedulerEngine:
             await self.store.mark_success(execution_id, duration)
             await self._record_run(snapshot.task_id, "success")
             self._consecutive_failures.pop(snapshot.task_id, None)
+            # STORY-172 : compteur + durée (best-effort — la durée n'est
+            # disponible que sur le chemin succès).
+            try:
+                record_scheduler_execution("success", duration)
+            except Exception:  # pragma: no cover — défense en profondeur
+                logger.exception("Métrique scheduler impossible (ignorée)")
             logger.info(
                 "Scheduler engine : exécution manuelle réussie task=%s "
                 "action=%s (%.3fs)",
@@ -455,6 +472,11 @@ class SchedulerEngine:
                 snapshot.task_id,
                 "overlap : l'exécution précédente est toujours en cours",
             )
+            # STORY-172 : exécutions par statut (métrique best-effort).
+            try:
+                record_scheduler_execution("skipped")
+            except Exception:  # pragma: no cover — défense en profondeur
+                logger.exception("Métrique scheduler impossible (ignorée)")
             logger.info(
                 "Scheduler engine : tâche %s (action=%s) skipped — chevauchement",
                 snapshot.task_id,
@@ -515,6 +537,11 @@ class SchedulerEngine:
             await self._apply_error_policy(snapshot, error)
             await self._record_run(snapshot.task_id, "failed", error)
             self._note_failure(snapshot)
+            # STORY-172 : compteur d'exécution échouée (best-effort).
+            try:
+                record_scheduler_execution("failed")
+            except Exception:  # pragma: no cover — défense en profondeur
+                logger.exception("Métrique scheduler impossible (ignorée)")
             logger.warning(
                 "Scheduler engine : exécution échouée task=%s action=%s "
                 "policy=%s erreur=%r",
@@ -528,6 +555,12 @@ class SchedulerEngine:
             await self.store.mark_success(execution_id, duration)
             await self._record_run(snapshot.task_id, "success")
             self._consecutive_failures.pop(snapshot.task_id, None)
+            # STORY-172 : compteur + durée (best-effort — la durée n'est
+            # disponible que sur le chemin succès).
+            try:
+                record_scheduler_execution("success", duration)
+            except Exception:  # pragma: no cover — défense en profondeur
+                logger.exception("Métrique scheduler impossible (ignorée)")
             logger.info(
                 "Scheduler engine : exécution réussie task=%s action=%s " "(%.3fs)",
                 snapshot.task_id,

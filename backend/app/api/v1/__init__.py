@@ -14,6 +14,7 @@ from .discovery import router as discovery_router
 from .docker import router as docker_router
 from .hosts import router as hosts_router
 from .import_export import router as import_export_router
+from .metrics import router as metrics_router
 from .organizations import router as organizations_router
 from .plugin_registry import router as plugin_registry_router
 from .plugins import router as plugins_router
@@ -62,5 +63,9 @@ api_router.include_router(
     plugin_registry_router, prefix="/registry", tags=["plugin-registry"]
 )
 api_router.include_router(system_router, prefix="/system", tags=["system"])
+# STORY-172 : exposition Prometheus — route /metrics sous /api/v1 (scrape
+# interne Docker, sans auth — cf. infrastructure/docker/prometheus.yml),
+# 404 si prometheus_enabled=False.
+api_router.include_router(metrics_router, tags=["metrics"])
 
 __all__ = ["api_router"]

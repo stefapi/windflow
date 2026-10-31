@@ -12,6 +12,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.events import EventType
+from ..core.metrics import record_deployment_transition
 from ..helper.template_renderer import TemplateRenderer
 from ..models.deployment import (
     Deployment,
@@ -758,6 +759,42 @@ class DeploymentService:
                 logger.info(
                     f"Déploiement {deployment_id} terminé en {duration:.2f}s "
                     f"avec statut {status.value}"
+                )
+
+        # STORY-172 (D2/D8) : métriques Prometheus à la source — les
+        # compteurs ok/ko, la gauge active et la durée de bout en bout
+        # (now − created_at, disponible même quand ``deploy_duration_seconds``
+        # n'existe pas encore) sont enregistrés uniquement sur les vraies
+        # transitions (``old_status != new_status``). Best-effort : l'appel
+        # est protégé au point d'appel — aucune métrique ne peut casser un
+        # déploiement.
+        if old_status != status:
+            try:
+                now_utc = datetime.now(timezone.utc)
+                created = deployment.created_at
+                if created is not None and created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                end_to_end = (
+                    (now_utc - created).total_seconds() if created is not None else None
+                )
+                record_deployment_transition(
+                    new_status=status.value,
+                    duration=(
+                        end_to_end
+                        if status
+                        in (
+                            DeploymentStatus.RUNNING,
+                            DeploymentStatus.FAILED,
+                            DeploymentStatus.STOPPED,
+                        )
+                        else None
+                    ),
+                    old_status=old_status.value if old_status else None,
+                )
+            except Exception as metrics_exc:
+                logger.warning(
+                    "Métriques de déploiement impossibles (ignorées): %s",
+                    metrics_exc,
                 )
 
         # STORY-167 (AC 3 — double écriture, décision 1) : insertion d'un

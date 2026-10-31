@@ -33,6 +33,10 @@ from fastapi import WebSocket
 from ..schemas.websocket_events import WebSocketEventType
 from .ack_registry import AckRegistry, ack_registry
 from .connection_managers import manager, user_manager
+
+# STORY-172 (E5/D1) : câblage des métriques WS (best-effort — jamais casser
+# un broadcast pour une métrique).
+from .metrics import broadcast_timer, record_subscription
 from .plugin import PluginContext
 
 # ============================================================================
@@ -105,7 +109,12 @@ async def _broadcast_deployment_event(
         event_type, websocket_message, user_id=event_data.get("user_id")
     )
 
-    await manager.broadcast_to_deployment(deployment_id, websocket_message)
+    # STORY-172 : durée de broadcast + clients touchés (le client count est
+    # mesuré en interne par ConnectionManager — record exact après l'envoi).
+    with broadcast_timer(
+        "deployment", len(manager.active_connections.get(deployment_id, ()))
+    ):
+        await manager.broadcast_to_deployment(deployment_id, websocket_message)
     await user_manager.dispatch_to_plugins(event_type, event_data)
 
 
@@ -265,7 +274,9 @@ async def broadcast_to_user(user_id: str, message: dict):
     # un id d'ack (généré si absent) et sont enregistrés au registre pour
     # re-diffusion à la reconnexion de ce même utilisateur.
     await _attach_ack_id_if_critical(message.get("type"), message, user_id=user_id)
-    await user_manager.broadcast_to_user(user_id, message)
+    # STORY-172 : durée de broadcast + clients touchés.
+    with broadcast_timer("user", len(user_manager.user_connections.get(user_id, ()))):
+        await user_manager.broadcast_to_user(user_id, message)
 
 
 async def broadcast_to_event_subscribers(event_type: str, message: dict):
@@ -292,7 +303,10 @@ async def broadcast_to_event_subscribers(event_type: str, message: dict):
     logger.debug(f"📢 Broadcasting to event subscribers: {event_type}")
     logger.debug(f"Message: {message}")
 
-    await user_manager.broadcast_to_event_subscribers(event_type, message)
+    # STORY-172 : durée de broadcast + clients touchés (abonnés inconnus à
+    # ce niveau — le count réel est mesuré dans UserConnectionManager).
+    with broadcast_timer("event", 0):
+        await user_manager.broadcast_to_event_subscribers(event_type, message)
 
     logger.debug("✅ Broadcast to event subscribers completed")
 
@@ -387,6 +401,8 @@ async def subscribe_to_event(user_id: str, event_type: str, websocket: WebSocket
         Utilisé par le plugin SubscriptionHandler pour gérer les messages "subscribe" du client.
     """
     await user_manager.subscribe_to_event(user_id, event_type, websocket)
+    # STORY-172 : abonnement tracé (types critiques STORY-164.1).
+    record_subscription("event", "subscribe")
 
 
 async def unsubscribe_from_event(user_id: str, event_type: str, websocket: WebSocket):
@@ -412,6 +428,8 @@ async def unsubscribe_from_event(user_id: str, event_type: str, websocket: WebSo
         Utilisé par le plugin SubscriptionHandler pour gérer les messages "unsubscribe" du client.
     """
     await user_manager.unsubscribe_from_event(user_id, event_type, websocket)
+    # STORY-172 : désabonnement tracé.
+    record_subscription("event", "unsubscribe")
 
 
 async def subscribe_to_deployment_logs(
@@ -440,3 +458,5 @@ async def subscribe_to_deployment_logs(
         "subscribe_deployment_logs" du client.
     """
     await user_manager.subscribe_to_deployment_logs(user_id, deployment_id, websocket)
+    # STORY-172 : abonnement logs de déploiement tracé.
+    record_subscription("deployment_logs", "subscribe")

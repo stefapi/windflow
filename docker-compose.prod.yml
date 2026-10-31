@@ -344,7 +344,9 @@ services:
     restart: unless-stopped
     volumes:
       - ./infrastructure/docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./infrastructure/docker/prometheus-rules:/etc/prometheus/rules:ro
+      # STORY-172 (D7) : montage direct du fichier — le répertoire
+      # prometheus-rules référencé n'existait pas (aucune alerte évaluée).
+      - ./infrastructure/docker/prometheus-alerts.yml:/etc/prometheus/rules/alerts.yml:ro
       - prometheus_data:/prometheus
     networks:
       - windflow-backend

@@ -12,9 +12,29 @@ Classes:
 
 import asyncio
 import logging
+import time
 from typing import Dict, Optional, Set
 
 from fastapi import WebSocket
+
+# STORY-172 (E5/D1) : câblage des métriques WebSocket — best-effort : chaque
+# appel est protégé au point d'appel (jamais casser une connexion ou un
+# broadcast pour une métrique).
+from .metrics import (
+    record_broadcast,
+    record_connection,
+    record_event_dispatch,
+    record_message_sent,
+)
+
+
+def _safe(record_fn, *args, **kwargs) -> None:
+    """Invoque un helper de métrique sans jamais lever (best-effort)."""
+    try:
+        record_fn(*args, **kwargs)
+    except Exception:  # pragma: no cover — défense en profondeur
+        logger.exception("Métrique WebSocket impossible (ignorée)")
+
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +74,23 @@ class BroadcastManager:
             try:
                 await websocket.send_json(message)
                 sent_count += 1
+                # STORY-172 : chaque envoi réel est compté (succès).
+                _safe(
+                    record_message_sent,
+                    str(message.get("type", "unknown")),
+                    True,
+                )
             except Exception as e:
                 logger.error(
                     f"Error broadcasting to WebSocket {context_description}: {e}"
                 )
                 disconnected.add(websocket)
+                # STORY-172 : l'échec d'envoi est compté (erreur).
+                _safe(
+                    record_message_sent,
+                    str(message.get("type", "unknown")),
+                    False,
+                )
 
         return sent_count, disconnected
 
@@ -144,6 +176,8 @@ class ConnectionManager:
                 self.active_connections[deployment_id] = set()
             self.active_connections[deployment_id].add(websocket)
 
+        # STORY-172 : gauge + compteur de connexions (best-effort).
+        _safe(record_connection, "deployment", "connected")
         logger.info(f"WebSocket connected for deployment {deployment_id}")
 
     async def disconnect(self, websocket: WebSocket, deployment_id: str):
@@ -162,6 +196,8 @@ class ConnectionManager:
                 if not self.active_connections[deployment_id]:
                     del self.active_connections[deployment_id]
 
+        # STORY-172 : gauge + compteur de déconnexions (best-effort).
+        _safe(record_connection, "deployment", "disconnected")
         logger.info(f"WebSocket disconnected for deployment {deployment_id}")
 
     async def broadcast_to_deployment(self, deployment_id: str, message: dict):
@@ -179,9 +215,18 @@ class ConnectionManager:
         connections = self.active_connections[deployment_id]
         connection_count = len(connections)
 
+        # STORY-172 : durée réelle du broadcast + nombre de clients touchés
+        # (measure-then-record — sent_count exact, best-effort).
+        _broadcast_started = time.monotonic()
         # Utiliser la logique commune de broadcast
         sent_count, disconnected = await BroadcastManager._broadcast_to_connections(
             connections, message, f"deployment {deployment_id}"
+        )
+        _safe(
+            record_broadcast,
+            "deployment",
+            time.monotonic() - _broadcast_started,
+            sent_count,
         )
 
         # Log standardisé
@@ -250,6 +295,9 @@ class UserConnectionManager:
             if context and user_id not in self.user_plugin_contexts:
                 self.user_plugin_contexts[user_id] = context
 
+        # STORY-172 : gauge + compteur de connexions utilisateur.
+        _safe(record_connection, "user", "connected")
+
     async def remove_connection(self, user_id: str, websocket: WebSocket):
         """
         Supprime une connexion utilisateur.
@@ -271,6 +319,9 @@ class UserConnectionManager:
                     # Nettoyer le contexte du plugin
                     if user_id in self.user_plugin_contexts:
                         del self.user_plugin_contexts[user_id]
+
+        # STORY-172 : gauge + compteur de déconnexions utilisateur.
+        _safe(record_connection, "user", "disconnected")
 
     async def subscribe_to_event(
         self, user_id: str, event_type: str, websocket: WebSocket
@@ -338,9 +389,17 @@ class UserConnectionManager:
         connections = self.user_connections[user_id]
         connection_count = len(connections)
 
+        # STORY-172 : durée réelle du broadcast + nombre de clients touchés.
+        _broadcast_started = time.monotonic()
         # Utiliser la logique commune de broadcast
         sent_count, disconnected = await BroadcastManager._broadcast_to_connections(
             connections, message, f"user {user_id}"
+        )
+        _safe(
+            record_broadcast,
+            "user",
+            time.monotonic() - _broadcast_started,
+            sent_count,
         )
 
         # Log standardisé
@@ -383,9 +442,17 @@ class UserConnectionManager:
             f"📢 Found {subscriber_count} subscriber(s) with {len(all_connections)} total connection(s)"
         )
 
+        # STORY-172 : durée réelle du broadcast + nombre de clients touchés.
+        _broadcast_started = time.monotonic()
         # Utiliser la logique commune de broadcast
         sent_count, disconnected = await BroadcastManager._broadcast_to_connections(
             all_connections, message, f"event subscribers for {event_type}"
+        )
+        _safe(
+            record_broadcast,
+            "event",
+            time.monotonic() - _broadcast_started,
+            sent_count,
         )
 
         # Log standardisé avec info sur les subscribers
@@ -496,13 +563,20 @@ class UserConnectionManager:
             # Dispatcher à tous les contextes en parallèle
             from .plugin import plugin_manager
 
-            await asyncio.gather(
-                *[
-                    plugin_manager.dispatch(event_type, event_data, ctx)  # type: ignore[arg-type]
-                    for ctx in contexts
-                ],
-                return_exceptions=True,
-            )
+            # STORY-172 : dispatch d'événement tracé (succès/erreur —
+            # best-effort, jamais de changement de comportement).
+            try:
+                await asyncio.gather(
+                    *[
+                        plugin_manager.dispatch(event_type, event_data, ctx)  # type: ignore[arg-type]
+                        for ctx in contexts
+                    ],
+                    return_exceptions=True,
+                )
+                _safe(record_event_dispatch, event_type, True)
+            except Exception:
+                _safe(record_event_dispatch, event_type, False)
+                raise
         else:
             logger.debug(f"🔌 No plugin contexts to dispatch {event_type}")
 

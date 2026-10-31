@@ -17,7 +17,7 @@ groups:
           description: "The WindFlow API service has been down for more than 2 minutes."
 
       - alert: WindFlowAPIHighResponseTime
-        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="windflow-api"}[5m])) > 1
+        expr: histogram_quantile(0.95, sum by (le) (rate(windflow_http_request_duration_seconds_bucket{job="windflow-api"}[5m]))) > 1
         for: 5m
         labels:
           severity: warning
@@ -124,7 +124,7 @@ groups:
     rules:
       # Deployment Failure Alerts
       - alert: HighDeploymentFailureRate
-        expr: rate(windflow_deployments_failed_total[10m]) / rate(windflow_deployments_total[10m]) > 0.2
+        expr: rate(windflow_deployments_total{result="failed"}[10m]) / rate(windflow_deployments_total[10m]) > 0.2
         for: 5m
         labels:
           severity: warning
@@ -134,7 +134,7 @@ groups:
           description: "More than 20% of deployments are failing (current rate: {{ $value }})."
 
       - alert: CriticalDeploymentFailureRate
-        expr: rate(windflow_deployments_failed_total[10m]) / rate(windflow_deployments_total[10m]) > 0.5
+        expr: rate(windflow_deployments_total{result="failed"}[10m]) / rate(windflow_deployments_total[10m]) > 0.5
         for: 3m
         labels:
           severity: critical
@@ -144,7 +144,7 @@ groups:
           description: "More than 50% of deployments are failing (current rate: {{ $value }})."
 
       - alert: DeploymentStuck
-        expr: windflow_deployment_duration_seconds > 3600
+        expr: histogram_quantile(0.99, windflow_deployment_duration_seconds_bucket) > 3600
         for: 5m
         labels:
           severity: warning
@@ -162,6 +162,17 @@ groups:
         annotations:
           summary: "No deployments in last 24 hours"
           description: "No deployment activity detected in the last 24 hours. This might be normal for some environments."
+
+      # Scheduler Alerts (STORY-172)
+      - alert: SchedulerExecutionFailures
+        expr: increase(windflow_scheduler_executions_total{status="failed"}[1h]) > 3
+        for: 5m
+        labels:
+          severity: warning
+          component: scheduler
+        annotations:
+          summary: "Scheduler execution failures"
+          description: "More than 3 scheduled task executions failed in the last hour (current: {{ $value }})."
 
   - name: windflow_database_alerts
     interval: 30s

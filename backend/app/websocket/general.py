@@ -30,6 +30,14 @@ from . import (
 )
 from .ack_registry import ack_registry
 from .heartbeat import HeartbeatExpiredError, periodic_ping, receive_with_expiry
+
+# STORY-172 (E5/D1) : câblage des métriques WS — auth, messages reçus,
+# abonnements (best-effort, jamais casser la connexion pour une métrique).
+from .metrics import (
+    auth_timer,
+    record_auth_attempt,
+    record_message_received,
+)
 from .plugins import default_message_handlers, default_plugins
 
 logger = logging.getLogger(__name__)
@@ -91,7 +99,11 @@ async def general_websocket_endpoint(websocket: WebSocket):
         # Helper centralisé — gère également le mode dev DISABLE_AUTH (auto-login
         # superadmin). Retourne None si l'authentification a échoué (connexion
         # déjà fermée par le helper).
-        user = await authenticate_ws_first_message(websocket)
+        # STORY-172 : tentative d'auth + durée (succès/échec — le helper
+        # ferme lui-même la connexion en cas d'échec).
+        with auth_timer():
+            user = await authenticate_ws_first_message(websocket)
+        record_auth_attempt(success=user is not None)
         if user is None:
             return
 
@@ -188,6 +200,8 @@ async def general_websocket_endpoint(websocket: WebSocket):
 
                     # Le client peut envoyer "ping" pour maintenir la connexion
                     if data == "ping":
+                        # STORY-172 : heartbeat compté comme message reçu.
+                        record_message_received("ping")
                         await websocket.send_json(
                             {"type": "pong", "timestamp": datetime.utcnow().isoformat()}
                         )
@@ -221,6 +235,9 @@ async def general_websocket_endpoint(websocket: WebSocket):
                                         },
                                     )
                                 continue
+
+                            # STORY-172 : message applicatif compté.
+                            record_message_received(str(message.get("type", "unknown")))
 
                             # Utiliser le système de plugins pour gérer le message
                             response = await plugin_manager.handle_client_message(
