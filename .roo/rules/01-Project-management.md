@@ -14,7 +14,9 @@ Le projet suit cette hiérarchie de fichiers :
 - **Stories** : `STORY-XXX` (numérotation séquentielle globale, pas par epic, ex: STORY-401, STORY-402...)
 - **Bugs** : `BUG-XXX` (numérotation séquentielle globale, ex: BUG-001, BUG-002...)
 
-Réutilise les numéros libres si besoin
+**Registre obligatoire** : toute création d'epic, de story, de sous-story ou de bug réserve d'abord son numéro dans `.backlog/identifiants.md` (chemin + date + motif) **dans le même changement** que la création du contrat. Les numéros ne sont **jamais réutilisés**, les entrées du registre ne sont **jamais retirées** (un abandon se traduit par un changement de statut, pas par une suppression de ligne). Les abandons historiques non inscrits font l'objet d'une rétro-inscription. La numérotation continue au plus haut numéro déjà attribué + 1.
+
+**Sous-stories** : `STORY-XXX.N` = compteur propre à chaque parent (démarrant à 1), tracées au registre comme les stories.
 
 ## 3. Cycle de Vie des Éléments
 
@@ -94,6 +96,8 @@ Réutilise les numéros libres si besoin
 
 ### 4.2 Cohérence Stories/Bugs ↔ Kanban
 
+**Le kanban est une vue GÉNÉRÉE.** Le statut de référence est le champ `**Statut :**` des contrats (`.backlog/epics/`, `.backlog/stories/`, `.backlog/bugs/`). Le fichier `.backlog/kanban.md` est régénéré intégralement par `make backlog` (`scripts/backlog.py generate`, qui vérifie d'abord les invariants), contrôlé en lecture seule par `make backlog-check`, et **son édition manuelle est interdite** — toute évolution passe par les contrats puis `make backlog`.
+
 **Présence obligatoire dans le Kanban :**
 - Toute story avec un statut `TODO`, `IN_PROGRESS`, `REVIEW`, ou `BLOCKED` DOIT apparaître dans `.backlog/kanban.md`
 - Tout bug avec un statut `CONFIRMED`, `IN_PROGRESS`, ou `REVIEW` DOIT apparaître dans `.backlog/kanban.md`
@@ -108,31 +112,37 @@ Réutilise les numéros libres si besoin
 | `BLOCKED` | 🏗️ IN PROGRESS (avec annotation) | `- [!]` |
 | `DONE` | ✅ DONE | `- [x]` |
 
-**Structure du fichier kanban.md :**
+**Structure du fichier kanban.md (format généré — vue epic-centric) :**
 ```markdown
 # KANBAN BOARD
 
-## 📋 BACKLOG (À faire)
+> ⚠️ **Vue générée automatiquement** par `make backlog` — **ne pas éditer à la main**.
 
-### EPIC-XXX : [Titre de l'Epic]
+## 📋 BACKLOG
+
+### EPIC-XXX : [Titre de l'Epic] (X/Y stories DONE)
 - [ ] STORY-YYY : [Titre de la Story]
+
+### Bugs
 - [ ] BUG-ZZZ : [Titre du Bug]
 
-## 🏗️ IN PROGRESS (En cours)
+## 🏗️ IN PROGRESS
 
-### EPIC-XXX : [Titre de l'Epic]
-- [~] STORY-YYY : [Titre]  # en cours
-- [!] BUG-ZZZ : [Titre]     # bloqué
+### EPIC-XXX : [Titre de l'Epic] (X/Y stories DONE)
+- [~] STORY-YYY : [Titre]   # en cours
+- [!] STORY-ZZZ : [Titre]   # bloqué
 
-## 🚧 REVIEW (En attente de validation)
+## 🚧 REVIEW
 
 - [?] STORY-YYY : [Titre de la Story]
 
-## ✅ DONE (Terminé)
+## ✅ DONE
 
-- [x] STORY-YYY : [Titre de la Story]
-- [x] BUG-ZZZ : [Titre du Bug]
+- [x] EPIC-XXX : [Titre de l'Epic] (X/Y stories DONE)   # vue compacte : les epics DONE
+- [x] BUG-ZZZ : [Titre du Bug]                          # ne listent pas chaque story DONE
 ```
+
+La colonne ✅ DONE est **compacte** : les epics terminées y figurent avec leur compteur d'avancement, sans listage individuel des stories DONE ; les stories/parents `ABANDONED` n'apparaissent pas individuellement (seulement dans les compteurs d'epic).
 
 ### 4.3 Checklist de Synchronisation
 
@@ -219,9 +229,10 @@ En complément du pipeline de stories, des skills autonomes sont disponibles pou
 ## 6. Format des Fichiers
 
 ### Templates
-- **Epic** : `.backlog/epic.md`
-- **Story** : `.backlog/story.md`
-- **Bug** : `.backlog/bug.md`
+- **Epic** : `.backlog/_models/epic.md`
+- **Story** : `.backlog/_models/story.md`
+- **Sous-story** : `.backlog/_models/sub-story.md`
+- **Bug** : `.backlog/_models/bug.md`
 
 ### Sections obligatoires par type
 

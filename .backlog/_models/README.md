@@ -1,0 +1,3 @@
+# Gabarits de contrats de backlog
+
+Ce répertoire contient les gabarits (`epic.md`, `story.md`, `sub-story.md`, `bug.md`) servant de modèle aux contrats du dossier `.backlog/` : les skills (create-epic, create-stories, split-story, create-improvement, create-refactoring, etc.) instancient ces gabarits pour générer les fichiers d'epic, de story, de sous-story ou de bug dans `.backlog/epics/`, `.backlog/stories/` et `.backlog/bugs/`. Ne jamais éditer directement un fichier de contrat pour lui faire changer de forme : toute évolution de la structure passe par la modification du gabarit correspondant ici (via la skill `update-rules` ou une décision consignée), les contrats existants restant inchangés jusqu'à leur clôture.

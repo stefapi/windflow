@@ -559,6 +559,29 @@ generate-openapi-docs: ## 📋 Generate comprehensive OpenAPI specification in .
 	$(POETRY) run python dev/scripts/generate_openapi_junie.py
 
 # ============================================================================
+# BACKLOG & HARNESS GUARDRAILS (kanban généré, invariants, corpus de pilotage)
+# ============================================================================
+
+.PHONY: backlog backlog-check check-harness harness-test
+
+backlog: ## 📋 Vérifie les invariants du backlog puis régénère .backlog/kanban.md
+	@echo "📋 Vérification des invariants du backlog et régénération du kanban..."
+	$(PYTHON) scripts/backlog.py generate
+	@echo "✅ Kanban régénéré (vue générée — ne pas éditer à la main)"
+
+backlog-check: ## 🔍 Vérifie les invariants du backlog (lecture seule, sans régénération)
+	@echo "🔍 Vérification des invariants du backlog (lecture seule)..."
+	$(PYTHON) scripts/backlog.py check
+
+check-harness: ## 🛡️ Vérifie la cohérence du harness (liens, skills, modes, gabarits)
+	@echo "🛡️ Vérification du harness (liens, skills, modes, gabarits)..."
+	$(PYTHON) scripts/check_harness.py
+
+harness-test: ## 🧪 Tests unitaires des garde-fous du harness (unittest stdlib)
+	@echo "🧪 Exécution des tests des garde-fous du harness..."
+	$(PYTHON) scripts/test_harness_tools.py
+
+# ============================================================================
 # CI/CD COMMANDS (Local execution)
 # ============================================================================
 
