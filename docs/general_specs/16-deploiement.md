@@ -60,26 +60,21 @@ Exemple illustratif — services du mode léger :
 ```yaml
 # docker-compose.light.yml (extrait)
 services:
-  windflow-api:
+  windflow-api:                     # process unique : API + runtime asyncio (tâches de fond, scheduler)
     image: windflow/api:latest
     environment:
       WINDFLOW_DB_MODE: light
       DATABASE_URL: "sqlite+aiosqlite:///data/windflow.db"
-      CELERY_BROKER_URL: "filesystem://"
     volumes:
       - windflow_data:/data
       - /var/run/docker.sock:/var/run/docker.sock
-  windflow-worker:
-    image: windflow/worker:latest
-    environment:
-      CELERY_CONCURRENCY: 1        # 1 worker en mode léger
   windflow-frontend:
     image: windflow/frontend:latest
     ports:
       - "80:80"
 ```
 
-**Empreinte** : ~3 containers, ~500 Mo RAM total. Pas de PostgreSQL, pas de Redis.
+**Empreinte** : ~2 containers, ~500 Mo RAM total. Pas de PostgreSQL, pas de Redis, pas de worker séparé (runtime asyncio unique — chapitre [04-architecture.md](04-architecture.md)).
 
 ## Installation mode standard
 
@@ -104,21 +99,18 @@ services:
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes --maxmemory 128mb
-  windflow-api:
+  windflow-api:                     # process unique : API + runtime asyncio (tâches de fond, scheduler)
     image: windflow/api:latest
     ports: ["8080:8000"]
     environment:
       DATABASE_URL: postgresql+asyncpg://windflow:${POSTGRES_PASSWORD}@postgres:5432/windflow
       REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/1
     volumes:
       - windflow_data:/data
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-  windflow-worker:
-    image: windflow/worker:latest        # CELERY_CONCURRENCY: 2
   windflow-frontend:
     image: windflow/frontend:latest
     ports: ["80:80"]

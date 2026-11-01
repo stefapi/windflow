@@ -22,10 +22,13 @@ Ce chapitre spécifie l'API REST et WebSocket de WindFlow. La surface principale
 ```
 /api/v1/
 ├── auth/                          # Authentification (core)
+├── users/                         # Gestion des utilisateurs (core)
 ├── apps/                          # Famille Apps (surface principale)
 ├── machines/                      # Famille Machines (surface principale)
 ├── hosts/                         # Famille Hosts (surface principale)
+│   └── (alias /targets/ déprécié — période de compatibilité, cf. § Hosts)
 ├── clusters/                      # Entité Cluster (surface principale)
+├── ssh-keys/                      # Clés SSH réutilisables (STORY-131.2)
 ├── compute/                       # Vue Compute par technologie (Mode Infra)
 │   ├── containers/
 │   ├── vms/
@@ -35,12 +38,22 @@ Ce chapitre spécifie l'API REST et WebSocket de WindFlow. La surface principale
 │   ├── networks/
 │   ├── images/
 │   └── graph/
+├── docker/                        # Surface Docker historique (35 endpoints — convergence /compute, cf. COMPUTE-DOCKER-MAPPING)
+├── stacks/                        # Stacks Compose (core)
+├── deployments/                   # Historique des déploiements (core)
+├── schedules/                     # Tâches planifiées (spec 17)
+├── stats/                         # Statistiques (dashboard, per-stack)
+├── discovery/                     # Adoption d'objets découverts (chapitre 03)
 ├── plugins/                       # Gestion des plugins (core)
+├── registry/                      # Registre de plugins (plugins, plugins/{name})
 ├── marketplace/                   # Catalogue (core)
 ├── organizations/                 # Organisations (core)
 ├── environments/                  # Environnements (core)
 ├── admin/                         # Administration système (core)
+│   ├── users/, audit/, system/, …
+│   └── stacks-management/         # Gestion des définitions de stacks (13 routes)
 ├── system/                        # Health, info (core)
+├── metrics                        # Exposition Prometheus (sans auth — exemption sondes, STORY-172)
 │
 └── plugins/                       # Routes dynamiques (ajoutées par les plugins)
     ├── traefik/                   #   → domaines, routes, certificats
@@ -240,6 +253,8 @@ class MachineCreateRequest(BaseModel):
 
 La famille Hosts remplace l'ancienne ressource `/targets` (alias historique : *target*). `/hosts` ne liste **plus de clusters** — les grappes multi-nœuds (kubernetes, proxmox, swarm) sont des Clusters exposés par `/clusters`.
 
+> **Double nommage `/targets` → `/hosts` (livré, STORY-166.2/166.6 — F3)** : l'ancien préfixe `/api/v1/targets/*` reste servi par un **alias déprécié** partageant les handlers de `/hosts` — chaque réponse porte les headers `Deprecation: true` et `Sunset: 2027-01-01` (RFC 8594), et toutes les opérations de l'alias sont marquées `deprecated: true` dans l'OpenAPI (tag `targets`). La période de compatibilité court jusqu'au retrait planifié au **2027-01-01** ; les clients (frontend, CLI) consomment exclusivement `/hosts`.
+
 ```
 GET    /                       # Lister les Hosts (filtres: environment_id, status, profile)
 POST   /                       # Ajouter un Host (adoption d'un substrat individuel)
@@ -322,6 +337,22 @@ class ClusterMemberResponse(BaseModel):
 ## API Mode Infra — vue Compute
 
 La vue Compute expose les objets bas niveau **par technologie** (chapitre 03). Elle complète les familles, sans les remplacer : les opérations par famille passent par `/apps`, `/machines`, `/hosts`, `/clusters`.
+
+### Surfaces livrées (transitoires — F3)
+
+Le socle Compute réellement livré à ce stade (STORY-160.3/173) couvre 7 routes — les autres sous-sections de ce chapitre décrivent la cible vers laquelle elles convergent (annotation par route) :
+
+```
+GET    /stats                        # Statistiques synthétiques Compute
+GET    /global                       # Vue globale Compute
+GET    /browse                       # Inventaire aplati, paginé et filtrable (converge vers /apps, /machines, /hosts)
+GET    /volumes                      # Volumes Docker (paginé) — converge vers /compute/volumes
+GET    /volumes/{name}               # Détail d'un volume
+GET    /volumes/{name}/browse        # Contenu d'un volume (conteneur éphémère durci, anti-traversal)
+POST   /prune                        # Prune Docker protégé (superadmin + confirm + dry-run + audit)
+```
+
+Toutes les réponses en liste sont paginées (`?page&per_page`, enveloppe `{data, pagination}`). `POST /prune` suit la **sémantique protégée** de la section [Volumes](#volumes--apiv1computevolumes) (liste protégée `windflow-plugin-*`, stacks managées arrêtées épargnées, dry-run par défaut, audit sans nom de ressource). La surface historique `/docker` (35 endpoints) reste servie sans réduction : la table de correspondance exhaustive `/compute` ↔ `/docker` et la décision « aucune suppression, convergence par dépréciation » (modèle 166) sont maintenues dans [COMPUTE-DOCKER-MAPPING.md](../technical_specs/COMPUTE-DOCKER-MAPPING.md).
 
 ### Containers — `/api/v1/compute/containers/`
 
@@ -572,7 +603,7 @@ POST   /validate               # Valider un compose sans déployer (existant, r�
 POST   /login                  # Login (username + password) → tokens
 POST   /refresh                # Renouveler l'access token
 POST   /logout                 # Invalider le refresh token
-GET    /me                     # Infos utilisateur courant
+GET    /me                     # ⚠ Déprécié (STORY-250.2) : Deprecation: true + Sunset 2027-05-31 → utiliser GET /users/me
 PUT    /password               # Changer son mot de passe
 POST   /api-keys               # Créer une clé API
 GET    /api-keys               # Lister ses clés API
@@ -634,6 +665,71 @@ PUT    /{id}                   # Modifier
 DELETE /{id}                   # Supprimer
 ```
 
+### Découverte — `/api/v1/discovery/` (livrée — F3)
+
+Pré-adoption d'objets découverts (chapitre [03-modele-compute.md](03-modele-compute.md)) — surface livrée, converge vers les familles lors du phasage F4 :
+
+```
+GET    /{item_type}/{item_id}/adoption-data   # Données d'adoption d'un objet découvert
+POST   /adopt                                 # Adopter l'objet (devient géré par WindFlow)
+```
+
+### Statistiques — `/api/v1/stats/` (livrées — F3)
+
+```
+GET    /stats/dashboard        # Statistiques du dashboard (compteurs, tendances)
+GET    /stats/stacks/{id}      # Statistiques d'une stack (déploiements, uptime)
+```
+
+### Import/export des stacks — `/api/v1/stacks/` (livrées — F3)
+
+```
+GET    /stacks/{id}/export     # Exporter une définition de stack (YAML)
+POST   /stacks/import          # Importer une définition de stack
+```
+
+### Administration des définitions de stacks — `/api/v1/admin/stacks-management/` (livrée — F3)
+
+Gestion du catalogue local de définitions de stacks — **13 routes réelles** (superadmin) :
+
+```
+POST   /validate               # Valider des définitions de stacks (sans import)
+POST   /import                 # Importer des définitions depuis le répertoire seed
+GET    /sync/status            # Statut de synchronisation des définitions
+POST   /sync/auto              # Synchronisation automatique (seed ↔ base)
+GET    /{id}/export            # Exporter une définition (YAML)
+POST   /export/bulk            # Exporter plusieurs définitions (archive)
+PATCH /{id}/toggle-visibility  # Basculer la visibilité (catalogue public/caché)
+POST   /{id}/duplicate         # Dupliquer une définition
+DELETE /{id}                   # Supprimer une définition
+GET    /stats/overview         # Vue d'ensemble du catalogue (compteurs par statut)
+GET    /{id}/usage             # Usage d'une définition (stacks déployées, deployments)
+GET    /health                 # Santé des définitions (erreurs de parsing)
+GET    /search                 # Recherche (nom, catégorie, description)
+```
+
+### Registre de plugins — `/api/v1/registry/` (livrée — F3)
+
+```
+GET    /plugins                # Catalogue du registre de plugins (paginé, enveloppe {data, pagination})
+GET    /plugins/{name}         # Fiche détaillée d'un plugin du registre
+```
+
+### Clés SSH — `/api/v1/ssh-keys/` (livrées — STORY-131.2)
+
+Clés SSH réutilisables pour l'accès aux Hosts (empreintes TOFU, chapitre 15) — gestion réservée aux admins :
+
+```
+GET    /                       # Lister les clés SSH
+POST   /                       # Uploader une clé (ou génération)
+GET    /{id}                   # Détails (empreinte, hosts associés)
+DELETE /{id}                   # Supprimer une clé
+```
+
+### Tâches planifiées — `/api/v1/schedules/`
+
+Liste, création, exécution manuelle (202) et historique paginé des exécutions — spécification complète au chapitre [17-automatisation-workflows.md](17-automatisation-workflows.md).
+
 ### Administration — `/api/v1/admin/`
 
 ```
@@ -642,6 +738,7 @@ POST   /users                  # Créer un utilisateur
 PUT    /users/{id}             # Modifier un utilisateur
 DELETE /users/{id}             # Supprimer un utilisateur
 GET    /audit                  # Journal d'audit (filtres: user, action, date)
+GET    /stacks-management/*    # Gestion des définitions de stacks (section dédiée ci-dessus)
 GET    /system/info            # Infos système (version, arch, mode, uptime)
 POST   /backup                 # Lancer un backup
 POST   /registries             # Ajouter un registre de plugins
@@ -656,6 +753,10 @@ GET    /health                 # Health check (pas d'auth requise)
 GET    /ready                  # Readiness check (pas d'auth requise)
 GET    /info                   # Version, mode (léger/standard), arch
 ```
+
+### Métriques Prometheus — `GET /api/v1/metrics` (livrée — STORY-172)
+
+Exposition Prometheus en **texte brut, sans auth** (exemption dédiée aux sondes internes Docker — scrape `metrics_path: /api/v1/metrics`), **non enveloppée** (consommée par Prometheus, pas par les clients JSON). Retourne `404` quand `prometheus_enabled=False`. Séries préfixées `windflow_` (HTTP, déploiements, scheduler, WebSocket, circuit breaker) ; procédure de vérification : [MONITORING-RUNBOOK.md](../technical_specs/MONITORING-RUNBOOK.md).
 
 ## Routes dynamiques des plugins
 
@@ -782,7 +883,7 @@ class ConflictError(APIError):
 
 ### Authentification
 
-Tous les endpoints (sauf `/api/v1/system/health`, `/api/v1/system/ready` et `/api/v1/auth/login`) nécessitent un header `Authorization: Bearer <token>`. Le token peut être un JWT (access token) ou une clé API (préfixée `wf_ak_`).
+Tous les endpoints (sauf `/api/v1/system/health`, `/api/v1/system/ready`, `/api/v1/auth/login` et `/api/v1/metrics` — exemption sondes Prometheus, STORY-172) nécessitent un header `Authorization: Bearer <token>`. Le token peut être un JWT (access token) ou une clé API (préfixée `wf_ak_`).
 
 ### RBAC
 

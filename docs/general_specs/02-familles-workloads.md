@@ -300,7 +300,7 @@ Chaque exécution (sauvegarde, restauration) se termine par un statut explicite 
 
 Chaque snapshot porte des **tags stables** : `windflow.instance=<uuid>` (identité d'installation) et `windflow.configid=<id>` (configuration de sauvegarde). La **liste et la rétention ne considèrent que les snapshots de l'instance** : deux instances WindFlow partageant un même dépôt ne se marchent pas dessus, et la rétention d'une configuration ne touche jamais les snapshots d'une autre. Toutes les décisions de portée n'utilisent **que** ces identifiants stables, jamais les noms normalisés (deux noms qui normalisent identiquement ne peuvent pas croiser leurs rétentions).
 
-Les planifications de sauvegarde (cron) sont inscrites au **scheduler core** et exécutées par les workers Celery ; l'exposition REST du verbe (`POST /apps/{id}/backup`, `POST /apps/{id}/restore`) est spécifiée au chapitre [09-api.md](09-api.md).
+Les planifications de sauvegarde (cron) sont inscrites au **scheduler core** et exécutées par son moteur asyncio (tâches de fond du process API) ; l'exposition REST du verbe (`POST /apps/{id}/backup`, `POST /apps/{id}/restore`) est spécifiée au chapitre [09-api.md](09-api.md).
 
 ### Hiérarchie des adapters App
 

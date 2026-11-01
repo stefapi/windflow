@@ -21,7 +21,7 @@ Ce chapitre spécifie l'automatisation dans WindFlow selon l'arbitrage D2 : le c
 
 ### Modèle
 
-Le scheduler core gère des **tâches planifiées** persistées dans la table `scheduled_tasks` (entités du chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)) et exécutées par le worker Celery. Une tâche est définie par :
+Le scheduler core gère des **tâches planifiées** persistées dans la table `scheduled_tasks` (entités du chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)) et exécutées par son moteur asyncio (boucle au lifespan du process API). Une tâche est définie par :
 
 - une **action** parmi un registre fixe d'actions core (voir ci-dessous) ;
 - un **déclencheur** : planification cron **ou** événement de la liste canonique (chapitre [11-plugins.md](11-plugins.md)) ;
@@ -63,7 +63,7 @@ Les plugins peuvent enregistrer leurs propres actions via leur module d'extensio
 
 ### Triggers
 
-**Planification cron** — expression cron standard, évaluée par le worker ; la tâche s'exécute dans la file Celery avec les paramètres enregistrés.
+**Planification cron** — expression cron standard, évaluée par le moteur asyncio du scheduler ; la tâche s'exécute avec les paramètres enregistrés.
 
 **Déclenchement par événement** — la tâche s'abonne à un événement de la liste canonique du chapitre [11-plugins.md](11-plugins.md). Le bus d'événements (Redis Pub/Sub en mode standard, `asyncio.Queue` en mode léger) notifie le scheduler, qui exécute l'action avec, en paramètres additionnels, les données de l'événement. Exemples :
 
@@ -78,7 +78,7 @@ flowchart LR
     E[Événement deployment.failed] --> B[Bus dévénements]
     B --> S[Scheduler core]
     S --> T[Tâche notification.send trigger event]
-    T --> W[Worker Celery]
+    T --> W[Moteur asyncio du scheduler]
     W --> N[Notification canal configuré]
 ```
 
@@ -110,7 +110,7 @@ Chaque exécution d'une tâche — par cron, par événement ou par déclencheme
 
 ### Maintenance système planifiée
 
-Le scheduler core exécute des **jobs système de maintenance** : des rétentions automatiques qui bornent la croissance des historiques et nettoient les caches. Ce sont des tâches internes du scheduler (non inscrites au registre des actions utilisateur), **exécutées par le worker Celery** et **configurables** (périodicité cron, rétention, activation) dans les réglages d'administration :
+Le scheduler core exécute des **jobs système de maintenance** : des rétentions automatiques qui bornent la croissance des historiques et nettoient les caches. Ce sont des tâches internes du scheduler (non inscrites au registre des actions utilisateur), **exécutées par son moteur asyncio** et **configurables** (périodicité cron, rétention, activation) dans les réglages d'administration :
 
 | Job | Nettoyage | Réglages |
 |---|---|---|

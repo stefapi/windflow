@@ -281,7 +281,7 @@ L'entité **« mise à jour en attente »** (une ligne par container, unicité H
 | `status` | `pending` \| `skipped` — `skipped` marque une suggestion semver ignorée par l'utilisateur |
 | `checked_at` | Fraîcheur du contrôle |
 
-Cycle de vie : la vérification (manuelle ou planifiée, scheduler core + Celery) **réinitialise** puis **reconstruit** les lignes en fusionnant les deux signaux ; une ligne est **effacée** à la recréation réussie du container (recreate, chapitre [02-familles-workloads.md](02-familles-workloads.md)) ou à sa suppression. C'est cette entité qui alimente les colonnes `current_version` / `available_version` du modèle de données (chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)) et le badge ⬆ « mise à jour disponible » des cartes Apps (chapitre [14-ui-maquettes.md](14-ui-maquettes.md), Écran 2).
+Cycle de vie : la vérification (manuelle ou planifiée, scheduler core) **réinitialise** puis **reconstruit** les lignes en fusionnant les deux signaux ; une ligne est **effacée** à la recréation réussie du container (recreate, chapitre [02-familles-workloads.md](02-familles-workloads.md)) ou à sa suppression. C'est cette entité qui alimente les colonnes `current_version` / `available_version` du modèle de données (chapitre [06-modele-de-donnees.md](06-modele-de-donnees.md)) et le badge ⬆ « mise à jour disponible » des cartes Apps (chapitre [14-ui-maquettes.md](14-ui-maquettes.md), Écran 2).
 
 ### Réconciliation après redéploiement de stack
 

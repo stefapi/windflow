@@ -6,6 +6,11 @@
 
 Ce chapitre spécifie le schéma de données de WindFlow : entités comptes/organisations, entités workloads (Apps, Machines, Hosts — issues du modèle directeur du chapitre 02), entité **Cluster** et ses membres (`clusters`, `cluster_members`), entités plugins et entités transverses (déploiements, audit, auth). Il couvre aussi la stratégie de migration `targets` → `hosts` (et la transformation des anciens Hosts `host_kubernetes` en Clusters) ainsi que les règles de compatibilité PostgreSQL/SQLite. Les comportements métier (verbes, adoption, cycles de vie) sont définis aux chapitres 02 et 03 ; seul leur support persistant est décrit ici.
 
+> **Déploiement phasé (F4)** — le modèle directeur ci-dessous est la **cible produit**, déployée par étapes :
+>
+> - **Étapes 1-2 livrées** : tables support (organisations, environments), entité `Host` avec `origin`/`environment_id` et `Stack.git_url` — migrations Alembic `1661`/`1662` ;
+> - **Étape 3 reportée** (Roadmap Phase 2) : tables `apps`, `machines`, `clusters`/`cluster_members`, triple XOR d'hébergement et verbes universels — le contrat d'adaptation est déjà posé par l'interface `WorkloadAdapter` (chapitre 02, STORY-174.1).
+
 ## Principes de conception
 
 - **Simplicité** : peu de tables, relations claires. Pas d'over-engineering relationnel.
@@ -258,6 +263,8 @@ erDiagram
 
 Les trois familles du chapitre 02 sont persistées dans trois tables distinctes. Chaque table porte le `profile` (sous-type technique) et un champ de statut propre à la famille. L'entité Cluster (premier rang, hors familles) est persistée dans `clusters` / `cluster_members` (section suivante).
 
+> **Phasage (F4)** : `hosts` est **livrée** (migration `1661`) ; les tables `apps` et `machines` sont **cibles non livrées** (étape 3 reportée Roadmap Phase 2).
+
 ### App — workload container-based
 
 ```sql
@@ -374,6 +381,8 @@ CREATE INDEX idx_hosts_status ON hosts(status);
 ## Entité Cluster (clusters et membres)
 
 L'entité **Cluster** (premier rang, chapitre 02) est persistée dans deux tables : `clusters` (la grappe) et `cluster_members` (l'appartenance des Hosts/Machines à un Cluster). Un Cluster héberge des Apps (`apps.cluster_id`, triple XOR ci-dessus) et est constitué de membres.
+
+> **Phasage (F4)** : cible non livrée — tables `clusters`/`cluster_members` reportées à l'étape 3 (Roadmap Phase 2).
 
 ### Cluster — grappe multi-nœuds
 
@@ -525,7 +534,7 @@ class ClusterStatus(str, Enum):   # Clusters — santé de la grappe (quorum, me
 
 ## Migration de `targets` vers `hosts`
 
-L'entité `Target` (colonne `type = local | ssh | proxmox`) est remplacée par l'entité **Host**. *Target* reste cité ici uniquement comme alias historique. Stratégie de migration :
+L'entité `Target` (colonne `type = local | ssh | proxmox`) est remplacée par l'entité **Host**. *Target* reste cité ici uniquement comme alias historique. Stratégie de migration — **livrée** (migrations Alembic `1661`/`1662` : renommage `targets` → `hosts`, axe `origin`, table `environments`, `stacks.environment_id`/`Stack.git_url`) :
 
 1. **Création de `hosts`** avec le schéma ci-dessus (profils canoniques à 3 valeurs).
 2. **Copie des lignes** de `targets` vers `hosts` avec correspondance de profils : `local` → `host_baremetal`, `ssh` → `host_baremetal` (accès SSH) ou `host_remote_docker` (si le Docker distant est le seul usage), `proxmox` → `host_proxmox`.
@@ -537,7 +546,7 @@ Les migrations Alembic restent compatibles PostgreSQL + SQLite (voir [Compatibil
 
 ## Migration `host_kubernetes` → `clusters`
 
-Le profil `host_kubernetes` disparaît des Hosts (chapitre 02) : un cluster Kubernetes devient une entité Cluster. Stratégie documentaire de transformation des Hosts `host_kubernetes` existants :
+Le profil `host_kubernetes` disparaît des Hosts (chapitre 02) : un cluster Kubernetes devient une entité Cluster. Stratégie documentaire de transformation des Hosts `host_kubernetes` existants — **cible non livrée** (dépend de l'étape 3 `clusters`, phasage F4) :
 
 1. **Création de `clusters`** et `cluster_members` avec les schémas ci-dessus.
 2. **Transformation des lignes** : chaque Host `host_kubernetes` devient un Cluster `type = 'kubernetes'` — `name`, `connection_config` (kubeconfig) et `last_scan_at` sont repris ; `origin` vaut `adopted` (un Host était une entité adoptée).
@@ -820,7 +829,7 @@ CREATE TABLE api_keys (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL,
-    key_hash VARCHAR(255) NOT NULL,           -- hash bcrypt de la clé (la clé brute n'est jamais stockée)
+    key_hash VARCHAR(255) NOT NULL,           -- hash Argon2id de la clé (la clé brute n'est jamais stockée)
     expires_at TIMESTAMP,                     -- null = n'expire jamais
     last_used_at TIMESTAMP,
     revoked BOOLEAN DEFAULT FALSE,

@@ -24,7 +24,7 @@ WindFlow est une **application monolithique modulaire** conçue pour être lég�
 
 Pour garder la conception cohérente, il est utile de définir les frontières :
 
-- **Pas un système distribué** : WindFlow est une seule instance (API + worker + DB). Le multi-machine signifie « piloter plusieurs Hosts », pas « distribuer WindFlow sur plusieurs serveurs ».
+- **Pas un système distribué** : WindFlow est une seule instance (process API unique + DB). Le multi-machine signifie « piloter plusieurs Hosts », pas « distribuer WindFlow sur plusieurs serveurs ».
 - **Pas cloud-native** : WindFlow tourne sur du matériel physique ou des VMs. Il n'a pas besoin de Kubernetes pour fonctionner.
 - **Pas enterprise-first** : les fonctionnalités enterprise (SSO, Vault, audit avancé) existent en tant que plugins, pas comme prérequis.
 
@@ -43,7 +43,7 @@ flowchart TB
     subgraph ApplicationWindFlow
         API["API REST FastAPI"]
         Auth["Auth JWT + RBAC"]
-        Worker["Celery Worker tâches async"]
+        TasksRuntime["Runtime asyncio — boucles lifespan + scheduler engine"]
 
         subgraph CoreServices
             AppSvc["App Service"]
@@ -93,7 +93,7 @@ flowchart TB
     API --> StackSvc
     API --> PluginSvc
     API --> MarketSvc
-    API --> Worker
+    API --> TasksRuntime
 
     PluginSvc --> PluginAPI
     PluginSvc --> PluginUI
@@ -109,7 +109,7 @@ flowchart TB
 
     API --> DB
     API --> Cache
-    Worker --> DB
+    TasksRuntime --> DB
 
     PluginHooks --> Traefik
     PluginHooks --> PGPlugin
@@ -157,31 +157,27 @@ WindFlow s'adapte au matériel disponible. Le même code tourne dans les trois p
 ### Mode léger
 
 ```
-WindFlow API (FastAPI) ─── SQLite (fichier local)
+WindFlow API (FastAPI + runtime asyncio) ─── SQLite (fichier local)
        │
-   Celery Worker (1 process)
-       │
-   Docker Engine (local)
+    Docker Engine (local)
 ```
 
 - SQLite au lieu de PostgreSQL (pas de service DB séparé)
 - Pas de Redis (cache en mémoire, sessions en DB)
-- Un seul worker Celery
+- Tâches de fond exécutées en asyncio dans le process API (boucles lifespan + scheduler engine) — pas de worker séparé
 - Empreinte : ~512 Mo RAM, 1 core
 
 ### Mode standard
 
 ```
-WindFlow API (FastAPI) ─── PostgreSQL ─── Redis
+WindFlow API (FastAPI + runtime asyncio) ─── PostgreSQL ─── Redis
        │
-   Celery Worker(s)
-       │
-   Docker Engine + libvirt (local ou distant)
+    Docker Engine + libvirt (local ou distant)
 ```
 
 - PostgreSQL pour la persistance
-- Redis pour le cache et le broker Celery
-- Un ou plusieurs workers
+- Redis pour le cache et le bus d'événements (Pub/Sub, canal unique `windflow:events`)
+- Process unique assumé : déploiement single-worker supporté (verrous anti-chevauchement du scheduler en mémoire)
 - Empreinte : ~1.5 Go RAM, 2 cores
 
 ### Mode standard + plugins
@@ -189,7 +185,7 @@ WindFlow API (FastAPI) ─── PostgreSQL ─── Redis
 Identique au mode standard, mais les plugins ajoutent des containers et des fonctionnalités :
 
 ```
-WindFlow (API + Worker + PostgreSQL + Redis)
+WindFlow (API + PostgreSQL + Redis)
     │
     ├── Plugin Traefik (container Traefik, intégration reverse proxy)
     ├── Plugin PostgreSQL (extension : gestion DB depuis l'UI)
@@ -232,10 +228,8 @@ windflow/
 │   ├── plugin_api.py        # API dynamique par plugin
 │   ├── plugin_hooks.py      # Hooks lifecycle
 │   └── marketplace.py       # Catalogue, recherche
-├── tasks/                   # Tâches Celery
-│   ├── deployment_tasks.py
-│   ├── plugin_tasks.py
-│   └── maintenance_tasks.py
+├── tasks/                   # Tâches async (asyncio — boucles lifespan)
+│   └── background_tasks.py  # Déploiements, purges périodiques, maintenance
 ├── websocket/               # Temps réel (renvoi 09-api.md)
 │   ├── terminal.py          # Terminal interactif
 │   ├── logs.py              # Streaming logs
@@ -286,9 +280,14 @@ Les chemins canoniques et le format des messages sont spécifiés au chapitre [0
 
 ### Bus d'événements internes
 
-Les services core et les plugins communiquent via un bus d'événements simple. En mode standard, Redis Pub/Sub est utilisé. En mode léger (sans Redis), un bus en mémoire (files asyncio) prend le relais. Les plugins s'abonnent aux événements qui les concernent — par exemple, le plugin Traefik écoute `stack.deployed` et `container.started` pour auto-configurer les routes.
+Les services core et les plugins communiquent via un bus d'événements unifié derrière une **interface `Bus` canonique** (implémentation de référence : `backend/app/core/events.py`). Deux implémentations concrètes :
 
-La **liste canonique des événements** (nommage `domaine.action_passé`, ex. `deployment.succeeded`, `host.offline`) est définie au chapitre [11-plugins.md](11-plugins.md) et référencée par les chapitres 09 et 17.
+- **`InMemoryEventBus`** (asyncio) — l'implémentation par défaut, notamment en mode léger sans Redis ;
+- **`RedisPubSubEventBus`** (optionnelle) — activée automatiquement quand une URL Redis (`cache_url`) est configurée ; tous les événements transitent sur le **canal unique `windflow:events`**.
+
+Redis Streams est volontairement **hors périmètre** à ce stade (arbitrage F6). Les plugins s'abonnent aux événements qui les concernent — par exemple, le plugin Traefik écoute `stack.deployed` et `container.started` pour auto-configurer les routes.
+
+La **liste canonique des événements** (nommage `domaine.action_passé`, ex. `deployment.succeeded`, `host.offline`) est définie au chapitre [11-plugins.md](11-plugins.md) et référencée par les chapitres 09 et 17. Une table de correspondance ancien → nouveau (`LEGACY_EVENT_ALIASES`, ex. `deployment.completed` → `deployment.succeeded`, `target.*` → `host.*`) garantit la compatibilité des consommateurs historiques.
 
 ### Collecte et historique court des métriques Hosts
 
@@ -339,7 +338,7 @@ Les procédures complètes d'exploitation sont au chapitre [16-deploiement.md](1
 
 **Cache** : en mode standard, Redis cache les sessions, les métadonnées des stacks et le catalogue marketplace. En mode léger, un cache dict en mémoire remplace Redis avec les mêmes TTL.
 
-**Tâches async** : les opérations longues (déploiement, pull d'images, snapshot de Machine) sont exécutées par Celery worker(s) pour ne pas bloquer l'API.
+**Tâches async** : les opérations longues (déploiement, pull d'images, purges) sont exécutées en tâches async du process API — boucles lifespan et scheduler engine (runtime asyncio unique) — sans bloquer la boucle d'événements.
 
 **WebSocket** : le terminal et le streaming de logs utilisent des connexions WebSocket persistantes pour éviter le polling.
 

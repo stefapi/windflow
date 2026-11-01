@@ -22,8 +22,8 @@ Le tableau de frontière core/plugins est la **référence unique** au chapitre 
 | **Backend** | FastAPI, Python 3.11+ | — |
 | **ORM** | SQLAlchemy 2.0 + Alembic | — |
 | **Base de données** | PostgreSQL 15+ **ou** SQLite | — |
-| **Cache / Broker** | Redis 7+ **ou** cache mémoire | — |
-| **Task queue** | Celery | — |
+| **Cache / bus d'événements** | Redis 7+ (Pub/Sub) **ou** cache mémoire + bus asyncio | — |
+| **Traitement asynchrone** | runtime asyncio (boucles lifespan + scheduler engine) | — |
 | **Frontend** | Vue.js 3, TypeScript, Element Plus, UnoCSS | Composants UI injectés par les plugins |
 | **CLI/TUI** | Rich, Typer, Textual | — |
 | **Containers** | Docker SDK Python, Docker Compose | — |
@@ -87,8 +87,8 @@ else:
 
 ### Cache : Redis ou mémoire
 
-- **Mode standard** : Redis 7+ sert de cache, de store de sessions et de broker pour Celery. Une instance unique suffit — pas de cluster.
-- **Mode léger** : un cache dict en mémoire avec TTL remplace Redis, avec la même interface pour le code applicatif. Les sessions sont stockées en base ; Celery utilise le filesystem comme broker.
+- **Mode standard** : Redis 7+ sert de cache et de bus d'événements (Pub/Sub, canal unique `windflow:events`). Une instance unique suffit — pas de cluster.
+- **Mode léger** : un cache dict en mémoire avec TTL remplace Redis, avec la même interface pour le code applicatif (fallback par opération en mode dégradé). Le bus d'événements bascule sur l'implémentation asyncio en mémoire.
 
 Exemple illustratif — cache mémoire :
 
@@ -101,9 +101,9 @@ await cache.set("key", "value")
 value = await cache.get("key")
 ```
 
-### Traitement asynchrone — Celery
+### Traitement asynchrone — asyncio
 
-Les opérations longues (déploiement de stacks, pull d'images, snapshots de Machines, installation de plugins) sont traitées par un ou plusieurs workers Celery. En mode léger sur un seul core ARM, la concurrence est réduite à 1 worker.
+Les opérations longues (déploiement de stacks, pull d'images, purges périodiques) sont traitées par le **runtime asyncio unique** du process API : boucles de tâches de fond au lifespan et planification par le scheduler engine. Pas de worker séparé — le déploiement supporté est single-worker (chapitre [04-architecture.md](04-architecture.md)).
 
 ### Chiffrement des secrets (core)
 
@@ -255,7 +255,7 @@ Le détail des pipelines (lint, tests, build des images multi-arch, publication)
 | `asyncpg` | Driver PostgreSQL async | Mode standard |
 | `aiosqlite` | Driver SQLite async | Mode léger |
 | `redis` | Client Redis async | Mode standard |
-| `celery` | Task queue | Oui |
+| `passlib` + `argon2-cffi` | Hashage Argon2id (mots de passe, clés API, refresh tokens) | Oui |
 | `docker` | Docker SDK Python | Oui |
 | `libvirt-python` | API libvirt (KVM) | Si KVM disponible |
 | `httpx` | Client HTTP async | Oui |
@@ -288,7 +288,6 @@ Le détail des pipelines (lint, tests, build des images multi-arch, publication)
 | Service | Mode standard | Mode léger | Image |
 |---------|---------------|------------|-------|
 | WindFlow API | Oui | Oui | `windflow/api` (multi-arch) |
-| Celery Worker | Oui | Oui (1 process) | `windflow/worker` (multi-arch) |
 | PostgreSQL | Oui | Non (SQLite) | `postgres:15` (multi-arch) |
 | Redis | Oui | Non (cache mémoire) | `redis:7-alpine` (multi-arch) |
 | Frontend (Nginx) | Oui | Oui | `windflow/frontend` (multi-arch) |

@@ -113,7 +113,7 @@ Spécifiés aux chapitres [07-authentification.md](07-authentification.md), [08-
 
 | Terme | Définition | Spécifié au |
 |---|---|---|
-| **Access token** | JWT de courte durée (30 min) émis à la connexion ; accepté aussi bien par l'UI, la CLI que l'API. | [07-authentification.md](07-authentification.md) |
+| **Access token** | JWT de courte durée (15 min) émis à la connexion ; accepté aussi bien par l'UI, la CLI que l'API. | [07-authentification.md](07-authentification.md) |
 | **Refresh token** | Chaîne opaque de longue durée (7 jours par défaut) stockée hashée en base ; sert uniquement à renouveler l'access token. | [07-authentification.md](07-authentification.md) |
 | **Clé API** | Jeton longue durée préfixé `wf_ak_…` pour les intégrations programmatiques, associée à un utilisateur et à des scopes. | [07-authentification.md](07-authentification.md) |
 | **RBAC** | Role-Based Access Control : 4 rôles (Viewer, Operator, Admin, Super Admin) appliqués par organisation et par famille de workload. | [08-rbac-permissions.md](08-rbac-permissions.md) |

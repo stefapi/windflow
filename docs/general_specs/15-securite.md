@@ -17,7 +17,7 @@ Ce chapitre spécifie la sécurité applicative de WindFlow : chiffrement des se
 
 | Core (toujours actif) | Plugin (optionnel) |
 |---|---|
-| Hashage bcrypt des mots de passe | Vulnerability scanning (Trivy) |
+| Hashage Argon2id des mots de passe | Vulnerability scanning (Trivy) |
 | Chiffrement AES-256 des secrets en base | Secrets management avancé (Vault) |
 | JWT avec expiration + refresh tokens | SSO / LDAP / 2FA (Keycloak) |
 | RBAC (4 rôles) | 2FA devant les services exposés (Authelia) |
@@ -65,7 +65,7 @@ class SecretManager:
 - `hosts.connection_config` — clés SSH, tokens API Proxmox (serveurs isolés) ;
 - `clusters.connection_config` — kubeconfigs (Clusters kubernetes), tokens API des clusters Proxmox, credentials socket/TLS Swarm ;
 - `plugin_configs.value` (quand `encrypted=true`) — configurations sensibles des plugins (clés API, mots de passe) ;
-- `api_keys.key_hash` et `refresh_tokens.token_hash` — hashés avec bcrypt (pas chiffrés : on ne peut pas retrouver la valeur).
+- `api_keys.key_hash` et `refresh_tokens.token_hash` — hashés avec Argon2id (pas chiffrés : on ne peut pas retrouver la valeur).
 
 ### Protection du SECRET_KEY
 
@@ -138,7 +138,7 @@ Les coordonnées du backend sont contrôlées : **loopback et IP de métadonnée
 
 Résumé des mesures ; le détail est dans les chapitres dédiés :
 
-- **Authentification** (chapitre [07-authentification.md](07-authentification.md)) : bcrypt (cost 12), JWT HS256 de 30 min, refresh tokens opaques de 7 jours, clés API `wf_ak_` hashées, rate limiting 5 tentatives/minute par IP puis blocage 5 minutes.
+- **Authentification** (chapitre [07-authentification.md](07-authentification.md)) : Argon2id, JWT HS256 de 15 min, refresh tokens opaques de 7 jours, clés API `wf_ak_` hashées, rate limiting 5 tentatives/minute par IP puis blocage 5 minutes.
 - **RBAC** (chapitre [08-rbac-permissions.md](08-rbac-permissions.md)) : 4 rôles hiérarchiques Viewer → Operator → Admin → Super Admin, permissions vérifiées sur chaque endpoint API et chaque action WebSocket.
 
 ## Sécurité du Docker socket
@@ -147,21 +147,18 @@ Le Docker socket (`/var/run/docker.sock`) est le point de sécurité le plus cri
 
 ### Mesures de protection
 
-**Accès exclusif via WindFlow** — seuls les containers `windflow-api` et `windflow-worker` montent le Docker socket. Les containers déployés par les utilisateurs n'y ont jamais accès.
+**Accès exclusif via WindFlow** — seul le container `windflow-api` monte le Docker socket (runtime asyncio unique, plus de worker séparé — chapitre [04-architecture.md](04-architecture.md)). Les containers déployés par les utilisateurs n'y ont jamais accès.
 
 **RBAC sur les opérations Docker** — les appels à l'API Docker passent toujours par l'API WindFlow, qui vérifie les permissions RBAC avant d'exécuter. Un Viewer ne peut pas démarrer un container, même s'il connaît l'API Docker.
 
 **Pas d'exposition réseau** — le Docker socket n'est jamais exposé sur le réseau (pas d'API Docker en TCP). Les machines distantes sont gérées via SSH (profil `host_remote_docker`).
 
 ```yaml
-# docker-compose.yml — seuls les services core montent le socket
+# docker-compose.yml — seul le service core monte le socket
 services:
   windflow-api:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro  # Lecture seule quand possible
-  windflow-worker:
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
 ```
 
 ### Risques résiduels

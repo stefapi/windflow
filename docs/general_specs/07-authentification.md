@@ -13,7 +13,7 @@ Ce chapitre spécifie le système d'authentification **JWT** autonome du core : 
 | Auth par mot de passe (JWT) | SSO Keycloak (LDAP, AD, OIDC, SAML) |
 | Refresh tokens | 2FA (TOTP, WebAuthn) via Keycloak |
 | Clés API pour la CLI et l'automatisation | Providers externes (Google, GitHub…) |
-| Hashage bcrypt | |
+| Hashage Argon2id (passlib + argon2-cffi) | |
 | Protection brute-force (rate limiting) | |
 
 ## Authentification par mot de passe
@@ -30,9 +30,9 @@ sequenceDiagram
     Client->>API: POST /api/v1/auth/login username password
     API->>DB: Rechercher l'utilisateur
     DB->>API: User + hashed_password
-    API->>API: Vérifier bcrypt - password - hash
+    API->>API: Vérifier Argon2id - password - hash
     alt Mot de passe correct
-        API->>API: Générer access_token - JWT 30 min
+        API->>API: Générer access_token - JWT 15 min
         API->>API: Générer refresh_token - opaque 7 jours
         API->>DB: Stocker refresh_token hashé
         API->>Cache: Stocker session
@@ -43,7 +43,7 @@ sequenceDiagram
     end
 ```
 
-Les mots de passe sont hashés avec bcrypt (cost factor 12). Le même mécanisme couvre les trois interfaces de WindFlow (Web UI, CLI, API) : un access token de courte durée et un refresh token de longue durée.
+Les mots de passe sont hashés avec **Argon2id** (passlib + argon2-cffi, paramètres par défaut de passlib). Les anciens hashes bcrypt restent acceptés en lecture (double lecture legacy) et sont re-hashés automatiquement en Argon2id au login suivant. Le même mécanisme couvre les trois interfaces de WindFlow (Web UI, CLI, API) : un access token de courte durée et un refresh token de longue durée.
 
 ### Access token (JWT)
 
@@ -60,7 +60,7 @@ Le access token est un JWT signé **HS256** avec le `SECRET_KEY` de l'instance. 
 }
 ```
 
-Durée : **30 minutes** par défaut (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`).
+Durée : **15 minutes** par défaut (configurable via `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`, champ `jwt_access_token_expire_minutes`).
 
 ### Refresh token
 
@@ -73,7 +73,7 @@ Le refresh flow : le client envoie `POST /api/v1/auth/refresh` avec son refresh 
 Les clés API permettent une authentification non-interactive pour la CLI, les scripts et les intégrations tierces.
 
 - **Format** : préfixe `wf_ak_` + 48 caractères aléatoires (`secrets.token_urlsafe`) ;
-- **Stockage** : seul le hash bcrypt de la clé est stocké en base (`api_keys.key_hash`) — la clé brute n'est jamais conservée ;
+- **Stockage** : seul le hash **Argon2id déterministe** de la clé est stocké en base (`api_keys.key_hash`) — la clé brute n'est jamais conservée ;
 - **Affichage** : la clé complète est affichée **une seule fois** à la création ;
 - **Expiration** : configurable à la création (null = n'expire jamais) ;
 - **Révocation** : à tout moment, par nom ou par identifiant.
@@ -108,7 +108,7 @@ curl -X POST http://windflow:8080/api/v1/auth/login \
     "access_token": "eyJhbGciOiJIUzI1NiIs...",
     "refresh_token": "9f8e7d6c5b4a3f2e1d0c...",
     "token_type": "bearer",
-    "expires_in": 1800,
+    "expires_in": 900,
     "user": {
         "id": "550e8400-e29b-41d4-a716-446655440000",
         "username": "admin",
@@ -123,7 +123,7 @@ curl -X POST http://windflow:8080/api/v1/auth/login \
 curl -X POST http://windflow:8080/api/v1/auth/refresh \
   -H "Content-Type: application/json" \
   -d '{"refresh_token": "9f8e7d6c5b4a3f2e1d0c..."}'
-# → { "access_token": "eyJ...", "token_type": "bearer", "expires_in": 1800 }
+# → { "access_token": "eyJ...", "token_type": "bearer", "expires_in": 900 }
 ```
 
 Les erreurs suivent l'enveloppe standard du chapitre [09-api.md](09-api.md) : `401` avec `INVALID_CREDENTIALS` (identifiants incorrects), `INVALID_OR_EXPIRED_TOKEN` (token invalide/expiré) ou `TOO_MANY_ATTEMPTS` (compteur brute-force dépassé).
@@ -206,11 +206,11 @@ Variables d'environnement core :
 
 ```bash
 # Clé de signature des JWT (générée automatiquement par install.sh)
-SECRET_KEY=a1b2c3d4...
+JWT_SECRET_KEY=a1b2c3d4...
 
 # Durée des tokens
-ACCESS_TOKEN_EXPIRE_MINUTES=30     # Défaut : 30
-REFRESH_TOKEN_EXPIRE_DAYS=7        # Défaut : 7
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=15  # Défaut : 15
+REFRESH_TOKEN_EXPIRE_DAYS=7         # Défaut : 7
 
 # Protection brute-force
 AUTH_MAX_ATTEMPTS=5                # Défaut : 5
