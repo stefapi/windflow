@@ -327,7 +327,7 @@ windflow images pull postgres:15
 windflow images prune
 ```
 
-Le volume browser et le pruning suivent les mêmes capacités que l'UI (chapitre [14-ui-maquettes.md](14-ui-maquettes.md) et [`../user-guide/`](../user-guide)).
+Le volume browser et le pruning suivent les mêmes capacités que l'UI (chapitre [14-ui-maquettes.md](14-ui-maquettes.md) ; guides `../user-guide/` non créés à ce jour).
 
 ## Organisations, environnements et administration
 

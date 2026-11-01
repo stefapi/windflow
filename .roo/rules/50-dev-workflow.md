@@ -81,10 +81,9 @@ Toutes les commandes standards sont présentes dans le `Makefile` à la racine d
 
 | Cible | Description |
 |-------|-------------|
-| `make docker-build` | 🐳 Build de toutes les images Docker (api + frontend + worker) |
+| `make docker-build` | 🐳 Build de toutes les images Docker (api + frontend) |
 | `make docker-build-backend` | 🐳 Build de l'image Docker backend |
 | `make docker-build-frontend` | 🐳 Build de l'image Docker frontend |
-| `make docker-build-worker` | 🐳 Build de l'image Docker worker |
 | `make docker-up` | 🐳 Démarrer les conteneurs Docker |
 | `make docker-down` | 🐳 Arrêter les conteneurs Docker |
 | `make docker-logs` | 🐳 Afficher les logs Docker |

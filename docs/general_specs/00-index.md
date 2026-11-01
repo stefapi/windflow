@@ -11,7 +11,7 @@ Cet index est le point d'entrée de la spécification générale de WindFlow : s
 ## Convention de lecture
 
 - **Spec cible** : `general_specs` décrit la vision produit cible de WindFlow, en avance sur l'implémentation réelle. Les écarts avec le code sont attendus et tracés par [../Roadmap.md](../Roadmap.md).
-- **QUOI vs COMMENT** : la spec générale décrit les comportements, contrats et périmètres (le QUOI). Le détail d'implémentation (schémas de code, procédures, protocoles) vit dans [`../technical_specs/`](../technical_specs) ; les parcours utilisateurs pas à pas dans [`../user-guide/`](../user-guide).
+- **QUOI vs COMMENT** : la spec générale décrit les comportements, contrats et périmètres (le QUOI). Le détail d'implémentation (schémas de code, procédures, protocoles) vit dans [`../technical_specs/`](../technical_specs) ; les parcours utilisateurs pas à pas dans `../user-guide/` (répertoire non créé à ce jour).
 - **Modèle directeur** : toute la spec est écrite dans le paradigme des trois familles (Apps, Machines, Hosts) défini au chapitre [02-familles-workloads.md](02-familles-workloads.md), complétées par l'entité **Cluster** de premier rang (grappes Kubernetes, Proxmox, Swarm — constituées de membres Hosts/Machines, hébergeant des Apps). Le terme *target* est un alias historique de Host ; les anciens libellés « Mode Standard / Mode Avancé » correspondent à Mode App / Mode Infra.
 - **Gabarit** : chaque chapitre suit le même gabarit (bloc `Statut · Public · Lié à`, vue d'ensemble, sections, « Voir aussi ») et vise 200 à 600 lignes.
 - **Liens** : tous les liens sont relatifs et vérifiés.
@@ -79,7 +79,7 @@ Ce tableau récapitule les fonctionnalités disponibles dès l'installation, san
 2. [02-familles-workloads.md](02-familles-workloads.md) — le modèle mental Apps/Machines/Hosts.
 3. [16-deploiement.md](16-deploiement.md) — installer WindFlow.
 4. [12-marketplace.md](12-marketplace.md) — choisir quoi installer.
-5. [`../user-guide/`](../user-guide) — guides pas à pas (stacks, adoption, compute).
+5. `../user-guide/` — guides pas à pas (stacks, adoption, compute) — répertoire non créé à ce jour.
 
 ### Développeur backend
 
@@ -108,7 +108,7 @@ Ce tableau récapitule les fonctionnalités disponibles dès l'installation, san
 ## Documentation liée hors `general_specs/`
 
 - [`../technical_specs/`](../technical_specs) — spécifications techniques détaillées : WebSocket temps réel, architecture modulaire, systèmes de virtualisation, design system, CI/CD, fonctions Jinja2, définitions de stacks.
-- [`../user-guide/`](../user-guide) — guides utilisateur : containers, stacks, adoption, compute, volumes, réseaux, images, infos système.
+- `../user-guide/` — guides utilisateur : containers, stacks, adoption, compute, volumes, réseaux, images, infos système (répertoire non créé à ce jour).
 - [../Roadmap.md](../Roadmap.md) — feuille de route produit : épic, stories et priorités d'implémentation.
 
 ## Voir aussi

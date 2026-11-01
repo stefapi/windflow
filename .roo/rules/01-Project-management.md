@@ -262,9 +262,9 @@ Si un élément doit être annulé :
 
 ## 8. Documentation et Spécification
 
-La documentation du projet est présente dans le dossier `doc/`.
-Les spécifications sont disponibles dans le dossier `doc/general_specs`.
-La Roadmap long terme est dans `doc/IMPLEMENTATION_ROADMAP.md`
+La documentation du projet est présente dans le dossier `docs/`.
+Les spécifications sont disponibles dans le dossier `docs/general_specs`.
+La Roadmap long terme est dans `docs/Roadmap.md`
 
 ## 9. Résumé des Transitions (Aide-mémoire)
 

@@ -400,7 +400,7 @@ L'adoption d'un objet discovered suit un wizard en 3 étapes :
 
 **Étape 3 — Validation.** WindFlow génère la définition de stack (fichier Compose ou configuration Machine) correspondant à l'état actuel, l'affiche pour relecture, et l'utilisateur confirme. L'objet passe d'`external` (discovered non adopté) à `adopted` — cycle de vie complet dès la fin du wizard — **sans interruption de service** (matrice [profil × origine](#matrice-canonique-profil--origine)).
 
-L'adoption des services système d'un Host (profil `app_native_service`) suit le même principe et est décrite au chapitre [02-familles-workloads.md](02-familles-workloads.md). Le parcours utilisateur complet est détaillé dans [../user-guide/adoption.md](../user-guide/adoption.md), et l'écran d'adoption au chapitre [14-ui-maquettes.md](14-ui-maquettes.md).
+L'adoption des services système d'un Host (profil `app_native_service`) suit le même principe et est décrite au chapitre [02-familles-workloads.md](02-familles-workloads.md). Le parcours utilisateur complet est détaillé dans `../user-guide/adoption.md` (répertoire non créé à ce jour), et l'écran d'adoption au chapitre [14-ui-maquettes.md](14-ui-maquettes.md).
 
 ## Actions par type d'objet
 
@@ -442,4 +442,4 @@ Une stack WindFlow expose des actions globales en plus des actions par composant
 - [09-api.md](09-api.md) — endpoints `/compute/*` exposant ces objets par technologie
 - [14-ui-maquettes.md](14-ui-maquettes.md) — Vue Compute (Écran 22), Snapshots Machines (Écran 8) et Adoption d'objets découverts (Écran 14)
 - [12-marketplace.md](12-marketplace.md) — onglet Machine Templates de la marketplace
-- [../user-guide/adoption.md](../user-guide/adoption.md) — parcours utilisateur d'adoption pas à pas
+- `../user-guide/adoption.md` — parcours utilisateur d'adoption pas à pas (à créer)

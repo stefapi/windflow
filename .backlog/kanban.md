@@ -7,7 +7,6 @@
 ### Divers (sans epic)
 
 ### EPIC-014 : P3 — Finitions & purge (remédiation backend)
-- [ ] STORY-253 : Mise à jour documentaire post-remédiation — `backend_status.md`, rules `.roo`, CHANGELOG (P3-5)
 - [ ] STORY-254 : Revue finale de conformité — audit specs ↔ code et tableau de conformité final (clôture du plan)
 
 ### EPIC-015 : Compute — Clusters Kubernetes & Apps cluster-scoped
@@ -15,6 +14,9 @@
 ## 🏗️ IN PROGRESS
 
 ### EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend)
+
+### EPIC-014 : P3 — Finitions & purge (remédiation backend)
+- [~] STORY-253 : Mise à jour documentaire post-remédiation — `backend_status.md`, rules `.roo`, CHANGELOG (P3-5)  # en cours
 
 ## 🚫 BLOCKED
 

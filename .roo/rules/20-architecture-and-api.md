@@ -17,7 +17,8 @@ L'API expose trois interfaces de documentation automatique :
 - Modular monolith (modules cohérents, frontières claires).
 
 ## Event-driven
-- Communication asynchrone via Redis Streams quand approprié.
+- Communication asynchrone via le bus canonique `Bus` (`backend/app/core/events.py`) : `InMemoryEventBus` par défaut, `RedisPubSubEventBus` optionnel sur le canal unique `windflow:events` (STORY-162).
+- Redis Streams est **hors périmètre** (arbitrage F6) — ne pas l'introduire sans décision explicite.
 - Prévoir retry/backoff, idempotence, et gestion d'erreurs robuste.
 
 ## WebSocket
@@ -43,6 +44,7 @@ Les middlewares sont appliqués dans un ordre critique (documenté dans `middlew
 | Error handler | Gestion centralisée des erreurs |
 
 ## Résilience & performance (attendu)
-- Cache (Redis) pour requêtes coûteuses
+- Cache unifié (`get_cache()`) : Redis si configuré, sinon mémoire locale bornée avec fallback par opération (STORY-168)
 - Rate limiting, circuit breaker, bulkhead, retries
-- Scalabilité horizontale, services stateless autant que possible
+- Circuit breaker **câblé** sur Docker, SSH et le registre de plugins (STORY-251) — séries `windflow_circuit_breaker_*` exposées via `/api/v1/metrics`
+- Scalabilité horizontale, services stateless autant que possible (déploiement single-worker assumé, verrous anti-chevauchement scheduler)

@@ -19,6 +19,12 @@ Dépendances backend notables :
 - scalar-fastapi `^1.0.3`
 - fastapi-limiter `^0.1.6`
 - email-validator
+- python-jose `^3.3.0` (JWT) + passlib `[argon2]` / argon2-cffi `^23.0.0` (hash Argon2id, STORY-130.1)
+- bcrypt `^4.0.0` — transition lecture seule des hashes legacy, retrait post-migration (cf. STORY-250)
+- alembic `^1.13.0` (migrations, STORY-120)
+- prometheus-client `^0.21` (observabilité réelle, STORY-172)
+- python-dateutil `^2.9.0` (croniter vendored / scheduler, STORY-160.1)
+- litellm `^1.79.0` (IA multi-provider — dépendance réelle, consommée par le cache LLM STORY-168)
 
 Frontend :
 - Vue 3 (Composition API obligatoire)

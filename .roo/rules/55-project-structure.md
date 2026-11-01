@@ -11,9 +11,8 @@ windflow/
 ├── scripts/          # Scripts d'installation et utilitaires
 ├── dev/              # Scripts de développement et templates
 ├── stacks_definitions/ # Définitions YAML de stacks Docker
-├── doc/              # Documentation et spécifications
+├── docs/             # Documentation et spécifications
 ├── .backlog/         # Gestion de projet (epics, stories, kanban)
-├── .clinerules/      # Règles de développement
 ├── Makefile          # Toutes les commandes de dev (source de vérité)
 └── pyproject.toml    # Config Poetry + dépendances Python
 ```

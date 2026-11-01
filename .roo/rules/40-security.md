@@ -8,8 +8,12 @@
 - ne jamais logger de données sensibles
 
 ## AuthN/AuthZ
-- JWT + refresh (voir `doc/general_specs/05-authentication.md`)
-- RBAC côté API (source de vérité) — voir `doc/general_specs/06-rbac-permissions.md`
+- JWT + refresh (voir `docs/general_specs/07-authentification.md`)
+- RBAC côté API (source de vérité) — voir `docs/general_specs/08-rbac-permissions.md`
+- Hash Argon2id effectif, double lecture bcrypt legacy avec re-hash automatique au login (STORY-130.1)
+- Refresh tokens opaques révocables `wf_rt_` avec rotation (STORY-123) ; clés API `wf_ak_` via `X-API-Key` (STORY-124)
+- RBAC granulaire 4 rôles (`viewer < operator < admin < super_admin`) via `require_role(...)` sur les endpoints REST et `ensure_role_ws` sur les canaux WebSocket (STORY-121/122)
+- Protection brute-force login : 5 échecs par username sur fenêtre glissante de 10 min → lockout 5 min (STORY-104)
 - validation inputs côté client ET serveur (Pydantic côté backend)
 - protection CSRF pour opérations critiques
 
@@ -28,6 +32,7 @@
 
 ## Rate limiting
 - fastapi-limiter avec Redis comme stockage
+- Fallback mémoire process-local effectif sans Redis (STORY-102)
 - Configuration par endpoint
 
 ## Headers de sécurité
@@ -39,8 +44,10 @@
 ## Secrets
 - HashiCorp Vault **optionnel** (`vault_enabled: bool = False` par défaut)
 - Activable via `make enable-secrets`
+- SecretManager Fernet (AES-256, clé dérivée PBKDF2) effectif pour les credentials en base (STORY-103)
 - jamais de secrets en dur
 - rotation + audit trail
+- audit trail applicatif : modèle `AuditLog` + émission sur actions critiques + `GET /admin/audit` (STORY-125)
 
 ## Scans
 - bandit/semgrep côté backend
@@ -113,4 +120,4 @@ Lors de la rédaction des tâches (`analyse-story`), intégrer les exigences sé
 - Pour les services : mentionner la vérification d'appartenance (`assert resource.owner_id == current_user.id`)
 - Pour les logs : mentionner `logger.info("...", extra={"user_id": ...})` sans données sensibles
 
-**Référencer** `doc/general_specs/05-authentication.md` et `doc/general_specs/06-rbac-permissions.md` pour les détails des rôles.
+**Référencer** `docs/general_specs/07-authentification.md` et `docs/general_specs/08-rbac-permissions.md` pour les détails des rôles.

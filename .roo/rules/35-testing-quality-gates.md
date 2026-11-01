@@ -14,9 +14,18 @@ Frontend : `tests/unit/`, `tests/integration/`, `tests/e2e/` (Playwright).
 - Cible frontend : aucun seuil configuré dans vitest.config.ts (pas de bloc `coverage.threshold`)
 - Chemins critiques (auth, déploiement, RBAC) : viser 95%
 
+### État des zones de test (post-remédiation P0-P3)
+
+Les « zones zéro » historiques sont comblées :
+- WebSocket : module couvert à 94 %, ~394 tests (STORY-164/165)
+- RBAC : matrice transverse par router (STORY-122.7), exhaustivité vérifiée par garde-fous
+- Migrations Alembic : tests d'intégration round-trip upgrade/downgrade (STORY-120.3)
+- Enveloppes/pagination : tests de contrat par router (STORY-126/128)
+- Volumétrie au 2026-11-01 : ~3040 fonctions de test unitaires (204 fichiers) + ~237 d'intégration (21 fichiers) — recompter avant de citer un chiffre (D2)
+
 ---
 
-## Outillage (voir `.clinerules/05-tech-stack.md`)
+## Outillage (voir `.roo/rules/05-tech-stack.md`)
 
 | Niveau | Backend | Frontend |
 |--------|---------|----------|
@@ -40,7 +49,7 @@ Frontend : `tests/unit/`, `tests/integration/`, `tests/e2e/` (Playwright).
 
 - httpx `AsyncClient` avec `ASGITransport` pour les tests d'endpoint API
 
-Toutes les commandes de lancement sont dans le `Makefile` (voir `.clinerules/50-dev-workflow.md`).
+Toutes les commandes de lancement sont dans le `Makefile` (voir `.roo/rules/50-dev-workflow.md`).
 
 ---
 
