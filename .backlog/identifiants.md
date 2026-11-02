@@ -133,7 +133,7 @@ Ce registre est la **source de vérité unique** pour l'attribution des identifi
 
 ## Bugs
 
-Le dossier `.backlog/bugs/` est vide. Les identifiants ci-dessous sont cités dans `CHANGELOG.md` (section `[Unreleased]`) sans fichier de contrat : **fichier absent du dépôt — trace historique CHANGELOG uniquement**.
+Le dossier `.backlog/bugs/` a longtemps été vide : les identifiants BUG-001→009 sont cités dans `CHANGELOG.md` (section `[Unreleased]`) sans fichier de contrat (**fichier absent du dépôt — trace historique CHANGELOG uniquement**). BUG-010 est le premier bug doté d'un contrat complet sur disque.
 
 | Identifiant | Chemin | Date d'attribution | Statut actuel |
 |---|---|---|---|
@@ -146,5 +146,6 @@ Le dossier `.backlog/bugs/` est vide. Les identifiants ci-dessous sont cités da
 | BUG-007 | — (cité dans CHANGELOG.md) | 2026-11-01 | Fichier absent du dépôt — trace historique CHANGELOG uniquement — corrigé (Fixed) |
 | BUG-008 | — (cité dans CHANGELOG.md) | 2026-11-01 | Fichier absent du dépôt — trace historique CHANGELOG uniquement — corrigé (Fixed) |
 | BUG-009 | — (cité dans CHANGELOG.md) | 2026-11-01 | Fichier absent du dépôt — trace historique CHANGELOG uniquement — corrigé (Fixed) |
+| BUG-010 | .backlog/bugs/BUG-010-launch-backend-pydantic-core.md | 2026-11-02 | DONE — Correctif lancement backend : sanitation PYTHONPATH + module path uvicorn dans Makefile |
 
-**Prochain bug : BUG-010** (plus haut numéro cité = BUG-009). Les dates BUG-003/004 correspondent à leur première apparition dans l'historique Git du CHANGELOG ; BUG-005→009 sont apparus le 2026-11-01.
+**Prochain bug : BUG-011** (plus haut attribué = BUG-010). Les dates BUG-003/004 correspondent à leur première apparition dans l'historique Git du CHANGELOG ; BUG-005→009 sont apparus le 2026-11-01.

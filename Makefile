@@ -181,7 +181,7 @@ backend-coverage: ## ☂️ Generate and view test coverage report
 
 .PHONY: backend
 backend: ## 🎬 Start backend development server
-	$(POETRY) run uvicorn $(BACKEND_DIR).main:app --reload --reload-dir $(BACKEND_DIR)/app --host 0.0.0.0 --port $(shell grep -oP '(?<=API_PORT=)\d+' .env 2>/dev/null || echo 8000)
+	env -u PYTHONPATH $(POETRY) run uvicorn $(BACKEND_DIR).app.main:app --reload --reload-dir $(BACKEND_DIR)/app --host 0.0.0.0 --port $(shell grep -oP '(?<=API_PORT=)\d+' .env 2>/dev/null || echo 8000)
 
 # ============================================================================
 # FRONTEND COMMANDS
@@ -342,7 +342,7 @@ serve: ## 🎬 Serve client and server separately
 	$(POETRY) run $(PYTHON) -c "$$APP_PYSCRIPT"
 
 run: ## 🎬 Run server in production mode
-	$(POETRY) run uvicorn $(BACKEND_DIR).main:app --host 0.0.0.0 --port $(shell grep -oP '(?<=API_PORT=)\d+' .env 2>/dev/null || echo 8000)
+	env -u PYTHONPATH $(POETRY) run uvicorn $(BACKEND_DIR).app.main:app --host 0.0.0.0 --port $(shell grep -oP '(?<=API_PORT=)\d+' .env 2>/dev/null || echo 8000)
 
 .PHONY: dev
 dev: ## 🎬 Start both backend and frontend development servers

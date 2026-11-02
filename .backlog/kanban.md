@@ -50,3 +50,4 @@ _(vide)_
 - [x] EPIC-011 : P0 — Sécurité bloquante (remédiation backend)
 - [x] EPIC-012 : P1 — Socle structurant (remédiation backend) (40/44 stories DONE)
 - [x] EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend) (31/36 stories DONE)
+- [x] BUG-010 : Lancement backend : ModuleNotFoundError pydantic_core + module path uvicorn invalide
