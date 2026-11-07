@@ -1,29 +1,25 @@
 """Tests unitaires du service UserService.
 
 - count_superadmins (STORY-122.4) : protection « dernier superadmin » ;
-- hashage Argon2 / migration bcrypt (STORY-130.1) : écriture ``$argon2id$``,
-  double lecture bcrypt legacy + re-hash automatique, pas de re-hash
-  superflu sur hash Argon2, échec silencieux sur hash illisible.
+- hashage Argon2id (STORY-130.1, post BUG-012) : écriture ``$argon2id$``,
+  lecture Argon2id seule (double lecture bcrypt retirée — migration achevée),
+  pas de re-hash superflu sur hash à jour, échec silencieux sur hash illisible
+  (y compris résiduel bcrypt legacy : plus jamais vérifié).
 """
 
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
-from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.schemas.user import UserCreate
 from app.services.user_service import UserService
 
-# Contexte local dédié à la génération de hashes bcrypt legacy de fixture
-# (la production écrit exclusivement en Argon2id — STORY-130.1).
-_BCRYPT_FIXTURE_CTX = CryptContext(schemes=["bcrypt"])
-
-
-def _legacy_bcrypt_hash(password: str) -> str:
-    """Génère un hash bcrypt legacy ($2b$...) pour les fixtures de migration."""
-    return _BCRYPT_FIXTURE_CTX.hash(password)
+# Hash bcrypt legacy CONSTANT (généré historiquement via passlib/bcrypt,
+# préfixe $2b$) — fixture sans dépendance : la purge BUG-012 retire le
+# package ``bcrypt``, le hash n'est plus jamais vérifiable (schème inconnu).
+LEGACY_BCRYPT_HASH = "$2b$12$KIXQeJxYRqEOeBzKzGzLxOjQk8Y0eQqZSsr6NUeG7Wc7kQqCqfQqC"
 
 
 def _user_with_hash(hashed_password: str) -> User:
@@ -105,18 +101,7 @@ class TestArgon2Hashing:
 
 
 class TestVerifyAndUpdate:
-    """``verify_and_update`` : double lecture + re-hash (cœur AC 1)."""
-
-    def test_bcrypt_hash_is_verified_and_upgraded_to_argon2id(self):
-        """Hash bcrypt legacy → (True, nouveau hash $argon2id$) — cœur AC 1."""
-        legacy = _legacy_bcrypt_hash("Secret123!")
-        assert legacy.startswith("$2b$")
-
-        verified, new_hash = UserService.verify_and_update("Secret123!", legacy)
-
-        assert verified is True
-        assert new_hash is not None
-        assert new_hash.startswith("$argon2id$")
+    """``verify_and_update`` : lecture Argon2id seule (post BUG-012)."""
 
     def test_argon2_hash_is_verified_without_rehash(self):
         """Hash argon2 à jour → (True, None) : pas de re-hash superflu (arbitrage n°2)."""
@@ -128,13 +113,30 @@ class TestVerifyAndUpdate:
         assert new_hash is None
 
     def test_wrong_password_returns_false_none(self):
-        """Mot de passe faux → (False, None), même sur hash bcrypt legacy."""
-        legacy = _legacy_bcrypt_hash("Secret123!")
+        """Mot de passe faux → (False, None)."""
+        hashed = UserService.hash_password("Secret123!")
 
-        verified, new_hash = UserService.verify_and_update("wrong-password", legacy)
+        verified, new_hash = UserService.verify_and_update("wrong-password", hashed)
 
         assert verified is False
         assert new_hash is None
+
+    def test_legacy_bcrypt_hash_fails_silently_verify_and_update(self):
+        """Hash bcrypt legacy ($2b$) → (False, None) sans lever — le schème
+        n'est plus connu depuis la purge BUG-012 (migration achevée, 0 hash
+        bcrypt en base) ; échec silencieux = 401 générique anti-énumération."""
+        verified, new_hash = UserService.verify_and_update(
+            "Secret123!", LEGACY_BCRYPT_HASH
+        )
+
+        assert verified is False
+        assert new_hash is None
+
+    def test_legacy_bcrypt_hash_fails_silently_verify_password(self):
+        """Hash bcrypt legacy → False sans lever (jamais de 500 au login)."""
+        result = UserService.verify_password("Secret123!", LEGACY_BCRYPT_HASH)
+
+        assert result is False
 
     def test_unreadable_hash_fails_silently_verify_and_update(self):
         """Hash illisible ($scrypt$...) → (False, None) sans lever (arbitrage n°9)."""
@@ -157,18 +159,6 @@ class TestVerifyAndUpdate:
 class TestVerifyAndUpdateUser:
     """``verify_and_update_user`` : persistance du re-hash (session mockée)."""
 
-    async def test_bcrypt_hash_triggers_update_and_commit(self):
-        """Hash bcrypt → hashed_password mis à jour en Argon2id + commit appelé."""
-        db = AsyncMock()
-        user = _user_with_hash(_legacy_bcrypt_hash("Secret123!"))
-
-        is_valid = await UserService.verify_and_update_user(db, user, "Secret123!")
-
-        assert is_valid is True
-        assert user.hashed_password.startswith("$argon2id$")
-        db.commit.assert_awaited_once()
-        db.refresh.assert_awaited_once_with(user)
-
     async def test_argon2_hash_does_not_commit(self):
         """Hash argon2 à jour → valide mais AUCUN commit superflu (arbitrage n°2)."""
         db = AsyncMock()
@@ -184,10 +174,24 @@ class TestVerifyAndUpdateUser:
     async def test_wrong_password_does_not_commit(self):
         """Mot de passe faux → False, aucun commit ni modification du hash."""
         db = AsyncMock()
-        user = _user_with_hash(_legacy_bcrypt_hash("Secret123!"))
+        user = _user_with_hash(UserService.hash_password("Secret123!"))
         hash_before = user.hashed_password
 
         is_valid = await UserService.verify_and_update_user(db, user, "wrong-password")
+
+        assert is_valid is False
+        assert user.hashed_password == hash_before
+        db.commit.assert_not_awaited()
+
+    async def test_legacy_bcrypt_hash_rejected_without_commit(self):
+        """Hash bcrypt legacy → False (schème inconnu post BUG-012), aucun
+        commit ni re-hash : un éventuel résidu bcrypt ne peut plus se
+        connecter (migration achevée — le compte doit être réinitialisé)."""
+        db = AsyncMock()
+        user = _user_with_hash(LEGACY_BCRYPT_HASH)
+        hash_before = user.hashed_password
+
+        is_valid = await UserService.verify_and_update_user(db, user, "Secret123!")
 
         assert is_valid is False
         assert user.hashed_password == hash_before

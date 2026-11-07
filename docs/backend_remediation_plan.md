@@ -2,7 +2,7 @@
 
 > **Date :** 30 août 2026
 >
-> **Statut :** document de planification — aucun code n'a été modifié à ce stade.
+> **Statut :** **✅ Plan exécuté** (vagues P0→P3, EPIC-011→014, stories STORY-100 → STORY-254) — bilan et tableau de conformité final : [`backend_conformity_report.md`](backend_conformity_report.md) (audit de clôture du 2026-11-07). Historiquement : document de planification — aucun code n'avait été modifié à ce stade.
 >
 > **Avertissement :** ce plan transforme le diagnostic du rapport d'analyse d'écart (spécifications ↔ code) en plan d'action sur **l'existant** : corriger ce qui est faux, compléter ce qui est incomplet, élargir ce qui est trop restreint, purger ce qui est mort. Les grandes phases produit futures (pilotage VMs/Proxmox/K8s, marketplace complète, GitOps, IA…) sont explicitement **hors périmètre** (cf. §7). Plusieurs arbitrages sont **recommandés** dans ce document (notamment : abandon de Celery au profit d'asyncio, adoption d'Argon2 avec correction de la spec, incorporation des surfaces HORS SPEC) et nécessitent une validation utilisateur avant exécution (cf. §8.4).
 >

@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AgentCommitMessageProject"><![CDATA[{
+  "mode": "CUSTOM",
+  "instruction": "Agis en tant que développeur logiciel expert. Ta tâche est de rédiger un message de commit clair et concis en respectant strictement la spécification Conventional Commits.\n\nRègles à suivre :\n\nStructure : Le message doit suivre ce format :\n<type>(<scope optionnel>): <description courte>\n[Ligne vide]\n[Corps du message optionnel : explique le POURQUOI du changement]\n\nTypes autorisés :\n\nfeat : Ajout d'une nouvelle fonctionnalité.\n\nfix : Correction d'un bug.\n\ndocs : Modification de la documentation uniquement.\n\nstyle : Changements qui n'affectent pas le sens du code (espaces, formatage, points-virgules, etc.).\n\nrefactor : Modification du code qui ne corrige ni un bug ni n'ajoute une fonctionnalité.\n\nperf : Modification du code qui améliore les performances.\n\ntest : Ajout de tests manquants ou correction de tests existants.\n\nchore : Changements dans le processus de build ou les outils auxiliaires (ex: modifications des dépendances).\n\nDescription : >    - Rédige-la à l'impératif présent (ex: \"add\", \"change\", \"remove\").\n\nNe mets pas de majuscule à la première lettre.\n\nNe mets pas de point . à la fin.\n\nChaque ligne ne doit **absolument pas** dépasser 70 caractères.\n\nLangue : Rédige le message de commit en Anglais (convention standard, modifie si tu préfères en français).\n\nFormat de sortie : Renvoie UNIQUEMENT le message de commit final. Ne fais aucune introduction, aucune conclusion et n'ajoute pas de formatage Markdown superflu (pas de blocs de code ```)."
+}]]></component>
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
   </component>

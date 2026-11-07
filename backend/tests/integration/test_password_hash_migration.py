@@ -1,29 +1,26 @@
-"""Tests d'intégration de la migration bcrypt → Argon2id (STORY-130.1).
+"""Tests d'intégration du hachage de mots de passe — contrat post BUG-012.
 
-Valide le parcours complet en conditions réelles (base de test, login réel
-par form-data — patterns ``test_auth_password_flow.py``) :
+La double lecture bcrypt (transition STORY-130.1) a été retirée : migration
+achevée (0 hash bcrypt en base), dépendance ``bcrypt`` purgée. Valide en
+conditions réelles (base de test, login réel par form-data — patterns
+``test_auth_password_flow.py``) :
 
-- **flux complet** : seed utilisateur bcrypt (écriture directe en base) →
-  ``POST /auth/login`` 200 → hash DB devenu ``$argon2id$`` → ``PUT
-  /auth/password`` avec l'ancien mot de passe d'origine (200 — preuve que
-  la vérification double lecture fonctionne aussi sur ce chemin) → login
-  avec le nouveau mot de passe 200 ;
-- **non-régression argon2** : utilisateur créé via ``POST /auth/register``
-  → hash ``$argon2id$`` dès la création (AC 1) → login 200 → hash
-  **inchangé** en base (pas de re-hash superflu — arbitrage n°2).
+- **flux complet Argon2id** : register → login 200 → ``PUT /auth/password``
+  (ancien mot de passe vérifié en Argon2id) → login nouveau mot de passe 200 ;
+- **résidu bcrypt legacy** : un éventuel hash ``$2b$...`` resté en base →
+  login **401 générique** (schème inconnu → échec silencieux) et hash
+  **inchangé** (aucun re-hash — le compte doit être réinitialisé).
 
 La non-régression des flux auth existants (login username/email, register,
 refresh, disable_auth) est couverte par les suites existantes
 (``test_auth_password_flow.py``, ``test_auth_api.py``,
-``test_auth_refresh_security.py``) rejouées dans la validation de la story
-(AC 3).
+``test_auth_refresh_security.py``).
 
 Sécurité (rules 40) : fixture ``_jwt_mode`` (pattern 123.4).
 """
 
 import pytest
 from httpx import AsyncClient
-from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from tests.conftest import unwrap
@@ -39,9 +36,10 @@ LOGIN_URL = "/api/v1/auth/login"
 REGISTER_URL = "/api/v1/auth/register"
 PASSWORD_URL = "/api/v1/auth/password"
 
-# Contexte local dédié à la génération du hash bcrypt legacy de fixture
-# (la production écrit exclusivement en Argon2id — STORY-130.1).
-_BCRYPT_FIXTURE_CTX = CryptContext(schemes=["bcrypt"])
+# Hash bcrypt legacy CONSTANT (généré historiquement via passlib/bcrypt,
+# préfixe $2b$) — fixture sans dépendance : la purge BUG-012 retire le
+# package ``bcrypt``, le hash n'est plus jamais vérifiable (schème inconnu).
+LEGACY_BCRYPT_HASH = "$2b$12$KIXQeJxYRqEOeBzKzGzLxOjQk8Y0eQqZSsr6NUeG7Wc7kQqCqfQqC"
 
 
 @pytest.fixture(autouse=True)
@@ -64,13 +62,13 @@ async def _login(
     return 200, unwrap(response)
 
 
-async def _seed_bcrypt_user(db_session: AsyncSession) -> User:
-    """Crée un utilisateur au hash bcrypt legacy ($2b$...) — compte pré-migration."""
+async def _seed_legacy_bcrypt_user(db_session: AsyncSession) -> User:
+    """Crée un utilisateur au hash bcrypt legacy ($2b$...) — résidu pré-migration."""
     user = User(
         email="it-legacy-bcrypt@example.com",
         username="it-legacy-bcrypt",
         full_name="IT Legacy Bcrypt",
-        hashed_password=_BCRYPT_FIXTURE_CTX.hash(OLD_PASSWORD),
+        hashed_password=LEGACY_BCRYPT_HASH,
         is_active=True,
     )
     db_session.add(user)
@@ -80,7 +78,7 @@ async def _seed_bcrypt_user(db_session: AsyncSession) -> User:
 
 
 async def _reload_user(db_session: AsyncSession, user_id: str) -> User:
-    """Recharge l'utilisateur depuis la base (après login/upgrade)."""
+    """Recharge l'utilisateur depuis la base."""
     result = await db_session.execute(select(User).where(User.id == user_id))
     return result.scalar_one()
 
@@ -107,26 +105,36 @@ async def _ensure_default_org(db_session: AsyncSession) -> None:
         await db_session.commit()
 
 
-class TestPasswordHashMigrationFullFlow:
-    """Flux complet de migration : bcrypt → login (re-hash) → PUT password → login."""
+class TestArgon2FullFlow:
+    """Flux complet Argon2id : register → login → PUT password → login."""
 
-    async def test_bcrypt_login_rehash_then_password_change_and_new_login(
+    async def test_register_login_password_change_and_new_login(
         self, client: AsyncClient, db_session: AsyncSession
     ):
-        """AC 1 : bcrypt → login 200 (re-hash $argon2id$) → PUT /auth/password
-        avec l'ancien mot de passe d'origine → login nouveau mot de passe 200."""
-        user = await _seed_bcrypt_user(db_session)
+        """Register → login 200 → PUT /auth/password (ancien mdp vérifié
+        Argon2id) → login nouveau mot de passe 200, ancien 401."""
+        await _ensure_default_org(db_session)
+        register = await client.post(
+            REGISTER_URL,
+            json={
+                "email": "it-argon2-flow@example.com",
+                "username": "it-argon2-flow",
+                "full_name": "IT Argon2 Flow",
+                "password": OLD_PASSWORD,
+            },
+        )
+        assert register.status_code == 201, register.text
+        created = unwrap(register)
 
-        # 1. Login avec le hash bcrypt legacy → 200 + re-hash transparent
+        # 1. Login avec le mot de passe d'origine → 200
+        user_id = created["user"]["id"]
+        user = await _reload_user(db_session, user_id)
+        assert user.hashed_password.startswith("$argon2id$")
         status, login_data = await _login(client, user.username, OLD_PASSWORD)
-        assert (
-            status == 200
-        ), "le compte bcrypt doit pouvoir se connecter (aucun reset requis)"
-        reloaded = await _reload_user(db_session, user.id)
-        assert reloaded.hashed_password.startswith("$argon2id$")
+        assert status == 200
 
-        # 2. Changement de mot de passe avec l'ANCIEN mot de passe d'origine —
-        #    preuve que la double lecture bcrypt fonctionne aussi sur PUT /auth/password
+        # 2. Changement de mot de passe — l'ancien mot de passe est vérifié
+        #    en Argon2id (lecture unique post BUG-012)
         change = await client.put(
             PASSWORD_URL,
             json={
@@ -147,33 +155,23 @@ class TestPasswordHashMigrationFullFlow:
         assert old_status == 401
 
 
-class TestArgon2NoRegression:
-    """Non-régression : les comptes créés aujourd'hui sont Argon2id et stables."""
+class TestLegacyBcryptResidue:
+    """Résidu bcrypt legacy : rejet générique, aucun re-hash (post BUG-012)."""
 
-    async def test_register_hashes_argon2id_and_login_keeps_hash_stable(
+    async def test_legacy_bcrypt_login_rejected_and_hash_unchanged(
         self, client: AsyncClient, db_session: AsyncSession
     ):
-        """AC 1 : register → $argon2id$ dès la création → login 200 → hash inchangé."""
-        await _ensure_default_org(db_session)
-        register = await client.post(
-            REGISTER_URL,
-            json={
-                "email": "it-argon2-register@example.com",
-                "username": "it-argon2-register",
-                "full_name": "IT Argon2 Register",
-                "password": OLD_PASSWORD,
-            },
-        )
-        assert register.status_code == 201, register.text
-        created = unwrap(register)
+        """Hash $2b$ resté en base → 401 générique (aucune fuite de schème,
+        aucune info sur le hash) et hash inchangé — plus aucun chemin de
+        re-hash (double lecture retirée, migration achevée)."""
+        user = await _seed_legacy_bcrypt_user(db_session)
 
-        # Hash Argon2id dès la création
-        user = await _reload_user(db_session, created["user"]["id"])
-        assert user.hashed_password.startswith("$argon2id$")
-        hash_after_creation = user.hashed_password
+        status, payload = await _login(client, user.username, OLD_PASSWORD)
 
-        # Login → 200, sans re-hash superflu (arbitrage n°2)
-        status, _ = await _login(client, user.username, OLD_PASSWORD)
-        assert status == 200
+        assert status == 401
+        assert payload is None
+        body_text = str(payload).lower()
+        assert "bcrypt" not in body_text
+        assert "argon2" not in body_text
         reloaded = await _reload_user(db_session, user.id)
-        assert reloaded.hashed_password == hash_after_creation
+        assert reloaded.hashed_password == LEGACY_BCRYPT_HASH

@@ -1,6 +1,6 @@
 # STORY-254 : Revue finale de conformité — audit specs ↔ code de bout en bout et tableau de conformité (clôture du plan)
 
-**Statut :** TODO
+**Statut :** DONE
 **Epic Parent :** EPIC-014 — P3 : Finitions & purge (remédiation backend)
 **Item plan :** Clôture du plan de remédiation (au-delà de P3-5 : écran de contrôle final annoncé en notes de conception de l'epic) — ampleur **M**
 
@@ -34,11 +34,19 @@ Contraintes :
 
 ## Critères d'acceptation (AC)
 
-- [ ] AC 1 : Une passe d'analyse d'écart specs ↔ code a été ré-exécutée sur **tous les domaines du rapport initial** (même méthode, mêmes sections de référence), en s'appuyant sur le code réellement fusionné — pas sur les intentions des stories.
+- [x] AC 1 : Une passe d'analyse d'écart specs ↔ code a été ré-exécutée sur **tous les domaines du rapport initial** (même méthode, mêmes sections de référence), en s'appuyant sur le code réellement fusionné — pas sur les intentions des stories.
 - [ ] AC 2 : Le **tableau de conformité final** est produit (domaine → CONFORME / REPORTÉ / ÉCART RÉSIDUEL, avec preuve/référence pour chaque ligne) et publie dans la documentation projet.
-- [ ] AC 3 : Chaque item P0 (5), P1 (11), P2 (15) et P3 (5) du plan est couvert : story DONE vérifiée, ou divergence/report tracé ; les items du plan §6 (hors périmètre) sont confirmés reportés dans [`Roadmap.md`](../../docs/Roadmap.md).
-- [ ] AC 4 : **Zéro écart bloquant non tracé** : tout écart résiduel découvert pendant l'audit fait l'objet d'une story, d'un bug ou d'une décision WONT_FIX documentée (l'arbitrage d'acceptation appartient à l'utilisateur).
+- [x] AC 3 : Chaque item P0 (5), P1 (11), P2 (15) et P3 (5) du plan est couvert : story DONE vérifiée, ou divergence/report tracé ; les items du plan §6 (hors périmètre) sont confirmés reportés dans [`Roadmap.md`](../../docs/Roadmap.md). *(35 livrés + P2-15 arbitré REPORTÉ avec trace — STORY-254.2 ; 17/17 reportés confirmés)*
+- [x] AC 4 : **Zéro écart bloquant non tracé** : tout écart résiduel découvert pendant l'audit fait l'objet d'une story, d'un bug ou d'une décision WONT_FIX documentée (l'arbitrage d'acceptation appartient à l'utilisateur). *(10 écarts → 4 bugs BUG-011→014, 4 WONT_FIX, 2 REPORTÉS — arbitrage utilisateur 2026-11-07, STORY-254.3)*
 - [ ] AC 5 : Le rapport final est daté, référencé depuis le plan de remédiation (statut « exécuté ») et le backlog (kanban) ; la CI reste verte (aucune modification de code).
+
+## Sous-stories
+- [x] STORY-254.1 : Audit par domaine specs ↔ code (re-passe du rapport initial) — Couvre AC 1
+- [x] STORY-254.2 : Croisement plan ↔ backlog (items P0-P3 et reportés §6 ↔ Roadmap) — Couvre AC 3
+- [x] STORY-254.3 : Écrans de contrôle des vagues + arbitrage des écarts résiduels — Couvre AC 4
+- [x] STORY-254.4 : Rapport final de conformité + publication (clôture du plan) — Couvre AC 2, AC 5
+
+> Découpe proactive effectuée le 2026-11-07 après analyse (`analyse-story`) : complexité détectée (>5 tâches, >6 fichiers — audit multi-domaines + croisement + arbitrage + rapport). Traitement séquentiel 254.1 → 254.2 → 254.3 → 254.4.
 
 ## Références spécification
 
@@ -55,12 +63,37 @@ Contraintes :
 
 ## État d'avancement technique
 
-*(à remplir par analyse-story)*
+> ⚠️ L'avancement technique est désormais suivi dans les sous-stories individuelles.
+
+**Progression :** 4/4 sous-stories terminées
+- [x] STORY-254.1 : Audit par domaine specs ↔ code
+- [x] STORY-254.2 : Croisement plan ↔ backlog
+- [x] STORY-254.3 : Écrans de contrôle + arbitrage des écarts résiduels
+- [x] STORY-254.4 : Rapport final de conformité + publication
+
+## Notes d'implémentation (clôture — 2026-11-07)
+
+### Sous-stories et livrables
+- **254.1** — journal d'audit 15 sections (toutes CONFORMES ou REPORTÉES, preuves fichier:ligne) + confirmation des 7 écarts §14.2 (découverte : écart « 14 échecs stacks » résorbé par BUG-010) ;
+- **254.2** — couverture 36 items plan (35 livrés, **P2-15 = écart n°8** : notifications core jamais matérialisées, arbitrage réclamé jamais tranché) + 17/17 reportés §6 confirmés Roadmap + écarts de forme F1-F4 ;
+- **254.3** — écrans de contrôle verts (Celery, code mort, couverture ; RBAC = 1 échec attendu tracé) + arbitrage utilisateur : **BUG-011→014 créés** (registre à jour, prochain BUG-015), n°6/F1/F2 WONT_FIX, n°7 REPORTÉ Phase 5, **n°8 P2-15 REPORTÉ initiative dédiée**, F3 rétro-inscription STORY-100→104 au registre ;
+- **254.4** — rapport final [`docs/backend_conformity_report.md`](../../docs/backend_conformity_report.md) publié + plan marqué « ✅ exécuté » + clôture backlog.
+
+### Décisions techniques
+- Découpe proactive 4 sous-stories (complexité détectée par analyse-story) ;
+- Posture revue strictement respectée : aucun code corrigé pendant l'audit — tout écart tracé (4 bugs ouverts) ;
+- Certification : 14 CONFORME + 1 à préserver + 1 REPORTÉ (IA) ; 36/36 items couverts ; 17/17 reportés confirmés ; 10/10 écarts résiduels tracés — **zéro écart bloquant non tracé**.
+
+### Fichiers modifiés (chaîne 254 complète)
+- Créés : 4 sous-stories, 4 bugs, [`backend_conformity_report.md`](../../docs/backend_conformity_report.md) ;
+- Modifiés : story parente, registre (4 bugs + 5 rétro-inscriptions + statuts), epic 014, kanban (régénéré), en-tête plan de remédiation.
 
 ## Tâches d'implémentation détaillées
 
-*(à remplir par analyse-story)*
+> ⚠️ Cette story a été découpée en sous-stories avant implémentation (complexité détectée par analyse-story).
+> Toutes les tâches ont été redistribuées dans les sous-stories listées ci-dessus.
+> Consulter chaque sous-story pour les tâches détaillées.
 
 ## Tests à écrire
 
-*(à remplir par analyse-story)*
+> ⚠️ Les tests sont désormais définis dans les sous-stories individuelles.

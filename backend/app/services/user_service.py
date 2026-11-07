@@ -16,15 +16,13 @@ from ..models.user_organization import UserOrganization
 from ..schemas.organization_member import OrganizationMemberAddRequest
 from ..schemas.user import UserCreate, UserUpdate
 
-# Configuration password hashing : Argon2id en écriture, double lecture bcrypt legacy.
-# - "argon2" : schème par défaut en ÉCRITURE (premier schème non déprécié) — tous les
-#   nouveaux hashes sont Argon2id (paramètres par défaut passlib/argon2-cffi, sans
-#   surcharge — arbitrage n°2 de STORY-130.1).
-# - "bcrypt" : LECTURE SEULE dépréciée, pour la transition — permet de vérifier les
-#   hashes legacy ($2b$...) et de les re-hacher en Argon2id au login via
-#   verify_and_update (upgrade paresseux, aucun reset requis — arbitrage F2).
-#   Retraite de la dépendance `bcrypt` post-migration : cf. STORY-250.
-pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
+# Configuration password hashing : Argon2id (unique schème).
+# - Écriture ET lecture Argon2id (paramètres par défaut passlib/argon2-cffi,
+#   sans surcharge — arbitrage n°2 de STORY-130.1).
+# - BUG-012 : la double lecture bcrypt legacy ($2b$..., transition STORY-130.1)
+#   a été retirée — migration achevée (0 hash bcrypt en base), dépendance
+#   `bcrypt` et helper `helper/security.py` purgés.
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 class UserService:
@@ -40,34 +38,34 @@ class UserService:
         Hash un mot de passe avec Argon2.
 
         Argon2 est un algorithme moderne de hashing de mots de passe,
-        gagnant du Password Hashing Competition (PHC). Il offre une meilleure
-        sécurité que bcrypt et n'a pas de limite de longueur pour les mots de passe.
+        gagnant du Password Hashing Competition (PHC). Il n'a pas de
+        limite de longueur pour les mots de passe.
 
         Args:
             password: Mot de passe en clair
 
         Returns:
-            Hash Argon2 du mot de passe
+            Hash Argon2id du mot de passe
         """
         return pwd_context.hash(password)
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """
-        Vérifie un mot de passe (double lecture Argon2id / bcrypt legacy).
+        Vérifie un mot de passe (Argon2id — lecture unique post BUG-012).
 
-        Le contexte accepte les hashes Argon2id (écriture courante) et les hashes
-        bcrypt legacy ($2b$..., lecture seule dépréciée — transition STORY-130.1).
-        Contrairement à bcrypt, Argon2 n'a pas de limite de longueur pour les mots
-        de passe, donc aucune troncature n'est nécessaire.
+        La double lecture bcrypt legacy ($2b$..., transition STORY-130.1) a été
+        retirée : migration achevée, le contexte ne connaît plus qu'Argon2id
+        (retrait de la dépendance ``bcrypt`` — BUG-012).
 
-        Les hashes illisibles (schème inconnu, hash corrompu) échouent
-        silencieusement : retourne False sans lever (arbitrage n°9 — jamais de 500
-        au login, même 401 générique anti-énumération).
+        Les hashes illisibles (schème inconnu, hash corrompu — ex. résiduel
+        bcrypt legacy) échouent silencieusement : retourne False sans lever
+        (arbitrage n°9 — jamais de 500 au login, même 401 générique
+        anti-énumération).
 
         Args:
             plain_password: Mot de passe en clair à vérifier
-            hashed_password: Hash stocké (Argon2id ou bcrypt legacy)
+            hashed_password: Hash stocké (Argon2id)
 
         Returns:
             True si le mot de passe correspond, False sinon
@@ -84,26 +82,28 @@ class UserService:
         """
         Vérifie un mot de passe et détecte si le hash doit être renouvelé.
 
-        Double lecture Argon2id / bcrypt legacy : cette méthode utilise
-        `verify_and_update` de passlib pour vérifier le hash stocké (quel que soit
-        son schème supporté) et retourner automatiquement un nouveau hash Argon2id
-        si le hash actuel est déprécié (bcrypt legacy en transition, ou paramètres
-        Argon2id obsolètes par rapport aux défauts passlib/argon2-cffi — aucune
-        surcharge de paramètres n'étant définie, arbitrage n°2 de STORY-130.1).
+        Utilise ``verify_and_update`` de passlib : vérifie le hash Argon2id
+        stocké et retourne automatiquement un nouveau hash si les paramètres
+        Argon2id sont obsolètes par rapport aux défauts passlib/argon2-cffi
+        (aucune surcharge de paramètres n'étant définie, arbitrage n°2 de
+        STORY-130.1). La double lecture bcrypt legacy (transition STORY-130.1)
+        a été retirée — migration achevée, dépendance ``bcrypt`` purgée
+        (BUG-012).
 
-        Les hashes illisibles (schème inconnu, hash corrompu) échouent
-        silencieusement : retourne (False, None) sans lever (arbitrage n°9 — jamais
-        de 500 au login, même 401 générique anti-énumération).
+        Les hashes illisibles (schème inconnu, hash corrompu — ex. résiduel
+        bcrypt legacy) échouent silencieusement : retourne (False, None) sans
+        lever (arbitrage n°9 — jamais de 500 au login, même 401 générique
+        anti-énumération).
 
         Args:
             plain_password: Mot de passe en clair à vérifier
-            hashed_password: Hash stocké (Argon2id ou bcrypt legacy)
+            hashed_password: Hash stocké (Argon2id)
 
         Returns:
             Tuple[bool, Optional[str]]:
                 - bool: True si le mot de passe correspond, False sinon
-                - Optional[str]: Nouveau hash Argon2id si une mise à jour est
-                  nécessaire (ex. hash bcrypt legacy), None sinon
+                - Optional[str]: Nouveau hash Argon2id si les paramètres
+                  doivent être renouvelés, None sinon
 
         Example:
             >>> is_valid, new_hash = UserService.verify_and_update("password123", old_hash)

@@ -256,7 +256,7 @@ class Token(BaseModel):
             "example": {
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
-                "expires_in": 3600,
+                "expires_in": 900,
             }
         }
     )
@@ -274,7 +274,7 @@ class Token(BaseModel):
     expires_in: int = Field(
         ...,
         description="Durée de validité en secondes",
-        json_schema_extra={"example": 3600},
+        json_schema_extra={"example": 900},
     )
 
 
@@ -316,7 +316,7 @@ class LoginResponse(BaseModel):
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh...",
                 "token_type": "bearer",
-                "expires_in": 3600,
+                "expires_in": 900,
                 "user": {
                     "id": "user-990e8400",
                     "email": "john.doe@company.com",
@@ -350,7 +350,7 @@ class LoginResponse(BaseModel):
     expires_in: int = Field(
         ...,
         description="Durée de validité en secondes",
-        json_schema_extra={"example": 3600},
+        json_schema_extra={"example": 900},
     )
     user: UserResponse = Field(..., description="Données de l'utilisateur")
 
@@ -368,7 +368,7 @@ class RefreshResponse(BaseModel):
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.new...",
                 "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.newrefresh...",
                 "token_type": "bearer",
-                "expires_in": 3600,
+                "expires_in": 900,
             }
         }
     )
@@ -393,7 +393,7 @@ class RefreshResponse(BaseModel):
     expires_in: int = Field(
         ...,
         description="Durée de validité en secondes",
-        json_schema_extra={"example": 3600},
+        json_schema_extra={"example": 900},
     )
 
 

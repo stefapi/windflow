@@ -217,21 +217,19 @@ services:
       DATABASE_POOL_SIZE: 20
       DATABASE_MAX_OVERFLOW: 40
 
-      # Redis
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      REDIS_MAX_CONNECTIONS: 100
+      # Cache unifié + bus d'événements (settings : cache_url — STORY-168/162)
+      CACHE_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
 
       # Vault
       VAULT_URL: http://vault:8200
       VAULT_TOKEN: ${VAULT_TOKEN}
 
-      # Security
-      SECRET_KEY: ${SECRET_KEY}
-      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      # Security (settings Pydantic réels — BUG-014)
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 15
       REFRESH_TOKEN_EXPIRE_DAYS: 7
 
       # Application
-      APP_ENV: production
       ENVIRONMENT: production
       LOG_LEVEL: INFO
       LOG_FORMAT: json
@@ -253,13 +251,10 @@ services:
       # Monitoring
       PROMETHEUS_ENABLED: "true"
 
-      # LLM Configuration
-      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      LLM_MODEL: ${LLM_MODEL:-codellama:13b}
-      LLM_BASE_URL: ${LLM_BASE_URL}
+      # LLM (settings : openai_api_key / anthropic_api_key / ollama_base_url)
+      # OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
 
-      # Workers
-      API_WORKERS: 4
     volumes:
       - app_logs:/app/logs
       - app_uploads:/app/uploads

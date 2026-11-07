@@ -34,6 +34,13 @@ PUBLIC_PATHS: frozenset[str] = frozenset(
         # traefik/install ; payload anti-fingerprinting, aucun secret)
         "/api/v1/system/health",
         "/api/v1/system/ready",
+        # BUG-011 / STORY-172 : exposition Prometheus sans auth — design
+        # documenté rules 45 (« sans auth (scrape interne Docker), jamais
+        # enveloppé ») : scrapée par Prometheus sur le réseau interne Docker
+        # uniquement, aucun router Traefik ne l'expose vers Internet (cf.
+        # app/api/v1/metrics.py docstring — exemptions spec 09, pattern
+        # system). Arbitrage BUG-011 : exemption contractuelle explicite.
+        "/api/v1/metrics",
     }
 )
 

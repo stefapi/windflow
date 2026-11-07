@@ -94,8 +94,8 @@ Authenticate a user and generate JWT tokens.
 - **Refresh Token**: **Opaque** server-side token (default: 7 days, `REFRESH_TOKEN_EXPIRE_DAYS`) — only its hash is stored in `refresh_tokens` (revocable, STORY-123)
 
 ## Security Features
-- Password hashing with Argon2id
-- Automatic upgrade of legacy bcrypt hashes at login (transparent re-hash to Argon2id)
+- Password hashing with Argon2id (sole scheme — legacy bcrypt read path
+  removed post-migration, BUG-012)
 - Account status verification
 - Rate limiting to prevent brute force attacks
 - Progressive account lockout after repeated failures (5 attempts / 10 min, 5 min lockout)
@@ -147,7 +147,7 @@ Authenticate a user and generate JWT tokens.
                             "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                             "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                             "token_type": "bearer",
-                            "expires_in": 1800,
+                            "expires_in": 900,
                             "user": {
                                 "id": "550e8400-e29b-41d4-a716-446655440000",
                                 "username": "admin",
@@ -447,7 +447,7 @@ Refresh an access token using a valid **opaque** refresh token.
                         "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.new_access_token...",
                         "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.new_refresh_token...",
                         "token_type": "bearer",
-                        "expires_in": 1800,
+                        "expires_in": 900,
                     }
                 }
             },
@@ -728,7 +728,7 @@ After successful registration, the user is **automatically logged in**:
                         "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                         "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                         "token_type": "bearer",
-                        "expires_in": 1800,
+                        "expires_in": 900,
                         "user": {
                             "id": "880e8400-e29b-41d4-a716-446655440003",
                             "username": "john_doe",
@@ -1031,8 +1031,8 @@ it is impossible to target another account.
 
 ## Security Features
 - Current password required (defense against session hijacking)
-- Argon2id hashing for the new password (current password accepted from either
-  Argon2id or legacy bcrypt storage — double read at login, cf. STORY-130.1)
+- Argon2id hashing for the new password (current password verified against
+  Argon2id storage — legacy bcrypt read path removed post-migration, BUG-012)
 - All refresh tokens revoked server-side (single-use opaque tokens)
 - Audit trail `user.password_changed` (no password material logged)
 - Rate limited (5 changes per minute)
@@ -1151,7 +1151,7 @@ async def change_password(
         raise InvalidInputError("Current password is incorrect")
 
     # 2. Écrire le nouveau hash — Argon2 via UserService.hash_password
-    #    (arbitrage n°1 : jamais helper/security.py bcrypt legacy).
+    #    (l'ancien helper bcrypt legacy helper/security.py a été purgé — BUG-012).
     current_user.hashed_password = UserService.hash_password(password_data.new_password)
     await session.commit()
 
