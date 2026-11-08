@@ -57,7 +57,7 @@ By participating in this project, you agree to abide by our [Code of Conduct](CO
 * **Node.js** 20+ with pnpm 9+
 * **Docker** & Docker Compose
 * **Git** with SSH configuration
-* **Poetry** for Python dependency management
+* **UV** for Python dependency & environment management (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 
 ### Quick Setup
 
@@ -84,7 +84,7 @@ make dev
 
 #### PyCharm (Backend)
 
-* **Interpreter:** Poetry environment
+* **Interpreter:** UV project environment (`.venv` — `uv sync`)
 * **Required plugins:** Python Type Checker (mypy), Pre-commit Hook Plugin
 * **Configuration:** Black formatter, pytest runner
 

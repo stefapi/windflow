@@ -31,7 +31,7 @@ import pytest
 # l'ajout officiel de la dépendance est à traiter avec STORY-172.
 pytest.importorskip(
     "prometheus_client",
-    reason="prometheus_client absent des dépendances Poetry (voir STORY-172)",
+    reason="prometheus_client absent des dépendances (voir STORY-172)",
 )
 
 from unittest.mock import patch  # noqa: E402

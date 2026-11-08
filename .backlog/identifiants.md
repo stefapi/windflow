@@ -138,7 +138,10 @@ Ce registre est la **source de vérité unique** pour l'attribution des identifi
 
 **Écarts de séquence constatés lors de la rétro-inscription** : aucune trace d'attribution pour les plages STORY-132→159 et STORY-175→249 (aucun fichier, aucune mention Git/CHANGELOG). Ces plages sont traitées comme **jamais attribuées** ; par prudence, la numérotation continue néanmoins au plus haut attribué + 1.
 
-**Prochaine story : STORY-255** (plus haut attribué = STORY-254).
+**Prochaine story : STORY-256** (plus haut attribué = STORY-255).
+
+| STORY-255 | .backlog/stories/STORY-255-migration-poetry-vers-uv.md | 2026-11-07 | DONE — Migration Poetry → UV (pyproject PEP 621, uv.lock, Makefile, Dockerfile, CI, scripts, docs, garde-fous, rules) |
+| EPIC-016 | .backlog/epics/EPIC-016-migration-uv-outillage.md | 2026-11-07 | DONE — épic outillage migration UV (STORY-255 DONE) |
 
 ## Bugs
 

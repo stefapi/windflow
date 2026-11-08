@@ -5,6 +5,8 @@ Endpoints pour l'administration et la gestion des stacks WindFlow.
 Remplace les scripts seed_stacks.py et check_stacks.py.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 

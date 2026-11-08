@@ -68,7 +68,7 @@ async def _seed_target_with_fp(
     *,
     name: str = "fp-target",
     accepted: bool = False,
-) -> tuple[Target, HostSSHFingerprint]:
+) -> tuple[Host, HostSSHFingerprint]:
     """Cible + empreinte (PENDING par défaut — TOFU)."""
     target = Host(
         name=name,

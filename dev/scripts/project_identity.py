@@ -13,13 +13,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
+import os
 import re
+import sys
 from datetime import date
 
 import jinja2
 import toml
-import os
-import sys
 
 macros = {
     "name": "Myapp",
@@ -65,49 +65,63 @@ if "custom" in readconfig:
             macros["package"] = readconfig["custom"]["params"]["package"]
         if "srcdir" in readconfig["custom"]["params"]:
             macros["srcdir"] = readconfig["custom"]["params"]["srcdir"]
-if "tool" in readconfig:
-    if "poetry" in readconfig["tool"]:
-        if "name" in readconfig["tool"]["poetry"]:
-            macros["name"] = readconfig["tool"]["poetry"]["name"]
-            macros["doc_title"] = macros["name"] + " Documentation"
-        if "version" in readconfig["tool"]["poetry"]:
-            macros["version"] = readconfig["tool"]["poetry"]["version"]
-            s = re.search(r"^([0-9]+)\.([0-9]+)", macros["version"])
-            if s:
-                macros["short_version"] = str(s.group(1).strip()) + "." + str(s.group(2).strip())
-        if "description" in readconfig["tool"]["poetry"]:
-            macros["short_desc"] = readconfig["tool"]["poetry"]["description"]
-        if "documentation" in readconfig["tool"]["poetry"]:
-            macros["documentation"] = readconfig["tool"]["poetry"]["documentation"]
-        if "homepage" in readconfig["tool"]["poetry"]:
-            macros["website"] = readconfig["tool"]["poetry"]["homepage"]
-        if "repository" in readconfig["tool"]["poetry"]:
-            macros["repository"] = readconfig["tool"]["poetry"]["repository"]
-            macros["bug_report"] = macros["repository"] + "/issues"
-        if "authors" in readconfig["tool"]["poetry"]:
-            author_mail = readconfig["tool"]["poetry"]["authors"][0]
-            s = re.search(r"^([^\<]*)\<([^\>]*)\>$", author_mail)
-            if s:
-                macros["author"] = s.group(1).strip()
-                macros["mail"] = s.group(2).strip()
-                macros["obfuscated_mail"] = macros["mail"].replace(".", " dot ").replace("@", " at ")
-                macros["copyright"] = "Copyright (c) " + str(date.today().year) + " " + macros["author"]
-        if "license" in readconfig["tool"]["poetry"]:
-            macros["license"] = readconfig["tool"]["poetry"]["license"]
+if "project" in readconfig:  # PEP 621
+    project = readconfig["project"]
+    if "name" in project:
+        macros["name"] = project["name"]
+        macros["doc_title"] = macros["name"] + " Documentation"
+    if "version" in project:
+        macros["version"] = project["version"]
+        s = re.search(r"^([0-9]+)\.([0-9]+)", macros["version"])
+        if s:
+            macros["short_version"] = (
+                str(s.group(1).strip()) + "." + str(s.group(2).strip())
+            )
+    if "description" in project:
+        macros["short_desc"] = project["description"]
+    urls = project.get("urls", {}) or {}
+    if "Documentation" in urls:
+        macros["documentation"] = urls["Documentation"]
+    if "Homepage" in urls:
+        macros["website"] = urls["Homepage"]
+    if "Repository" in urls:
+        macros["repository"] = urls["Repository"]
+        macros["bug_report"] = macros["repository"] + "/issues"
+    if "authors" in project and project["authors"]:
+        author = project["authors"][0]
+        author_name = (
+            author.get("name", "") if isinstance(author, dict) else str(author)
+        )
+        author_email = author.get("email", "") if isinstance(author, dict) else ""
+        macros["author"] = author_name.strip()
+        if author_email:
+            macros["mail"] = author_email.strip()
+            macros["obfuscated_mail"] = (
+                macros["mail"].replace(".", " dot ").replace("@", " at ")
+            )
+        macros["copyright"] = (
+            "Copyright (c) " + str(date.today().year) + " " + macros["author"]
+        )
+    if "license" in project:
+        license_field = project["license"]
+        if isinstance(license_field, dict):
+            macros["license"] = license_field.get("text", "")
+        else:
+            macros["license"] = str(license_field)
 
 for src, dst_list in files.items():
     new_list = []
     for dst in dst_list:
-        match = re.search(r'\{\{(\w+)\}\}', dst)
+        match = re.search(r"\{\{(\w+)\}\}", dst)
         if match is not None:
-            val= macros.get(match.group(1))
-            dst = re.sub(r'\{\{(\w+)\}\}', val, dst)
+            val = macros.get(match.group(1))
+            dst = re.sub(r"\{\{(\w+)\}\}", val, dst)
         new_list.append(dst)
     dst_list = new_list
-    match = re.search(r'\{\{(\w+)\}\}', src)
+    match = re.search(r"\{\{(\w+)\}\}", src)
     if match is not None:
         val = macros.get(match.group(1))
-        src = re.sub(r'\{\{(\w+)\}\}', val, src)
+        src = re.sub(r"\{\{(\w+)\}\}", val, src)
     with open(src, "r") as file:
         template = jinja2.Template(file.read(), autoescape=True)
         string = template.render(macros)

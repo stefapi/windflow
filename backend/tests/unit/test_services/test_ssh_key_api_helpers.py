@@ -33,7 +33,7 @@ FP_OTHER = "SHA256:" + "C" * 43
 
 async def _seed(
     db_session: AsyncSession, organization_id: str
-) -> tuple[Target, HostSSHFingerprint]:
+) -> tuple[Host, HostSSHFingerprint]:
     """Cible + empreinte PENDING matching (host, 22, ssh-ed25519)."""
     target = Host(
         name="tofu-target",

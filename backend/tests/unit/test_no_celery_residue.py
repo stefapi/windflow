@@ -23,12 +23,13 @@ def test_celery_app_module_absent() -> None:
 
 
 def test_no_celery_dependency_in_pyproject() -> None:
-    """Aucune dépendance celery ne doit figurer dans pyproject.toml."""
+    """Aucune dépendance celery ne doit figurer dans pyproject.toml (PEP 621)."""
     with open(PYPROJECT_PATH, "rb") as fh:
         data = tomllib.load(fh)
 
-    poetry_deps = data.get("tool", {}).get("poetry", {}).get("dependencies", {})
-    for dep_name in poetry_deps:
+    project_deps = data.get("project", {}).get("dependencies", [])
+    for dep in project_deps:
+        dep_name = dep.split(";")[0].split("[")[0].strip()
         assert "celery" not in dep_name.lower(), (
             f"Dépendance Celery réintroduite dans pyproject.toml : {dep_name} "
             "(arbitrage F1 — runtime asyncio unique, cf. STORY-130.2)"

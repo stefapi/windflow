@@ -12,6 +12,7 @@ Sécurité obligatoire (rules 40) : 401 sans token, isolation organisation
 (stack d'une autre organisation → 404).
 """
 
+import pytest
 from httpx import AsyncClient
 from tests.conftest import unwrap
 
@@ -20,6 +21,17 @@ from app.models.organization import Organization
 from app.models.stack import Stack
 from app.schemas.stack import StackCreate
 from app.services.stack_service import StackService
+
+
+@pytest.fixture(autouse=True)
+def _jwt_mode(monkeypatch):
+    """Force le mode JWT normal (disable_auth=False) — pattern 123.4.
+
+    Immunise le test contre un éventuel ``DISABLE_AUTH=true`` du ``.env``
+    local (le fallback dev-mode exigerait un superadmin en base → 500)."""
+    from app.auth import dependencies as auth_deps
+
+    monkeypatch.setattr(auth_deps.settings, "disable_auth", False)
 
 
 def _auth_headers(user) -> dict[str, str]:

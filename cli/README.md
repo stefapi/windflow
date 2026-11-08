@@ -22,8 +22,8 @@ Le CLI WindFlow est inclus dans le projet principal. Pour l'installer :
 # Depuis la racine du projet
 pip install -e .
 
-# Ou avec poetry
-poetry install
+# Ou avec uv (environnement projet)
+uv sync
 
 # Installer les dépendances
 pip install rich httpx pyyaml

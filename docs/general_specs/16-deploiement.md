@@ -16,7 +16,7 @@ Ce chapitre couvre l'exploitation de WindFlow : installation (mode léger sur Ra
 
 **Pour le développement (optionnel) :**
 
-- Python ≥ 3.11 + Poetry ≥ 1.8 ;
+- Python ≥ 3.11 + UV ≥ 0.12 ;
 - Node.js ≥ 20 + pnpm ≥ 9.
 
 ## Profils d'installation
@@ -158,17 +158,17 @@ Pour contribuer au code de WindFlow.
 ```bash
 git clone https://github.com/windflow/windflow.git
 cd windflow
-poetry install --with dev
+uv sync --group dev
 
 # PostgreSQL et Redis pour le dev local
 docker compose -f docker-compose.dev-deps.yml up -d
 
 cp .env.dev.example .env
-poetry run alembic upgrade head
-poetry run windflow admin create --username admin --email admin@localhost
+uv run alembic upgrade head
+uv run python -m cli.__main__ admin create --username admin --email admin@localhost
 
 # Serveur de dev
-poetry run uvicorn windflow.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Frontend et CLI

@@ -267,8 +267,8 @@ make frontend-typecheck     # tsc strict
 
 ```bash
 # Backend — tests d'un module spécifique
-poetry run pytest backend/tests/unit/test_services/test_xxx_service.py -v
-poetry run pytest backend/tests/unit/test_api/test_xxx.py -v --tb=short
+uv run pytest backend/tests/unit/test_services/test_xxx_service.py -v
+uv run pytest backend/tests/unit/test_api/test_xxx.py -v --tb=short
 
 # Frontend — tests d'un fichier spécifique
 cd frontend && pnpm test -- tests/unit/components/XxxComponent

@@ -3,10 +3,11 @@
 import json
 import os
 import sys
-import toml
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import toml
 
 # Add the project root to Python path to import from app
 CWD = Path(__file__).parent
@@ -18,6 +19,7 @@ from app.main import app
 # Output directory
 DOC_DIR = PROJECT_ROOT / "doc"
 OPENAPI_FILE = DOC_DIR / "openapi.json"
+
 
 def load_project_metadata() -> Dict[str, Any]:
     """
@@ -31,19 +33,26 @@ def load_project_metadata() -> Dict[str, Any]:
         config = toml.load(pyproject_path)
         metadata = {}
 
-        # Extract from tool.poetry section
-        if "tool" in config and "poetry" in config["tool"]:
-            poetry = config["tool"]["poetry"]
-            metadata.update({
-                "name": poetry.get("name", "API"),
-                "version": poetry.get("version", "1.0.0"),
-                "description": poetry.get("description", ""),
-                "authors": poetry.get("authors", []),
-                "license": poetry.get("license", ""),
-                "homepage": poetry.get("homepage", ""),
-                "repository": poetry.get("repository", ""),
-                "documentation": poetry.get("documentation", "")
-            })
+        # Extract from project section (PEP 621)
+        if "project" in config:
+            project = config["project"]
+            metadata.update(
+                {
+                    "name": project.get("name", "API"),
+                    "version": project.get("version", "1.0.0"),
+                    "description": project.get("description", ""),
+                    "license": project.get("license", ""),
+                }
+            )
+            authors = [
+                a.get("name", "") if isinstance(a, dict) else str(a)
+                for a in project.get("authors", [])
+            ]
+            metadata["authors"] = authors
+            urls = project.get("urls", {}) or {}
+            metadata["homepage"] = urls.get("Homepage", "")
+            metadata["repository"] = urls.get("Repository", "")
+            metadata["documentation"] = urls.get("Documentation", "")
 
         # Extract from custom.params section
         if "custom" in config and "params" in config["custom"]:
@@ -56,6 +65,7 @@ def load_project_metadata() -> Dict[str, Any]:
         print(f"Warning: Could not load project metadata from pyproject.toml: {e}")
         return {}
 
+
 def get_server_urls() -> List[Dict[str, str]]:
     """
     Get server URLs from environment variables or defaults.
@@ -65,28 +75,25 @@ def get_server_urls() -> List[Dict[str, str]]:
     # Development server
     dev_port = os.getenv("PORT", "8010")
     dev_host = os.getenv("DEV_HOST", "localhost")
-    servers.append({
-        "url": f"http://{dev_host}:{dev_port}",
-        "description": "Development server (local)"
-    })
+    servers.append(
+        {
+            "url": f"http://{dev_host}:{dev_port}",
+            "description": "Development server (local)",
+        }
+    )
 
     # Production server (if configured)
     prod_url = os.getenv("PROD_API_URL")
     if prod_url:
-        servers.append({
-            "url": prod_url,
-            "description": "Production server"
-        })
+        servers.append({"url": prod_url, "description": "Production server"})
 
     # Staging server (if configured)
     staging_url = os.getenv("STAGING_API_URL")
     if staging_url:
-        servers.append({
-            "url": staging_url,
-            "description": "Staging server"
-        })
+        servers.append({"url": staging_url, "description": "Staging server"})
 
     return servers
+
 
 def extract_tags_from_routes(openapi_spec: Dict[str, Any]) -> List[Dict[str, str]]:
     """
@@ -106,27 +113,29 @@ def extract_tags_from_routes(openapi_spec: Dict[str, Any]) -> List[Dict[str, str
                                 "operations": [],
                                 "summaries": [],
                                 "descriptions": [],
-                                "paths": []
+                                "paths": [],
                             }
 
                         tag_operations[tag]["operations"].append(method.upper())
                         tag_operations[tag]["paths"].append(path)
 
                         if "summary" in operation:
-                            tag_operations[tag]["summaries"].append(operation["summary"])
+                            tag_operations[tag]["summaries"].append(
+                                operation["summary"]
+                            )
                         if "description" in operation:
-                            tag_operations[tag]["descriptions"].append(operation["description"])
+                            tag_operations[tag]["descriptions"].append(
+                                operation["description"]
+                            )
 
     # Generate tag descriptions based on actual operations
     tags = []
     for tag in sorted(tag_operations.keys()):
         description = generate_dynamic_tag_description(tag, tag_operations[tag])
-        tags.append({
-            "name": tag,
-            "description": description
-        })
+        tags.append({"name": tag, "description": description})
 
     return tags
+
 
 def generate_dynamic_tag_description(tag: str, operations_data: Dict[str, List]) -> str:
     """
@@ -165,7 +174,14 @@ def generate_dynamic_tag_description(tag: str, operations_data: Dict[str, List])
 
     # Analyze content to determine domain
     domain_keywords = {
-        "user": ["user", "utilisateur", "account", "profile", "login", "authentication"],
+        "user": [
+            "user",
+            "utilisateur",
+            "account",
+            "profile",
+            "login",
+            "authentication",
+        ],
         "organization": ["organization", "organisation", "company", "tenant"],
         "environment": ["environment", "environnement", "deployment", "infrastructure"],
         "element": ["element", "élément", "component", "resource", "infrastructure"],
@@ -175,7 +191,7 @@ def generate_dynamic_tag_description(tag: str, operations_data: Dict[str, List])
         "health": ["health", "status", "check", "monitoring", "diagnostic"],
         "tag": ["tag", "label", "category", "classification"],
         "function": ["function", "fonction", "capability", "feature"],
-        "coffee": ["coffee", "teapot", "test", "utility"]
+        "coffee": ["coffee", "teapot", "test", "utility"],
     }
 
     # Find the most relevant domain
@@ -224,7 +240,9 @@ def generate_dynamic_tag_description(tag: str, operations_data: Dict[str, List])
     # Add operation count information
     total_ops = len(operations)
     if total_ops > 0:
-        description_parts.append(f"Provides {base_desc} with {total_ops} endpoint{'s' if total_ops != 1 else ''}")
+        description_parts.append(
+            f"Provides {base_desc} with {total_ops} endpoint{'s' if total_ops != 1 else ''}"
+        )
     else:
         description_parts.append(f"Provides {base_desc}")
 
@@ -239,14 +257,17 @@ def generate_dynamic_tag_description(tag: str, operations_data: Dict[str, List])
 
     return ". ".join(description_parts) + "."
 
+
 def extract_security_schemes(openapi_spec: Dict[str, Any]) -> Dict[str, Any]:
     """
     Extract security schemes from the existing OpenAPI spec or generate defaults.
     """
     # Check if security schemes already exist
-    if ("components" in openapi_spec and
-        "securitySchemes" in openapi_spec["components"] and
-        openapi_spec["components"]["securitySchemes"]):
+    if (
+        "components" in openapi_spec
+        and "securitySchemes" in openapi_spec["components"]
+        and openapi_spec["components"]["securitySchemes"]
+    ):
         return openapi_spec["components"]["securitySchemes"]
 
     # Generate default security schemes based on detected patterns
@@ -263,15 +284,11 @@ def extract_security_schemes(openapi_spec: Dict[str, Any]) -> Dict[str, Any]:
     if has_login:
         security_schemes["OAuth2PasswordBearerOrKey"] = {
             "type": "oauth2",
-            "flows": {
-                "password": {
-                    "tokenUrl": "/login",
-                    "scopes": {}
-                }
-            }
+            "flows": {"password": {"tokenUrl": "/login", "scopes": {}}},
         }
 
     return security_schemes
+
 
 def analyze_api_patterns(openapi_spec: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -290,7 +307,7 @@ def analyze_api_patterns(openapi_spec: Dict[str, Any]) -> Dict[str, Any]:
         "request_bodies": 0,
         "tags_count": 0,
         "schemas_count": 0,
-        "security_schemes_count": 0
+        "security_schemes_count": 0,
     }
 
     if "paths" in openapi_spec:
@@ -321,28 +338,37 @@ def analyze_api_patterns(openapi_spec: Dict[str, Any]) -> Dict[str, Any]:
                     if "requestBody" in operation:
                         analysis["request_bodies"] += 1
                         if "content" in operation["requestBody"]:
-                            analysis["content_types"].update(operation["requestBody"]["content"].keys())
+                            analysis["content_types"].update(
+                                operation["requestBody"]["content"].keys()
+                            )
 
                     # Analyze responses
                     if "responses" in operation:
                         analysis["response_codes"].update(operation["responses"].keys())
                         for response in operation["responses"].values():
                             if "content" in response:
-                                analysis["content_types"].update(response["content"].keys())
+                                analysis["content_types"].update(
+                                    response["content"].keys()
+                                )
 
     # Count components
     if "components" in openapi_spec:
         if "schemas" in openapi_spec["components"]:
             analysis["schemas_count"] = len(openapi_spec["components"]["schemas"])
         if "securitySchemes" in openapi_spec["components"]:
-            analysis["security_schemes_count"] = len(openapi_spec["components"]["securitySchemes"])
+            analysis["security_schemes_count"] = len(
+                openapi_spec["components"]["securitySchemes"]
+            )
 
     if "tags" in openapi_spec:
         analysis["tags_count"] = len(openapi_spec["tags"])
 
     return analysis
 
-def enhance_api_description(openapi_spec: Dict[str, Any], project_metadata: Dict[str, Any]) -> str:
+
+def enhance_api_description(
+    openapi_spec: Dict[str, Any], project_metadata: Dict[str, Any]
+) -> str:
     """
     Generate an enhanced API description based on analysis of the actual API.
     """
@@ -353,43 +379,59 @@ def enhance_api_description(openapi_spec: Dict[str, Any], project_metadata: Dict
     long_description = project_metadata.get("long_description", "")
 
     if long_description:
-        description = f"{description}\n\n{long_description}" if description else long_description
+        description = (
+            f"{description}\n\n{long_description}" if description else long_description
+        )
 
     # Add API overview section
     description += f"\n\n## API Overview\n"
     description += f"This API provides {analysis['operation_count']} operations across {analysis['endpoint_count']} endpoints"
 
-    if analysis['tags_count'] > 0:
+    if analysis["tags_count"] > 0:
         description += f", organized into {analysis['tags_count']} functional areas"
 
     description += "."
 
     # Add supported methods
-    if analysis['methods_used']:
-        methods = sorted(analysis['methods_used'])
+    if analysis["methods_used"]:
+        methods = sorted(analysis["methods_used"])
         description += f" Supports {', '.join(methods)} HTTP methods."
 
     # Add authentication info
-    auth_percentage = (analysis['authentication_required'] / analysis['operation_count'] * 100) if analysis['operation_count'] > 0 else 0
+    auth_percentage = (
+        (analysis["authentication_required"] / analysis["operation_count"] * 100)
+        if analysis["operation_count"] > 0
+        else 0
+    )
     if auth_percentage > 0:
         description += f"\n\n## Authentication\n"
         if auth_percentage == 100:
             description += "All endpoints require authentication."
         elif auth_percentage > 50:
-            description += f"Most endpoints ({auth_percentage:.0f}%) require authentication."
+            description += (
+                f"Most endpoints ({auth_percentage:.0f}%) require authentication."
+            )
         else:
-            description += f"Some endpoints ({auth_percentage:.0f}%) require authentication."
+            description += (
+                f"Some endpoints ({auth_percentage:.0f}%) require authentication."
+            )
 
     # Add data formats
-    if analysis['content_types']:
-        content_types = sorted(analysis['content_types'])
+    if analysis["content_types"]:
+        content_types = sorted(analysis["content_types"])
         description += f"\n\n## Data Formats\n"
-        description += f"Supports the following content types: {', '.join(content_types)}."
+        description += (
+            f"Supports the following content types: {', '.join(content_types)}."
+        )
 
     # Add response codes info
-    if analysis['response_codes']:
-        success_codes = [code for code in analysis['response_codes'] if code.startswith('2')]
-        error_codes = [code for code in analysis['response_codes'] if not code.startswith('2')]
+    if analysis["response_codes"]:
+        success_codes = [
+            code for code in analysis["response_codes"] if code.startswith("2")
+        ]
+        error_codes = [
+            code for code in analysis["response_codes"] if not code.startswith("2")
+        ]
 
         description += f"\n\n## Response Codes\n"
         if success_codes:
@@ -398,7 +440,7 @@ def enhance_api_description(openapi_spec: Dict[str, Any], project_metadata: Dict
             description += f"Error responses: {', '.join(sorted(error_codes))}."
 
     # Add schemas info
-    if analysis['schemas_count'] > 0:
+    if analysis["schemas_count"] > 0:
         description += f"\n\n## Data Models\n"
         description += f"Includes {analysis['schemas_count']} data model definitions for request and response validation."
 
@@ -406,6 +448,7 @@ def enhance_api_description(openapi_spec: Dict[str, Any], project_metadata: Dict
     description += "The API returns standardized error responses with appropriate HTTP status codes and detailed error messages."
 
     return description.strip()
+
 
 def enhance_openapi_spec(openapi_spec: dict) -> dict:
     """
@@ -417,7 +460,10 @@ def enhance_openapi_spec(openapi_spec: dict) -> dict:
 
     # Add generation timestamp and generator info
     openapi_spec["info"]["x-generated-at"] = datetime.now().isoformat()
-    generator_name = os.getenv("OPENAPI_GENERATOR_NAME", f"{project_metadata.get('name', 'API')} OpenAPI Generator")
+    generator_name = os.getenv(
+        "OPENAPI_GENERATOR_NAME",
+        f"{project_metadata.get('name', 'API')} OpenAPI Generator",
+    )
     openapi_spec["info"]["x-generator"] = generator_name
 
     # Enhance info section with project metadata
@@ -442,7 +488,7 @@ def enhance_openapi_spec(openapi_spec: dict) -> dict:
     info_updates = {
         "title": title,
         "description": description.strip(),
-        "version": project_metadata.get("version", "1.0.0")
+        "version": project_metadata.get("version", "1.0.0"),
     }
 
     # Add contact information if available
@@ -452,6 +498,7 @@ def enhance_openapi_spec(openapi_spec: dict) -> dict:
         if isinstance(author_info, str) and "<" in author_info and ">" in author_info:
             # Parse "Name <email>" format
             import re
+
             match = re.match(r"^([^<]+)<([^>]+)>$", author_info.strip())
             if match:
                 name = match.group(1).strip()
@@ -477,7 +524,7 @@ def enhance_openapi_spec(openapi_spec: dict) -> dict:
             "Apache-2.0": "https://www.apache.org/licenses/LICENSE-2.0",
             "GPL": "https://www.gnu.org/licenses/gpl-3.0.html",
             "GPL-3.0": "https://www.gnu.org/licenses/gpl-3.0.html",
-            "BSD": "https://opensource.org/licenses/BSD-3-Clause"
+            "BSD": "https://opensource.org/licenses/BSD-3-Clause",
         }
 
         if license_name in license_urls:
@@ -525,16 +572,27 @@ def enhance_openapi_spec(openapi_spec: dict) -> dict:
                 # Add operation ID if missing
                 if "operationId" not in operation:
                     # Generate operation ID from path and method
-                    path_parts = [part for part in path.split("/") if part and not part.startswith("{")]
-                    operation_id = method + "".join(word.capitalize() for word in path_parts)
+                    path_parts = [
+                        part
+                        for part in path.split("/")
+                        if part and not part.startswith("{")
+                    ]
+                    operation_id = method + "".join(
+                        word.capitalize() for word in path_parts
+                    )
                     operation["operationId"] = operation_id
 
                 # Add examples to responses
                 if "responses" in operation:
                     for status_code, response in operation["responses"].items():
                         if "content" in response:
-                            for content_type, content_info in response["content"].items():
-                                if content_type == "application/json" and "examples" not in content_info:
+                            for content_type, content_info in response[
+                                "content"
+                            ].items():
+                                if (
+                                    content_type == "application/json"
+                                    and "examples" not in content_info
+                                ):
                                     # Add example based on status code
                                     if status_code == "200":
                                         content_info["examples"] = {
@@ -543,8 +601,8 @@ def enhance_openapi_spec(openapi_spec: dict) -> dict:
                                                 "value": {
                                                     "status": "success",
                                                     "message": "Operation completed successfully",
-                                                    "data": {}
-                                                }
+                                                    "data": {},
+                                                },
                                             }
                                         }
                                     elif status_code.startswith("4"):
@@ -554,8 +612,8 @@ def enhance_openapi_spec(openapi_spec: dict) -> dict:
                                                 "value": {
                                                     "status": "error",
                                                     "message": "Invalid request",
-                                                    "detail": "Detailed error description"
-                                                }
+                                                    "detail": "Detailed error description",
+                                                },
                                             }
                                         }
 
@@ -571,10 +629,11 @@ def enhance_openapi_spec(openapi_spec: dict) -> dict:
         project_name = project_metadata.get("name", "API")
         openapi_spec["externalDocs"] = {
             "description": f"{project_name.title()} Documentation",
-            "url": documentation_url
+            "url": documentation_url,
         }
 
     return openapi_spec
+
 
 def generate_openapi_json():
     """
@@ -601,7 +660,9 @@ def generate_openapi_json():
 
     # Print summary statistics
     paths_count = len(enhanced_spec.get("paths", {}))
-    total_operations = sum(len(methods) for methods in enhanced_spec.get("paths", {}).values())
+    total_operations = sum(
+        len(methods) for methods in enhanced_spec.get("paths", {}).values()
+    )
     schemas_count = len(enhanced_spec.get("components", {}).get("schemas", {}))
 
     print(f"📈 Statistics:")
@@ -609,7 +670,10 @@ def generate_openapi_json():
     print(f"   - Total operations: {total_operations}")
     print(f"   - Schema definitions: {schemas_count}")
     print(f"   - Tags: {len(enhanced_spec.get('tags', []))}")
-    print(f"   - Security schemes: {len(enhanced_spec.get('components', {}).get('securitySchemes', {}))}")
+    print(
+        f"   - Security schemes: {len(enhanced_spec.get('components', {}).get('securitySchemes', {}))}"
+    )
+
 
 if __name__ == "__main__":
     generate_openapi_json()

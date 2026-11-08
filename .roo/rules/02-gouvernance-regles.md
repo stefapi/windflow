@@ -22,7 +22,7 @@ En cas de contradiction entre deux règles ou entre une règle et une autre inst
 - Une story demande d'ajouter `structlog` « pour de meilleurs logs » → conflit avec `45-observability.md` (niveau 4) ET `05-tech-stack.md` (niveau 3, `logging` standard JSON) → refuser sauf décision consignée du propriétaire (niveau 2).
 - `30-code-standards.md` tolère une fonction de 40 lignes, mais `40-security.md` exige la validation Pydantic de tous les inputs → la validation s'impose (niveau 1 > niveau 4).
 - Un mode demande une sortie verbeuse multi-étapes, mais `60-output-format.md` impose le format Plan/Act → suivre `60-output-format.md` (niveau 4 > niveau 5).
-- Le code legacy utilise `requirements.txt` mais `05-tech-stack.md` impose Poetry + pnpm → la règle prime sur l'habitude (niveau 3 > niveau 6).
+- Le code legacy utilise `requirements.txt` mais `05-tech-stack.md` impose UV + pnpm → la règle prime sur l'habitude (niveau 3 > niveau 6).
 
 ## 3. Plages numériques par famille
 
@@ -73,7 +73,7 @@ Une nouvelle règle sans outil de contrôle doit être explicitement marquée «
 |-----------|---------------------|
 | Éditer `.backlog/kanban.md` à la main pour réorganiser le board | Modifier les contrats (statuts dans les fichiers story/bug/epic) puis régénérer via `make backlog` ; contrôler avec `make backlog-check` — l'édition manuelle du kanban est interdite |
 | Supprimer un fichier de backlog | Changer le statut en `ABANDONED` dans le titre + note explicative (règle d'or, `01-Project-management.md` §7) |
-| Créer une dépendance sans justification | `pyproject.toml` (Poetry) côté Python et `pnpm` côté frontend uniquement, avec justification claire (`05-tech-stack.md`) |
+| Créer une dépendance sans justification | `pyproject.toml` (UV, PEP 621) côté Python et `pnpm` côté frontend uniquement, avec justification claire (`05-tech-stack.md`) |
 | Introduire Redis Streams | Bus canonique `Bus` (`backend/app/core/events.py`), `RedisPubSubEventBus` optionnel — Redis Streams hors périmètre par arbitrage F6 (`20-architecture-and-api.md`) |
 | Utiliser `structlog` | `logging` standard Python avec format JSON configurable (`45-observability.md`) |
 | Modifier les tables en base manuellement | Migrations Alembic dans `backend/alembic/versions/` |

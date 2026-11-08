@@ -4,7 +4,7 @@
 
 # Core tools
 PYTHON ?= python3
-POETRY ?= poetry
+UV ?= uv
 PNPM ?= pnpm
 NODE ?= node
 DOCKER ?= docker
@@ -81,12 +81,13 @@ help: ## 📖 Display help information about available commands
 
 outdated: ## 🚧 Check for outdated dependencies in both backend and frontend
 	@echo "Checking backend dependencies..."
-	$(POETRY) show --outdated
+	$(UV) lock --upgrade --dry-run
 	@echo "\nChecking frontend dependencies..."
 	cd $(FRONTEND_DIR) && $(PNPM) exec taze
 
-setup: ## 🏗 Setup complete development environment
-	$(POETRY) install --with dev
+setup: ## 🏗 Setup complete development environment (uv sync + pnpm install)
+	$(UV) python install 3.11
+	$(UV) sync --group dev
 	cd $(FRONTEND_DIR) && $(PNPM) install
 	cp -n .env.example .env || true
 	@echo "🏗  Development Setup Complete "
@@ -95,8 +96,8 @@ setup: ## 🏗 Setup complete development environment
 	@echo "    2. run 'make frontend' to start the frontend development server"
 	@echo "    3. run 'make dev' to start both servers"
 
-install: ## 📦 Install development version
-	$(POETRY) install
+install: ## 📦 Install dependencies (main only, no dev group)
+	$(UV) sync --no-default-groups
 
 # ============================================================================
 # CLEANING COMMANDS
@@ -143,45 +144,47 @@ backend-clean: clean-pyc clean-tests clean-frontend ## 🧹 Clean backend-specif
 	rm -fr .mypy_cache
 
 backend-typecheck: ## 🔍 Type check the backend code
-	cd $(BACKEND_DIR) && $(POETRY) run mypy app/
+	cd $(BACKEND_DIR) && $(UV) run mypy app/
 
-backend-build: ## 🏗 Build backend package
-	$(POETRY) build
+backend-build: ## 🏗 Build backend package (non applicable : projet non-package, cf. tool.uv)
+	@echo "⚠️  windflow n'est pas un package distribuable (tool.uv package=false)."
+	@echo "    Distribution via images Docker : make docker-build"
+	@exit 1
 
 backend-test-unit: ## 🧪 Run backend unit tests only
-	$(POETRY) run pytest $(BACKEND_DIR)/tests/unit/ -v --cov=$(BACKEND_DIR) --cov-report=html --cov-report=term
+	$(UV) run pytest $(BACKEND_DIR)/tests/unit/ -v --cov=$(BACKEND_DIR) --cov-report=html --cov-report=term
 
 backend-test-integration: ## 🧪 Run backend integration tests only
-	$(POETRY) run pytest $(BACKEND_DIR)/tests/integration/ -v --cov=$(BACKEND_DIR) --cov-report=html --cov-report=term
+	$(UV) run pytest $(BACKEND_DIR)/tests/integration/ -v --cov=$(BACKEND_DIR) --cov-report=html --cov-report=term
 
 backend-test-coverage: ## ☂️ Run backend tests with coverage report
-	$(POETRY) run pytest $(BACKEND_DIR)/tests/ --cov=$(BACKEND_DIR) --cov-report=html --cov-report=term
+	$(UV) run pytest $(BACKEND_DIR)/tests/ --cov=$(BACKEND_DIR) --cov-report=html --cov-report=term
 	$(BROWSER) htmlcov/index.html
 
 backend-test-all: backend-test-unit backend-test-integration ## 🧪 Run all backend tests (unit + integration)
 
 backend-format: ## 🧺 Format backend code
-	$(POETRY) run isort $(BACKEND_DIR)
-	$(POETRY) run black $(BACKEND_DIR)
+	$(UV) run isort $(BACKEND_DIR)
+	$(UV) run black $(BACKEND_DIR)
 
 backend-lint: ## 🧹 Lint backend code
-	$(POETRY) run isort --check-only $(BACKEND_DIR)
-	$(POETRY) run black --check $(BACKEND_DIR)
-	$(POETRY) run flake8 $(BACKEND_DIR)
-	cd $(BACKEND_DIR) && $(POETRY) run mypy app/
-	$(POETRY) run bandit -r $(BACKEND_DIR) -ll
+	$(UV) run isort --check-only $(BACKEND_DIR)
+	$(UV) run black --check $(BACKEND_DIR)
+	$(UV) run flake8 $(BACKEND_DIR)
+	cd $(BACKEND_DIR) && $(UV) run mypy app/
+	$(UV) run bandit -r $(BACKEND_DIR) -ll
 
 backend-all: backend-format backend-lint backend-typecheck backend-test ## 🧪 Run all backend checks and tests
 
 backend-coverage: ## ☂️ Generate and view test coverage report
-	$(POETRY) run pytest $(BACKEND_DIR)/tests/
-	$(POETRY) run coverage report -m
-	$(POETRY) run coverage html
+	$(UV) run pytest $(BACKEND_DIR)/tests/
+	$(UV) run coverage report -m
+	$(UV) run coverage html
 	$(BROWSER) htmlcov/index.html
 
 .PHONY: backend
 backend: ## 🎬 Start backend development server
-	env -u PYTHONPATH $(POETRY) run uvicorn $(BACKEND_DIR).app.main:app --reload --reload-dir $(BACKEND_DIR)/app --host 0.0.0.0 --port $(shell grep -oP '(?<=API_PORT=)\d+' .env 2>/dev/null || echo 8000)
+	env -u PYTHONPATH $(UV) run uvicorn $(BACKEND_DIR).app.main:app --reload --reload-dir $(BACKEND_DIR)/app --host 0.0.0.0 --port $(shell grep -oP '(?<=API_PORT=)\d+' .env 2>/dev/null || echo 8000)
 
 # ============================================================================
 # FRONTEND COMMANDS
@@ -273,7 +276,7 @@ frontend-unlighthouse: ## 🔍 Run Unlighthouse for performance testing
 	cd $(FRONTEND_DIR) && $(PNPM) unlighthouse
 
 frontend-generate: ## 🏗 Generate code for frontend
-	$(POETRY) run python dev/scripts/generate_types.py
+	$(UV) run python dev/scripts/generate_types.py
 
 frontend-all: frontend-format frontend-lint frontend-css-check frontend-typecheck frontend-test ## 🧪 Run all frontend checks and tests
 
@@ -290,28 +293,29 @@ cli-clean: ## 🧹 Clean CLI build artifacts
 	rm -rf $(CLI_DIR)/build
 
 cli-test: ## 🧪 Run CLI tests
-	$(POETRY) run pytest $(CLI_DIR)/tests/ -v
+	$(UV) run pytest $(CLI_DIR)/tests/ -v
 
 cli-lint: ## 🧹 Lint CLI code
-	$(POETRY) run flake8 $(CLI_DIR)/
-	$(POETRY) run mypy $(CLI_DIR)/
+	$(UV) run flake8 $(CLI_DIR)/
+	$(UV) run mypy $(CLI_DIR)/
 
 cli-format: ## 🧺 Format CLI code
-	$(POETRY) run black $(CLI_DIR)/
-	$(POETRY) run isort $(CLI_DIR)/
+	$(UV) run black $(CLI_DIR)/
+	$(UV) run isort $(CLI_DIR)/
 
 cli-build: ## 🏗 Build CLI executable
-	$(POETRY) run pyinstaller --onefile $(CLI_DIR)/main.py -n windflow
+	$(UV) run --with pyinstaller pyinstaller --onefile $(CLI_DIR)/main.py -n windflow
 
-cli-install: ## 📦 Install CLI globally
-	$(POETRY) build
-	pip install dist/windflow-*.whl --force-reinstall
+cli-install: ## 📦 Install CLI globally (non package : projet non-package, cf. tool.uv)
+	@echo "⚠️  windflow n'est pas un package distribuable (tool.uv package=false)."
+	@echo "    CLI local : make cli  |  binaire autonome : make cli-build"
+	@exit 1
 
 cli-all: cli-format cli-lint cli-test ## 🧪 Run all CLI checks and tests
 
 .PHONY: cli
 cli: ## 🖥️ Start WindFlow CLI interface
-	$(POETRY) run python -m $(CLI_DIR).main
+	$(UV) run python -m $(CLI_DIR).main
 
 # ============================================================================
 # DEVELOPMENT COMMANDS
@@ -319,18 +323,18 @@ cli: ## 🖥️ Start WindFlow CLI interface
 
 purge: clean ## 🧹 Remove everything for a fresh environment
 	rm -rf ./dev/data 2>/dev/null || true
-	$(POETRY) env remove --all
+	rm -rf .venv
 
 MIGRATION_MESSAGE ?= migration_to_be_named
 
 migrate: ## 🗃️ Generate database migration (alembic revision --autogenerate)
-	$(POETRY) run $(ALEMBIC) -c alembic.ini revision --autogenerate -m "$(MIGRATION_MESSAGE)"
+	$(UV) run $(ALEMBIC) -c alembic.ini revision --autogenerate -m "$(MIGRATION_MESSAGE)"
 
 migrate-upgrade: ## 🗃️ Apply database migrations (alembic upgrade head)
-	$(POETRY) run $(ALEMBIC) -c alembic.ini upgrade head
+	$(UV) run $(ALEMBIC) -c alembic.ini upgrade head
 
 migrate-stamp: ## 🗃️ Stamp existing database with baseline revision (alembic stamp baseline)
-	$(POETRY) run $(ALEMBIC) -c alembic.ini stamp baseline
+	$(UV) run $(ALEMBIC) -c alembic.ini stamp baseline
 
 format: backend-format frontend-format cli-format ## 🧺 Format all code (backend, frontend and CLI)
 
@@ -339,10 +343,10 @@ lint: backend-lint frontend-lint cli-lint ## 🧹 Lint all code (backend, fronte
 test: backend-test frontend-test cli-test ## 🧪 Run all tests (backend, frontend and CLI)
 
 serve: ## 🎬 Serve client and server separately
-	$(POETRY) run $(PYTHON) -c "$$APP_PYSCRIPT"
+	$(UV) run $(PYTHON) -c "$$APP_PYSCRIPT"
 
 run: ## 🎬 Run server in production mode
-	env -u PYTHONPATH $(POETRY) run uvicorn $(BACKEND_DIR).app.main:app --host 0.0.0.0 --port $(shell grep -oP '(?<=API_PORT=)\d+' .env 2>/dev/null || echo 8000)
+	env -u PYTHONPATH $(UV) run uvicorn $(BACKEND_DIR).app.main:app --host 0.0.0.0 --port $(shell grep -oP '(?<=API_PORT=)\d+' .env 2>/dev/null || echo 8000)
 
 .PHONY: dev
 dev: ## 🎬 Start both backend and frontend development servers
@@ -519,21 +523,22 @@ enable-mon: enable-monitoring ## 📊 Shortcut for enable-monitoring
 # DEPLOYMENT COMMANDS
 # ============================================================================
 
-prepare: ## 🏗 Prepare for deployment
-	$(POETRY) export --output requirements.txt
+prepare: ## 🏗 Prepare for deployment (export requirements.txt depuis uv.lock)
+	$(UV) export --format requirements-txt --output requirements.txt
 
 .PHONY: dist
 dist: clean prepare backend-build frontend-build ## 📦 Create distribution files
 
-release: clean dist ## 🚀 Build and publish to PyPI
-	$(POETRY) publish
+release: clean dist ## 🚀 Build and publish to PyPI (non applicable : projet non-package)
+	@echo "⚠️  Publication PyPI non applicable (tool.uv package=false) — distribution Docker."
+	@exit 1
 
 release-install: ## 📥 Install production version from PyPI
 	pip install windflow --break-system-packages
 
-stage: clean dist ## 🧪 Build and publish to TestPyPI
-	$(POETRY) config repositories.testpypi https://test.pypi.org/legacy/
-	$(POETRY) publish -r testpypi
+stage: clean dist ## 🧪 Build and publish to TestPyPI (non applicable : projet non-package)
+	@echo "⚠️  Publication TestPyPI non applicable (tool.uv package=false) — distribution Docker."
+	@exit 1
 
 stage-install: ## 📥 Install testing version from TestPyPI
 	pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ windflow --break-system-packages
@@ -543,20 +548,20 @@ stage-install: ## 📥 Install testing version from TestPyPI
 # ============================================================================
 
 code-gen: ## 🤖 Generate API routes
-	$(POETRY) run dev/scripts/daemon_routes_gen.py
+	$(UV) run dev/scripts/daemon_routes_gen.py
 
 generate-api: ## 🔄 Regenerate TypeScript API client from backend routes
-	$(POETRY) run python dev/scripts/daemon_routes_gen.py && \
+	$(UV) run python dev/scripts/daemon_routes_gen.py && \
 	cd $(FRONTEND_DIR) && $(PNPM) format:api
 
 generate-types: ## 🔧 Generate shared TypeScript types
-	$(POETRY) run python dev/scripts/generate_types.py
+	$(UV) run python dev/scripts/generate_types.py
 
 generate-docs: ## 📚 Generate automatic documentation
-	$(POETRY) run sphinx-build -b html docs/ docs/_build/html/
+	$(UV) run --with sphinx sphinx-build -b html docs/ docs/_build/html/
 
 generate-openapi-docs: ## 📋 Generate comprehensive OpenAPI specification in .junie directory
-	$(POETRY) run python dev/scripts/generate_openapi_junie.py
+	$(UV) run python dev/scripts/generate_openapi_junie.py
 
 # ============================================================================
 # BACKLOG & HARNESS GUARDRAILS (kanban généré, invariants, corpus de pilotage)
@@ -587,10 +592,10 @@ harness-test: ## 🧪 Tests unitaires des garde-fous du harness (unittest stdlib
 
 ci-lint-backend: ## 🔍 CI: Lint backend (local execution)
 	@echo "🔍 Running backend linting..."
-	$(POETRY) run black --check $(BACKEND_DIR)/
-	$(POETRY) run isort --check-only $(BACKEND_DIR)/
-	$(POETRY) run flake8 $(BACKEND_DIR)/
-	$(POETRY) run pylint $(BACKEND_DIR)/ --fail-under=8.0 || true
+	$(UV) run black --check $(BACKEND_DIR)/
+	$(UV) run isort --check-only $(BACKEND_DIR)/
+	$(UV) run flake8 $(BACKEND_DIR)/
+	$(UV) run pylint $(BACKEND_DIR)/ --fail-under=8.0 || true
 	@echo "✅ Backend linting complete"
 
 ci-lint-frontend: ## 🔍 CI: Lint frontend (local execution)
@@ -602,7 +607,7 @@ ci-lint-frontend: ## 🔍 CI: Lint frontend (local execution)
 
 ci-test-backend: ## 🧪 CI: Test backend with coverage (local execution)
 	@echo "🧪 Running backend tests..."
-	$(POETRY) run pytest $(BACKEND_DIR)/tests/ \
+	$(UV) run pytest $(BACKEND_DIR)/tests/ \
 		--cov=$(BACKEND_DIR) \
 		--cov-report=xml \
 		--cov-report=html \
@@ -618,8 +623,8 @@ ci-test-frontend: ## 🧪 CI: Test frontend (local execution)
 
 ci-security-backend: ## 🔒 CI: Security audit backend (local execution)
 	@echo "🔒 Running backend security audit..."
-	$(POETRY) run bandit -r $(BACKEND_DIR)/ -f json -o bandit-report.json || true
-	$(POETRY) run safety check --json || true
+	$(UV) run bandit -r $(BACKEND_DIR)/ -f json -o bandit-report.json || true
+	$(UV) run --with safety safety check --json || true
 	@echo "✅ Backend security audit complete"
 
 ci-security-frontend: ## 🔒 CI: Security audit frontend (local execution)
@@ -643,9 +648,12 @@ ci-quick: ci-lint-backend ci-lint-frontend ## ⚡ CI: Quick checks (lint only)
 
 .PHONY: docs
 docs: ## 📄 Generate and serve documentation
-	cd docs && $(POETRY) run $(PYTHON) -m mkdocs serve
+	cd docs && $(UV) run --with mkdocs $(PYTHON) -m mkdocs serve
 
 all: clean setup format lint test dev ## 🚀 Complete setup, format, lint, test, and run
+
+install-vm: ## 📦 Installe le binding VM libvirt (hôte avec pkg-config + libvirt-dev)
+	$(UV) pip install "libvirt-python>=11.8.0,<12.0.0"
 
 ci: install lint test ## ✅ Continuous integration pipeline (legacy)
 

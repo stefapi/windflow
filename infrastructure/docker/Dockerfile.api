@@ -4,8 +4,8 @@ FROM python:3.11-slim as base
 # Variables d'environnement
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
 # Installation des dépendances système
 RUN apt-get update && apt-get install -y \
@@ -15,25 +15,20 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Installation UV (binaire statique depuis l'image officielle)
+COPY --from=ghcr.io/astral-sh/uv:0.12.22 /uv /uvx /bin/
+
 # Création de l'utilisateur non-root
 RUN groupadd -r windflow && useradd -r -g windflow windflow
 
 # Création du répertoire de travail
 WORKDIR /app
 
-# Installation Poetry
-RUN pip install poetry==1.6.1
+# Copie des fichiers de dépendances (layer caché séparé du code)
+COPY pyproject.toml uv.lock ./
 
-# Configuration Poetry
-ENV POETRY_NO_INTERACTION=1 \
-    POETRY_VENV_IN_PROJECT=1 \
-    POETRY_CACHE_DIR=/tmp/poetry_cache
-
-# Copie des fichiers de dépendances
-COPY pyproject.toml poetry.lock ./
-
-# Installation des dépendances
-RUN poetry install --only=main && rm -rf $POETRY_CACHE_DIR
+# Installation des dépendances (projet non-package : tool.uv package=false)
+RUN uv sync --frozen --no-dev
 
 # Stage de production
 FROM python:3.11-slim as production

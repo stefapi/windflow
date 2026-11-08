@@ -11,8 +11,8 @@
 #   ./run.sh --help       # Affiche l'aide
 #
 # Prérequis:
-#   - Poetry installé (https://python-poetry.org/)
-#   - Python 3.11+
+#   - UV installé (https://docs.astral.sh/uv/)
+#   - Python 3.11+ (téléchargé automatiquement par UV si absent)
 #
 # Variables d'environnement (optionnelles):
 #   HOST              # Adresse d'écoute (défaut: 0.0.0.0)
@@ -105,27 +105,27 @@ EOF
 # VALIDATIONS
 # ============================================================================
 
-check_poetry() {
-    log_info "Vérification de Poetry..."
+check_uv() {
+    log_info "Vérification de UV..."
 
-    if ! command -v poetry &> /dev/null; then
-        log_error "Poetry n'est pas installé."
+    if ! command -v uv &> /dev/null; then
+        log_error "UV n'est pas installé."
         echo ""
-        echo "Installation de Poetry:"
-        echo "  curl -sSL https://install.python-poetry.org | python3 -"
+        echo "Installation de UV:"
+        echo "  curl -LsSf https://astral.sh/uv/install.sh | sh"
         echo ""
-        echo "Ou consultez: https://python-poetry.org/docs/#installation"
+        echo "Ou consultez: https://docs.astral.sh/uv/getting-started/installation/"
         exit 1
     fi
 
-    log_success "Poetry est installé: $(poetry --version)"
+    log_success "UV est installé: $(uv --version)"
 }
 
 check_python_version() {
     log_info "Vérification de la version Python..."
 
     local python_version
-    python_version=$(poetry run python --version 2>&1 | awk '{print $2}')
+    python_version=$(uv run python --version 2>&1 | awk '{print $2}')
     local major_version
     major_version=$(echo "$python_version" | cut -d. -f1)
     local minor_version
@@ -142,18 +142,14 @@ check_python_version() {
 check_dependencies() {
     log_info "Vérification des dépendances..."
 
-    if [[ ! -f "${SCRIPT_DIR}/poetry.lock" ]]; then
-        log_warning "poetry.lock non trouvé. Installation des dépendances..."
-        poetry install
-    else
-        # Vérifier si les dépendances sont à jour
-        if ! poetry check --quiet 2>/dev/null; then
-            log_warning "Dépendances obsolètes. Mise à jour..."
-            poetry install
-        else
-            log_success "Dépendances installées"
-        fi
+    if [[ ! -f "${SCRIPT_DIR}/uv.lock" ]]; then
+        log_error "uv.lock non trouvé. Lancez 'uv lock' puis recommencez."
+        exit 1
     fi
+
+    # uv sync est idempotent : installe/aligne le .venv sur uv.lock
+    uv sync --group dev
+    log_success "Dépendances installées"
 }
 
 setup_environment() {
@@ -235,7 +231,7 @@ start_development() {
     echo ""
 
     # Lancer uvicorn avec reload
-    poetry run uvicorn "${BACKEND_MODULE}" \
+    uv run uvicorn "${BACKEND_MODULE}" \
         --host "${DEFAULT_HOST}" \
         --port "${DEFAULT_PORT}" \
         --reload \
@@ -264,7 +260,7 @@ start_production() {
     echo ""
 
     # Lancer uvicorn en mode production
-    poetry run uvicorn "${BACKEND_MODULE}" \
+    uv run uvicorn "${BACKEND_MODULE}" \
         --host "${DEFAULT_HOST}" \
         --port "${DEFAULT_PORT}" \
         --workers "${workers}" \
@@ -290,7 +286,7 @@ main() {
     validate_mode
 
     # Validations
-    check_poetry
+    check_uv
     check_python_version
     check_dependencies
     setup_environment

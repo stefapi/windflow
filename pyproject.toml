@@ -1,71 +1,98 @@
-[tool.poetry]
+[project]
 name = "windflow"
 version = "0.1.0"
-description = ""
-authors = ["stephane apiou <stephane@apiou.org>"]
+description = "WindFlow - Outil web intelligent de déploiement de conteneurs Docker"
+authors = [{ name = "stephane apiou", email = "stephane@apiou.org" }]
 readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # anyio épinglé en série 3.x : l'ancien poetry.lock résolvait 3.7.1 et la
+    # montée en 4.x change la sémantique de fermeture WebSocket du TestClient
+    # (STORY-255 — fidélité de la migration d'outillage).
+    "anyio<4.0.0",
+    # NOTE libvirt-python : binding VM (cible « physiques/VM ») volontairement
+    # HORS du graphe résolu — sdist uniquement (aucune wheel PyPI), build exige
+    # `pkg-config` + libvirt-dev sur l'hôte. L'import est défensif
+    # (backend/app/services/socket_clients.py try/except ImportError).
+    # Installation ciblée : `make install-vm` (cf. Makefile, STORY-255).
+    # asyncssh : importe bcrypt (KDF bcrypt_pbkdf des clés OpenSSH chiffrées,
+    # public_key.py) sans le déclarer strictement — pin direct garanti (l'ancien
+    # pin « transition lecture hashes legacy » passlib a été retiré par BUG-012).
+    "asyncssh[bcrypt]>=2.14.0,<3.0.0",
+    "aiohttp>=3.11.0,<4.0.0",
+    "aiosqlite>=0.21.0,<0.22.0",
+    "alembic>=1.13.0,<2.0.0",
+    "argon2-cffi>=23.0.0,<24.0.0",
+    "cryptography>=44.0.0",
+    "docker>=7.0.0,<8.0.0",
+    "email-validator>=2.0.0,<3.0.0",
+    "fastapi>=0.120.0,<0.121.0",
+    "fastapi-limiter>=0.1.6,<0.2.0 ; python_version >= '3.11' and python_version < '4.0'",
+    "litellm>=1.79.0,<2.0.0",
+    "passlib[argon2]>=1.7.4,<2.0.0",
+    "prometheus-client>=0.21,<0.22",
+    "psycopg2-binary>=2.9.0,<3.0.0",
+    "pydantic>=2.12.0,<2.13.0",
+    "pydantic-settings>=2.11.0,<2.12.0",
+    # STORY-160.1 (E3) : croniter vendored (app/helper/croniter.py) importe
+    # dateutil.relativedelta/dateutil.tz — dépendance directe explicite
+    # (déjà résolue transitivement en 2.9.0.post0, déclarée pour la fiabilité).
+    "python-dateutil>=2.9.0,<3.0.0",
+    "python-jose[cryptography]>=3.3.0,<4.0.0",
+    "python-multipart>=0.0.20,<0.1.0",
+    "pyyaml>=6.0.0,<7.0.0",
+    "redis>=5.0.0,<6.0.0",
+    "rich>=14.2.0,<15.0.0",
+    "scalar-fastapi>=1.0.3,<2.0.0",
+    # STORY-172 : requise en top-level par app/websocket/metrics.py (import
+    # prometheus_client) + generate_latest/REGISTRY pour /api/v1/metrics.
+    "sqlalchemy[asyncio]>=2.0.0,<2.1.0",
+    "uvicorn[standard]>=0.38.0,<0.39.0",
+    "websockets>=15.0.0,<16.0.0",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.11"
-fastapi = "^0.120.0"
-uvicorn = {version = "^0.38.0", extras = ["standard"]}
-websockets = "^15.0.0"
-sqlalchemy = {version = "^2.0.0", extras = ["asyncio"]}
-aiosqlite = "^0.21.0"
-pydantic = "^2.12.0"
-# asyncssh : importe bcrypt (KDF bcrypt_pbkdf des clés OpenSSH chiffrées,
-# public_key.py) sans le déclarer strictement — pin direct garanti (l'ancien
-# pin « transition lecture hashes legacy » passlib a été retiré par BUG-012).
-asyncssh = {version = "^2.14.0", extras = ["bcrypt"]}
-docker = "^7.0.0"
-libvirt-python = "^11.8.0"
-pydantic-settings = "^2.0.0"
-email-validator = "^2.0.0"
-python-multipart = "^0.0.20"
-cryptography = ">=44.0.0"
-python-jose = {version = "^3.3.0", extras = ["cryptography"]}
-passlib = {version = "^1.7.4", extras = ["argon2"]}
-argon2-cffi = "^23.0.0"
-psycopg2-binary = "^2.9.0"
-litellm = "^1.79.0"
-aiohttp = "^3.11.0"
-pyyaml = "^6.0.0"
-rich = "^14.2.0"
-scalar-fastapi = "^1.0.3"
-fastapi-limiter = {version = "^0.1.6", python = ">=3.11,<4.0"}
-redis = "^5.0.0"
-alembic = "^1.13.0"
-asyncpg = "^0.30.0"
-# STORY-160.1 (E3) : croniter vendored (app/helper/croniter.py) importe
-# dateutil.relativedelta/dateutil.tz — dépendance directe explicite
-# (déjà résolue transitiivement en 2.9.0.post0, déclarée pour la fiabilité).
-python-dateutil = "^2.9.0"
-# STORY-172 : requise en top-level par app/websocket/metrics.py (import
-# prometheus_client) + generate_latest/REGISTRY pour l'endpoint /api/v1/metrics.
-prometheus-client = "^0.21"
-
-[tool.poetry.group.dev]
-optional = true
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.4.0"
-pytest-asyncio = "^0.21.0"
-pytest-cov = "^4.1.0"
-pytest-mock = "^3.12.0"
-pytest-env = "^1.1.0"
-pytest-xdist = "^3.5.0"
-pytest-timeout = "^2.2.0"
-pytest-benchmark = "^4.0.0"
-pytest-sugar = "^0.9.7"
-pytest-clarity = "^1.0.1"
-faker = "^22.0.0"
-factory-boy = "^3.3.0"
-freezegun = "^1.4.0"
-aioresponses = "^0.7.6"
-ruff = "^0.15.13"
-
-[tool.poetry.scripts]
+[project.scripts]
+# Point d'entrée CLI — invoqué via `uv run windflow` une fois le projet
+# installé en mode editable (`uv sync --package`), sinon `uv run python -m cli.__main__`.
 windflow = "cli.__main__:main"
+
+[dependency-groups]
+dev = [
+    # Outillage lint/format/typecheck — invoqué par les cibles Makefile
+    # `make lint` / `make backend-typecheck` (rules 30/50). Absents de
+    # l'ancienne définition Poetry (installés hors lock) — dette comblée
+    # par la migration UV (STORY-255).
+    "bandit>=1.7.0",
+    "black>=24.0.0",
+    "flake8>=7.0.0",
+    "isort>=5.13.0",
+    "mypy>=1.8.0",
+    "pylint>=3.0.0",
+    # Tests
+    "types-PyYAML>=6.0.0",
+    "pytest>=7.4.0,<8.0.0",
+    "pytest-asyncio>=0.21.0,<0.22.0",
+    "pytest-benchmark>=4.0.0,<5.0.0",
+    "pytest-clarity>=1.0.1,<2.0.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "pytest-env>=1.1.0,<2.0.0",
+    "pytest-mock>=3.12.0,<4.0.0",
+    "pytest-sugar>=0.9.7,<0.10.0",
+    "pytest-timeout>=2.2.0,<3.0.0",
+    "pytest-xdist>=3.5.0,<4.0.0",
+    # Fixtures et utilitaires de test
+    "aioresponses>=0.7.6,<0.8.0",
+    "factory-boy>=3.3.0,<4.0.0",
+    "faker>=22.0.0,<23.0.0",
+    "freezegun>=1.4.0,<2.0.0",
+    "ruff>=0.15.13,<0.16.0",
+]
+
+[tool.uv]
+# Monolithe modulaire non publié : le projet n'est pas construit/installé
+# comme package (backend/ et cli/ résolvent par racine du dépôt et sys.path,
+# pas par site-packages) — uv gère uniquement l'environnement et les dépendances.
+package = false
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
@@ -144,5 +171,7 @@ module = [
 ignore_missing_imports = true
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+# Le projet n'est pas construit (`tool.uv package = false`) — backend déclaré
+# uniquement pour la compatibilité des outils inspectant pyproject.toml.
+requires = ["uv>=0.12.0"]
+build-backend = "uv_build"

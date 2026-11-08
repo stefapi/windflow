@@ -81,7 +81,7 @@ def _auth_headers(user: User) -> dict[str, str]:
 
 async def _seed_org_resources(
     db_session: AsyncSession, org: Organization, suffix: str
-) -> tuple[Stack, Target, Deployment]:
+) -> tuple[Stack, Host, Deployment]:
     """Insère stack + target + deployment dans l'organisation donnée."""
     stack = Stack(
         name=f"stack-{suffix}",

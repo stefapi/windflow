@@ -236,8 +236,8 @@ jobs:
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-latest-arm64' || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
-      - run: poetry install
-      - run: poetry run pytest
+      - run: uv sync --group dev
+      - run: uv run pytest
 ```
 
 Le détail des pipelines (lint, tests, build des images multi-arch, publication) est spécifié dans [../technical_specs/CI-CD-GUIDE.md](../technical_specs/CI-CD-GUIDE.md).

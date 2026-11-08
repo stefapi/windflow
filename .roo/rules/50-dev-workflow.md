@@ -10,8 +10,8 @@ Toutes les commandes standards sont présentes dans le `Makefile` à la racine d
 
 | Cible | Description |
 |-------|-------------|
-| `make setup` | 🏗 Setup complet de l'environnement de dev (Poetry install + pnpm install + .env) |
-| `make install` | 📦 Installation de la version de développement (Poetry install) |
+| `make setup` | 🏗 Setup complet de l'environnement de dev (uv sync + pnpm install + .env) |
+| `make install` | 📦 Installation des dépendances main uniquement (uv sync --no-default-groups) |
 | `make clean` | 🧹 Nettoyage complet (data, pyc, tests, frontend) |
 | `make clean-data` | ⚠️ Suppression de toutes les données dev |
 | `make clean-build` | 🧹 Nettoyage des artefacts de build Python |
@@ -33,7 +33,7 @@ Toutes les commandes standards sont présentes dans le `Makefile` à la racine d
 | `make backend-test-all` | 🧪 Tous les tests backend (unit + integration) |
 | `make backend-test-coverage` | ☂️ Tests backend avec rapport de couverture (ouvre navigateur) |
 | `make backend-coverage` | ☂️ Générer et visualiser le rapport de couverture |
-| `make backend-build` | 🏗 Build du package backend (Poetry build) |
+| `make backend-build` | 🏗 Build du package backend (non applicable : projet non-package, distribution Docker — STORY-255) |
 | `make backend-all` | 🧪 Tous les checks backend (format + lint + typecheck + test) |
 
 ### Frontend

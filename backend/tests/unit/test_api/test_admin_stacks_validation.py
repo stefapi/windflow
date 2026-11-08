@@ -31,6 +31,17 @@ PREFIX = "/api/v1/admin/stacks-management"
 
 
 @pytest.fixture(autouse=True)
+def _jwt_mode(monkeypatch):
+    """Force le mode JWT normal (disable_auth=False) — pattern 123.4.
+
+    Immunise le test contre un éventuel ``DISABLE_AUTH=true`` du ``.env``
+    local (le fallback dev-mode exigerait un superadmin en base → 500)."""
+    from app.auth import dependencies as auth_deps
+
+    monkeypatch.setattr(auth_deps.settings, "disable_auth", False)
+
+
+@pytest.fixture(autouse=True)
 def _fresh_role_cache():
     """Cache de rôles vierge autour de chaque test (pattern 122.7)."""
     reset_role_cache()

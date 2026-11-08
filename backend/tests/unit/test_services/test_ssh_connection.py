@@ -64,7 +64,7 @@ async def _call_verify(
     )
 
 
-async def _seed_target(db: AsyncSession, organization_id: str) -> Target:
+async def _seed_target(db: AsyncSession, organization_id: str) -> Host:
     """Cible distante minimale (credentials chiffrées password)."""
     from app.models.host import encrypt_credentials_for_storage
 

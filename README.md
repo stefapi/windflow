@@ -202,8 +202,8 @@ Once WindFlow is running, open the web UI and go to **Marketplace**. Install the
 
 ```bash
 # Backend (FastAPI)
-poetry install --with dev
-poetry run uvicorn windflow.main:app --reload --host 0.0.0.0 --port 8000
+uv sync --group dev
+uv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Frontend (Vue.js 3)
 cd frontend
@@ -215,7 +215,7 @@ pip install -e ./cli
 windflow --help
 ```
 
-**Dev prerequisites:** Python ≥ 3.11 + Poetry ≥ 1.8, Node.js ≥ 20 + pnpm ≥ 9
+**Dev prerequisites:** Python ≥ 3.11 + UV ≥ 0.12, Node.js ≥ 20 + pnpm ≥ 9
 
 ## 🔧 Configuration
 

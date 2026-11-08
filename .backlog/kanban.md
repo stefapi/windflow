@@ -47,6 +47,7 @@ _(vide)_
 - [x] EPIC-012 : P1 — Socle structurant (remédiation backend) (40/44 stories DONE)
 - [x] EPIC-013 : P2 — Conformité fonctionnelle (remédiation backend) (31/36 stories DONE)
 - [x] EPIC-014 : P3 — Finitions & purge (remédiation backend) (11/11 stories DONE)
+- [x] EPIC-016 : [DONE] Migration UV & outillage Python (1/1 stories DONE)
 - [x] BUG-010 : Lancement backend : ModuleNotFoundError pydantic_core + module path uvicorn invalide
 - [x] BUG-011 : Garde-fou RBAC vs `/api/v1/metrics` sans auth — arbitrer le contrat (résidu STORY-172)
 - [x] BUG-012 : `helper/security.py` bcrypt orphelin — purger le helper et la dépendance transitionnelle

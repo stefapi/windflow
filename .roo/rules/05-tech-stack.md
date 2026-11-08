@@ -45,7 +45,8 @@ IA :
 - LiteLLM multi-provider (fallback, rate limiting si nécessaire)
 
 Dev tooling :
-- Poetry uniquement côté Python (pas de requirements.txt édité à la main)
+- UV uniquement côté Python (`pyproject.toml` PEP 621 + `uv.lock`, pas de requirements.txt édité à la main)
+- `libvirt-python` hors graphe résolu (sdist sans wheel, exige libvirt-dev sur l'hôte) — install ciblée via `make install-vm`, import défensif dans le code (STORY-255)
 - pnpm côté frontend
 - CI : lint + typecheck + tests + sécurité (bandit/semgrep, npm audit)
 - Makefile : sur la racine pour toutes les actions de dev backend, frontend, déploiement, docker, tests, etc.

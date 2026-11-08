@@ -39,28 +39,28 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 Install Poetry
+      - name: 📦 Install UV
         run: |
-          curl -sSL https://install.python-poetry.org | python3 -
+          curl -LsSf https://astral.sh/uv/0.12.22/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: 📚 Install dependencies
-        run: poetry install --with dev
+        run: uv sync --group dev
 
       - name: 🧹 Run Black (format check)
-        run: poetry run black --check backend/
+        run: uv run black --check backend/
 
       - name: 🧹 Run isort (import check)
-        run: poetry run isort --check-only backend/
+        run: uv run isort --check-only backend/
 
       - name: 🔍 Run Flake8 (linting)
-        run: poetry run flake8 backend/
+        run: uv run flake8 backend/
 
       - name: 🔍 Run Pylint (code quality)
-        run: poetry run pylint backend/ --fail-under=8.0 || true
+        run: uv run pylint backend/ --fail-under=8.0 || true
 
       - name: 🔒 Run Bandit (security)
-        run: poetry run bandit -r backend/ -f json -o bandit-report.json || true
+        run: uv run bandit -r backend/ -f json -o bandit-report.json || true
 
       - name: 📊 Upload Bandit report
         uses: actions/upload-artifact@v4
@@ -145,13 +145,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 Install Poetry
+      - name: 📦 Install UV
         run: |
-          curl -sSL https://install.python-poetry.org | python3 -
+          curl -LsSf https://astral.sh/uv/0.12.22/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: 📚 Install dependencies
-        run: poetry install --with dev
+        run: uv sync --group dev
 
       - name: 🧪 Run tests with coverage
         env:
@@ -159,7 +159,7 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: test-secret-key-for-ci
         run: |
-          poetry run pytest backend/tests/ \
+          uv run pytest backend/tests/ \
             --cov=backend \
             --cov-report=xml \
             --cov-report=html \
@@ -206,21 +206,21 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 Install Poetry
+      - name: 📦 Install UV
         run: |
-          curl -sSL https://install.python-poetry.org | python3 -
+          curl -LsSf https://astral.sh/uv/0.12.22/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: 📚 Install dependencies
-        run: poetry install --with dev
+        run: uv sync --group dev
 
       - name: 🗃️ Run migrations on fresh SQLite database
         env:
           DATABASE_URL: sqlite+aiosqlite:///./dev/data/ci_migrations.db
         run: |
           mkdir -p ./dev/data
-          poetry run alembic -c alembic.ini upgrade head
-          poetry run python -c "
+          uv run alembic -c alembic.ini upgrade head
+          uv run python -c "
           from sqlalchemy import create_engine, inspect
           engine = create_engine('sqlite:///./dev/data/ci_migrations.db')
           tables = set(inspect(engine).get_table_names())
@@ -238,8 +238,8 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://windflow:windflow123@localhost:5433/windflow_migrations
         run: |
-          poetry run alembic -c alembic.ini upgrade head
-          poetry run python -c "
+          uv run alembic -c alembic.ini upgrade head
+          uv run python -c "
           import asyncio
           import asyncpg
 
@@ -347,15 +347,15 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 Install Poetry
+      - name: 📦 Install UV
         run: |
-          curl -sSL https://install.python-poetry.org | python3 -
+          curl -LsSf https://astral.sh/uv/0.12.22/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: 🔒 Python security audit
         run: |
-          poetry install --with dev
-          poetry run safety check --json || true
+          uv sync --group dev
+          uv run safety check --json || true
 
       - name: 📦 Set up Node.js
         uses: actions/setup-node@v4

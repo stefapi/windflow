@@ -14,7 +14,7 @@ windflow/
 ├── docs/             # Documentation et spécifications
 ├── .backlog/         # Gestion de projet (epics, stories, kanban)
 ├── Makefile          # Toutes les commandes de dev (source de vérité)
-└── pyproject.toml    # Config Poetry + dépendances Python
+└── pyproject.toml    # Config UV (PEP 621) + dépendances Python + uv.lock
 ```
 
 ---
