@@ -7,12 +7,20 @@ Vérifie la cohérence du corpus de pilotage (règles, skills, modes, gabarits) 
      fichiers existants (les blocs de code et liens absolus sont exclus) ;
   2. présence des 16 skills attendues avec un ``SKILL.md`` non vide dans
      ``.agents/skills/`` (et absence de corpus concurrent dans ``.roo/skills/``) ;
-  3. présence des points d'entrée communs : ``AGENTS.md``, ``CLAUDE.md``
+  3. frontmatter de chaque ``SKILL.md`` conforme à la spec agentskills
+     (``name`` = nom du répertoire, minuscules/chiffres/tirets ≤ 64,
+     ``description`` sur une ligne de 1 à 1024 caractères) — Roo Code ignore
+     silencieusement une skill non conforme, ce contrôle rend l'échec visible ;
+  4. adaptateur Claude Code : ``.claude/skills`` doit être un symlink vers
+     ``../.agents/skills`` (lien, jamais copie : source de vérité unique) ;
+  5. cohérence d'inventaire du corpus : fichiers numérotés de ``.roo/rules/``
+     ↔ table du ``README.md`` ↔ liste de ``02-gouvernance-regles.md`` §1 ;
+  6. présence des points d'entrée communs : ``AGENTS.md``, ``CLAUDE.md``
      (import ``@AGENTS.md``), ``docs/dev/protocole-execution.md``,
      ``docs/dev/controles-validation.md``, ``.rooignore`` et les 4 règles de
      modes (orchestrator, architect, code, debug) ;
-  4. présence de ``.roomodes`` (JSON ou YAML) et unicité des slugs de modes ;
-  5. présence des 4 gabarits ``.backlog/_models/{epic,story,sub-story,bug}.md``.
+  7. présence de ``.roomodes`` (JSON ou YAML) et unicité des slugs de modes ;
+  8. présence des 4 gabarits ``.backlog/_models/{epic,story,sub-story,bug}.md``.
 
 Exit 0 si tout est conforme, 1 sinon (avec résumé des erreurs fichier:ligne).
 """
@@ -56,6 +64,11 @@ EXPECTED_MODELS = ("epic.md", "story.md", "sub-story.md", "bug.md")
 _LINK_RE = re.compile(r"(?<!\!)\[[^\]\n]+\]\(([^)\s]+)\)")
 _SLUG_JSON_KEY_RE = re.compile(r"^\s*\"slug\"\s*:\s*\"([^\"]+)\"")
 _SLUG_YAML_KEY_RE = re.compile(r"^\s*-?\s*slug\s*:\s*([^\s#]+)\s*$")
+_FRONTMATTER_RE = re.compile(r"\A---[ \t]*\n(.*?)\n---[ \t]*\n", re.S)
+_FRONTMATTER_NAME_RE = re.compile(r"^name:[ \t]*(.+?)[ \t]*$", re.M)
+_FRONTMATTER_DESC_RE = re.compile(r"^description:[ \t]*(.+?)[ \t]*$", re.M)
+_SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_CORPUS_REF_RE = re.compile(r"`(\d{2}-[A-Za-z0-9-]+\.md)`")
 
 
 def strip_code_blocks(text: str) -> str:
@@ -108,6 +121,148 @@ def check_skills(root: Path, errors: list[str]) -> int:
             "skills : .roo/skills/ n'est plus l'emplacement de référence (voir .agents/skills/)"
         )
     return count
+
+
+def check_skill_frontmatter(root: Path, errors: list[str]) -> int:
+    """Valide le frontmatter des SKILL.md (spec agentskills) ; retourne le nombre d'erreurs.
+
+    Claude Code et Roo Code rejettent silencieusement une skill dont le nom ne
+    correspond pas au répertoire ou dont la description est absente/hors bornes :
+    ce contrôle rend l'échec visible localement et en CI.
+    """
+    count = 0
+    for skill in EXPECTED_SKILLS:
+        skill_file = root / ".agents" / "skills" / skill / "SKILL.md"
+        if not skill_file.is_file():
+            continue  # absence déjà signalée par check_skills
+        text = skill_file.read_text(encoding="utf-8")
+        rel = skill_file.relative_to(root)
+        match = _FRONTMATTER_RE.match(text)
+        if match is None:
+            errors.append(
+                f"skill frontmatter : {rel} doit commencer par un bloc --- (name, description)"
+            )
+            count += 1
+            continue
+        frontmatter = match.group(1)
+        name_match = _FRONTMATTER_NAME_RE.search(frontmatter)
+        desc_match = _FRONTMATTER_DESC_RE.search(frontmatter)
+        if name_match is None:
+            errors.append(f"skill frontmatter : {rel} sans champ 'name'")
+            count += 1
+        else:
+            name = name_match.group(1).strip()
+            if name != skill:
+                errors.append(
+                    f"skill frontmatter : {rel} name={name!r} ≠ nom du répertoire {skill!r}"
+                )
+                count += 1
+            elif len(name) > 64 or _SKILL_NAME_RE.match(name) is None:
+                errors.append(
+                    f"skill frontmatter : {rel} name={name!r} non conforme agentskills "
+                    "(minuscules/chiffres/tirets, ≤ 64 caractères)"
+                )
+                count += 1
+        if desc_match is None:
+            errors.append(
+                f"skill frontmatter : {rel} sans champ 'description' (une ligne, 1–1024 caractères)"
+            )
+            count += 1
+        else:
+            desc_len = len(desc_match.group(1).strip())
+            if not 1 <= desc_len <= 1024:
+                errors.append(
+                    f"skill frontmatter : {rel} description hors bornes (1–1024, longueur {desc_len})"
+                )
+                count += 1
+    return count
+
+
+def check_skill_adapters(root: Path, errors: list[str]) -> None:
+    """Vérifie l'adaptateur Claude Code : .claude/skills = symlink vers ../.agents/skills.
+
+    Claude Code ne découvre les skills que via .claude/skills/ ; l'adaptateur
+    doit rester un lien (source unique), jamais une copie divergente.
+    """
+    adapter = root / ".claude" / "skills"
+    reference = (root / ".agents" / "skills").resolve()
+    if not adapter.is_symlink():
+        if adapter.exists():
+            errors.append(
+                "adaptateur skills : .claude/skills doit être un symlink vers ../.agents/skills "
+                "(pas une copie) — recréer : rm -rf .claude/skills && ln -sfn ../.agents/skills .claude/skills"
+            )
+        else:
+            errors.append(
+                "adaptateur skills : .claude/skills manquant (Claude Code ne lit que .claude/skills/) — "
+                "créer : ln -sfn ../.agents/skills .claude/skills"
+            )
+        return
+    if not adapter.exists():
+        errors.append("adaptateur skills : .claude/skills est un lien cassé (cible inexistante)")
+        return
+    if adapter.resolve() != reference:
+        errors.append(
+            f"adaptateur skills : .claude/skills pointe vers {adapter.resolve()} au lieu de {reference}"
+        )
+
+
+def _corpus_refs_readme(text: str) -> set[str] | None:
+    """Référence du corpus dans la table « Organisation du corpus » du README (lignes de table)."""
+    table_lines = [line for line in text.splitlines() if line.lstrip().startswith("|")]
+    if not table_lines:
+        return None
+    return set(_CORPUS_REF_RE.findall("\n".join(table_lines)))
+
+
+def _corpus_refs_rule02(text: str) -> set[str] | None:
+    """Référence du corpus dans la ligne « Corpus actuel : » de 02-gouvernance-regles.md §1."""
+    for line in text.splitlines():
+        if line.strip().startswith("Corpus actuel :"):
+            return set(_CORPUS_REF_RE.findall(line))
+    return None
+
+
+def check_rules_inventory(root: Path, errors: list[str]) -> None:
+    """Cohérence d'inventaire : fichiers numérotés de .roo/rules/ ↔ README ↔ 02 §1.
+
+    Détecte automatiquement la dérive entre le disque, la table du README.md et
+    la liste « Corpus actuel : » de 02-gouvernance-regles.md (§1). Les mentions
+    de documents externes (ex. `docs/general_specs/`) sont hors périmètre.
+    Sans corpus sur disque (dépôts de test), le contrôle est sans objet.
+    """
+    rules_dir = root / ".roo" / "rules"
+    if not rules_dir.is_dir():
+        return
+    disk = {p.name for p in rules_dir.glob("[0-9][0-9]-*.md")}
+    if not disk:
+        return
+    readme = rules_dir / "README.md"
+    rule02 = rules_dir / "02-gouvernance-regles.md"
+    sources = (
+        (readme, "README.md", _corpus_refs_readme),
+        (rule02, "02-gouvernance-regles.md §1", _corpus_refs_rule02),
+    )
+    for path, label, extractor in sources:
+        if not path.is_file():
+            errors.append(
+                f"inventaire corpus : {label} requis pour contrôler la cohérence de .roo/rules/"
+            )
+            continue
+        refs = extractor(path.read_text(encoding="utf-8"))
+        if refs is None:
+            errors.append(f"inventaire corpus : inventaire introuvable dans {label}")
+            continue
+        unlisted = sorted(disk - refs)
+        dead = sorted(refs - disk)
+        if unlisted:
+            errors.append(
+                f"inventaire corpus : fichier(s) non listé(s) dans {label} : {', '.join(unlisted)}"
+            )
+        if dead:
+            errors.append(
+                f"inventaire corpus : référence(s) morte(s) dans {label} : {', '.join(dead)}"
+            )
 
 
 def check_entry_points(root: Path, errors: list[str]) -> None:
@@ -205,13 +360,18 @@ def main(argv: list[str] | None = None) -> int:
     errors: list[str] = []
     checked, broken = check_links(args.root, errors)
     skill_errors = check_skills(args.root, errors)
+    frontmatter_errors = check_skill_frontmatter(args.root, errors)
+    check_skill_adapters(args.root, errors)
+    check_rules_inventory(args.root, errors)
     check_entry_points(args.root, errors)
     check_roomodes(args.root, errors)
     check_models(args.root, errors)
 
     print(f"Harness : {len(EXPECTED_SKILLS)} skills attendues (.agents/skills/), "
           f"{checked} liens relatifs vérifiés, 4 gabarits attendus, "
-          f"{len(EXPECTED_MODE_RULES)} règles de modes attendues.")
+          f"{len(EXPECTED_MODE_RULES)} règles de modes attendues ; "
+          f"frontmatter ({frontmatter_errors} écart(s)), adaptateur .claude/skills "
+          f"et inventaire du corpus contrôlés.")
     if errors:
         print(f"❌ {len(errors)} problème(s) détecté(s) :")
         for error in errors:

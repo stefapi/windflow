@@ -22,6 +22,7 @@ Les règles de modes (conduite des modes Roo Code `orchestrator`, `architect`, `
 - Feuille de route : `docs/Roadmap.md`
 - Backlog et contrats : `.backlog/` (gabarits dans `.backlog/_models/`)
 - Protocole commun d'exécution : `docs/dev/protocole-execution.md` ; matrice de validation : `docs/dev/controles-validation.md`
+- Carte du harness, compatibilité outils et smoke tests : [docs/dev/harness.md](../../docs/dev/harness.md)
 - Skills (workflows de référence) : `.agents/skills/` ; point d'entrée commun : `AGENTS.md` (racine)
 
 ## Application et évolution des règles

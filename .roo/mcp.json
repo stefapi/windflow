@@ -5,7 +5,7 @@
       "args": [
         "mcp-server-sqlite",
         "--db-path",
-        "/home/stef/workspace/windflow/dev/data/windflow.db"
+        "dev/data/windflow.db"
       ]
     },
     "context7": {

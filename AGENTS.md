@@ -9,7 +9,9 @@ de domaine applicables au changement.
 Le [protocole d'exécution](docs/dev/protocole-execution.md) relie contrat,
 autonomie, réexamen de l'approche, vérification et revue ; la
 [matrice de validation](docs/dev/controles-validation.md) inventorie les portes
-et leurs limites. Les skills du dépôt sont dans [.agents/skills/](.agents/skills/) ;
+et leurs limites. La [carte du harness](docs/dev/harness.md) décrit la
+compatibilité Claude Code / OpenCode / Roo Code / Codex (points d'entrée,
+adaptateur de skills, smoke tests de chargement). Les skills du dépôt sont dans [.agents/skills/](.agents/skills/) ;
 ouvrir le `SKILL.md` pertinent lorsqu'une demande appelle ce workflow, sans
 charger toutes les skills.
 

@@ -46,6 +46,7 @@ _(vide)_
 ## 🚧 REVIEW
 
 - [?] EPIC-020 : Alignement du harness de pilotage sur PreviImmo
+- [?] EPIC-021 : Durcissement du harness multi-outils (Claude Code, OpenCode, Roo Code, Codex)
 
 ## ✅ DONE
 

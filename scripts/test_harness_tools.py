@@ -7,12 +7,17 @@ Couverture :
   - backlog.py    : cas nominal (exit 0, kanban généré), statut invalide, doublon
                     d'identifiant, incohérence registre, statut d'epic incohérent,
                     non-écriture du kanban en cas de violation ;
-  - check_harness.py : cas nominal (exit 0), lien cassé détecté, skill manquante.
+  - check_harness.py : cas nominal (exit 0), lien cassé détecté, skill manquante,
+                    frontmatter invalide (nom ≠ répertoire, description
+                    absente/hors bornes), adaptateur .claude/skills (manquant,
+                    copie, cible erronée), inventaire du corpus (fichier non
+                    listé, référence morte).
 """
 
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import tempfile
 import unittest
@@ -250,7 +255,16 @@ class TestCheckHarnessTool(TempRootMixin, unittest.TestCase):
         rules = self.root / ".roo" / "rules"
         rules.mkdir(parents=True)
         (rules / "README.md").write_text(
-            "# Rules\n\nVoir [les gabarits](../../.backlog/_models/README.md).\n",
+            "# Rules\n\n"
+            "| Famille | Fichiers |\n| --- | --- |\n"
+            "| 00–02 | `00-project-context.md`, `02-gouvernance-regles.md` |\n\n"
+            "Voir [les gabarits](../../.backlog/_models/README.md).\n",
+            encoding="utf-8",
+        )
+        (rules / "00-project-context.md").write_text("# Contexte\n", encoding="utf-8")
+        (rules / "02-gouvernance-regles.md").write_text(
+            "# 02 — Gouvernance\n\nCorpus actuel : `00-project-context.md`, "
+            "`02-gouvernance-regles.md`.\n",
             encoding="utf-8",
         )
         for folder, filename in harness_mod.EXPECTED_MODE_RULES:
@@ -260,7 +274,17 @@ class TestCheckHarnessTool(TempRootMixin, unittest.TestCase):
         for skill in harness_mod.EXPECTED_SKILLS:
             skill_file = self.root / ".agents" / "skills" / skill / "SKILL.md"
             skill_file.parent.mkdir(parents=True, exist_ok=True)
-            skill_file.write_text(f"# Skill {skill}\n\nContenu non vide.\n", encoding="utf-8")
+            skill_file.write_text(
+                f"---\nname: {skill}\ndescription: Skill de test {skill}.\n---\n\n"
+                f"# {skill}\n\nContenu non vide.\n",
+                encoding="utf-8",
+            )
+        claude_dir = self.root / ".claude"
+        claude_dir.mkdir(parents=True, exist_ok=True)
+        adapter = claude_dir / "skills"
+        if adapter.is_symlink() or adapter.exists():
+            adapter.unlink()
+        os.symlink("../.agents/skills", adapter)
         models = self.root / ".backlog" / "_models"
         models.mkdir(parents=True)
         for model in harness_mod.EXPECTED_MODELS:
@@ -289,7 +313,10 @@ class TestCheckHarnessTool(TempRootMixin, unittest.TestCase):
         self.build_valid_harness()
         readme = self.root / ".roo" / "rules" / "README.md"
         readme.write_text(
-            "# Rules\n\nVoir [cible inexistante](./absent.md).\n", encoding="utf-8"
+            "# Rules\n\n| Famille | Fichiers |\n| --- | --- |\n"
+            "| 00–02 | `00-project-context.md`, `02-gouvernance-regles.md` |\n\n"
+            "Voir [cible inexistante](./absent.md).\n",
+            encoding="utf-8",
         )
         self.assertEqual(self.run_main(), 1)
 
@@ -312,6 +339,81 @@ class TestCheckHarnessTool(TempRootMixin, unittest.TestCase):
         legacy.write_text("# Ancien emplacement\n", encoding="utf-8")
         self.assertEqual(self.run_main(), 1)
 
+    # ------------------------------------------------------- frontmatter skills
+
+    def test_frontmatter_name_mismatch_detected(self) -> None:
+        self.build_valid_harness()
+        skill = self.root / ".agents" / "skills" / "treat-story" / "SKILL.md"
+        skill.write_text(
+            "---\nname: wrong-name\ndescription: Skill de test.\n---\n\nContenu.\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(self.run_main(), 1)
+
+    def test_frontmatter_missing_description_detected(self) -> None:
+        self.build_valid_harness()
+        skill = self.root / ".agents" / "skills" / "treat-story" / "SKILL.md"
+        skill.write_text("---\nname: treat-story\n---\n\nContenu.\n", encoding="utf-8")
+        self.assertEqual(self.run_main(), 1)
+
+    def test_frontmatter_description_too_long_detected(self) -> None:
+        self.build_valid_harness()
+        skill = self.root / ".agents" / "skills" / "treat-story" / "SKILL.md"
+        skill.write_text(
+            f"---\nname: treat-story\ndescription: {'x' * 1025}\n---\n\nContenu.\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(self.run_main(), 1)
+
+    def test_frontmatter_block_missing_detected(self) -> None:
+        self.build_valid_harness()
+        skill = self.root / ".agents" / "skills" / "treat-story" / "SKILL.md"
+        skill.write_text("# treat-story\n\nPas de frontmatter.\n", encoding="utf-8")
+        self.assertEqual(self.run_main(), 1)
+
+    # -------------------------------------------------------- adaptateur Claude
+
+    def test_claude_adapter_missing_detected(self) -> None:
+        self.build_valid_harness()
+        (self.root / ".claude" / "skills").unlink()
+        self.assertEqual(self.run_main(), 1)
+
+    def test_claude_adapter_copy_detected(self) -> None:
+        self.build_valid_harness()
+        adapter = self.root / ".claude" / "skills"
+        adapter.unlink()
+        adapter.mkdir()
+        (adapter / "treat-story").mkdir()
+        (adapter / "treat-story" / "SKILL.md").write_text("# Copie\n", encoding="utf-8")
+        self.assertEqual(self.run_main(), 1)
+
+    def test_claude_adapter_wrong_target_detected(self) -> None:
+        self.build_valid_harness()
+        adapter = self.root / ".claude" / "skills"
+        adapter.unlink()
+        os.symlink("../.backlog", adapter)
+        self.assertEqual(self.run_main(), 1)
+
+    # ------------------------------------------------------------ inventaire corpus
+
+    def test_inventory_unlisted_file_detected(self) -> None:
+        self.build_valid_harness()
+        (self.root / ".roo" / "rules" / "99-experiment.md").write_text(
+            "# 99 — Hors inventaire\n", encoding="utf-8"
+        )
+        self.assertEqual(self.run_main(), 1)
+
+    def test_inventory_dead_reference_detected(self) -> None:
+        self.build_valid_harness()
+        readme = self.root / ".roo" / "rules" / "README.md"
+        readme.write_text(
+            readme.read_text(encoding="utf-8").replace(
+                "`02-gouvernance-regles.md` |", "`02-gouvernance-regles.md`, `77-fantome.md` |"
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual(self.run_main(), 1)
+
     def test_missing_entry_points_detected(self) -> None:
         self.build_valid_harness()
         (self.root / "AGENTS.md").unlink()
@@ -327,7 +429,9 @@ class TestCheckHarnessTool(TempRootMixin, unittest.TestCase):
         self.build_valid_harness()
         readme = self.root / ".roo" / "rules" / "README.md"
         readme.write_text(
-            "# Rules\n\nExemple :\n\n```markdown\n[placeholder](./dans-un-bloc.md)\n```\n",
+            "# Rules\n\n| Famille | Fichiers |\n| --- | --- |\n"
+            "| 00–02 | `00-project-context.md`, `02-gouvernance-regles.md` |\n\n"
+            "Exemple :\n\n```markdown\n[placeholder](./dans-un-bloc.md)\n```\n",
             encoding="utf-8",
         )
         self.assertEqual(self.run_main(), 0)

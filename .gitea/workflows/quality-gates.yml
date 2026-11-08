@@ -109,6 +109,28 @@ jobs:
           name: bandit-security-report
           path: bandit-report.json
 
+  harness-gates:
+    name: Harness Gates (corpus, skills, backlog)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Harness consistency (liens, skills, adaptateur, inventaire)
+        run: python3 scripts/check_harness.py
+
+      - name: Backlog invariants (lecture seule)
+        run: python3 scripts/backlog.py check
+
+      - name: Harness guard unit tests
+        run: python3 scripts/test_harness_tools.py
+
   dependency-check:
     name: Dependency Security Check
     runs-on: ubuntu-latest

@@ -33,7 +33,7 @@ Ce registre est la **source de vérité unique** pour l'attribution des identifi
 | EPIC-014 | .backlog/epics/EPIC-014-remediation-p3-finitions-purge.md | 2026-08-30 | DONE — clôturée le 2026-11-07 (revue finale de conformité STORY-254) |
 | EPIC-015 | .backlog/epics/EPIC-015-compute-clusters-apps-k8s.md | 2026-09-05 | TODO |
 
-**Prochaine épic : EPIC-021** (plus haut attribué = EPIC-020, inscrit le 2026-11-08).
+**Prochaine épic : EPIC-022** (plus haut attribué = EPIC-021, inscrit le 2026-11-08).
 
 ## Stories
 
@@ -146,6 +146,7 @@ Ce registre est la **source de vérité unique** pour l'attribution des identifi
 | EPIC-018 | .backlog/epics/EPIC-018-documentation-exhaustive-endpoints.md | 2026-11-08 | TODO — Documentation exhaustive des endpoints, badges + x-codeSamples (inspiration previimmo EPIC-003) |
 | EPIC-019 | .backlog/epics/EPIC-019-bac-a-sable-mock-backend.md | 2026-11-08 | TODO — Bac à sable / mock backend servi par le contrat OpenAPI (inspiration previimmo EPIC-004) |
 | EPIC-020 | .backlog/epics/EPIC-020-alignment-harness-previimmo.md | 2026-11-08 | REVIEW — Alignement du harness de pilotage sur PreviImmo (règles, modes, skills .agents/skills, protocole, AGENTS.md, ci-fast/check) |
+| EPIC-021 | .backlog/epics/EPIC-021-durcissement-harness-multi-outils.md | 2026-11-08 | REVIEW — Durcissement du harness multi-outils (adaptateur skills Claude Code, garde-fous check_harness étendus, CI Gitea, MCP portable, doc harness) |
 
 ## Bugs
 

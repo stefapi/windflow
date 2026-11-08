@@ -4,8 +4,8 @@
 
 | Contrôle | Commande locale | CI configurée | Portée et limites |
 | --- | --- | --- | --- |
-| Backlog | `make backlog-check` | Partielle | Identifiants, statuts, registre, relations des contrats, cases et vue générée ; tests sur corpus temporaire (`make harness-test`). Aucune validation des AC ou du métier |
-| Instructions partagées | `make check-harness` | Partielle | Structure et liens locaux du corpus, présence des points d'entrée (AGENTS.md, CLAUDE.md, skills, règles de modes) et import Claude ; ni chargement réel des clients, ni comportement des agents certifiés |
+| Backlog | `make backlog-check` | Oui (job `harness-gates`) | Identifiants, statuts, registre, relations des contrats, cases et vue générée ; tests sur corpus temporaire (`make harness-test`). Aucune validation des AC ou du métier |
+| Instructions partagées | `make check-harness` | Oui (job `harness-gates`) | Structure et liens locaux du corpus, présence des points d'entrée (AGENTS.md, CLAUDE.md, skills, règles de modes), frontmatter des skills, adaptateur `.claude/skills` et inventaire du corpus ; ni chargement réel des clients, ni comportement des agents certifiés (smoke tests : `docs/dev/harness.md`) |
 | Lint et formatage | `make lint` | Oui (`.gitea/workflows/ci.yml`, `quality-gates.yml`) | black, isort, flake8, mypy, ESLint, Prettier, Stylelint |
 | Types | `make typecheck` | Oui | mypy + tsc strict |
 | Tests backend + couverture ≥ 80 % | `make ci-test-backend` | Oui (`test.yml`) | Vérifier les scénarios réellement collectés, les succès et les tests ignorés/skippés |
