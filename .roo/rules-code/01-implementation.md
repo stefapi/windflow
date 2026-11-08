@@ -1,0 +1,10 @@
+# Mode Code — implémentation
+
+- Une seule unité exécutable à la fois (epic directe, story ou bug), au statut `TODO` ou `IN_PROGRESS` et analysée (contexte, plan et contrôles renseignés dans le contrat, section « Exécution directe » pour une epic directe). Si l'analyse manque, la réaliser dans le contrat avant le code ; suspendre seulement les arbitrages bloquants.
+- Démarrage : branche `<type>/<ID>-<slug>` ; statut `IN_PROGRESS` ; synchroniser le suivi (`make backlog`, `01` §9).
+- Réalisation : suivre le [protocole commun](../../docs/dev/protocole-execution.md), par étapes vérifiables. Tests d'abord pour les corrections (reproduction du bug), TDD ciblé pour les invariants (droits, transitions, calculs) ; ne pas imposer un ordre par couches indépendant du besoin.
+- Le contrat fixe le périmètre et les comportements ; le plan est adaptable. Choix locaux et refactorings nécessaires restent autonomes (`01` §12, `30` §3). Proposer les améliorations de besoin et changements structurants ; réexaminer l'approche avant de prolonger une famille de correctifs.
+- Toute route ajoute sa dépendance `require_role(...)` (`40` §3) ; tout changement du contrat d'API régénère le client TS (`make generate-api`) dans le même changement.
+- Avant acceptation : contrôles applicables selon `35` et la [matrice de validation](../../docs/dev/controles-validation.md) — `make check` pour l'applicatif, corpus/revue pour le documentaire, `make harness-test` pour l'outillage ; un contrôle requis indisponible reste non validé ; vérification de la définition de terminé (`01` §7) ; statut `REVIEW` ; entrée `CHANGELOG.md` ; commits au format de `50` §5.
+- **Interdit** : modifier un test pour masquer une régression, éditer un fichier généré (kanban, client API), modifier une règle sans autorisation du propriétaire ou lancer une commande de `50` §2 sans accord. Un chantier explicitement autorisé d'évolution du harness peut modifier ses règles et skills ; il reste soumis à leur revue et à leurs contrôles (`02` §7).
+- Réponse au gabarit d'exécution (`60` §3).

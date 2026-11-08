@@ -1,177 +1,100 @@
-# Organisation des répertoires du projet
+# 55 — Structure du dépôt
 
-## Structure racine
+## 1. Racine
 
 ```
 windflow/
-├── backend/          # API FastAPI + services métier
-├── frontend/         # SPA Vue 3
-├── cli/              # CLI client Python
-├── infrastructure/   # Docker, Nginx, Prometheus, Grafana
-├── scripts/          # Scripts d'installation et utilitaires
-├── dev/              # Scripts de développement et templates
-├── stacks_definitions/ # Définitions YAML de stacks Docker
-├── docs/             # Documentation et spécifications
-├── .backlog/         # Gestion de projet (epics, stories, kanban)
-├── Makefile          # Toutes les commandes de dev (source de vérité)
-└── pyproject.toml    # Config UV (PEP 621) + dépendances Python + uv.lock
+├── .agents/               skills du pipeline backlog (création, analyse, traitement, revue)
+├── .backlog/              contrats : epics, stories, bugs, registre, kanban (généré), gabarits
+├── .gitea/                CI (workflows Gitea Actions)
+├── .husky/                hooks Git (commit-msg)
+├── .roo/                  règles (.roo/rules/, .roo/rules-<mode>/), mcp.json
+├── backend/               API FastAPI + services métier
+├── frontend/              SPA Vue 3
+├── cli/                   CLI client Python (argparse)
+├── infrastructure/        Docker, Nginx, Prometheus, Grafana
+├── scripts/               garde-fous (backlog.py, check_harness.py) et utilitaires
+├── dev/                   scripts de développement
+├── stacks_definitions/    définitions YAML de stacks
+├── docs/                  spécifications (general_specs, technical_specs), docs dev
+├── Makefile               source de vérité des commandes
+├── pyproject.toml         config uv (PEP 621) + dépendances Python + uv.lock
+└── .env.example  .env.prod.example  .rooignore  .gitignore  .editorconfig
 ```
 
----
+Aucun autre dossier de premier niveau sans mise à jour de ce fichier.
 
-## Backend (`backend/`)
-
-### Structure des modules
+## 2. Backend (`backend/`)
 
 ```
 backend/
 ├── app/
 │   ├── main.py               # Point d'entrée FastAPI, montage des routers
-│   ├── config.py             # Settings Pydantic-settings (env vars)
+│   ├── config.py             # Settings pydantic-settings (seul lieu lisant l'environnement)
 │   ├── database.py           # Session async SQLAlchemy
-│   │
-│   ├── api/v1/               # Endpoints REST (routers FastAPI)
-│   │   └── *.py              # Un fichier par domaine (containers.py, stacks.py, auth.py…)
-│   │
-│   ├── auth/                 # AuthN/AuthZ
-│   │   ├── jwt.py            # Génération/vérification JWT
-│   │   └── dependencies.py   # Dépendances FastAPI (get_current_user, require_role…)
-│   │
-│   ├── core/                 # Transversal (ne pas mettre de logique métier ici)
-│   │   ├── exceptions.py     # Exceptions personnalisées (WindFlowException et sous-classes)
-│   │   ├── abstractions.py   # Classes de base abstraites
-│   │   ├── events.py         # Événements système (Redis Streams)
-│   │   ├── rate_limit.py     # Rate limiting
-│   │   └── resilience.py     # Circuit breaker, retry, bulkhead
-│   │
-│   ├── models/               # Modèles SQLAlchemy (ORM)
-│   │   └── *.py              # Un fichier par entité (user.py, stack.py, deployment.py…)
-│   │
-│   ├── schemas/              # Schémas Pydantic (validation I/O)
-│   │   └── *.py              # Un fichier par domaine (stack.py, docker.py, auth.py…)
-│   │
-│   ├── services/             # Logique métier (pas de dépendance HTTP directe)
-│   │   └── *.py              # Un fichier par domaine (docker_client_service.py…)
-│   │
-│   ├── tasks/                # Tâches async (asyncio runtime)
-│   │   └── *.py
-│   │
-│   ├── websocket/            # Handlers WebSocket (temps réel)
-│   │   └── *.py
-│   │
-│   ├── middleware/           # Middlewares FastAPI (logging, correlation ID…)
-│   │   └── *.py
-│   │
-│   ├── helper/               # Fonctions utilitaires pures (pas de dépendances métier)
-│   │   └── *.py
-│   │
+│   ├── api/v1/               # Endpoints REST (un fichier par domaine)
+│   ├── auth/                 # AuthN/AuthZ (jwt.py, dependencies.py, rbac.py)
+│   ├── core/                 # Transversal, sans logique métier (exceptions, abstractions,
+│   │                         # events.py — bus Bus, cache, rate_limit, resilience, metrics)
+│   ├── models/               # Modèles SQLAlchemy (un fichier par entité)
+│   ├── schemas/              # Schémas Pydantic (*Request/*Response/*Update)
+│   ├── services/             # Logique métier (une classe, injection de dépendances)
+│   ├── tasks/                # Tâches async
+│   ├── websocket/            # Handlers temps réel (21)
+│   ├── middleware/           # Middlewares FastAPI (ordre critique, voir middleware/README.md)
+│   ├── helper/               # Utilitaires purs
 │   └── enums/                # Énumérations partagées
-│       └── *.py
-│
-└── tests/
-    ├── conftest.py           # Fixtures partagées (DB de test, clients HTTP…)
-    ├── unit/                 # Tests unitaires (mocks des dépendances externes)
-    │   ├── test_services/
-    │   ├── test_schemas/
-    │   └── test_*.py
-    └── integration/          # Tests d'intégration (DB réelle, Redis…)
-        └── test_api_*.py
+├── alembic/versions/         # Migrations (jamais de DDL manuel)
+└── tests/                    # conftest.py, unit/, integration/
 ```
 
-### Conventions backend
+Conventions : un router = un domaine ; validation Pydantic systématique ; exceptions de `core/exceptions.py` uniquement ; migrations Alembic.
 
-- **Un router = un domaine** dans `api/v1/` (monté dans `main.py`)
-- **Un service = une classe** avec injection de dépendances (pas de singleton global sauf DB)
-- **Schémas Pydantic** séparés en `*Request`, `*Response`, `*Update` selon usage
-- **Migrations Alembic** dans `alembic/versions/` (jamais modifier les tables manuellement)
-- **Toujours** lever des exceptions de `core/exceptions.py`, jamais des exceptions Python brutes dans les endpoints
-
----
-
-## Frontend (`frontend/`)
-
-### Structure des modules
+## 3. Frontend (`frontend/`)
 
 ```
 frontend/
 ├── src/
-│   ├── main.ts               # Point d'entrée Vue 3
-│   ├── App.vue               # Composant racine
-│   │
+│   ├── main.ts  App.vue
 │   ├── views/                # Pages (une vue = une route)
-│   │   └── *.vue             # ContainerDetail.vue, Stacks.vue…
-│   │
-│   ├── components/           # Composants réutilisables
-│   │   ├── ui/               # Composants UI génériques (boutons, badges…)
-│   │   └── [domaine]/        # Composants spécifiques à un domaine
-│   │
-│   ├── composables/          # Logique réutilisable (Composition API)
-│   │   └── use*.ts           # useContainerStats.ts, useDeployments.ts…
-│   │
-│   ├── stores/               # État global Pinia
-│   │   └── *.ts              # containers.ts, deployments.ts, auth.ts…
-│   │
-│   ├── services/             # Appels API HTTP (axios)
-│   │   └── *.ts              # Un fichier par domaine
-│   │
-│   ├── types/                # Types TypeScript partagés
-│   │   └── *.ts              # api.ts, models.ts…
-│   │
-│   ├── router/               # Vue Router
-│   │   └── index.ts
-│   │
-│   ├── utils/                # Fonctions utilitaires pures
-│   │   └── *.ts
-│   │
-│   ├── assets/               # Images, icônes statiques
-│   ├── styles/               # CSS/UnoCSS global
-│   └── layouts/              # Layouts de pages (DefaultLayout.vue…)
-│
-└── tests/
-    ├── unit/                 # Tests unitaires Vitest
-    │   ├── views/            # Tests des vues (*.spec.ts)
-    │   ├── components/       # Tests des composants
-    │   └── composables/      # Tests des composables
-    ├── integration/          # Tests d'intégration
-    └── e2e/                  # Tests E2E Playwright (workflows critiques uniquement)
+│   ├── components/           # ui/ (génériques) + [domaine]/ (spécifiques)
+│   ├── composables/          # use*.ts (Composition API)
+│   ├── stores/               # Pinia (un store = un domaine)
+│   ├── services/             # Appels HTTP Axios (seul point d'accès à l'API)
+│   ├── types/                # Types TypeScript partagés (importer depuis là)
+│   ├── router/  layouts/  utils/  assets/  styles/
+└── tests/                    # unit/ (views, components, composables), integration/, e2e/
 ```
 
-### Conventions frontend
+Conventions : `<script setup lang="ts">` obligatoire ; fichiers kebab-case ; composables `use*` pour la logique réutilisable ; jamais d'axios hors `services/` (`06`).
 
-- **Composition API obligatoire** (`<script setup lang="ts">`)
-- **Fichiers kebab-case** : `container-detail.vue` (mais le composant s'appelle `ContainerDetail`)
-- **Un store Pinia = un domaine** (état + actions + getters)
-- **Composables `use*`** pour toute logique réutilisable ou avec état local
-- **Services** pour les appels HTTP (jamais d'axios directement dans les views/composants)
-- **Types** centralisés dans `src/types/` — importer depuis là, ne pas redéfinir localement
+## 4. Localisation des tests
 
----
-
-## Tests — localisation des fichiers
-
-| Type de test | Backend | Frontend |
-|---|---|---|
+| Type | Backend | Frontend |
+| --- | --- | --- |
 | Unitaire service | `backend/tests/unit/test_services/test_xxx_service.py` | — |
-| Unitaire schéma | `backend/tests/unit/test_schemas/test_xxx.py` | — |
-| Unitaire endpoint | `backend/tests/unit/test_api/test_xxx.py` | — |
-| Unitaire composant | — | `frontend/tests/unit/components/Xxx.spec.ts` |
-| Unitaire composable | — | `frontend/tests/unit/composables/useXxx.spec.ts` |
-| Unitaire vue | — | `frontend/tests/unit/views/XxxView.spec.ts` |
-| Intégration API | `backend/tests/integration/test_api_xxx.py` | — |
-| E2E workflow | — | `frontend/tests/e2e/xxx.spec.ts` |
+| Unitaire schéma/endpoint | `backend/tests/unit/test_schemas/`, `test_api/` | — |
+| Unitaire composant/composable/vue | — | `frontend/tests/unit/{components,composables,views}/Xxx.spec.ts` |
+| Intégration API | `backend/tests/integration/test_api_xxx.py` | `frontend/tests/integration/` |
+| E2E | — | `frontend/tests/e2e/xxx.spec.ts` |
 
----
+## 5. Dossiers générés ou techniques
 
-## Makefile — commandes disponibles
+| Chemin | Règle |
+| --- | --- |
+| Client API généré | Généré par `make generate-api`, commité, jamais édité à la main |
+| `.backlog/kanban.md` | Généré par `make backlog` ; édition manuelle interdite |
+| `.venv/`, `venv/`, `node_modules/`, `dist/`, caches, `htmlcov/`, `coverage.xml` | Jamais commités ; exclus par `.gitignore` et `.rooignore` |
+| `data/`, logs, dumps | Jamais commités ; jamais lus par un agent (`.rooignore`) |
+| `backend/alembic/versions/` | Modifiés seulement selon `20` §6 |
 
-Le `Makefile` à la racine est la **source de vérité** pour toutes les commandes de développement.
-Consulter `make help` pour la liste complète. Les principales :
+## 6. Documentation
 
-```bash
-make test-backend          # Tous les tests backend
-make test-frontend         # Tous les tests frontend
-make lint                  # Lint backend + frontend
-make typecheck             # mypy + tsc
-make build                 # Build production
-make dev                   # Démarrer les services de dev
+```
+docs/
+├── general_specs/    # spécification fonctionnelle canonique (00-index.md, 01…19)
+├── technical_specs/  # spécifications techniques (WEBSOCKET-REAL-TIME, DESIGN-SYSTEM, …)
+├── dev/              # protocole d'exécution, matrice de validation
+├── Roadmap.md
+└── rapports et plans de remédiation
 ```

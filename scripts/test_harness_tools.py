@@ -192,6 +192,27 @@ class TestBacklogTool(TempRootMixin, unittest.TestCase):
                              story_checked=True)
         self.assertEqual(self.run_main("check"), 0)
 
+    def test_epic_review_is_manual_declaration(self) -> None:
+        # epic REVIEW avec story DONE : déclaration manuelle légitime (revue globale),
+        # la dérivation ne s'applique pas (cf. règle 01 §6)
+        write_minimal_corpus(self.root, epic_status="DONE", story_status="DONE",
+                             story_checked=True)
+        epic = self.root / ".backlog" / "epics" / "EPIC-900-test.md"
+        epic.write_text(
+            EPIC_TEMPLATE.format(eid="EPIC-900", title="Epic de test", status="REVIEW",
+                                 story_lines="- [x] STORY-900 : Titre story"),
+            encoding="utf-8",
+        )
+        registry = self.root / ".backlog" / "identifiants.md"
+        registry.write_text(
+            registry.read_text(encoding="utf-8").replace(
+                ".backlog/epics/EPIC-900-test.md | 2026-11-01 | DONE",
+                ".backlog/epics/EPIC-900-test.md | 2026-11-01 | REVIEW",
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual(self.run_main("check"), 0)
+
     def test_abandoned_title_marker_mismatch_detected(self) -> None:
         write_minimal_corpus(self.root, epic_status="TODO", story_status="TODO")
         story = self.root / ".backlog" / "stories" / "STORY-900-test.md"
@@ -232,8 +253,12 @@ class TestCheckHarnessTool(TempRootMixin, unittest.TestCase):
             "# Rules\n\nVoir [les gabarits](../../.backlog/_models/README.md).\n",
             encoding="utf-8",
         )
+        for folder, filename in harness_mod.EXPECTED_MODE_RULES:
+            mode_dir = self.root / ".roo" / folder
+            mode_dir.mkdir(parents=True, exist_ok=True)
+            (mode_dir / filename).write_text(f"# Mode {folder}\n\nRègle de mode.\n", encoding="utf-8")
         for skill in harness_mod.EXPECTED_SKILLS:
-            skill_file = self.root / ".roo" / "skills" / skill / "SKILL.md"
+            skill_file = self.root / ".agents" / "skills" / skill / "SKILL.md"
             skill_file.parent.mkdir(parents=True, exist_ok=True)
             skill_file.write_text(f"# Skill {skill}\n\nContenu non vide.\n", encoding="utf-8")
         models = self.root / ".backlog" / "_models"
@@ -245,6 +270,13 @@ class TestCheckHarnessTool(TempRootMixin, unittest.TestCase):
             "customModes:\n  - slug: code\n    name: Code\n  - slug: architect\n    name: Architect\n",
             encoding="utf-8",
         )
+        (self.root / "AGENTS.md").write_text("# Instructions\n\nVoir [.roo/rules](.roo/rules).\n", encoding="utf-8")
+        (self.root / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")
+        (self.root / ".rooignore").write_text(".env\n", encoding="utf-8")
+        dev_docs = self.root / "docs" / "dev"
+        dev_docs.mkdir(parents=True)
+        (dev_docs / "protocole-execution.md").write_text("# Protocole\n", encoding="utf-8")
+        (dev_docs / "controles-validation.md").write_text("# Contrôles\n", encoding="utf-8")
 
     def run_main(self) -> int:
         return harness_mod.main(["--root", str(self.root)])
@@ -263,14 +295,32 @@ class TestCheckHarnessTool(TempRootMixin, unittest.TestCase):
 
     def test_missing_skill_detected(self) -> None:
         self.build_valid_harness()
-        (self.root / ".roo" / "skills" / "analyse-story" / "SKILL.md").unlink()
+        (self.root / ".agents" / "skills" / "analyse-story" / "SKILL.md").unlink()
         self.assertEqual(self.run_main(), 1)
 
     def test_empty_skill_detected(self) -> None:
         self.build_valid_harness()
-        (self.root / ".roo" / "skills" / "treat-story" / "SKILL.md").write_text(
+        (self.root / ".agents" / "skills" / "treat-story" / "SKILL.md").write_text(
             "   \n", encoding="utf-8"
         )
+        self.assertEqual(self.run_main(), 1)
+
+    def test_legacy_roo_skills_detected(self) -> None:
+        self.build_valid_harness()
+        legacy = self.root / ".roo" / "skills" / "analyse-story" / "SKILL.md"
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text("# Ancien emplacement\n", encoding="utf-8")
+        self.assertEqual(self.run_main(), 1)
+
+    def test_missing_entry_points_detected(self) -> None:
+        self.build_valid_harness()
+        (self.root / "AGENTS.md").unlink()
+        self.assertEqual(self.run_main(), 1)
+        (self.root / "AGENTS.md").write_text("# Instructions\n", encoding="utf-8")
+        (self.root / "CLAUDE.md").write_text("Pas d'import\n", encoding="utf-8")
+        self.assertEqual(self.run_main(), 1)
+        (self.root / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")
+        (self.root / ".roo" / "rules-debug" / "01-debogage.md").unlink()
         self.assertEqual(self.run_main(), 1)
 
     def test_code_block_links_ignored(self) -> None:

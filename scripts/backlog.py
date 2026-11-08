@@ -23,7 +23,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-EPIC_STATUSES = {"TODO", "IN_PROGRESS", "BLOCKED", "DONE", "ABANDONED"}
+EPIC_STATUSES = {"TODO", "IN_PROGRESS", "REVIEW", "BLOCKED", "DONE", "ABANDONED"}
 STORY_STATUSES = {"TODO", "IN_PROGRESS", "REVIEW", "BLOCKED", "DONE", "ABANDONED"}
 BUG_STATUSES = {"NEW", "CONFIRMED", "IN_PROGRESS", "REVIEW", "DONE", "WONT_FIX", "ABANDONED"}
 
@@ -285,8 +285,9 @@ class BacklogCorpus:
             derived = self._derived_epic_status(contract)
             if derived is None or contract.status == "ABANDONED":
                 continue
-            # BLOCKED reste une déclaration manuelle légitime (dépendance externe)
-            if contract.status == "BLOCKED":
+            # BLOCKED reste une déclaration manuelle légitime (dépendance externe) ;
+            # REVIEW aussi (epic directe prête à relire, ou revue globale d'une epic découpée).
+            if contract.status in {"BLOCKED", "REVIEW"}:
                 continue
             if contract.status != derived:
                 self.anomalies.append(

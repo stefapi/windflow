@@ -642,6 +642,14 @@ ci-full: ci-lint-backend ci-lint-frontend ci-test-backend ci-test-frontend ci-se
 
 ci-quick: ci-lint-backend ci-lint-frontend ## ⚡ CI: Quick checks (lint only)
 
+.PHONY: ci-fast check
+
+ci-fast: backend-lint backend-typecheck frontend-lint-check frontend-typecheck backlog-check check-harness backend-test-unit frontend-test-unit ## ⚡ Retour intermédiaire local (lint, types, corpus, backlog, tests sans couverture)
+	@echo "⚡ ci-fast terminé — retour intermédiaire ; ne remplace pas 'make check' ni les portes d'acceptation"
+
+check: ci-full backend-typecheck frontend-typecheck cli-lint cli-test backlog check-harness harness-test ## 🛡️ Portes locales complètes avant acceptation
+	@echo "🛡️ make check terminé — vérifier les contrôles supplémentaires requis par la tâche (cf. docs/dev/controles-validation.md)"
+
 # ============================================================================
 # ALL-IN-ONE COMMANDS
 # ============================================================================

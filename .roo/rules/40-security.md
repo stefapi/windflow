@@ -1,123 +1,78 @@
-# Sécurité (obligatoire)
+# 40 — Sécurité (obligatoire)
 
-## Principes
-- OWASP Top 10
-- least privilege
-- zero trust
-- chiffrement en transit et au repos
-- ne jamais logger de données sensibles
+> Prime sur toute autre règle (`02` §2). En cas de doute : l'option la plus restrictive, signalée.
 
-## AuthN/AuthZ
-- JWT + refresh (voir `docs/general_specs/07-authentification.md`)
-- RBAC côté API (source de vérité) — voir `docs/general_specs/08-rbac-permissions.md`
-- Hash Argon2id effectif, double lecture bcrypt legacy avec re-hash automatique au login (STORY-130.1)
-- Refresh tokens opaques révocables `wf_rt_` avec rotation (STORY-123) ; clés API `wf_ak_` via `X-API-Key` (STORY-124)
-- RBAC granulaire 4 rôles (`viewer < operator < admin < super_admin`) via `require_role(...)` sur les endpoints REST et `ensure_role_ws` sur les canaux WebSocket (STORY-121/122)
-- Protection brute-force login : 5 échecs par username sur fenêtre glissante de 10 min → lockout 5 min (STORY-104)
-- validation inputs côté client ET serveur (Pydantic côté backend)
-- protection CSRF pour opérations critiques
+## 1. Principes
 
-### Bibliothèques d'authentification
-- python-jose (JWT)
-- passlib + argon2-cffi (hash des mots de passe)
-- email-validator
+OWASP Top 10 ; least privilege ; zero trust ; chiffrement en transit et au repos ; ne jamais logger de données sensibles ; aucune confiance dans ce qu'envoie le client — la validation serveur fait foi.
 
-### Mode dev sans auth
-- `disable_auth: bool = False` par défaut
-- Permet de contourner JWT en développement
+## 2. Authentification
 
-### Keycloak SSO
-- Optionnel (`keycloak_enabled: bool = False` par défaut)
-- Extension activable via `make enable-sso`
+- JWT + refresh (spécification `docs/general_specs/07-authentification.md`) : refresh tokens opaques révocables `wf_rt_` avec rotation (STORY-123) ; clés API `wf_ak_` via l'en-tête `X-API-Key` (STORY-124).
+- Hash Argon2id effectif, double lecture bcrypt legacy avec re-hash automatique au login uniquement (STORY-130.1) ; bcrypt en voie de retrait post-migration (STORY-250).
+- Protection brute-force login : 5 échecs par username sur fenêtre glissante de 10 min → lockout 5 min (STORY-104).
+- Bibliothèques : python-jose (JWT), passlib + argon2-cffi, email-validator.
+- Mode dev sans auth : `disable_auth: bool = False` par défaut ; signaler toute activation hors environnement de développement.
+- Keycloak SSO optionnel (`keycloak_enabled = False` par défaut), activable via `make enable-sso`.
+- Token d'accès côté frontend conservé **en mémoire** (store Pinia auth) — jamais en `localStorage` ni `sessionStorage`.
 
-## Rate limiting
-- fastapi-limiter avec Redis comme stockage
-- Fallback mémoire process-local effectif sans Redis (STORY-102)
-- Configuration par endpoint
+## 3. Autorisation (RBAC)
 
-## Headers de sécurité
-- CSP configurable
-- HSTS
-- X-Frame-Options
-- Security headers middleware dédié
+- Source de vérité côté API : 4 rôles `viewer < operator < admin < super_admin` (spécification `docs/general_specs/08-rbac-permissions.md`).
+- `require_role(...)` (et alias `require_viewer`, `require_operator`, `require_admin`, `require_super_admin`) sur les endpoints REST — `backend/app/auth/` ; `ensure_role_ws` / `require_role_ws` sur les canaux WebSocket (`21` §3).
+- Isolation des ressources : un utilisateur ne peut pas accéder aux ressources d'un autre ; vérifier l'appartenance dans les services.
+- Un endpoint ou canal sensible sans `require_role` alors que ses voisins en ont un est une escalade : à signaler en revue.
 
-## Secrets
-- HashiCorp Vault **optionnel** (`vault_enabled: bool = False` par défaut)
-- Activable via `make enable-secrets`
-- SecretManager Fernet (AES-256, clé dérivée PBKDF2) effectif pour les credentials en base (STORY-103)
-- jamais de secrets en dur
-- rotation + audit trail
-- audit trail applicatif : modèle `AuditLog` + émission sur actions critiques + `GET /admin/audit` (STORY-125)
+## 4. Validation et exposition
 
-## Scans
-- bandit/semgrep côté backend
-- npm audit côté frontend
+- Validation des inputs côté client ET serveur (Pydantic côté backend fait foi) ; paramètres de path/query typés et bornés.
+- Champs sensibles exclus explicitement des schémas `*Response` (`exclude={"password", "token", …}`).
+- Messages d'erreur génériques côté client : jamais de stack trace, SQL ou chemin de fichier dans une réponse.
+- En-têtes de sécurité : CSP configurable, HSTS, X-Frame-Options (security headers middleware, `20` §5). CORS : origines configurées — tout élargissement (`"*"`) est signalé.
+- Rate limiting fastapi-limiter (Redis, fallback mémoire process-local STORY-102), configurable par endpoint.
+- CSRF pour opérations critiques.
 
----
+## 5. Secrets
 
-## Checklist sécurité lors de l'analyse d'une story
+- **Jamais de secrets en dur**, ni dans les logs, ni dans une URL ; variables d'environnement (`07` §5).
+- SecretManager Fernet (AES-256, clé dérivée PBKDF2) effectif pour les credentials en base (STORY-103).
+- HashiCorp Vault optionnel (`vault_enabled = False` par défaut), activable via `make enable-secrets`.
+- Audit trail applicatif : modèle `AuditLog` + émission sur actions critiques + `GET /admin/audit` (STORY-125).
+- `.env.example` / `.env.prod.example` mis à jour dans le même commit qu'une nouvelle variable.
 
-Lors de la phase d'analyse (`analyse-story`), évaluer **obligatoirement** les points suivants :
+## 6. Données sensibles
+
+Jamais dans les journaux, les réponses d'erreur, les URL ni les labels de métriques (jamais de query string, `45` §4) : mots de passe, tokens (`wf_rt_`, `wf_ak_`, JWT), clés API LLM, credentials SSH/hosts, cookies, contenu de fichiers de configuration des cibles.
+
+**Interdit** : `eval`/`exec`/`pickle` sur des données non maîtrisées ; `yaml.load` (utiliser `yaml.safe_load`) ; SQL construite par concaténation (paramètres liés uniquement) ; `subprocess` avec `shell=True` ; `v-html`/`innerHTML` avec un contenu non maîtrisé ; désactivation de la vérification TLS.
+
+## 7. Scans
+
+bandit/semgrep côté backend, `pnpm audit` côté frontend (`make ci-security-backend`, `make ci-security-frontend`).
+
+## 8. Checklist sécurité lors de l'analyse d'une story
+
+Lors de la phase d'analyse (`analyse-story`), évaluer obligatoirement :
 
 ### Authentification & autorisation
-
-- [ ] L'endpoint/fonctionnalité nécessite-t-il une authentification ? → Si oui, vérifier que `get_current_user` est injecté
-- [ ] Quels rôles peuvent accéder à cette fonctionnalité ? → Lister les rôles autorisés et les rôles à exclure (RBAC)
-- [ ] Les accès RBAC sont-ils vérifiés côté API (source de vérité) ? → Pas seulement côté frontend
-- [ ] Des ressources appartenant à un utilisateur sont-elles exposées ? → Vérifier l'isolation (un user ne peut pas accéder aux ressources d'un autre)
+- [ ] L'endpoint/fonctionnalité nécessite-t-il une authentification ? → `get_current_user` injecté
+- [ ] Quels rôles peuvent y accéder ? → `require_role(...)` sur la route, `ensure_role_ws` sur le canal
+- [ ] Les accès RBAC sont-ils vérifiés côté API (source de vérité), pas seulement côté frontend ?
+- [ ] Des ressources par utilisateur sont-elles exposées ? → isolation vérifiée dans le service
 
 ### Validation & injection
-
-- [ ] Les inputs utilisateur sont-ils entièrement validés via Pydantic (backend) ?
-- [ ] Les paramètres de path/query sont-ils typés et bornés (min/max, regex si applicable) ?
-- [ ] Les entrées sont-elles susceptibles d'injection (SQL, commande shell, YAML, JSON) ? → Prévoir une sanitisation
-- [ ] Les uploads de fichiers (si applicable) sont-ils validés (type MIME, taille max) ?
+- [ ] Inputs entièrement validés via Pydantic ? Paramètres typés et bornés ?
+- [ ] Risque d'injection (SQL, shell, YAML, JSON) ? → sanitisation prévue
+- [ ] Uploads validés (type MIME, taille max) le cas échéant ?
 
 ### Exposition de données sensibles
-
-- [ ] La réponse API expose-t-elle des champs sensibles (mots de passe, tokens, secrets) ? → Les exclure explicitement dans les schémas Pydantic Response
-- [ ] Les logs produits contiennent-ils des données sensibles ? → Utiliser des masques/hash pour les secrets dans les logs
-- [ ] Les messages d'erreur révèlent-ils des informations internes (stack traces, noms de tables) ? → Retourner des messages génériques
+- [ ] Champs sensibles exclus des schémas `*Response` ?
+- [ ] Logs et métriques sans données sensibles ?
+- [ ] Messages d'erreur génériques ?
 
 ### Audit & traçabilité
+- [ ] L'opération doit-elle être tracée (audit log) — suppression, déploiement, modification de config ?
+- [ ] Les événements émis (bus, WebSocket) contiennent-ils des données sensibles ?
 
-- [ ] L'opération doit-elle être tracée (qui a fait quoi, quand) ? → Prévoir un audit log pour les actions critiques (suppression, déploiement, modification de config)
-- [ ] Les events Redis émis contiennent-ils des données sensibles non chiffrées ?
-
----
-
-## Checklist des tests de sécurité à spécifier dans une story
-
-Pour **tout nouvel endpoint** ou **feature modifiant des données**, les tests suivants DOIVENT être présents dans la section `## Tests à écrire` de la story :
-
-### Backend — tests obligatoires
-
-| Cas | Test attendu |
-|-----|-------------|
-| Accès sans token | `test_xxx_returns_401_without_token` |
-| Accès avec rôle insuffisant | `test_xxx_returns_403_for_viewer` (ou autre rôle insuffisant) |
-| Body invalide / champ manquant | `test_xxx_returns_422_on_invalid_body` |
-| Ressource introuvable | `test_xxx_returns_404_when_not_found` |
-| Accès à ressource d'un autre user | `test_xxx_returns_403_for_foreign_resource` (si applicable) |
-| Champs sensibles absents de la réponse | `test_xxx_response_does_not_expose_password` (si applicable) |
-
-### Frontend — tests obligatoires
-
-| Cas | Test attendu |
-|-----|-------------|
-| Route protégée sans auth | redirige vers `/login` |
-| Actions admin masquées pour viewer | éléments conditionnels non affichés |
-| Pas de secret/token visible dans le DOM | assertions `not.toContain` sur les tokens |
-
----
-
-## Application dans les tâches d'implémentation
-
-Lors de la rédaction des tâches (`analyse-story`), intégrer les exigences sécurité **directement dans les tâches concernées** :
-
-- Pour tout endpoint : mentionner explicitement la dépendance `require_role(...)` ou `get_current_user`
-- Pour les schémas Pydantic Response : mentionner les champs à **exclure** (`exclude={"password", "token"}`)
-- Pour les services : mentionner la vérification d'appartenance (`assert resource.owner_id == current_user.id`)
-- Pour les logs : mentionner `logger.info("...", extra={"user_id": ...})` sans données sensibles
-
-**Référencer** `docs/general_specs/07-authentification.md` et `docs/general_specs/08-rbac-permissions.md` pour les détails des rôles.
+### Tests de sécurité à spécifier dans la story
+Pour tout nouvel endpoint ou feature modifiant des données : `401` sans token, `403` rôle insuffisant, `422` body invalide, `404` introuvable, isolation par utilisateur, champs sensibles absents (`35` §5). Frontend : redirection `/login` sans auth, actions admin masquées pour `viewer`, aucun token dans le DOM.

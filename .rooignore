@@ -1,0 +1,48 @@
+# Fichiers que Roo Code ne lit ni ne modifie (syntaxe .gitignore).
+# Ce n'est pas une frontière de sécurité : aucune donnée réelle ne doit se trouver dans l'espace de travail.
+
+# Secrets et environnements
+.env
+.env.*
+!.env.example
+!.env.prod.example
+*.pem
+*.key
+*.p12
+
+# Données et sauvegardes (jamais dans le dépôt)
+/data/
+/dev/data/
+/backups/
+*.dump
+*.backup
+*.sql.gz
+*.db
+*.sqlite*
+
+# Dépendances, artefacts et caches
+.venv/
+venv/
+node_modules/
+frontend/dist/
+dist/
+__pycache__/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+frontend/coverage/
+.benchmarks/
+.uv-cache/
+
+# IDE et OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Artefacts volumineux générés
+coverage*.xml
+bandit-report.json

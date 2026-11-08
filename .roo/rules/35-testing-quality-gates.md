@@ -1,285 +1,80 @@
-# Tests, couverture & quality gates
+# 35 — Tests, couverture et quality gates
 
-## Pyramide des tests
+## 1. Pyramide
 
-Backend : `unit/` + `integration/` uniquement (pas de `e2e/`).
-Frontend : `tests/unit/`, `tests/integration/`, `tests/e2e/` (Playwright).
+Surtout des tests unitaires (services, schémas, composables) ; puis des tests d'intégration (API et base réelle) ; peu de tests de bout en bout, réservés aux parcours critiques.
 
----
+- Backend : `unit/` + `integration/` uniquement (pas de `e2e/`).
+- Frontend : `tests/unit/`, `tests/integration/`, `tests/e2e/` (Playwright).
 
-## Couverture minimale
-
-- Minimum : 80% pour tout nouveau composant
-- Cible backend : 80% (`--cov-fail-under=80` dans Makefile et CI)
-- Cible frontend : aucun seuil configuré dans vitest.config.ts (pas de bloc `coverage.threshold`)
-- Chemins critiques (auth, déploiement, RBAC) : viser 95%
-
-### État des zones de test (post-remédiation P0-P3)
-
-Les « zones zéro » historiques sont comblées :
-- WebSocket : module couvert à 94 %, ~394 tests (STORY-164/165)
-- RBAC : matrice transverse par router (STORY-122.7), exhaustivité vérifiée par garde-fous
-- Migrations Alembic : tests d'intégration round-trip upgrade/downgrade (STORY-120.3)
-- Enveloppes/pagination : tests de contrat par router (STORY-126/128)
-- Volumétrie au 2026-11-01 : ~3040 fonctions de test unitaires (204 fichiers) + ~237 d'intégration (21 fichiers) — recompter avant de citer un chiffre (D2)
-
----
-
-## Outillage (voir `.roo/rules/05-tech-stack.md`)
+## 2. Outillage
 
 | Niveau | Backend | Frontend |
-|--------|---------|----------|
-| Unitaires | `pytest` + `pytest-asyncio` | `Vitest` + `@vue/test-utils ^2.4.6` + `@pinia/testing ^1.0.2` |
-| Intégration | `pytest` + DB réelle + Redis | `Vitest` + mocks HTTP |
-| E2E | — | `Playwright ^1.56.0` (navigateurs chromium + firefox + webkit) |
+| --- | --- | --- |
+| Unitaires | pytest + pytest-asyncio, pytest-mock, pytest-xdist, pytest-timeout, pytest-benchmark, faker, factory-boy, freezegun, aioresponses | Vitest + `@vue/test-utils ^2.4.6` + `@pinia/testing ^1.0.2`, jsdom `^26.0.0` |
+| Intégration | pytest + DB réelle + Redis | Vitest + mocks HTTP |
+| E2E | — | Playwright `^1.56.0` (chromium, firefox, webkit) |
 
-### Outils de test backend complémentaires
+Client HTTP de test : httpx `AsyncClient` avec `ASGITransport` pour les tests d'endpoint API. Toutes les commandes sont dans le `Makefile` (`50` §1).
 
-- pytest-cov, pytest-mock, pytest-xdist, pytest-timeout, pytest-benchmark
-- pytest-sugar, pytest-clarity
-- faker, factory-boy, freezegun
-- aioresponses
+## 3. Couverture
 
-### Outils de test frontend complémentaires
+| Périmètre | Seuil |
+| --- | --- |
+| Backend global | 80 % (`--cov-fail-under=80` dans `make ci-test-backend`) |
+| Tout nouveau composant | 80 % minimum |
+| Chemins critiques (auth, déploiement, RBAC) | viser 95 % |
+| Frontend | aucun seuil configuré dans `vitest.config.ts` — viser la couverture des chemins critiques |
 
-- jsdom `^26.0.0` (environnement Vitest)
-- @playwright/test `^1.56.0`
+Les « zones zéro » historiques sont comblées (WebSocket ~94 % STORY-164/165, matrice RBAC STORY-122.7, round-trip migrations STORY-120.3, enveloppes/pagination STORY-126/128). Recompter avant de citer une volumétrie (décision D2).
 
-### Client HTTP de test
+## 4. Données de test
 
-- httpx `AsyncClient` avec `ASGITransport` pour les tests d'endpoint API
+- **Interdit** : toute donnée réelle (hosts, credentials, clés API) dans les tests, fixtures, captures ou journaux. Construire un cas fictif équivalent.
+- Fixtures partagées dans `backend/tests/conftest.py`, documentées par leur docstring.
 
-Toutes les commandes de lancement sont dans le `Makefile` (voir `.roo/rules/50-dev-workflow.md`).
+## 5. Cas systématiques par famille
 
----
+| Famille | Cas obligatoires |
+| --- | --- |
+| Endpoint REST (par verbe) | 401 sans token, 403 rôle insuffisant, 422 body invalide, 404 introuvable ; 201+objet créé pour POST ; 409 conflit si applicable ; pagination pour les listes |
+| Sécurité | isolation des ressources par utilisateur/organisation ; champs sensibles absents des réponses |
+| WebSocket | droits du canal (`ensure_role_ws`), reprise après coupure (`21` §7) |
+| Composant/vue | rendu initial (vide, chargement, données), interactions, états d'erreur, accès conditionnel selon rôle ; route protégée sans auth → redirection `/login` |
+| Migrations | montée et descente (round-trip upgrade/downgrade) sur base de test |
+| Bus/async | publication après validation seulement ; relance après erreur transitoire sans double effet |
+| Calculs/droits/transitions | exemples métier préparés avant l'implémentation ; TDD ciblé |
 
-## Backend — patterns de tests
+- **Un bug commence par un test qui le reproduit** (en échec avant le correctif, vert après).
+- Un test existant n'est jamais modifié pour passer, sauf accord écrit du propriétaire mentionné dans le commit.
+- Les scénarios métier sont préparés avant le code, en langage lisible (situation, action, attendu, refus/limite pertinents) ; la skill `write-acceptance-tests` décrit cette étape pour les bugs et comportements critiques.
 
-### Structure d'un test unitaire (service)
+## 6. Commandes
 
-```python
-# backend/tests/unit/test_services/test_xxx_service.py
-import pytest
-from unittest.mock import AsyncMock, patch
-
-@pytest.fixture
-def mock_docker_client():
-    return AsyncMock()
-
-@pytest.mark.asyncio
-async def test_get_all_returns_empty_list(mock_docker_client):
-    """Cas nominal : liste vide"""
-    service = XxxService(docker_client=mock_docker_client)
-    mock_docker_client.containers.list.return_value = []
-    result = await service.get_all()
-    assert result == []
-
-@pytest.mark.asyncio
-async def test_create_with_valid_data(mock_docker_client):
-    """Cas nominal : création avec données valides"""
-    ...
-
-@pytest.mark.asyncio
-async def test_create_raises_on_invalid_data(mock_docker_client):
-    """Cas d'erreur : données invalides → exception métier"""
-    ...
-```
-
-### Structure d'un test d'endpoint API
-
-```python
-# backend/tests/unit/test_api/test_xxx.py
-import pytest
-from httpx import AsyncClient, ASGITransport
-
-@pytest.mark.asyncio
-async def test_get_xxx_list_authenticated(client: AsyncClient, auth_headers):
-    """Cas nominal : liste accessible avec auth"""
-    response = await client.get("/api/v1/xxx", headers=auth_headers)
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
-
-@pytest.mark.asyncio
-async def test_get_xxx_list_unauthenticated(client: AsyncClient):
-    """Sécurité : 401 sans token"""
-    response = await client.get("/api/v1/xxx")
-    assert response.status_code == 401
-
-@pytest.mark.asyncio
-async def test_create_xxx_forbidden_for_viewer(client: AsyncClient, viewer_headers):
-    """Sécurité RBAC : 403 pour rôle insuffisant"""
-    response = await client.post("/api/v1/xxx", json={...}, headers=viewer_headers)
-    assert response.status_code == 403
-
-@pytest.mark.asyncio
-async def test_create_xxx_invalid_body(client: AsyncClient, auth_headers):
-    """Validation : 422 avec body invalide"""
-    response = await client.post("/api/v1/xxx", json={"invalid": "data"}, headers=auth_headers)
-    assert response.status_code == 422
-
-@pytest.mark.asyncio
-async def test_get_xxx_not_found(client: AsyncClient, auth_headers):
-    """Cas d'erreur : 404 si ressource inexistante"""
-    response = await client.get("/api/v1/xxx/nonexistent-id", headers=auth_headers)
-    assert response.status_code == 404
-```
-
-### Cas de test obligatoires par type d'endpoint
-
-| Verbe | Cas nominaux | Cas d'erreur obligatoires |
-|-------|-------------|--------------------------|
-| GET (liste) | retourne liste vide, retourne liste avec éléments, pagination | 401, 403 (RBAC), 400 (paramètres invalides) |
-| GET (détail) | retourne ressource complète | 401, 403, 404 |
-| POST | crée avec données valides, retourne 201+objet créé | 401, 403, 422 (validation), 409 (conflit si applicable) |
-| PUT/PATCH | met à jour partiellement, met à jour complètement | 401, 403, 404, 422 |
-| DELETE | supprime, retourne 204 | 401, 403, 404 |
-
----
-
-## Frontend — patterns de tests
-
-### Structure d'un test composant (Vitest)
-
-```typescript
-// frontend/tests/unit/components/XxxComponent.spec.ts
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { createTestingPinia } from '@pinia/testing'
-import XxxComponent from '@/components/XxxComponent.vue'
-
-describe('XxxComponent', () => {
-  describe('rendu initial', () => {
-    it('affiche le loading spinner pendant le chargement', () => {
-      const wrapper = mount(XxxComponent, {
-        props: { id: '123' },
-        global: { plugins: [createTestingPinia({ initialState: { xxx: { loading: true } } })] }
-      })
-      expect(wrapper.find('[data-testid="loading"]').exists()).toBe(true)
-    })
-
-    it('affiche les données quand chargées', async () => {
-      const wrapper = mount(XxxComponent, { props: { id: '123' }, ... })
-      expect(wrapper.text()).toContain('valeur attendue')
-    })
-  })
-
-  describe('interactions', () => {
-    it('émet un événement au clic sur le bouton', async () => {
-      const wrapper = mount(XxxComponent, ...)
-      await wrapper.find('button').trigger('click')
-      expect(wrapper.emitted('action')).toBeTruthy()
-    })
-  })
-
-  describe('cas d\'erreur', () => {
-    it('affiche un message d\'erreur si l\'API échoue', async () => {
-      // mock l'erreur dans le store
-      ...
-      expect(wrapper.find('[data-testid="error"]').text()).toBe('...')
-    })
-  })
-})
-```
-
-### Structure d'un test composable (Vitest)
-
-```typescript
-// frontend/tests/unit/composables/useXxx.spec.ts
-import { describe, it, expect, vi } from 'vitest'
-import { ref } from 'vue'
-import { useXxx } from '@/composables/useXxx'
-
-vi.mock('@/services/xxx', () => ({
-  fetchXxx: vi.fn(),
-}))
-
-describe('useXxx', () => {
-  it('retourne les données initiales vides', () => {
-    const { items, loading, error } = useXxx()
-    expect(items.value).toEqual([])
-    expect(loading.value).toBe(false)
-  })
-
-  it('charge les données correctement', async () => {
-    fetchXxx.mockResolvedValue([{ id: '1', name: 'test' }])
-    const { items, load } = useXxx()
-    await load()
-    expect(items.value).toHaveLength(1)
-  })
-
-  it('gère les erreurs de l\'API', async () => {
-    fetchXxx.mockRejectedValue(new Error('Network Error'))
-    const { error, load } = useXxx()
-    await load()
-    expect(error.value).toBeTruthy()
-  })
-})
-```
-
-### Cas de test obligatoires pour les composants/vues
-
-- **Rendu initial** : état vide, état chargement (spinner), état avec données
-- **Interactions** : clic bouton, saisie formulaire, navigation
-- **États d'erreur** : affichage message d'erreur, retry
-- **Props/Emits** : vérifier les props requises, les événements émis
-- **Accès conditionnel** : éléments cachés selon rôle/état
-
----
-
-## Tests de sécurité obligatoires
-
-Ces tests DOIVENT être écrits pour tout endpoint modifiant des données ou exposant des données sensibles.
-
-### Backend
-
-```python
-# Toujours tester :
-test_xxx_returns_401_when_no_token()         # Pas d'accès sans auth
-test_xxx_returns_403_when_insufficient_role() # RBAC respecté
-test_xxx_rejects_invalid_input()              # Protection injection (422)
-test_xxx_does_not_expose_sensitive_fields()   # Pas de champs sensibles dans la réponse
-```
-
-### Frontend
-
-```typescript
-// Dans les tests de vues avec routes protégées :
-it('redirige vers /login si non authentifié', ...)
-it('masque les actions admin pour un rôle viewer', ...)
-it('n\'affiche pas les tokens/secrets dans le DOM', ...)
-```
-
----
-
-## Commandes de validation
-
-Se référer au `Makefile` (source de vérité) :
+Source de vérité : le `Makefile` (`50` §1).
 
 ```bash
-make backend-test           # pytest backend complet
-make frontend-test          # Vitest frontend complet
-make lint                   # Lint backend + frontend + CLI
-make backend-typecheck      # mypy
-make frontend-typecheck     # tsc strict
+make backend-test-unit                     # tests unitaires backend
+make frontend-test-unit                    # tests unitaires frontend
+make ci-test-backend                       # backend complet + couverture ≥ 80 %
+make ci-fast                               # retour intermédiaire local (sans couverture)
+make check                                 # portes complètes avant acceptation
 ```
 
-### Commandes ciblées lors du développement
+Ciblé pendant le développement :
 
 ```bash
-# Backend — tests d'un module spécifique
-uv run pytest backend/tests/unit/test_services/test_xxx_service.py -v
 uv run pytest backend/tests/unit/test_api/test_xxx.py -v --tb=short
-
-# Frontend — tests d'un fichier spécifique
 cd frontend && pnpm test -- tests/unit/components/XxxComponent
-cd frontend && pnpm test -- tests/unit/views/XxxView
-cd frontend && pnpm build && pnpm lint
 ```
 
----
+## 7. Revue distincte et acceptance
 
-## Avant de conclure une étape
+- Pendant le développement : exécuter les contrôles ciblés et impactés. Avant acceptation : les portes applicables restent requises (`01` §7, [matrice de validation](../../docs/dev/controles-validation.md)).
+- Réutiliser les preuves encore valides ; tout changement susceptible d'invalider une preuve exige une nouvelle vérification. Une suite vide, ignorée ou indisponible ne prouve rien.
+- Pour un changement structurant ou sensible, obtenir une revue distincte par un second agent quand l'outil le permet, sinon une revue distincte humaine avec la limite consignée. Le relecteur reçoit contrat, faits, diff et preuves, sans conclusion imposée. La revue technique ne remplace pas les validations humaines de `02` §7.
+- Ne pas qualifier un échec de « préexistant » sans preuve sur la référence de départ dans un environnement comparable.
 
-- Lancer les tests ciblés sur les fichiers modifiés/créés
-- Vérifier la couverture si possible (`--cov` backend, `--coverage` frontend)
-- Si impossible d'exécuter : préciser exactement ce qui n'a pas été lancé et fournir la commande
+## 8. Conclure sans avoir exécuté les tests
+
+Un contrôle requis non exécuté bloque l'acceptation, sauf dérogation explicite avec décideur, motif, périmètre et expiration ; il reste marqué non exécuté. Le travail peut être présenté en revue avec ses limites. Un agent n'affirme jamais qu'un test passe sans l'avoir exécuté. S'il n'a pas pu exécuter des tests, il indique lesquels, pourquoi, et la commande exacte à lancer (`60-output-format.md` §4).

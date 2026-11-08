@@ -27,6 +27,15 @@ _(aucun contrat de story créé — voir la liste plannifiée dans l'epic)_
 ### EPIC-015 : Compute — Clusters Kubernetes & Apps cluster-scoped
 _(aucun contrat de story créé — voir la liste plannifiée dans l'epic)_
 
+### EPIC-017 : Scalar + Mermaid auto-hébergés pour la documentation API
+_(aucun contrat de story créé — voir la liste plannifiée dans l'epic)_
+
+### EPIC-018 : Documentation exhaustive des endpoints (tags, exemples, badges, échantillons)
+_(aucun contrat de story créé — voir la liste plannifiée dans l'epic)_
+
+### EPIC-019 : Bac à sable de l'API (mock backend servi par le contrat OpenAPI)
+_(aucun contrat de story créé — voir la liste plannifiée dans l'epic)_
+
 ### Bugs
 _(aucun)_
 
@@ -36,7 +45,7 @@ _(vide)_
 
 ## 🚧 REVIEW
 
-_(vide)_
+- [?] EPIC-020 : Alignement du harness de pilotage sur PreviImmo
 
 ## ✅ DONE
 

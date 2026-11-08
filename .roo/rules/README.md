@@ -1,41 +1,32 @@
-# WindFlow - Règles de Développement
+# WindFlow — Règles de développement
 
-Le répertoire `.roo/rules` contient **uniquement les règles de développement concrètes** pour le projet WindFlow.
+Le répertoire `.roo/rules/` contient le corpus de règles du projet. L'ordre de lecture n'est pas un ordre de priorité : voir `02-gouvernance-regles.md` §2.
 
-## Organisation du projet
+## Organisation du corpus
 
-### 📋 Règles de Développement (`.roo/rules/`)
-Contient **les conventions de code et bonnes pratiques** :
-- Règles de développement spécifiques par technologie
-- Conventions de nommage et formatage
-- Patterns de code et structures
-- Outils et workflows de développement
+| Plage | Famille | Fichiers |
+| --- | --- | --- |
+| 00–04 | Contexte, gestion de projet, gouvernance, glossaire | `00-project-context.md`, `01-Project-management.md`, `02-gouvernance-regles.md`, `03-glossary.md` |
+| 05–09 | Stack, frontend, environnement Python | `05-tech-stack.md`, `06-frontend-vue3.md`, `07-python-uv.md` |
+| 20–29 | Architecture, API, temps réel, IA | `20-architecture-and-api.md`, `21-realtime-websocket.md`, `25-ai-llm-mcp.md` |
+| 30–39 | Code, tests | `30-code-standards.md`, `35-testing-quality-gates.md` |
+| 40–49 | Sécurité, observabilité, performance | `40-security.md`, `45-observability.md`, `46-performance-resilience.md` |
+| 50–59 | Workflow, structure | `50-dev-workflow.md`, `55-project-structure.md` |
+| 60–69 | Format de sortie | `60-output-format.md` |
 
-### 📚 Contexte projet et suivi
-Le contexte du projet et son état d'avancement se trouvent :
-- dans `docs/` (documentation et spécifications, dont `docs/general_specs/` et `docs/Roadmap.md`)
-- dans `.backlog/` (gestion de projet : epics, stories, bugs, kanban)
-- dans `.backlog/_models/` (gabarits de contrats : epic, story, sous-story, bug)
+Les règles de modes (conduite des modes Roo Code `orchestrator`, `architect`, `code`, `debug`) sont dans `.roo/rules-<mode>/` et précisent le corpus sans jamais le contredire.
 
+## Contexte projet et suivi
 
-## Application des Règles
+- Spécifications : `docs/general_specs/` (index `00-index.md`) et `docs/technical_specs/`
+- Feuille de route : `docs/Roadmap.md`
+- Backlog et contrats : `.backlog/` (gabarits dans `.backlog/_models/`)
+- Protocole commun d'exécution : `docs/dev/protocole-execution.md` ; matrice de validation : `docs/dev/controles-validation.md`
+- Skills (workflows de référence) : `.agents/skills/` ; point d'entrée commun : `AGENTS.md` (racine)
 
-### Processus de Développement
-1. **Lecture obligatoire** des règles avant tout développement
-2. **Respect strict** des conventions définies
-3. **Validation automatique** via pre-commit hooks
-4. **Review** systématique du respect des règles en code review
+## Application et évolution des règles
 
-### Évolution des Règles
-- Toute modification du corpus passe par la skill `update-rules` ; l'ordre de priorité en cas de conflit, le plan de numérotation et les interdits sont définis dans `02-gouvernance-regles.md`
-- **Mise à jour régulière** basée sur les retours d'expérience
-- **Discussions d'équipe** pour les changements majeurs
-- **Versioning** des règles avec changelog
-- **Formation** continue sur les bonnes pratiques
-
-
-### 📚 Ressources Complémentaires
-- [Documentation Projet](../../docs/general_specs/README.md) - Spécifications complètes
-- [Architecture](../../docs/general_specs/04-architecture.md) - Principes architecturaux
-- [Stack Technologique](../../docs/general_specs/05-stack-technologique.md) - Technologies détaillées
-- [Guide de Déploiement](../../docs/general_specs/16-deploiement.md) - Installation
+1. **Lecture** des règles pertinentes avant tout développement ; les règles font foi en cas de conflit avec une habitude générale.
+2. **Validation automatique** via le `Makefile` (`make lint`, `make typecheck`, `make test`, `make check`).
+3. Toute modification du corpus passe par la skill `update-rules` (`.agents/skills/update-rules/SKILL.md`) ; l'ordre de priorité, le plan de numérotation et les interdits sont définis dans `02-gouvernance-regles.md` ; la fusion d'un changement de règles appartient au propriétaire.
+4. Cohérence contrôlée par `make check-harness` (liens, skills, points d'entrée, modes, gabarits) et `make backlog-check` (contrats du backlog).

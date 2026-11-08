@@ -2,12 +2,17 @@
 """Contrôleur du harness windflow (stdlib uniquement).
 
 Vérifie la cohérence du corpus de pilotage (règles, skills, modes, gabarits) :
-  1. liens Markdown relatifs de ``.roo/rules/*.md``, ``.roo/skills/**/*.md`` et
-     ``.backlog/_models/*.md`` pointant vers des fichiers existants
-     (les blocs de code et liens absolus sont exclus) ;
-  2. présence des 15 skills attendues avec un ``SKILL.md`` non vide ;
-  3. présence de ``.roomodes`` (JSON ou YAML) et unicité des slugs de modes ;
-  4. présence des 4 gabarits ``.backlog/_models/{epic,story,sub-story,bug}.md``.
+  1. liens Markdown relatifs de ``.roo/rules/*.md``, ``.roo/rules-*/*.md``,
+     ``.agents/skills/**/*.md`` et ``.backlog/_models/*.md`` pointant vers des
+     fichiers existants (les blocs de code et liens absolus sont exclus) ;
+  2. présence des 16 skills attendues avec un ``SKILL.md`` non vide dans
+     ``.agents/skills/`` (et absence de corpus concurrent dans ``.roo/skills/``) ;
+  3. présence des points d'entrée communs : ``AGENTS.md``, ``CLAUDE.md``
+     (import ``@AGENTS.md``), ``docs/dev/protocole-execution.md``,
+     ``docs/dev/controles-validation.md``, ``.rooignore`` et les 4 règles de
+     modes (orchestrator, architect, code, debug) ;
+  4. présence de ``.roomodes`` (JSON ou YAML) et unicité des slugs de modes ;
+  5. présence des 4 gabarits ``.backlog/_models/{epic,story,sub-story,bug}.md``.
 
 Exit 0 si tout est conforme, 1 sinon (avec résumé des erreurs fichier:ligne).
 """
@@ -36,6 +41,14 @@ EXPECTED_SKILLS = (
     "treat-epic",
     "treat-story",
     "update-rules",
+    "write-acceptance-tests",
+)
+
+EXPECTED_MODE_RULES = (
+    ("rules-orchestrator", "01-orchestration.md"),
+    ("rules-architect", "01-analyse-conception.md"),
+    ("rules-code", "01-implementation.md"),
+    ("rules-debug", "01-debogage.md"),
 )
 
 EXPECTED_MODELS = ("epic.md", "story.md", "sub-story.md", "bug.md")
@@ -55,7 +68,7 @@ def strip_code_blocks(text: str) -> str:
 def check_links(root: Path, errors: list[str]) -> tuple[int, int]:
     """Vérifie les liens relatifs ; retourne (liens vérifiés, liens cassés)."""
     targets: list[Path] = []
-    for pattern in (".roo/rules/*.md", ".roo/skills/**/*.md", ".backlog/_models/*.md"):
+    for pattern in (".roo/rules/*.md", ".roo/rules-*/*.md", ".agents/skills/**/*.md", ".backlog/_models/*.md"):
         targets.extend(root.glob(pattern))
     checked = broken = 0
     for path in sorted(set(targets)):
@@ -79,17 +92,47 @@ def check_links(root: Path, errors: list[str]) -> tuple[int, int]:
 
 
 def check_skills(root: Path, errors: list[str]) -> int:
-    """Vérifie les skills attendues ; retourne le nombre d'erreurs."""
+    """Vérifie les skills attendues dans .agents/skills/ ; retourne le nombre d'erreurs."""
     count = 0
     for skill in EXPECTED_SKILLS:
-        skill_file = root / ".roo" / "skills" / skill / "SKILL.md"
+        skill_file = root / ".agents" / "skills" / skill / "SKILL.md"
         if not skill_file.is_file():
             errors.append(f"skill manquante : {skill_file.relative_to(root)}")
             count += 1
         elif not skill_file.read_text(encoding="utf-8").strip():
             errors.append(f"skill vide : {skill_file.relative_to(root)}")
             count += 1
+    legacy = root / ".roo" / "skills"
+    if legacy.is_dir() and any(legacy.iterdir()):
+        errors.append(
+            "skills : .roo/skills/ n'est plus l'emplacement de référence (voir .agents/skills/)"
+        )
     return count
+
+
+def check_entry_points(root: Path, errors: list[str]) -> None:
+    """Vérifie les points d'entrée communs : AGENTS.md, CLAUDE.md, protocole, règles de modes."""
+    agents = root / "AGENTS.md"
+    if not agents.is_file():
+        errors.append("point d'entrée : AGENTS.md introuvable à la racine")
+    claude = root / "CLAUDE.md"
+    if not claude.is_file():
+        errors.append("point d'entrée : CLAUDE.md introuvable à la racine")
+    elif "@AGENTS.md" not in claude.read_text(encoding="utf-8"):
+        errors.append("point d'entrée : CLAUDE.md doit importer @AGENTS.md")
+    protocol = root / "docs" / "dev" / "protocole-execution.md"
+    if not protocol.is_file():
+        errors.append("point d'entrée : docs/dev/protocole-execution.md introuvable")
+    validation = root / "docs" / "dev" / "controles-validation.md"
+    if not validation.is_file():
+        errors.append("point d'entrée : docs/dev/controles-validation.md introuvable")
+    rooignore = root / ".rooignore"
+    if not rooignore.is_file():
+        errors.append("point d'entrée : .rooignore introuvable à la racine")
+    for folder, filename in EXPECTED_MODE_RULES:
+        path = root / ".roo" / folder / filename
+        if not path.is_file():
+            errors.append(f"règle de mode manquante : {path.relative_to(root)}")
 
 
 def _slugs_from_json(data: object) -> list[str] | None:
@@ -162,17 +205,19 @@ def main(argv: list[str] | None = None) -> int:
     errors: list[str] = []
     checked, broken = check_links(args.root, errors)
     skill_errors = check_skills(args.root, errors)
+    check_entry_points(args.root, errors)
     check_roomodes(args.root, errors)
     check_models(args.root, errors)
 
-    print(f"Harness : {len(EXPECTED_SKILLS)} skills attendues, "
-          f"{checked} liens relatifs vérifiés, 4 gabarits attendus.")
+    print(f"Harness : {len(EXPECTED_SKILLS)} skills attendues (.agents/skills/), "
+          f"{checked} liens relatifs vérifiés, 4 gabarits attendus, "
+          f"{len(EXPECTED_MODE_RULES)} règles de modes attendues.")
     if errors:
         print(f"❌ {len(errors)} problème(s) détecté(s) :")
         for error in errors:
             print(f"  - {error}")
         return 1
-    print("✅ Harness conforme (liens, skills, modes, gabarits).")
+    print("✅ Harness conforme (liens, skills, points d'entrée, modes, gabarits).")
     return 0
 
 
